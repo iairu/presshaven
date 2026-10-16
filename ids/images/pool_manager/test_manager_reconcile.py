@@ -49,6 +49,7 @@ class Reconcile(unittest.TestCase):
         self.mgr._local = manager.threading.local()
         self.mgr.docker = mock.MagicMock()
         self.mgr.static_pool_up = lambda n: True
+        self.mgr.static_pool_pending = lambda n: False
         self.mgr.runtime_pools = lambda: set()
         self.mgr.pool_container_healthy = lambda n: True
         self.started = []
@@ -322,6 +323,22 @@ class Reconcile(unittest.TestCase):
         self.assertTrue(all(n > self.STATIC for n in self.mgr.destroyed))
         self.assertFalse(any(e["forced"] for e in self.events("scaledown")))
         self.m.IDLE_TIMEOUT_S = 0
+
+    def test_no_spare_is_built_while_compose_pools_are_still_starting(self):
+        self.mgr.static_pool_up = lambda n: False          # stack just started
+        self.mgr.static_pool_pending = lambda n: True
+        self.run_reconcile()
+        self.assertEqual(self.started, [])
+        self.mgr.static_pool_up = lambda n: True           # they came up
+        self.run_reconcile()
+        self.assertEqual(self.started, [])                 # and they are the spares
+        self.assertEqual(self.r.zcard(self.m.FREE_KEY), self.STATIC)
+
+    def test_broken_compose_pools_do_not_block_spares(self):
+        self.mgr.static_pool_up = lambda n: False
+        self.mgr.static_pool_pending = lambda n: False     # missing / exited / unhealthy
+        self.run_reconcile()
+        self.assertEqual(self.started, [self.STATIC + 1])
 
     def test_expired_waiting_session_gets_no_pool(self):
         self.run_reconcile()

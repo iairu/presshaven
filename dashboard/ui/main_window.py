@@ -22,6 +22,7 @@ from core.learning import PAGE_GUIDES
 from core.state import AppState
 from ui import theme
 from ui.dependency_banner import DependencyBanner
+from ui.host_settings_banner import HostSettingsBanner
 from ui.error_monitor import ErrorLogMonitor
 from core.container_status import classify
 from ui.page_backups import BackupsPage
@@ -130,6 +131,9 @@ class MainWindow(QMainWindow):
         # can't be missed just because docker/docker compose happened to
         # be fine when whichever page you're currently on was built).
         self.dependency_banner = DependencyBanner()
+        # Kernel settings a stack needs on its host (this machine or a
+        # remote server), checked in the background per target in use.
+        self.host_settings_banner = HostSettingsBanner(state)
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
@@ -152,6 +156,7 @@ class MainWindow(QMainWindow):
         stack_layout.setContentsMargins(12, 10, 12, 10)
         stack_layout.setSpacing(10)
         stack_layout.addWidget(self.dependency_banner)
+        stack_layout.addWidget(self.host_settings_banner)
         stack_layout.addWidget(self.stack, stretch=1)
         content_layout.addWidget(stack_holder, stretch=1)
         body.addWidget(content, stretch=1)
@@ -414,6 +419,7 @@ class MainWindow(QMainWindow):
         self.state.save()
 
     def _on_remote_settings_changed(self) -> None:
+        self.host_settings_banner.refresh()
         self.services_page.rebuild_panels()
         # Global Visualization page rebuilds its diagram automatically on the next poll
         # tick (it always calls _get_targets() fresh in apply_status()).
@@ -636,6 +642,7 @@ class MainWindow(QMainWindow):
             self._short = short
             self.page_subtitle.setVisible(not short and bool(PAGE_GUIDES.get(self.current_page())))
             self.dependency_banner.set_compact(short)
+            self.host_settings_banner.set_compact(short)
 
     # ---- geometry persistence ----
 

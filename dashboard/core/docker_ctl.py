@@ -29,6 +29,26 @@ PROJECT_LABELS = {pid: project_for(pid).label for pid in PROJECT_IDS}
 RUNTIME_POOL_LABEL = "honeypot.pool.managed-by=pool_manager"
 
 
+# The edge stack's log shipper to the SIEM (profiles: [elk]) and the .env
+# values that say whether it has anywhere to ship to.
+SIEM_SHIPPER_SERVICE = "vector_outbound"
+VECTOR_HOST_PLACEHOLDERS = {"", "your-siem-vm.example.com"}
+_TRUE = {"1", "true", "yes", "on"}
+
+
+def siem_shipping(env) -> tuple[bool, str]:
+    """(enabled, why not) for the edge's vector_outbound, from its .env
+    (anything with .get(key, default)). It ships only when ELK_ENABLED is on
+    and VECTOR_HOST is a real address: with the .env.example placeholder it
+    can't resolve the host and drops every batch."""
+    if env.get("ELK_ENABLED", "false").strip().strip("\"'").lower() not in _TRUE:
+        return False, "ELK_ENABLED is not true"
+    host = env.get("VECTOR_HOST", "").strip().strip("\"'")
+    if host.lower() in VECTOR_HOST_PLACEHOLDERS:
+        return False, f"VECTOR_HOST is not set ({host or 'empty'})"
+    return True, ""
+
+
 @dataclass
 class Target:
     project: str  # "edge" | "siem"
@@ -141,11 +161,39 @@ class Target:
             return (*compose_args, "--remove-orphans")
         return compose_args
 
+    def siem_shipping(self) -> tuple[bool, str]:
+        """siem_shipping() for this target's .env (edge only; the SIEM stack
+        has no shipper). An unreadable .env counts as enabled, so a failed
+        SSH read never silently switches log shipping off."""
+        if self.project != "edge":
+            return True, ""
+        from core.env_upload import load_project_env   # env_upload imports this module
+        try:
+            env = load_project_env(self.project, self.remote, timeout=8.0)
+        except Exception:  # noqa: BLE001
+            return True, ""
+        return siem_shipping(env)
+
+    def _shipper_args(self, compose_args: tuple[str, ...]) -> tuple[str, ...]:
+        """A whole-stack `up` of the edge keeps vector_outbound at zero
+        replicas while log shipping isn't configured. --profile '*' would
+        otherwise start it regardless of ELK_ENABLED, and with the
+        placeholder VECTOR_HOST it only logs DNS errors and drops events.
+        Scaling to 0 also stops one left running from an earlier start. An
+        `up` of named services is left alone."""
+        if (self.project != "edge" or not compose_args or compose_args[0] != "up"
+                or any(not a.startswith("-") for a in compose_args[1:])):
+            return compose_args
+        enabled, _why = self.siem_shipping()
+        if enabled:
+            return compose_args
+        return (*compose_args, "--scale", f"{SIEM_SHIPPER_SERVICE}=0")
+
     def build(self, *compose_args: str) -> tuple[list[str], str | None]:
         """Returns (argv, cwd). cwd is None for remote (the ssh command
         does its own `cd`)."""
         global_flags = self._global_flags(compose_args, self.compose_file)
-        compose_args = self._augment_args(compose_args)
+        compose_args = self._augment_args(self._shipper_args(compose_args))
 
         if not self.is_remote:
             return ["docker", "compose", *global_flags, *compose_args], self._local_dir()

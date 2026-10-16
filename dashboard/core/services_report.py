@@ -34,8 +34,9 @@ from PyQt6.QtPrintSupport import QPrinter
 
 from core import resource_stats as rs
 from core.container_status import classify, start_settled
+from core.startup_events import chart_groups, detect_events as _detect_events, start_warnings
 from core.docker_ctl import Target
-from core.exploit_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc, _resource_series_color
+from core.exploit_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc
 from core import diagrams, vector_figures
 from core.vector_figures import VectorFigure
 from core import report_stats as st
@@ -59,6 +60,10 @@ STOP_MAX_SECONDS = 90.0
 SETTLE_TAIL_S = 8.0
 
 _SYS_CPU_COLOR = "#1565c0"
+# Categorical slots in fixed order (validated set: blue, orange, aqua, yellow,
+# magenta, green, violet, red); a chart never holds more than 8 series.
+_CATEGORICAL = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300",
+                "#4a3aa7", "#e34948")
 _SYS_RAM_COLOR = "#e08a00"
 
 
@@ -80,6 +85,9 @@ class ServicesReport:
     stage_shots: list = field(default_factory=list)
     # Where per-container CPU/memory came from (cgroup files or docker stats).
     resource_source: str = ""
+    # (service, what is wrong) found after a start: failed or never-started
+    # containers, and services that logged error lines (start_warnings()).
+    warnings: list = field(default_factory=list)
 
 
 # ---- host /proc sampling (works local or over SSH via Target.build_shell) ----
@@ -110,29 +118,6 @@ def _read_system(target: Target) -> tuple[int, int, int, int] | None:
     if cpu_total == 0 or mem_total == 0:
         return None
     return cpu_total, cpu_idle, mem_total, mem_avail
-
-
-def _detect_events(prev: dict, cur: dict, elapsed: float, events: list) -> None:
-    """Append human-readable transition events by diffing per-service status."""
-    def add(label):
-        if not events or events[-1][1] != label:
-            events.append((round(elapsed, 1), label))
-    for svc, st in cur.items():
-        was = prev.get(svc)
-        if was is None:
-            add(f"{svc} started")
-        elif st != was:
-            if st == "healthy":
-                add(f"{svc} healthy")
-            elif st == "starting" and was in ("created", "running"):
-                add(f"{svc} running, health pending")
-            elif st == "unhealthy":
-                add(f"{svc} unhealthy")
-            elif st == "exited_bad":
-                add(f"{svc} exited (error)")
-    for svc in prev:
-        if svc not in cur:
-            add(f"{svc} stopped")
 
 
 class ServicesReportWorker(QThread):
@@ -200,6 +185,24 @@ class ServicesReportWorker(QThread):
             if svc:
                 status[svc] = classify(c)
         return status
+
+    def _collect_warnings(self, duration_s: float) -> list[tuple[str, str]]:
+        """start_warnings() for this run: `ps -a` now, and the logs written
+        since the start (best effort; [] when they can't be read)."""
+        try:
+            argv, cwd = self._target.build("logs", "--no-color", "--since",
+                                           f"{int(duration_s) + 15}s")
+            res = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=60)
+            logs = res.stdout if res.returncode == 0 else ""
+        except (subprocess.TimeoutExpired, OSError):
+            logs = ""
+        warnings = start_warnings(self._target.ps(), logs)
+        # Host kernel settings this stack needs (core/host_settings.py).
+        from core import host_settings
+        for p in host_settings.target_problems(self._target) or []:
+            warnings.append(("host", p.text() + " Fix: " + host_settings.fix_commands([p])
+                             .replace("\n", "; ")))
+        return warnings
 
     def run(self) -> None:
         try:
@@ -347,6 +350,13 @@ class ServicesReportWorker(QThread):
                     "Final state", self._grab_health("end")))
 
             data.duration_s = round(time.time() - start, 1)
+            if op == "start":
+                data.warnings = self._collect_warnings(data.duration_s)
+                if data.warnings:
+                    data.stage_shots = [
+                        (f"{cap} \u2014 but {len(data.warnings)} warning(s), see Warnings"
+                         if cap == "All containers healthy" else cap, path)
+                        for cap, path in data.stage_shots]
             data.resource_source = rs.describe_sampling(sampler, FAST_SAMPLE_INTERVAL_S)
             # Drop stages whose grab failed (empty path) so the PDF has no blanks.
             data.stage_shots = [(cap, p) for cap, p in data.stage_shots if p]
@@ -379,8 +389,8 @@ def _event_markers(events: list) -> list[tuple[int, float, float, list[str]]]:
 
 # How _detect_events words each state, so a marker's events can be grouped
 # by what happened ("healthy: a, b, c") instead of repeating the verb.
-_EVENT_STATES = ("running, health pending", "exited (error)", "started", "healthy",
-                 "unhealthy", "stopped")
+_EVENT_STATES = ("running, health pending", "exited (error)", "created", "started",
+                 "finished", "healthy", "unhealthy", "removed", "stopped")
 
 
 def _summarize_events(labels: list[str]) -> str:
@@ -395,7 +405,8 @@ def _summarize_events(labels: list[str]) -> str:
 
 
 def _ts_chart(series: dict, colors: dict, events: list, y_label: str,
-              family: str, y_max: float | None = None, annotate_peak: bool = False) -> VectorFigure:
+              family: str, y_max: float | None = None,
+              annotate_peak: str | None = None) -> VectorFigure:
     """A multi-series time-series chart with a dashed red vertical line per
     event marker (see _event_markers). Each marker's number sits on white in a
     band above the plot, on its own row when tags would overlap -- the same
@@ -481,8 +492,12 @@ def _ts_chart(series: dict, colors: dict, events: list, y_label: str,
 
     # Explain the largest CPU peak: mark the global max point and note the
     # nearest event (within 8s), else flag it as an unexplained transient.
-    if annotate_peak and all_pts:
-        pt_max = max(all_pts, key=lambda tv: tv[1])
+    # annotate_peak names the series whose peak is called out (the host
+    # chart's CPU): taking the max over every series called RAM's peak the
+    # "CPU peak" whenever RAM ran higher than CPU.
+    peak_pts = series.get(annotate_peak, []) if annotate_peak else []
+    if peak_pts:
+        pt_max = max(peak_pts, key=lambda tv: tv[1])
         tp, vp = pt_max
         near = None  # nearest marker within 8s: (distance, number)
         for n, t0, t1, _labels in markers:
@@ -494,7 +509,7 @@ def _ts_chart(series: dict, colors: dict, events: list, y_label: str,
         p.setPen(QPen(QColor("#111111"), 2))
         p.drawEllipse(x - 4, y - 4, 8, 8)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        note = (f"peak {vp:.0f}% @ {tp:.0f}s "
+        note = (f"{annotate_peak.split()[0]} peak {vp:.0f}% @ {tp:.0f}s "
                 + (f"(near marker {near[1]})" if near else "(transient, no logged event)"))
         p.setFont(QFont(family, 8))
         nfm = QFontMetrics(QFont(family, 8))
@@ -603,6 +618,26 @@ def _container_stats_html(container_samples: list, svcs: list) -> str:
             'sustained load.</p>')
 
 
+def _warnings_html(data: ServicesReport) -> str:
+    """Near the top, so a start that "succeeded" (compose exit 0, health
+    checks green) but had a failing job or a service logging errors says so
+    in words, not only as a badge in a screenshot."""
+    if data.operation != "start":
+        return ""
+    if not data.warnings:
+        return ('<p style="color:#2e7d32;"><b>No warnings:</b> no container failed or was left '
+                'unstarted, and no service logged an error line during the start.</p>')
+    rows = "".join(f'<tr><td><b>{_esc(svc)}</b></td><td>{_esc(what)}</td></tr>'
+                   for svc, what in data.warnings)
+    return ('<h2 style="color:#c62828;">Warnings</h2>'
+            '<p style="color:#555;">Found after the start settled, from <i>docker compose ps -a</i> '
+            'and the logs written during the start (the same error lines that put a red badge on '
+            'a tile in the Global Visualization page).</p>'
+            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;"><tr><th>Service</th><th>Problem</th></tr>'
+            + rows + '</table>')
+
+
 def render_services_pdf(data: ServicesReport, out_path: str) -> None:
     family = _report_font_family()
     doc = QTextDocument()
@@ -623,15 +658,22 @@ def render_services_pdf(data: ServicesReport, out_path: str) -> None:
         parts.append('<p style="color:#b35900;"><b>Recording hit its time limit</b> '
                      f'({data.duration_s:.0f}s) before the stack settled, so the charts end '
                      'while containers were still changing state.</p>')
+    parts.append(_warnings_html(data))
     parts.append('<p style="color:#555;">Resource usage recorded while the stack was '
                  f'{"brought up" if data.operation == "start" else "taken down"}. Each dashed '
-                 'red vertical line marks a major event (a container starting, going healthy or '
-                 'unhealthy, or stopping), numbered in a band above the graph; events within '
+                 'red vertical line marks a major event (a container created, started, going '
+                 'healthy or unhealthy, a one-shot job finishing, or a container stopping or '
+                 'being removed), numbered in a band above the graph; events within '
                  f'{_MARKER_GAP_S:g}s of each other share one number, and the event key under the '
-                 'host graph says what each number covers. The largest CPU peak is called out '
-                 'with the marker it lines up with. <b>Figure 1</b> shows how these services fit together &ndash; '
+                 'host graph says what each number covers. The largest host CPU peak is called '
+                 'out with the marker it lines up with. <b>Figure 1</b> shows how these services fit together &ndash; '
                  'the per-container graphs below track each box in it.</p>')
-    parts.append(st.GLOSSARY_HTML)
+    first = min((t for t, _ in data.events), default=None)
+    if data.operation == "start" and first is not None and first >= 3:
+        parts.append(f'<p style="color:#555;">No container changed state in the first '
+                     f'{first:.0f}s: docker compose was building or checking the locally '
+                     'built images first (<i>up --build</i>).</p>')
+    parts.append(st.SPREAD_GLOSSARY_HTML)
     parts.append(diagrams.figure_html(
         doc, diagrams.architecture_diagram(family), "svc-arch", 1,
         "System architecture: the services whose CPU / memory the per-container charts below "
@@ -646,7 +688,7 @@ def render_services_pdf(data: ServicesReport, out_path: str) -> None:
         }
         colors = {"CPU %": QColor(_SYS_CPU_COLOR), "RAM %": QColor(_SYS_RAM_COLOR)}
         img = _ts_chart(sys_series, colors, data.events, "host CPU % / RAM %",
-                        family, y_max=100.0, annotate_peak=True)
+                        family, y_max=100.0, annotate_peak="CPU %")
         vector_figures.add_figure(doc, "svc://sys", img)
         parts.append('<img src="svc://sys" width="640"/><br/>')
         parts.append(f'<span style="color:#444; font-size:10px;">'
@@ -664,18 +706,29 @@ def render_services_pdf(data: ServicesReport, out_path: str) -> None:
                      + html.escape(data.resource_source) + '.</p>')
     if data.container_samples:
         svcs = sorted({s for _, snap in data.container_samples for s in snap})
-        cmap = {s: _resource_series_color(i) for i, s in enumerate(svcs)}
-        cpu_series = {s: [(t, snap[s][0]) for t, snap in data.container_samples if s in snap] for s in svcs}
-        mem_series = {s: [(t, snap[s][1] / 1048576.0) for t, snap in data.container_samples if s in snap] for s in svcs}
-        cpu_img = _ts_chart(cpu_series, cmap, data.events, "container CPU %", family)
-        mem_img = _ts_chart(mem_series, cmap, data.events, "container memory (MiB)", family)
-        vector_figures.add_figure(doc, "svc://cpu", cpu_img)
-        vector_figures.add_figure(doc, "svc://mem", mem_img)
-        parts.append('<img src="svc://cpu" width="640"/><br/>')
-        parts.append('<img src="svc://mem" width="640"/><br/>')
-        legend = " &nbsp; ".join(
-            f'<span style="color:{cmap[s].name()};">&#9632;</span> {_esc(s)}' for s in svcs)
-        parts.append(f'<span style="color:#444; font-size:10px;">Legend: {legend}</span>')
+        groups = chart_groups(svcs)
+        if len(groups) > 1:
+            parts.append('<p style="color:#666666;">Grouped by role, one CPU and one memory chart '
+                         'per group, so every line in a chart has a colour of its own.</p>')
+        for g, (title, members) in enumerate(groups):
+            # Fixed categorical order per chart (never cycled within one chart).
+            cmap = {s: QColor(_CATEGORICAL[i % len(_CATEGORICAL)]) for i, s in enumerate(members)}
+            cpu_series = {s: [(t, snap[s][0]) for t, snap in data.container_samples if s in snap]
+                          for s in members}
+            mem_series = {s: [(t, snap[s][1] / 1048576.0) for t, snap in data.container_samples
+                              if s in snap] for s in members}
+            prefix = f"{title}: " if title else ""
+            cpu_img = _ts_chart(cpu_series, cmap, data.events, f"{prefix}container CPU %", family)
+            mem_img = _ts_chart(mem_series, cmap, data.events, f"{prefix}container memory (MiB)", family)
+            vector_figures.add_figure(doc, f"svc://cpu{g}", cpu_img)
+            vector_figures.add_figure(doc, f"svc://mem{g}", mem_img)
+            if title:
+                parts.append(f'<h3 style="color:#222;">{_esc(title)}</h3>')
+            parts.append(f'<img src="svc://cpu{g}" width="640"/><br/>')
+            parts.append(f'<img src="svc://mem{g}" width="640"/><br/>')
+            legend = " &nbsp; ".join(
+                f'<span style="color:{cmap[s].name()};">&#9632;</span> {_esc(s)}' for s in members)
+            parts.append(f'<span style="color:#444; font-size:10px;">Legend: {legend}</span>')
         parts.append(_container_stats_html(data.container_samples, svcs))
     else:
         parts.append('<p style="color:#666;">No per-container samples were captured.</p>')

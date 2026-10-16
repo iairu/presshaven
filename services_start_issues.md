@@ -11,6 +11,22 @@ Times like "54 s" are elapsed times in the respective report.
 
 Sources: the two PDFs, plus the containers' current logs, Redis and Elasticsearch. The edge containers in the report are still the ones running now (created 08:55:03 local), so their logs cover this start.
 
+## Status (2026-10-16)
+
+| # | Status |
+|---|---|
+| A.1 | **Fixed.** The local edge now ships to the local SIEM: `ids/.env` has `ELK_ENABLED=true` and `VECTOR_HOST=host.docker.internal`, and the SIEM's CA and `vector-agent` cert were copied to `ids/vector/certs/`. 5,000 documents arrived within 5 s, with no shipper errors. In code, a whole-stack Start of the edge scales `vector_outbound` to 0 while shipping isn't configured (`core/docker_ctl.py`). |
+| A.2 | **Fixed** earlier (stricter Kibana healthcheck, an import job that waits, retries and verifies, failed jobs kept visible). The report side is covered by B.4. |
+| A.3 | **Fixed.** pool_manager counts compose pools that are still starting as on their way, so it no longer builds a spare before they come up. A broken compose pool still lets spares be built. |
+| A.4 | **Fixed.** `KIBANA_MEM_LIMIT` is now 2 GiB (`.env`, `.env.example`, compose default). It takes effect when Kibana is next recreated. |
+| A.5 | **Fixed on this machine** (`/etc/sysctl.d/99-redis-overcommit.conf`, `vm.overcommit_memory=1`). The dashboard now checks this, plus Elasticsearch's `vm.max_map_count`, on every host that runs a stack. It shows a banner with the fix commands, and the start report lists them under Warnings (`core/host_settings.py`). |
+| B.1, B.2 | **Fixed.** Events now read created / started / finished / removed / stopped (`core/startup_events.py`). |
+| B.3 | **Fixed.** The callout uses the CPU series only and says "CPU peak". |
+| B.4 | **Fixed.** A Warnings section lists failed or unstarted containers, services with error lines, and missing host settings. The final screenshot's caption mentions the warnings. |
+| B.5 | **Fixed.** Above 8 containers, the charts are split by role, with up to 8 fixed-order colours per chart. |
+| B.6 | **Fixed.** The services report uses a glossary of only the metrics it prints. |
+| B.7 | **Fixed.** The report says when the first seconds were spent building images. |
+
 Only issues **not** already in `pool_test_report_issues.md` are listed. Where an issue is the root cause of one listed there, that's noted.
 
 ---

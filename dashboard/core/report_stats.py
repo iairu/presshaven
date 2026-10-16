@@ -418,3 +418,16 @@ GLOSSARY_HTML = (
     'over-confident. <b>P(&ge;x)</b> is the share of a recording spent at or above '
     '<i>x</i>: the chance that a randomly picked moment was that busy. <b>SD</b> '
     '(standard deviation) is the typical distance of a value from the mean.</p>')
+
+
+# For reports that print only spread figures (mean ± SD, percentiles, peaks,
+# P(>=x)) -- no confidence intervals or p-values, so GLOSSARY_HTML's
+# explanation of those would describe numbers the report doesn't contain.
+SPREAD_GLOSSARY_HTML = (
+    '<p style="color:#555; font-size:9pt;"><b>Reading the metrics.</b> '
+    '<b>SD</b> (standard deviation) is the typical distance of a value from the mean. '
+    'The <b>95th percentile</b> is the level usage stayed at or below 95% of the time; '
+    'a <b>peak</b> far above it is a short burst rather than sustained load. '
+    '<b>P(&ge;x)</b> is the share of the recording spent at or above <i>x</i>: the chance '
+    'that a randomly picked moment was that busy. &ldquo;How unusual the peak is&rdquo; '
+    'counts SDs above the mean; more than about 3 is a rare spike.</p>')

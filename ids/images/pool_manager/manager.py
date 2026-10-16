@@ -186,6 +186,28 @@ class Manager:
                 return True
         return False
 
+    def static_pool_pending(self, n: int) -> bool:
+        """A compose-declared pool that is still on its way: its serving
+        container exists but is only created, restarting or in its health
+        grace period. compose creates every container at the start of `up`
+        and starts the eshops only once their databases are seeded, so for
+        the first minute or so of a stack start none of pools 1-3 is ready
+        yet. Without this the manager built a runtime "spare" right then,
+        one the compose pools made redundant a minute later. A pool whose
+        container is missing, exited or unhealthy is not pending."""
+        service = f"honeypot_eshop_{n}" if MODE == "wordpress" else (
+            "honeypot_database" if n == 1 else f"honeypot_database_{n}")
+        for c in self.docker.containers.list(all=True, filters={
+                "label": [f"com.docker.compose.project={PROJECT}",
+                          f"com.docker.compose.service={service}"]}):
+            state = c.attrs.get("State", {})
+            if state.get("Status") in ("created", "restarting"):
+                return True
+            if state.get("Status") == "running" and \
+                    state.get("Health", {}).get("Status") == "starting":
+                return True
+        return False
+
     def pool_container_healthy(self, n: int) -> bool:
         try:
             prefix = "honeypot_eshop_" if MODE == "wordpress" else "honeypot_database_"
@@ -758,10 +780,14 @@ class Manager:
         free = self.redis.zcard(FREE_KEY)
         waiting = self.prune_waiting()
         in_flight = len(self.in_flight)
+        # Compose pools still starting count as on their way, like a build.
+        coming = sum(1 for n in range(1, STATIC_COUNT + 1)
+                     if n not in ready and self.static_pool_pending(n))
         pools = self.all_pools(ready)
         room, reason = pl.budget_room(len(pools), POOL_MEM_MB, POOL_CPUS,
                                       MAX_MEMORY_MB, MAX_CPUS, MAX_POOLS)
-        start = pl.pools_to_start(free, in_flight, waiting, spares, room, PARALLEL_BUILDS)
+        start = pl.pools_to_start(free, in_flight + coming, waiting, spares, room,
+                                  PARALLEL_BUILDS + coming)
         if not reason and start > 0:
             ok, reason = self.can_grow()
         self.redis.set(STATUS_KEY, json.dumps({

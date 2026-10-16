@@ -23,6 +23,10 @@ services:
       # for well under 500MB of actual indexed data).
       - ES_JAVA_OPTS=${ES_JAVA_OPTS:--Xms1g -Xmx1g}
     mem_limit: ${ES_MEM_LIMIT}
+    # Needs vm.max_map_count >= 262144 on the HOST (Elasticsearch memory-maps
+    # its index files). A host-level kernel setting compose can't set; the
+    # dashboard checks it on every host that runs this stack and shows the
+    # fix (dashboard/core/host_settings.py).
     ulimits:
       memlock:
         soft: -1
@@ -129,7 +133,7 @@ services:
       # real fix, not a suppression of a real problem, since there's
       # nothing this VM could ever successfully telemeter to anyway.
       - TELEMETRY_ENABLED=false
-    mem_limit: ${KIBANA_MEM_LIMIT}
+    mem_limit: ${KIBANA_MEM_LIMIT:-2147483648}
     ports:
       - "${KIBANA_PORT}:${KIBANA_PORT}"
     healthcheck:
