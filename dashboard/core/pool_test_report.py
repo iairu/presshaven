@@ -443,8 +443,9 @@ class UsageSample:
     containers: int
     pools: int
     mem_mb: float
-    cpu_percent: float
+    cpu_percent: float            # sum over pool containers (100 = one core busy)
     ready: int | None = None      # pools registered ready with the router (Redis)
+    host_mem_mb: float | None = None   # total RAM in use on the host at this sample
 
 
 @dataclass
@@ -468,6 +469,8 @@ class PoolTestData:
     marks: list[tuple[float, str]] = field(default_factory=list)   # (t, step title)
     reserve: dict = field(default_factory=dict)       # see ScalingSummary.reserve
     usage: list[UsageSample] = field(default_factory=list)
+    host_cpus: int = 0            # logical processors on the host (0 = unknown)
+    host_mem_total_mb: float = 0.0  # total RAM on the host
     # The forced scale-down at the end: {"requested", "done" (None = timed out),
     # "sessions", "pools_before", "pools_after", "idle_timeout"}
     scaledown: dict = field(default_factory=dict)

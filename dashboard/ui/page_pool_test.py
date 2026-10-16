@@ -41,7 +41,7 @@ from core.pool_test_report import (capacity_warning, CART_PLAN, FALLBACK_EXPLOIT
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
                                     browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
                                     window_plan)
-from core.resource_stats import collect_pool_usage
+from core.resource_stats import collect_pool_usage, host_stats
 from core.state import AppState
 from ui.browser_widget import BrowserWidget
 from ui.flow_layout import FlowLayout, labeled
@@ -145,8 +145,10 @@ class _UsageSampler(QThread):
                     ready = redis_inspect.ready_pool_count(self._target.remote)
                 except Exception:  # noqa: BLE001
                     ready = None
+                host = host_stats(self._target)
                 self.samples.append(UsageSample(started - self._t0, u.containers, u.pools,
-                                                u.mem_bytes / 2 ** 20, u.cpu_percent, ready))
+                                                u.mem_bytes / 2 ** 20, u.cpu_percent, ready,
+                                                host[2] if host else None))
             except Exception:  # noqa: BLE001 -- a gap in the curve, not a failed run
                 pass
             while not self._stop and time.time() - started < self.interval:
@@ -1072,6 +1074,30 @@ class PoolTestPage(QWidget):
             state = self._blocking(lambda: redis_inspect.pool_state(remote))
         except Exception:  # noqa: BLE001
             pass
+        # Reassignment check: the pools the windows were on are gone, but the
+        # windows still hold their (released) session cookie. Sending each back
+        # to the shop shows the router reassigns it to a surviving pool (or a
+        # fresh session) rather than leaving it on a removed pool -- the
+        # timeline then shows the move instead of a window frozen on a dead pool.
+        removed = sorted(set(before.get("ready", [])) - set(state.get("ready", []) if state else []))
+        pool_before = {}
+        for smp in self._samples:
+            if smp.t < requested and smp.pool is not None:
+                pool_before[smp.window] = smp.pool
+        reassign = []
+        if removed:
+            self._mark("Reassignment after removal")
+            self._load_all([self._base_url() + "/"] * len(self.browsers),
+                           "reassignment after removal")
+            self._spin(700)
+            decisions = self._settled_decisions(need_sessions=True)
+            for i, d in enumerate(decisions):
+                frm = pool_before.get(i)
+                if frm in removed:
+                    to = (f"pool {d.pool}" if d.pool is not None
+                          else "production (fresh session)")
+                    reassign.append({"window": i, "from": frm, "to": to,
+                                     "stranded": d.pool == frm})
         for i, browser in enumerate(self.browsers):   # later manual use starts afresh
             browser.clear_cookies()
             self._session_ids[i] = ""
@@ -1081,6 +1107,7 @@ class PoolTestPage(QWidget):
                 "pools_before": before.get("ready", []) if before else [],
                 "building_before": sorted(int(n) for n in status.get("building", {})),
                 "pools_after": state.get("ready", []) if state else [],
+                "removed_pools": removed, "reassign": reassign,
                 "idle_timeout": status.get("idle_timeout"), "spares": status.get("spares"),
                 "mem_per_pool": status.get("mem_per_pool"),
                 "cpus_per_pool": status.get("cpus_per_pool")}
@@ -1118,6 +1145,12 @@ class PoolTestPage(QWidget):
             offset = self._blocking(lambda: redis_inspect.server_time(remote)) - time.time()
         except Exception:  # noqa: BLE001 -- same host: no offset
             offset = 0.0
+        try:
+            _h = self._blocking(lambda: host_stats(target))
+        except Exception:  # noqa: BLE001
+            _h = None
+        host_cpus = _h[0] if _h else 0
+        host_mem_total = _h[1] if _h else 0.0
         self._t0 = time.time()
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
         self._reserve = {}
@@ -1313,6 +1346,7 @@ class PoolTestPage(QWidget):
             samples=list(self._samples), loads=list(self._loads), events=events,
             marks=list(self._marks), reserve=dict(self._reserve),
             usage=list(sampler.samples), scaledown=scaledown,
+            host_cpus=host_cpus, host_mem_total_mb=host_mem_total,
             cleared=cleared, clear_seed=clear_seed)
 
     def reset_sessions(self) -> None:

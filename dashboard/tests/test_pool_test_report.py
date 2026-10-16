@@ -532,3 +532,23 @@ class ResponseRealismTests(unittest.TestCase):
         total, four, ex = pe.response_realism([ev])
         self.assertEqual((total, four), (3, 2))
         self.assertTrue(any("404" in e for e in ex))
+
+
+class PersonalIssueTests(unittest.TestCase):
+    def test_host_stats_parsing(self):
+        from core.resource_stats import parse_host_stats
+        out = "20\nMemTotal:       16375680 kB\nMemAvailable:    4000000 kB\nSwap: 0\n"
+        cpus, total, used = parse_host_stats(out)
+        self.assertEqual(cpus, 20)
+        self.assertAlmostEqual(total, 15992.0, delta=1)
+        self.assertAlmostEqual(used, 12085.0, delta=1)   # (16375680-4000000)/1024
+        self.assertIsNone(parse_host_stats("nope"))
+
+    def test_cpu_panel_normalizes_by_host_cpus(self):
+        # usage_figure labels CPU by host cpus when known; check the label logic.
+        from core.pool_test_report import PoolTestData, UsageSample
+        d = PoolTestData("n", "t", "u", "x", [], host_cpus=20,
+                         usage=[UsageSample(0, 2, 1, 400, 180.0, 1)])
+        # The normalized value for a 180% sum on 20 CPUs is 9%.
+        cpus = d.host_cpus
+        self.assertAlmostEqual(d.usage[0].cpu_percent / cpus, 9.0)

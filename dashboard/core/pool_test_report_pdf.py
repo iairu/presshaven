@@ -759,14 +759,25 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
     span = max([data.duration, 1.0] + [u.t for u in usage])
     W, ml, mr = 900, 110, 24
     plot_w = W - ml - mr
-    panels = [("Memory in use", lambda u: u.mem_mb, "MB", _BLUE_INK),
-              ("CPU in use", lambda u: u.cpu_percent, "% of one CPU", _BLUE_INK),
+    cpus = data.host_cpus or 0
+    have_host_mem = any(u.host_mem_mb is not None for u in usage)
+    # (title, value_fn, unit, color, overlay_fn|None, overlay_label)
+    if cpus > 0:
+        cpu_panel = ("CPU in use", lambda u: u.cpu_percent / cpus,
+                     f"% of all {cpus} CPUs", _BLUE_INK, None, "")
+    else:
+        cpu_panel = ("CPU in use", lambda u: u.cpu_percent, "% of one CPU", _BLUE_INK, None, "")
+    mem_overlay = ((lambda u: u.host_mem_mb) if have_host_mem else None)
+    panels = [("Memory in use", lambda u: u.mem_mb, "MB", _BLUE_INK, mem_overlay,
+               "whole host (all services)"),
+              cpu_panel,
               # Registered-ready pools when sampled: counting pools with any
               # running container also counted ones still being built.
               (("Pools ready", lambda u: float(u.ready if u.ready is not None else u.pools),
-                "registered with the router", _BLUE_INK)
+                "registered with the router", _BLUE_INK, None, "")
                if any(u.ready is not None for u in data.usage) else
-               ("Pools with running containers", lambda u: float(u.pools), "incl. builds", _BLUE_INK))]
+               ("Pools with running containers", lambda u: float(u.pools), "incl. builds",
+                _BLUE_INK, None, ""))]
     panel_h, gap, top = 110, 30, 56
     H = top + len(panels) * (panel_h + gap) + 34
     img, p = vector_figures.new_figure(W, H)
@@ -782,13 +793,17 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
     events += [(t, _RED) for t, _r in summ.capped]
     events += [(r.at, _REMOVED) for r in summ.removals]
     sd = data.scaledown or {}
-    for k, (title, value, unit, color) in enumerate(panels):
+    for k, (title, value, unit, color, overlay, overlay_label) in enumerate(panels):
         y0 = top + k * (panel_h + gap)
         vals = [value(u) for u in usage]
-        vmax = max(vals + [1.0]) * 1.15
+        ovals = [overlay(u) for u in usage if overlay and overlay(u) is not None] if overlay else []
+        vmax = max(vals + ovals + [1.0]) * 1.15
         p.setFont(QFont(family, 9, QFont.Weight.Bold))
         p.setPen(QColor(_INK))
-        p.drawText(QPointF(ml, y0 - 4), f"{title} ({unit})")
+        head = f"{title} ({unit})"
+        if overlay and ovals:
+            head += f"  \u2014 blue: pool containers, grey: {overlay_label}"
+        p.drawText(QPointF(ml, y0 - 4), head)
         p.setFont(font)
         for frac in (0.0, 0.5, 1.0):
             y = y0 + panel_h - frac * panel_h
@@ -805,6 +820,12 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
             p.setPen(QPen(QColor(c), 1, Qt.PenStyle.DashLine))
             p.drawLine(QPointF(X(t), y0), QPointF(X(t), y0 + panel_h))
         if len(usage) >= 2:
+            if overlay and ovals:
+                p.setPen(QPen(QColor("#9e9e9e"), 1.5))
+                opts = [QPointF(X(u.t), y0 + panel_h - ((overlay(u) or 0) / vmax) * panel_h)
+                        for u in usage]
+                for a, b in zip(opts, opts[1:]):
+                    p.drawLine(a, b)
             pen = QPen(QColor(color), 2)
             p.setPen(pen)
             pts = [QPointF(X(u.t), y0 + panel_h - (value(u) / vmax) * panel_h) for u in usage]
@@ -938,6 +959,43 @@ def _secs(v) -> str:
     return "—" if v is None else f"{v:.0f} s"
 
 
+def _memory_scope_html(data: PoolTestData, summ: ScalingSummary) -> str:
+    """Why the pool-container memory in the figure sits far below the budget and
+    the host RAM (issue: 10 pools near a 12 GB cap, but the figure shows ~4 GB)."""
+    usage = [u for u in data.usage if u.mem_mb is not None]
+    if not usage:
+        return ""
+    peak = max(u.mem_mb for u in usage)
+    peak_pools = max((u.ready or u.pools) for u in usage) or 1
+    status = (data.pool_state or {}).get("status") or {}
+    charge = status.get("mem_per_pool")
+    rows = [("Pool containers, measured peak",
+             f"{peak:,.0f} MB across {peak_pools} pools (~{peak / peak_pools:,.0f} MB per pool) "
+             "\u2014 this is what the figure's blue line shows")]
+    if charge:
+        rows.append(("Budget charge per pool",
+                     f"{charge:g} MB (POOL_RESERVE_MEM_MB) \u2014 what the scaling budget counts, "
+                     "deliberately above measured use as headroom"))
+    rows.append(("Container memory limit per pool",
+                 "1536 MB (1024 eshop + 512 database) \u2014 the hard ceiling a pool can reach, "
+                 "rarely approached at rest"))
+    if data.host_mem_total_mb:
+        hpeak = max((u.host_mem_mb or 0) for u in usage)
+        rows.append(("Whole host RAM",
+                     f"{hpeak:,.0f} MB in use of {data.host_mem_total_mb:,.0f} MB total "
+                     "(grey line) \u2014 includes production, Redis, Suricata and everything else, "
+                     "so it sits well above the pool containers alone"))
+    return ('<h3 style="color:#222;">Why pool memory is below the budget</h3>'
+            '<p style="color:#555;">The figure\'s memory panel counts the honeypot pool '
+            'containers only. A WordPress pool idles far below both its budget charge and its '
+            'container limit, so 10 pools use far less than a 12 GB budget suggests; the host as a '
+            'whole (grey line) is higher because it runs everything else too.</p>'
+            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;">'
+            + "".join(f'<tr><td width="34%"><b>{_esc(k)}</b></td><td>{_esc(v)}</td></tr>'
+                      for k, v in rows) + '</table>')
+
+
 def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int) -> tuple[str, int]:
     """Section: how fast pools were added, how long windows borrowed a pool,
     and page-load latency per routing state. Returns (html, next figure no)."""
@@ -997,6 +1055,30 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                'style="border-collapse:collapse; color:#333;">'
                + "".join(f'<tr><td width="32%"><b>{_esc(k)}</b></td><td>{_esc(v)}</td></tr>' for k, v in rows)
                + '</table><br/>')
+
+    # If building pools was slow, point at the levers that speed it up.
+    done_builds = [b for b in summ.builds if b.seconds is not None]
+    slowest = max((b.seconds for b in done_builds), default=0)
+    parallel = ((data.pool_state or {}).get("status") or {}).get("parallel")
+    prebuild_s = ((res.get("end") or data.duration) - res["start"]) if res.get("requested") else 0
+    if slowest >= 100 or prebuild_s >= 150:
+        wphase = max((dict(b.phases).get("WordPress seed", 0) for b in done_builds), default=0)
+        tips = ["<b>Why it is slow and how to speed it up.</b> A pool is built by cloning "
+                "production, then re-applying the WordPress storefront config via wp-cli "
+                f"(the “WordPress seed” phase, ~{wphase:.0f} s here — the biggest part of a "
+                f"~{slowest:.0f} s build)."]
+        tips.append("That config is identical to production, which was just cloned, so it can be "
+                    "skipped: set <b>POOL_FAST_CLONE=1</b> (ids/.env) to inherit the storefront "
+                    "from the clone instead of rebuilding it, saving most of that phase. Verify a "
+                    "built pool still serves the shop before relying on it.")
+        if res.get("requested") and parallel:
+            tips.append(f"The pre-build ran {parallel} build(s) at a time, so {res['requested']} "
+                        f"pools took {int((res['requested'] + parallel - 1) // parallel)} wave(s). "
+                        "Raise <b>POOL_PARALLEL_BUILDS</b> to build them in one wave (the host here "
+                        f"has spare cores for it).")
+        tips.append("Keeping more warm spares (<b>POOL_SPARES</b>) means attackers more often find "
+                    "a pool already built, at the cost of idle resources.")
+        out.append('<p style="color:#555;">' + "<br/>".join(tips) + '</p>')
 
     out.append(diagrams.figure_html(
         doc, scaling_timeline_figure(data, summ, family), "pool-scaling-timeline", fig,
@@ -1058,14 +1140,20 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
         fig += 1
 
     if data.usage:
+        cpu_note = (f"CPU is the sum over the pool containers divided by the host's "
+                    f"{data.host_cpus} logical processors, so 100% means every core busy"
+                    if data.host_cpus else
+                    "CPU is the sum over the pool containers, where 100% is one core busy")
         out.append(diagrams.figure_html(
             doc, usage_figure(data, summ, family), "pool-usage", fig,
-            "Memory and CPU of the honeypot pool containers (eshop + database), and the number of "
-            "pools registered ready with the router ("
-            "docker stats every 10 s, every 3 s around the scale-down). Dashed lines: green a pool "
-            "finished building, red the resource limit was reached, brown a pool was removed. "
-            "Shaded: the forced scale-down at the end of the run.", width=640))
+            "Memory and CPU of the honeypot pool containers (eshop + database) only, and the number "
+            "of pools registered ready with the router (docker stats every 10 s, every 3 s around "
+            "the scale-down). " + cpu_note + ". The memory panel's grey line is the whole host's "
+            "RAM in use (every service, not just the pools). Dashed lines: green a pool finished "
+            "building, red the resource limit was reached, brown a pool was removed. Shaded: the "
+            "forced scale-down at the end of the run.", width=640))
         fig += 1
+        out.append(_memory_scope_html(data, summ))
 
     chosen, probed = latency_loads(data.loads)
     stats = load_stats(chosen)
@@ -1157,9 +1245,16 @@ def _scaledown_html(data: PoolTestData) -> str:
                      f"{nb * per:,.0f} MB / {nb * sd.get('cpus_per_pool', 0):g} CPUs \u2192 "
                      f"{na * per:,.0f} MB / {na * sd.get('cpus_per_pool', 0):g} CPUs"))
     if before and after:
-        rows += [("Memory in use (measured)", f"{before.mem_mb:,.0f} MB \u2192 {after.mem_mb:,.0f} MB "
+        cpus = data.host_cpus or 0
+        if cpus:
+            cpu_row = (f"{before.cpu_percent / cpus:.0f} % \u2192 {after.cpu_percent / cpus:.0f} % "
+                       f"of all {cpus} CPUs")
+        else:
+            cpu_row = f"{before.cpu_percent:.0f} % \u2192 {after.cpu_percent:.0f} % of one CPU"
+        rows += [("Memory in use (measured, pool containers)",
+                  f"{before.mem_mb:,.0f} MB \u2192 {after.mem_mb:,.0f} MB "
                   f"({after.mem_mb - before.mem_mb:+,.0f} MB)"),
-                 ("CPU in use (measured)", f"{before.cpu_percent:.0f} % \u2192 {after.cpu_percent:.0f} %"),
+                 ("CPU in use (measured, pool containers)", cpu_row),
                  ("Containers running", f"{before.containers} \u2192 {after.containers}")]
     else:
         rows.append(("Measured use", "no resource samples around the scale-down"))
@@ -1171,7 +1266,40 @@ def _scaledown_html(data: PoolTestData) -> str:
     if idle:
         out.append('<p style="color:#555;">Also removed during the run for being idle: '
                    + _esc(", ".join(f"pool {r.pool} (idle {r.idle:.0f} s)" for r in idle)) + '.</p>')
+    out.append(_reassign_html(data, sd))
     return "".join(out)
+
+
+def _reassign_html(data: PoolTestData, sd: dict) -> str:
+    """After a pool is removed, the window that was on it is sent back to the
+    shop once: it should land on a surviving pool (or a fresh session), not
+    stay on the gone pool. Answers whether removal reassigns its users."""
+    reassign = sd.get("reassign")
+    if sd.get("removed_pools") is None:
+        return ""
+    name = lambda w: data.frames[w].label if w < len(data.frames) else f"Window {w + 1}"   # noqa: E731
+    if not reassign:
+        return ('<h3 style="color:#222;">Reassignment after removal</h3>'
+                '<p style="color:#555;">No window was on a removed pool, so nothing had to be '
+                'reassigned.</p>')
+    stranded = [r for r in reassign if r.get("stranded")]
+    rows = "".join(
+        f'<tr><td>{_esc(name(r["window"]))}</td><td>pool {r["from"]}</td><td>{_esc(str(r["to"]))}</td>'
+        f'<td>{_badge("stranded", _RED) if r.get("stranded") else _badge("reassigned", _GREEN)}</td></tr>'
+        for r in reassign)
+    verdict = ('<p style="color:#2e7d32;"><b>Every window whose pool was removed was moved to a '
+               'surviving pool or given a fresh session on its next request.</b></p>' if not stranded
+               else '<p style="color:#c62828;"><b>' + _esc(", ".join(name(r["window"]) for r in stranded))
+               + ' stayed on a removed pool.</b></p>')
+    return ('<h3 style="color:#222;">Reassignment after removal</h3>'
+            '<p style="color:#555;">A removed pool\'s owner keeps its session cookie; its pool '
+            'assignment was dropped when the pool went. Sent back to the shop once, the router '
+            'reassigns it rather than routing to the pool that no longer exists. (The forced '
+            'scale-down drops assignments on purpose; in normal operation idle scale-down only '
+            'removes pools no request has reached, so there is usually no active owner to move.)</p>'
+            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Removed pool</th>'
+            '<th>Reassigned to</th><th></th></tr>' + rows + '</table>' + verdict)
 
 
 def _borrow_outcome(c) -> str:

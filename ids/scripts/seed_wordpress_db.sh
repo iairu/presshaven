@@ -346,6 +346,19 @@ author_storefront_content() {
 if $WP core is-installed 2>/dev/null; then
     if [ "${FORCE_RESEED:-0}" != "1" ]; then
         log "WordPress already installed -- skipping install (set FORCE_RESEED=1 to wipe and rebuild)."
+        # SKIP_STOREFRONT_CONFIG=1: the database was cloned from an already-
+        # configured source (pool_manager cloning production for a runtime
+        # pool), so permalinks, shipping and the enabled payment gateways are
+        # already present and identical -- re-running configure_storefront only
+        # repeats work. Each wp-cli call boots WordPress, so those ~10-15 calls
+        # are the bulk of a runtime pool's "WordPress seed" time. Skipping them
+        # when the source was already configured cuts that to the is-installed
+        # check alone. Leave unset (default) to always refresh, which is what
+        # pools 1-3 and a from-scratch seed need.
+        if [ "${SKIP_STOREFRONT_CONFIG:-0}" = "1" ]; then
+            log "SKIP_STOREFRONT_CONFIG=1 -- storefront inherited from the cloned source, not refreshed."
+            exit 0
+        fi
         configure_storefront
         author_storefront_content
         log "Storefront configuration refreshed."

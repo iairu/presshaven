@@ -498,6 +498,9 @@ services:
       - POOL_RESERVE_MEM_MB=${POOL_RESERVE_MEM_MB:-}
       - POOL_RESERVE_CPUS=${POOL_RESERVE_CPUS:-}
       - POOL_WAITING_ACTIVE_SECONDS=${POOL_WAITING_ACTIVE_SECONDS:-60}
+      # Fast clone: skip re-applying storefront config on a runtime pool that
+      # cloned the already-configured production DB (~50s/pool saved). Opt-in.
+      - POOL_FAST_CLONE=${POOL_FAST_CLONE:-0}
       # Scale down: pools no request has reached for this long are removed
       # (runtime ones) or freed (compose-declared ones). 0 = never, minimum 600.
       - POOL_IDLE_TIMEOUT_SECONDS=${POOL_IDLE_TIMEOUT_SECONDS:-1800}

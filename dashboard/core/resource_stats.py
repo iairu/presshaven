@@ -190,6 +190,32 @@ def parse_pool_usage(stats_lines: str) -> PoolUsage:
     return out
 
 
+def parse_host_stats(text: str) -> tuple[int, float, float] | None:
+    """(logical CPUs, total RAM MB, RAM MB in use) from `nproc` output followed
+    by /proc/meminfo. None when memory could not be read."""
+    cpus = 0
+    mem_total = mem_avail = 0
+    for line in text.splitlines():
+        line = line.strip()
+        if line.isdigit() and cpus == 0:
+            cpus = int(line)
+        elif line.startswith("MemTotal:"):
+            mem_total = int(line.split()[1])
+        elif line.startswith("MemAvailable:"):
+            mem_avail = int(line.split()[1])
+    if mem_total == 0:
+        return None
+    return cpus, mem_total / 1024.0, (mem_total - mem_avail) / 1024.0
+
+
+def host_stats(target: Target, timeout: float = 10.0) -> tuple[int, float, float] | None:
+    """(logical CPUs, total RAM MB, RAM MB in use) of the host that runs the
+    target's containers, from its /proc. None when it can't be read. Used by
+    the pool test to show pool-container use against the whole host."""
+    out = _run(target, "nproc; cat /proc/meminfo", timeout)
+    return parse_host_stats(out) if out else None
+
+
 def collect_pool_usage(target: Target, timeout: float = 20.0) -> PoolUsage:
     """Memory/CPU of every running honeypot pool container, runtime ones included.
 

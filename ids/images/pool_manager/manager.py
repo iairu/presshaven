@@ -104,6 +104,13 @@ POOL_CPUS = float(os.environ.get("POOL_RESERVE_CPUS", "") or POOL_CPUS)
 # cleared its cookies leaves its old session in the queue; without this the
 # next pool went to that abandoned session while a live attacker kept waiting.
 WAITING_ACTIVE_S = float(os.environ.get("POOL_WAITING_ACTIVE_SECONDS", "60") or 60)
+# Runtime pools clone the already-configured production database, so their
+# WordPress storefront config (permalinks, shipping, enabled gateways) is
+# already present. With fast clone on, the per-pool WordPress-seed step skips
+# re-applying it (~50s of wp-cli per pool), relying on the clone + content
+# sync. Off by default: enable only after verifying a pool still serves
+# correctly on your stack. Never affects the compose-declared pools 1-3.
+FAST_CLONE = os.environ.get("POOL_FAST_CLONE", "0") == "1"
 # Pools built at the same time while sessions wait for one.
 PARALLEL_BUILDS = max(1, int(os.environ.get("POOL_PARALLEL_BUILDS", "2")))
 # Scale down pools no request has reached for this long (seconds; 0 = never).
@@ -530,6 +537,7 @@ class Manager:
                 "WP_SITE_URL": os.environ.get("WP_SITE_URL", "http://localhost"),
                 "WP_SITE_TITLE": os.environ.get("WP_SITE_TITLE", "Fernhill Coffee Roasters"),
                 "FORCE_RESEED": "0", "IMPORT_SAMPLE_CONTENT": "0",
+                "SKIP_STOREFRONT_CONFIG": "1" if FAST_CLONE else "0",
                 "STRIPE_TEST_PUBLISHABLE_KEY": os.environ.get("STRIPE_TEST_PUBLISHABLE_KEY", ""),
                 "STRIPE_TEST_SECRET_KEY": os.environ.get("STRIPE_TEST_SECRET_KEY", "")},
             network=self._net("honeypot_network"),
@@ -862,7 +870,8 @@ class Manager:
         log(f"started (project {PROJECT}, mode {MODE}, spares {SPARES}, max pools {MAX_POOLS}, "
             f"budget {MAX_MEMORY_MB:g} MB / {MAX_CPUS:g} CPUs (0 = none), "
             f"{POOL_MEM_MB} MB / {POOL_CPUS:g} CPUs per pool, {PARALLEL_BUILDS} parallel builds, "
-            f"idle timeout {IDLE_TIMEOUT_S:g} s (0 = never))")
+            f"idle timeout {IDLE_TIMEOUT_S:g} s (0 = never)"
+            + (", fast clone ON" if FAST_CLONE else "") + ")")
         try:
             self.remove_partial_pools()
         except Exception as e:  # noqa: BLE001
