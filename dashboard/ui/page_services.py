@@ -4,6 +4,7 @@ live command output below."""
 from __future__ import annotations
 
 import subprocess
+import threading
 
 import os
 
@@ -14,7 +15,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from core.container_status import summarize
+from core.container_status import finished_ok, summarize
 from core import honeypot_layer
 from core.docker_ctl import Target
 from core import services_report
@@ -168,14 +169,23 @@ class TargetPanel(QGroupBox):
         """`up` leaves every one-shot service (init_setup, the db seed and
         migration jobs, the Kibana/ES setup jobs) behind as an "Exited (0)"
         container, which clutters `docker container ls -a`. Their work is done and
-        the next `up` re-runs them anyway, so remove the stopped ones. Only
-        stopped containers go: `compose rm` never touches running ones."""
-        argv, cwd = self.target.build("rm", "-f")
-        try:
-            subprocess.Popen(argv, cwd=cwd, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-        except OSError:
-            pass
+        the next `up` re-runs them anyway, so remove those. Only jobs that
+        exited 0 go: a failed one (e.g. kibana_dashboards_setup when the import
+        never went through) stays, with its logs, so the failure is visible
+        instead of silently vanishing. Runs off the GUI thread (`ps` + `rm`)."""
+        target = self.target
+
+        def work() -> None:
+            done = sorted({c.get("Service", "") for c in finished_ok(target.ps())} - {""})
+            if not done:
+                return
+            argv, cwd = target.build("rm", "-f", *done)
+            try:
+                subprocess.run(argv, cwd=cwd, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, timeout=60)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        threading.Thread(target=work, daemon=True).start()
 
     def _reload_logs(self) -> None:
         self._run("logs", "--tail=50", "-f", mutating=False)

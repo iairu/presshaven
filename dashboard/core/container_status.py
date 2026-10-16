@@ -19,6 +19,13 @@ def exit_code_ok(container: dict) -> bool:
     return str(container.get("ExitCode", "0")) in ("0", "")
 
 
+def finished_ok(containers: list[dict]) -> list[dict]:
+    """One-shot jobs that have exited successfully (safe to clean up). A
+    running container also reports ExitCode 0, so State must say exited; a job
+    that failed is left out so its container and logs stay inspectable."""
+    return [c for c in containers if c.get("State") == "exited" and exit_code_ok(c)]
+
+
 def classify(container: dict | None) -> str:
     if container is None:
         return DOWN

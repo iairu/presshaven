@@ -133,10 +133,16 @@ services:
     ports:
       - "${KIBANA_PORT}:${KIBANA_PORT}"
     healthcheck:
+      # Only the real HTTP server counts: it answers an anonymous "/" with a
+      # 302 to the login page. While Kibana boots, a short-lived *preboot*
+      # server on the same port answers "/" with 200 OK and every API with
+      # 503 -- this check used to accept that 200, so (probing every 2 s
+      # during start_period) Kibana was marked healthy before it could
+      # import anything, and kibana_dashboards_setup ran too early.
       test:
         [
           "CMD-SHELL",
-          "curl -I --cacert config/certs/ca/ca.crt  https://kibana:5601 | grep -E \"HTTP/1\\.1 (200 OK|302 Found)\""
+          "curl -sI --cacert config/certs/ca/ca.crt https://kibana:5601 | grep -q \"HTTP/1\\.1 302 Found\""
         ]
       interval: 10s
       timeout: 10s
@@ -178,6 +184,14 @@ services:
   # exported copy silently stops applying the moment STACK_VERSION changes
   # -- confirmed live via `GET _find?type=config`. Setting it explicitly
   # here is version-independent.
+  #
+  # Robust against a Kibana that is up but not ready: it waits for
+  # /api/status to report "available", retries the import until Kibana
+  # accepts it (curl --fail-with-body, so a 503 is a retry, not a silent
+  # success), then checks that every dashboard in the NDJSON really exists.
+  # Anything else exits non-zero, so a failed import is visible in
+  # `docker compose ps -a` / the dashboard's Services page instead of looking
+  # like a clean run.
   kibana_dashboards_setup:
     image: curlimages/curl:7.85.0
     depends_on:
@@ -185,18 +199,27 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c '
+        api() { curl -sS --fail-with-body --cacert /certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "kbn-xsrf: true" "$$@"; };
+        echo "Waiting for Kibana to report available...";
+        n=0;
+        until api https://kibana:5601/api/status 2>/dev/null | grep -q "\"overall\":{\"level\":\"available\"";
+        do n=$$((n+1)); [ $$n -ge 120 ] && { echo "Kibana did not become available in 10 min"; exit 1; }; sleep 5; done;
         echo "Importing Honeypot dashboards...";
-        curl --cacert /certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} -H "kbn-xsrf: true" \
-          -X POST "https://kibana:5601/api/saved_objects/_import?overwrite=true" \
-          -F "file=@/data/honeypot-dashboards.ndjson";
-        echo "";
+        n=0;
+        until out=$$(api -X POST "https://kibana:5601/api/saved_objects/_import?overwrite=true" -F "file=@/data/honeypot-dashboards.ndjson") && echo "$$out" | grep -q "\"success\":true";
+        do echo "$$out" | head -c 400; echo; n=$$((n+1)); [ $$n -ge 24 ] && { echo "Import was never accepted"; exit 1; }; echo "Retrying import in 5 s..."; sleep 5; done;
+        echo "$$out" | grep -o "\"successCount\":[0-9]*";
         echo "Setting default landing page to the Web Traffic & Threat Overview dashboard...";
-        curl --cacert /certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} -H "kbn-xsrf: true" -H "Content-Type: application/json" \
-          -X POST "https://kibana:5601/api/kibana/settings/defaultRoute" \
-          -d "{\"value\": \"/app/dashboards#/view/dashboard-web-threat-overview\"}";
-        echo "";
+        api -H "Content-Type: application/json" -X POST "https://kibana:5601/api/kibana/settings/defaultRoute" \
+          -d "{\"value\": \"/app/dashboards#/view/dashboard-web-threat-overview\"}" >/dev/null || echo "WARNING: could not set the default route";
+        ids=$$(grep -o "\"id\": *\"dashboard-[^\"]*\"" /data/honeypot-dashboards.ndjson | sed "s/.*\"\\(dashboard-[^\"]*\\)\"/\\1/" | sort -u);
+        [ -n "$$ids" ] || { echo "No dashboard ids found in the NDJSON"; exit 1; };
+        missing=0;
+        for id in $$ids; do
+          if api "https://kibana:5601/api/saved_objects/dashboard/$$id" >/dev/null 2>&1; then echo "  ok      $$id"; else echo "  MISSING $$id"; missing=1; fi;
+        done;
+        [ $$missing -eq 0 ] || { echo "Some dashboards are missing after the import"; exit 1; };
         echo "Dashboards imported.";
-        exit 0;
       '
     volumes:
       - ../elasticsearch/certs/ca:/certs/ca:ro

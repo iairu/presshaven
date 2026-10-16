@@ -214,3 +214,12 @@ class PurgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FinishedOkTests(unittest.TestCase):
+    def test_only_cleanly_exited_jobs_are_cleaned_up(self):
+        from core.container_status import finished_ok
+        cs = [{"Service": "init-password", "State": "exited", "ExitCode": 0},
+              {"Service": "kibana_dashboards_setup", "State": "exited", "ExitCode": 1},
+              {"Service": "kibana", "State": "running", "ExitCode": 0}]
+        self.assertEqual([c["Service"] for c in finished_ok(cs)], ["init-password"])
