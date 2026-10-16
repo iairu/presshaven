@@ -432,3 +432,8 @@ def request_scaledown(remote: RemoteConfig | None, session_ids: list[str], ttl: 
     _run_redis_cli(remote, "EVAL", script, "2", "honeypot_pool:release",
                    "honeypot_pool:scaledown_now", str(ttl), *session_ids, timeout=timeout)
 
+
+def ready_pool_count(remote: RemoteConfig | None, timeout: float = 10.0) -> int | None:
+    """How many honeypot pools are registered ready with the router."""
+    out = _run_redis_cli(remote, "SCARD", "honeypot_pool:ready", timeout=timeout).strip()
+    return int(out) if out.isdigit() else None

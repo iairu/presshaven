@@ -298,6 +298,10 @@ local function get_or_assign_pool(owner)
         -- A session still waiting for its own pool is cached only briefly.
         local pool_num = clamp_pool(existing_pool)
         local waiting = red:zscore(rules.WAITING_KEY, owner)
+        if waiting and waiting ~= ngx.null then
+            -- Still waiting and still active: keeps its claim on the next pool.
+            red:hset(rules.WAITING_SEEN_KEY, owner, string.format("%.3f", ngx.now()))
+        end
         _G.redis_pool.close_connection(red)
 
         set_local_cache(owner, pool_num,

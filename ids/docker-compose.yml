@@ -492,6 +492,12 @@ services:
       - POOL_MAX_MEMORY_MB=${POOL_MAX_MEMORY_MB:-12288}
       - POOL_MAX_CPUS=${POOL_MAX_CPUS:-12}
       - POOL_PARALLEL_BUILDS=${POOL_PARALLEL_BUILDS:-2}
+      # What the budget charges per pool (empty = the containers' limits) and
+      # how recently a waiting session must have sent a request to get the
+      # next pool built for it.
+      - POOL_RESERVE_MEM_MB=${POOL_RESERVE_MEM_MB:-}
+      - POOL_RESERVE_CPUS=${POOL_RESERVE_CPUS:-}
+      - POOL_WAITING_ACTIVE_SECONDS=${POOL_WAITING_ACTIVE_SECONDS:-60}
       # Scale down: pools no request has reached for this long are removed
       # (runtime ones) or freed (compose-declared ones). 0 = never, minimum 600.
       - POOL_IDLE_TIMEOUT_SECONDS=${POOL_IDLE_TIMEOUT_SECONDS:-1800}

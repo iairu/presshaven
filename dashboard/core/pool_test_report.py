@@ -316,9 +316,13 @@ def cart_marks(steps: list["StepResult"], resets: set[tuple[int, int]] | None = 
                     "so the cart it filled was gone from the browser from that step on."
                     if i in cleared_at else "")
             if c is None:
+                # Not measured, not a changed cart: the read (retried once with
+                # a longer timeout) still timed out, typically while pools were
+                # being built and the host was busy.
                 row.append(CART_UNREADABLE)
                 if i in base:
-                    issues.append(f"Window {i + 1}: cart could not be read in '{step.title}'.")
+                    notes.append(f"Window {i + 1}: cart not measured in '{step.title}' "
+                                 "(the read timed out twice).")
                 continue
             if i not in base:
                 if not c.items:
@@ -429,6 +433,7 @@ class LoadTiming:
     step: str
     ms: float
     state: str = ""               # filled from the routing read right after the load
+    probe: bool = False           # a latency probe load (same page, one window at a time)
 
 
 @dataclass
@@ -439,6 +444,7 @@ class UsageSample:
     pools: int
     mem_mb: float
     cpu_percent: float
+    ready: int | None = None      # pools registered ready with the router (Redis)
 
 
 @dataclass
@@ -520,6 +526,15 @@ def _quantile(values: list[float], q: float) -> float:
     return v[lo] + (v[hi] - v[lo]) * (k - lo)
 
 
+def latency_loads(loads: list[LoadTiming]) -> tuple[list[LoadTiming], bool]:
+    """The loads to compare latency on, and whether they are probe loads.
+    Probe loads (the same product page, one window at a time) compare like
+    with like; the step loads mix pages and run every window at once, so
+    they mostly measure the test machine. Step loads only when no probe ran."""
+    probes = [x for x in loads if x.probe]
+    return (probes, True) if probes else (list(loads), False)
+
+
 def load_stats(loads: list[LoadTiming]) -> dict[str, dict]:
     """Page-load latency per routing state: n, median, p90, max (ms)."""
     out = {}
@@ -544,24 +559,37 @@ class PoolBuild:
 
 @dataclass
 class BorrowCase:
-    """Case A: a window that found no free pool (not scaled yet) and borrowed one."""
+    """Case A: a session that found no free pool (not scaled yet) and borrowed one."""
     window: int
     borrowed: int | None
-    start: float
-    end: float | None             # moved to its own pool / dropped / None = still waiting
-    outcome: str                  # "own" | "dropped" | "waiting"
+    start: float                  # assigned (from the hand-off event when there is one)
+    end: float | None             # moved to its own pool / dropped / abandoned / None = waiting
+    outcome: str                  # "own" | "dropped" | "abandoned" | "waiting"
     own_pool: int | None = None
     waited: float | None = None   # pool_manager's figure when it handed the pool over
+    session_id: str = ""
 
 
 @dataclass
 class LimitCase:
-    """Case B: a window left on a shared pool because the resource limit was hit."""
+    """Case B: a window's session left on a shared pool for good."""
     window: int
     pool: int | None
     since: float
-    shared_with: list[int]
-    how: str                      # "assigned while capped" | "dropped from the wait queue"
+    shared_with: list[int]        # other test windows on the pool
+    how: str                      # "assigned while capped" | "dropped from the wait queue" | ...
+    shared_outside: list[str] = field(default_factory=list)   # other owners, described
+    session_id: str = ""
+
+
+@dataclass
+class AbandonedSession:
+    """A session a window left behind by clearing its data (1.1 / 1.3)."""
+    window: int
+    session_id: str
+    at: float                     # when the window was first seen on another session
+    pool: int | None              # the pool it held then (None: production)
+    later_pool: int | None = None  # a pool handed to it after it was abandoned
 
 
 @dataclass
@@ -583,6 +611,37 @@ class ScalingSummary:
     timelines: dict[int, list]
     removals: list[PoolRemoval] = field(default_factory=list)
     released: list[tuple[float, int, int, str]] = field(default_factory=list)  # (t, pool, sessions, reason)
+    abandoned: list[AbandonedSession] = field(default_factory=list)
+    owners: dict[int, int] = field(default_factory=dict)       # pool -> first window to own it
+
+
+def session_timelines(samples: list[Sample], end: float) -> dict[tuple[int, str], list]:
+    """Like timelines(), but per (window, session id): a window that cleared
+    its data and got a new session gets a separate timeline for each, the
+    earlier one ending when the window was first seen on the next."""
+    batches: dict[float, list[Sample]] = {}
+    for smp in samples:
+        batches.setdefault(smp.t, []).append(smp)
+    out: dict[tuple[int, str], list] = {}
+    current: dict[int, str] = {}
+    for t in sorted(batches):
+        batch = batches[t]
+        for smp, state in zip(batch, classify(batch)):
+            if not smp.session_id:
+                continue
+            prev = current.get(smp.window)
+            if prev is not None and prev != smp.session_id:
+                segs = out[(smp.window, prev)]
+                segs[-1] = (segs[-1][0], t, segs[-1][2], segs[-1][3])
+            current[smp.window] = smp.session_id
+            segs = out.setdefault((smp.window, smp.session_id), [])
+            pool = smp.pool if state != PRODUCTION else None
+            if segs and segs[-1][2] == state and segs[-1][3] == pool:
+                continue
+            if segs:
+                segs[-1] = (segs[-1][0], t, segs[-1][2], segs[-1][3])
+            segs.append((t, end, state, pool))
+    return out
 
 
 def usage_at(usage: list[UsageSample], t: float, after: bool = False) -> UsageSample | None:
@@ -593,8 +652,9 @@ def usage_at(usage: list[UsageSample], t: float, after: bool = False) -> UsageSa
 
 
 def _arrival(segs: list, pool: int | None) -> float:
-    """When a window's timeline first reached `pool` (inf if never)."""
-    return next((sg[0] for sg in segs if sg[3] == pool), float("inf"))
+    """When a timeline first held `pool` for real -- as its own or shared,
+    not merely borrowed while its own was being built (inf if never)."""
+    return next((sg[0] for sg in segs if sg[3] == pool and sg[2] in (OWN, SHARED)), float("inf"))
 
 
 def scaling_summary(data: PoolTestData) -> ScalingSummary:
@@ -641,46 +701,85 @@ def scaling_summary(data: PoolTestData) -> ScalingSummary:
     builds.sort(key=lambda b: b.start)
 
     tl = timelines(data.samples, data.duration)
-    sid_of: dict[int, str] = {}
-    for smp in data.samples:
-        if smp.session_id:
-            sid_of[smp.window] = smp.session_id
+    stl = session_timelines(data.samples, data.duration)
+    order: dict[int, list[str]] = {}            # window -> its sessions, in order
+    for (w, sid), segs in sorted(stl.items(), key=lambda kv: kv[1][0][0]):
+        order.setdefault(w, []).append(sid)
+    last_sid = {w: sids[-1] for w, sids in order.items()}
+
+    abandoned: list[AbandonedSession] = []
+    for (w, sid), segs in stl.items():
+        if last_sid.get(w) != sid:
+            h = handoffs.get(sid)
+            abandoned.append(AbandonedSession(w, sid, segs[-1][1], segs[-1][3],
+                                              h.get("pool") if h and h["at"] >= segs[-1][1] else None))
+    abandoned.sort(key=lambda a: a.at)
+    gone = {a.session_id: a for a in abandoned}
+
+    # First window to hold each pool as its own: the pool's owner.
+    owners: dict[int, int] = {}
+    for (w, sid), segs in sorted(stl.items(), key=lambda kv: kv[1][0][0]):
+        for t0, _t1, state, pool in segs:
+            if pool is not None and state in (OWN, SHARED):
+                if pool not in owners or t0 < owners[pool][0]:
+                    owners[pool] = (t0, w)
+    owner_of = {p: w for p, (_t, w) in owners.items()}
+
     borrow: list[BorrowCase] = []
-    limit: list[LimitCase] = []
-    for w, segs in sorted(tl.items()):
-        sid = sid_of.get(w, "")
+    for (w, sid), segs in sorted(stl.items(), key=lambda kv: (kv[0][0], kv[1][0][0])):
         for i, (t0, t1, state, pool) in enumerate(segs):
             if state != BORROWED or (i and segs[i - 1][2] == BORROWED):
                 continue
-            nxt = next((sg for sg in segs[i + 1:] if sg[2] != BORROWED), None)
             h = handoffs.get(sid)
-            if nxt is not None and nxt[2] == OWN:
-                borrow.append(BorrowCase(w, pool, t0, nxt[0], "own", nxt[3],
-                                         h.get("waited") if h else None))
-            elif nxt is not None or sid in dropped:
-                borrow.append(BorrowCase(w, pool, t0, dropped.get(sid, nxt[0] if nxt else None),
-                                         "dropped"))
+            waited = h.get("waited") if h else None
+            # pool_manager knows when the session started waiting; the window
+            # only sees it at its next routing read (several seconds later).
+            start = h["at"] - waited if h and waited is not None else t0
+            nxt = next((sg for sg in segs[i + 1:] if sg[2] != BORROWED), None)
+            if sid in gone and nxt is None:
+                a_ = gone[sid]
+                borrow.append(BorrowCase(w, pool, start, a_.at, "abandoned", a_.later_pool,
+                                         waited, sid))
+            elif nxt is not None and nxt[2] == OWN:
+                borrow.append(BorrowCase(w, pool, start, h["at"] if h else nxt[0], "own",
+                                         nxt[3], waited, sid))
+            elif sid in dropped or nxt is not None:
+                borrow.append(BorrowCase(w, pool, start, dropped.get(sid, nxt[0] if nxt else None),
+                                         "dropped", None, None, sid))
             else:
-                borrow.append(BorrowCase(w, pool, t0, None, "waiting"))
-        final = segs[-1] if segs else None
-        first = next((sg for sg in segs if sg[2] != PRODUCTION), None)
-        # Diverted while growth was capped: round-robin onto a ready pool, even
-        # when the pool's other owner is not one of the test windows.
-        capped_at_divert = first is not None and first[2] in (OWN, SHARED) and any(
-            a - 1 <= first[0] and (b is None or first[0] <= b) for a, b in intervals)
-        # Shared at the end: the round-robin newcomer is whoever reached that
-        # pool last (the first one there owned it), even if the cap predates
-        # the run and so has no event in it.
-        arrived_later = final is not None and final[2] == SHARED and any(
-            o != w and sg and sg[-1][3] == final[3] and _arrival(sg, final[3]) < _arrival(segs, final[3])
-            for o, sg in tl.items())
-        if final and (arrived_later or capped_at_divert or (sid in dropped and final[2] != OWN)):
-            others = sorted({o for o, sg in tl.items() if o != w and sg and sg[-1][3] == final[3]
-                             and sg[-1][2] in (SHARED, OWN, BORROWED)})
-            how = "dropped from the wait queue" if sid in dropped else "assigned while capped"
-            limit.append(LimitCase(w, final[3], first[0] if first else final[0], others, how))
+                borrow.append(BorrowCase(w, pool, start, None, "waiting", None, None, sid))
+
+    # Case B: a window's CURRENT session sharing its pool for good, with
+    # another window (as the later arrival) or with sessions outside the
+    # test (the registry counts more owners than windows on the pool).
+    registry = (data.pool_state or {}).get("owners", {}) or {}
+    finals = {w: stl[(w, sid)][-1] for w, sid in last_sid.items()}
+    limit: list[LimitCase] = []
+    for w, sid in sorted(last_sid.items()):
+        t0, _t1, state, pool = finals[w]
+        if pool is None or state not in (OWN, SHARED):
+            continue
+        segs = stl[(w, sid)]
+        arrived = _arrival(segs, pool)
+        on_pool = [o for o, f in finals.items() if f[3] == pool and f[2] in (OWN, SHARED)]
+        earlier = [o for o in on_pool if o != w
+                   and _arrival(stl[(o, last_sid[o])], pool) < arrived]
+        outside_n = max(0, int(registry.get(pool, 0) or 0) - len(on_pool))
+        outside = []
+        for a_ in abandoned:
+            if outside_n and (a_.later_pool == pool or (a_.pool == pool and a_.later_pool is None)):
+                outside.append(f"window {a_.window + 1}'s abandoned session {a_.session_id[:8]}\u2026")
+                outside_n -= 1
+        outside += ["a session outside the test"] * outside_n
+        if not earlier and not outside:
+            continue
+        first = next((sg for sg in segs if sg[3] == pool), finals[w])
+        capped_then = any(c - 1 <= first[0] and (u is None or first[0] <= u) for c, u in intervals)
+        how = ("dropped from the wait queue" if sid in dropped else
+               "assigned while capped" if capped_then else "assigned round-robin (no free pool)")
+        limit.append(LimitCase(w, pool, first[0], sorted(earlier), how, outside, sid))
     return ScalingSummary(builds, borrow, limit, capped, dict(data.reserve), tl,
-                          removals, released)
+                          removals, released, abandoned, owner_of)
 
 
 @dataclass
@@ -754,7 +853,13 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
         moved.append(", ".join(fresh) + " cleared browser data, got a fresh session and was "
                      "not diverted again before the run ended, so it is on production.")
     cart_issues = cart_violations(steps or [], cart_resets(cleared))
-    shared = {n: labels for n, labels in by_pool.items() if len(labels) > 1}
+    # The registry counts every session on a pool; more owners than windows
+    # on it means it is shared with a session outside the test (e.g. one a
+    # window abandoned by clearing its data), even with one window on it.
+    registry = (state or {}).get("owners", {}) or {}
+    outside = {n: int(registry.get(n, 0) or 0) - len(labels) for n, labels in by_pool.items()
+               if int(registry.get(n, 0) or 0) > len(labels)}
+    shared = {n: labels for n, labels in by_pool.items() if len(labels) > 1 or n in outside}
     if not shared and cart_issues:
         pools = ", ".join(f"{f.label} \u2192 pool {f.pool}" for f in frames)
         return Verdict(CART_LOST, "A cart changed when its session was routed to a honeypot",
@@ -767,7 +872,9 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
         return Verdict(EXCLUSIVE, "Every attacker has a honeypot pool of their own",
                        [pools + "."] + moved, by_pool)
 
-    findings = [f"Pool {n} is shared by {', '.join(labels)}." for n, labels in sorted(shared.items())]
+    findings = [f"Pool {n} is shared by {', '.join(labels)}"
+                + (f" and {outside[n]} session(s) outside the test" if n in outside else "") + "."
+                for n, labels in sorted(shared.items())]
     if sharing_justified(state):
         if state.get("capped"):
             reason = (f"pool growth is capped ({state.get('capped')}), so further attackers "
@@ -788,3 +895,30 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
            if free else "but the registry shows no reason for it (state unavailable or pools missing)."))
     return Verdict(SHARED_UNEXPECTED, "Pools are shared although free pools exist",
                    findings + moved + cart_issues, by_pool)
+
+
+def capacity_warning(windows: int, delayed: int, state: dict) -> str:
+    """Before a run: a warning when the resource limit can't give every window
+    a pool of its own, so the round-robin fallback (and, for the delayed
+    windows, a pre-build that can't finish) is what the run will show. The
+    run releases this machine's sessions first, so every ready pool plus the
+    room left under the limit is available to it. "" when it fits or the
+    pool_manager status is unknown."""
+    status = (state or {}).get("status") or {}
+    if "room" not in status:
+        return ""
+    capacity = len(state.get("ready", [])) + int(status.get("room") or 0)
+    if windows <= capacity:
+        return ""
+    short = windows - capacity
+    text = (f"Only {capacity} pool(s) fit in the resource limit, so {short} of the {windows} windows "
+            "will share a pool round-robin (case B) instead of getting one of their own.")
+    if delayed:
+        text += (f" The {delayed} delayed window(s) attack last, so they are the ones most likely "
+                 "to find no pre-built pool.")
+    per = status.get("mem_per_pool")
+    if per:
+        text += (f" To fit all windows, raise POOL_MAX_MEMORY_MB / POOL_MAX_CPUS / POOL_MAX, or "
+                 f"lower the per-pool charge (now {per:g} MB per pool, POOL_RESERVE_MEM_MB / "
+                 "POOL_RESERVE_CPUS) in ids/.env.")
+    return text

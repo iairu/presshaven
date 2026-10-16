@@ -204,5 +204,27 @@ for _, dir in ipairs({ "../..", "../../../db_proxy/reverse_proxy_enhanced" }) do
     end
 end
 
+print("== GREASE values do not change the recovery key ==")
+do
+    local ids = require "session_identity_rules"
+    check("0x1a1a / 0xFAFA are GREASE", ids.is_grease("0x1a1a") and ids.is_grease("0xFAFA"))
+    check("0x1a2a and real names are not", not ids.is_grease("0x1a2a") and not ids.is_grease("X25519")
+          and not ids.is_grease("0x00ff"))
+    local base = { user_agent = "UA", accept_language = "en", http_version = "HTTP/2.0", ssl_protocol = "TLSv1.3" }
+    local function with(ciphers, curves)
+        local f = {}
+        for k, v in pairs(base) do f[k] = v end
+        f.ssl_ciphers, f.ssl_curves = ciphers, curves
+        return ids.fingerprint_source(f, true)
+    end
+    -- Real QtWebEngine ClientHellos on two connections (GREASE differs).
+    local a = with("0xfafa:TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384", "0xfafa:X25519MLKEM768:X25519")
+    local b = with("0xbaba:TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384", "0xdada:X25519MLKEM768:X25519")
+    check("two connections of one browser give the same key", a == b)
+    check("a different cipher list still gives a different key",
+          a ~= with("TLS_AES_128_GCM_SHA256", "X25519"))
+    check("GREASE is gone from the key", not a:find("0xfafa", 1, true))
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 os.exit(failed == 0 and 0 or 1)

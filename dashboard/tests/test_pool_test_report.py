@@ -198,7 +198,8 @@ class ScalingTests(unittest.TestCase):
         s = scaling_summary(d)
         self.assertEqual([seg[2] for seg in s.timelines[1]], ["production", BORROWED, OWN])
         (c,) = s.borrow
-        self.assertEqual((c.window, c.borrowed, c.own_pool, c.end - c.start, c.waited), (1, 1, 2, 30, 29))
+        # Timed from pool_manager's hand-off event (assigned at 39 - 29 = 10, moved at 39).
+        self.assertEqual((c.window, c.borrowed, c.own_pool, c.end - c.start, c.waited), (1, 1, 2, 29, 29))
         self.assertEqual((s.builds[0].pool, s.builds[0].reason, s.builds[0].seconds), (2, "waiting session", 28))
         self.assertEqual(s.limit, [])
 
@@ -436,3 +437,85 @@ class ClearBrowserDataTests(unittest.TestCase):
         self.assertIn("reappeared in 'back'", notes[0])
         self.assertEqual(len(issues), 1)
         self.assertIn("deleted its cookies before 'clear'", issues[0])
+
+
+class ReportRunRegressionTests(unittest.TestCase):
+    """The shape of the 2026-10-16 run (pool_test_report_issues.md 3.1-3.3, 3.5)."""
+
+    def setUp(self):
+        from core.pool_test_report import PoolTestData, Sample
+        P = ("PRODUCTION", None, False)
+        # windows: 0 = A (own pool 1), 1 = E, 2 = H, 3 = I
+        timeline = [
+            (0, [("a", *P), ("e_old", *P), ("h", *P), ("i", *P)]),
+            (10, [("a", "HONEYPOT", 1, False), ("e_old", *P), ("h", *P), ("i", *P)]),
+            (82, [("a", "HONEYPOT", 1, False), ("e_old", "HONEYPOT", 1, True), ("h", *P), ("i", *P)]),
+            (110, [("a", "HONEYPOT", 1, False), ("e_new", *P), ("h", *P), ("i", *P)]),   # E cleared data
+            (290, [("a", "HONEYPOT", 1, False), ("e_new", *P), ("h", "HONEYPOT", 8, False),
+                   ("i", "HONEYPOT", 5, False)]),
+        ]
+        samples = [Sample(t, w, sid, r, p, wt) for t, row in timeline
+                   for w, (sid, r, p, wt) in enumerate(row)]
+        events = [{"type": "handoff", "pool": 5, "session": "e_old", "borrowed": 1, "waited": 52, "at": 132},
+                  {"type": "capped", "reason": "resource limit reached", "at": 164}]
+        frames_ = [FrameResult(f"Attacker {c}", session_id=s, pool=p)
+                   for c, s, p in (("A", "a", 1), ("E", "e_new", None), ("H", "h", 8), ("I", "i", 5))]
+        self.state = {"ready": [1, 5, 8], "free": [], "capped": "resource limit reached",
+                      "owners": {1: 1, 5: 2, 8: 1}}
+        self.data = PoolTestData("now", "t", "u", "", frames_, pool_state=self.state,
+                                 duration=400, samples=samples, events=events)
+
+    def test_cases(self):
+        from core.pool_test_report import scaling_summary
+        s = scaling_summary(self.data)
+        (b,) = s.borrow
+        self.assertEqual((b.window, b.outcome, b.own_pool, b.start), (1, "abandoned", 5, 80))
+        self.assertEqual([(a.window, a.session_id, a.later_pool) for a in s.abandoned], [(1, "e_old", 5)])
+        self.assertEqual([c.window for c in s.limit], [3])          # I only; H had pool 8 alone
+        self.assertIn("abandoned session", s.limit[0].shared_outside[0])
+        self.assertEqual(s.owners[1], 0)
+
+    def test_verdict_counts_registry_owners(self):
+        frames_ = [FrameResult(f"Attacker {c}", session_id=f"{c * 32}", pool=p)
+                   for c, p in (("A", 1), ("E", 1), ("H", 8), ("I", 5))]
+        state = dict(self.state, owners={1: 2, 5: 2, 8: 1})
+        v = analyze(frames_, state)
+        self.assertIn("Pool 5 is shared by Attacker I and 1 session(s) outside the test.", v.findings)
+        self.assertNotIn(8, [n for n in v.by_pool if f"Pool {n} is shared" in " ".join(v.findings)])
+
+
+class IssueFixTests(unittest.TestCase):
+    def test_background_is_subtracted_from_db_counters(self):
+        from core.pool_evidence import without_background
+        base = {"Questions": 1000, "Com_select": 900, "Com_insert": 0, "Com_update": 0, "Com_delete": 0}
+        idle = {"Questions": 1600, "Com_select": 1500, "Com_insert": 0, "Com_update": 0, "Com_delete": 0}
+        delta = {"Questions": 7000, "Com_select": 6500, "Com_insert": 5, "Com_update": 2, "Com_delete": 0}
+        out = without_background(delta, base, idle, idle_s=60, total_s=600)   # 10/s background
+        self.assertEqual(out["Questions"], 1000)
+        self.assertEqual(out["Com_select"], 500)
+        self.assertEqual(out["Com_insert"], 5)
+        self.assertIsNone(without_background(delta, base, None, 60, 600))
+
+    def test_explained_cross_traffic_is_not_a_finding(self):
+        from core import pool_evidence as pe
+        ev = pe.ContainerEvidence(1, hits=[pe.Hit("A", "GET", "/", 200), pe.Hit("E", "GET", "/x", 200),
+                                           pe.Hit("G", "GET", "/y", 200)])
+        out = pe.cross_traffic([ev], {1: "A"}, {1: {"E"}})
+        self.assertEqual(len(out), 1)
+        self.assertIn("G", out[0])
+        self.assertNotIn("E,", out[0])
+
+    def test_capacity_warning(self):
+        from core.pool_test_report import capacity_warning
+        state = {"ready": [1, 2, 3, 4], "status": {"room": 4, "mem_per_pool": 1536}}
+        self.assertIn("2 of the 10 windows", capacity_warning(10, 3, state))
+        self.assertEqual(capacity_warning(8, 0, state), "")
+        self.assertEqual(capacity_warning(10, 0, {}), "")       # manager status unknown
+
+    def test_probe_loads_are_preferred_for_latency(self):
+        from core.pool_test_report import LoadTiming, latency_loads
+        loads = [LoadTiming(0, 0, "step", 3000, "own"), LoadTiming(1, 0, "probe", 400, "own", probe=True)]
+        chosen, probed = latency_loads(loads)
+        self.assertTrue(probed)
+        self.assertEqual([x.ms for x in chosen], [400])
+        self.assertEqual(latency_loads(loads[:1]), (loads[:1], False))

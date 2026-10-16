@@ -11,6 +11,7 @@ project's compose Target, so they work for a remote edge host too.
 from __future__ import annotations
 
 import re
+import time
 import shlex
 from dataclasses import dataclass, field
 
@@ -48,6 +49,9 @@ class ContainerEvidence:
     hits: list[Hit] = field(default_factory=list)
     files_changed: list[str] = field(default_factory=list)
     db_delta: dict[str, int] | None = None   # None: no baseline (pool built mid-run)
+    # db_delta minus the pool's own background (healthchecks, WP cron, content
+    # sync) at the rate measured while no window was on it; None: not measured.
+    db_attack: dict[str, int] | None = None
     error: str = ""
 
     def windows(self) -> list[str]:
@@ -96,6 +100,22 @@ def db_delta(before: dict[str, int] | None, after: dict[str, int]) -> dict[str, 
     if before is None:
         return None
     return {k: after.get(k, 0) - before.get(k, 0) for k in DB_COUNTERS}
+
+
+def without_background(delta: dict[str, int] | None, base: dict[str, int] | None,
+                       idle: dict[str, int] | None, idle_s: float, total_s: float) -> dict[str, int] | None:
+    """`delta` (counters over total_s seconds) minus the pool's background:
+    its rate while idle (base -> idle over idle_s seconds, no window on it)
+    times total_s. A pool's own healthchecks, WP cron and content sync run
+    thousands of queries even when nobody visits, which swamped what the
+    attacker caused. None when the idle rate was not measured."""
+    if delta is None or base is None or idle is None or idle_s < 5:
+        return None
+    out = {}
+    for k in DB_COUNTERS:
+        rate = max(0, idle.get(k, 0) - base.get(k, 0)) / idle_s
+        out[k] = max(0, round(delta.get(k, 0) - rate * total_s))
+    return out
 
 
 # ---- collectors (docker / compose) ----
@@ -172,7 +192,18 @@ def take_baseline(target: Target, pools: list[int]) -> dict:
                 break
         except PoolEvidenceError:
             continue
-    return {"since": since, "db": {p: db_status(target, p) for p in pools}, "pool_since": {}}
+    now = time.time()
+    return {"since": since, "db": {p: db_status(target, p) for p in pools}, "pool_since": {},
+            "db_at": {p: now for p in pools}}
+
+
+def mark_idle(target: Target, baseline: dict) -> None:
+    """Second DB snapshot of the pools that were up at the start, taken while
+    every window is still on production: the counters between the baseline and
+    this are the pools' own background (see without_background())."""
+    now = time.time()
+    baseline["idle"] = {p: (db_status(target, p), now)
+                        for p, b in baseline.get("db", {}).items() if b is not None}
 
 
 def extend_baseline(target: Target, baseline: dict, pools: list[int]) -> None:
@@ -212,20 +243,31 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
                               f"-prune -o -type f -newermt '{since}' -print 2>/dev/null | head -60")
                 ev.files_changed = filter_files(files.splitlines())
             after = db_status(target, pool)
-            ev.db_delta = db_delta(baseline.get("db", {}).get(pool), after) if after else None
+            base = baseline.get("db", {}).get(pool)
+            ev.db_delta = db_delta(base, after) if after else None
+            idle, idle_at = baseline.get("idle", {}).get(pool, (None, 0.0))
+            base_at = baseline.get("db_at", {}).get(pool)
+            if base_at and idle_at:
+                ev.db_attack = without_background(ev.db_delta, base, idle,
+                                                  idle_at - base_at, time.time() - base_at)
         except PoolEvidenceError as e:
             ev.error = str(e)
         out.append(ev)
     return out
 
 
-def cross_traffic(evidence: list[ContainerEvidence], owners: dict[int, str]) -> list[str]:
-    """Findings for pools that served a window other than their owner."""
+def cross_traffic(evidence: list[ContainerEvidence], owners: dict[int, str],
+                  expected: dict[int, set[str]] | None = None) -> list[str]:
+    """Findings for pools that served a window other than their owner.
+    `expected` (pool -> window letters) lists traffic the run explains -- a
+    window that borrowed the pool while its own was built, or shares it at
+    the resource limit -- which is the design, not a leak, so it is left out."""
     out = []
     for ev in evidence:
         owner = owners.get(ev.pool)
-        others = [w for w in ev.windows() if owner and w != owner]
+        allowed = (expected or {}).get(ev.pool, set())
+        others = [w for w in ev.windows() if owner and w != owner and w not in allowed]
         if others:
             out.append(f"Pool {ev.pool} (owned by window {owner}) also served window(s) "
-                       f"{', '.join(others)}.")
+                       f"{', '.join(others)}, which neither borrowed nor shares it.")
     return out

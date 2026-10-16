@@ -19,7 +19,8 @@ from core.pool_test_report import (BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, M
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
-                                   CART_UNREADABLE, cart_marks, cart_resets, load_stats, scaling_summary,
+                                   CART_UNREADABLE, cart_marks, cart_resets, latency_loads, load_stats,
+                                   scaling_summary,
                                    usage_at)
 
 _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY, MERGED: _RED,
@@ -28,6 +29,13 @@ _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY,
 
 def _short(session_id: str) -> str:
     return (session_id[:8] + "…") if session_id else "no session"
+
+
+def _pool_shared(pool: int, verdict: Verdict, registry_owners: dict) -> bool:
+    """Shared by two windows, or by one window and sessions outside the test
+    (the registry counts more owners than windows bound to it)."""
+    labels = verdict.by_pool.get(pool, [])
+    return len(labels) > 1 or int(registry_owners.get(pool, 0) or 0) > len(labels)
 
 
 def routing_figure(data: PoolTestData, verdict: Verdict, family: str = "Serif"):
@@ -52,7 +60,7 @@ def routing_figure(data: PoolTestData, verdict: Verdict, family: str = "Serif"):
     for i, f in enumerate(frames):
         y = 48 + i * row_h
         tx, ty = targets[f.pool]
-        shared = f.pool is not None and len(verdict.by_pool.get(f.pool, [])) > 1
+        shared = f.pool is not None and _pool_shared(f.pool, verdict, owners)
         color = (_ORANGE if verdict.status == SHARED_EXPECTED else _RED) if shared \
             else (_GREY if f.pool is None else _GREEN)
         _arrow(p, 250, y + 30, tx, ty + pool_h / 2, color=color)
@@ -67,7 +75,7 @@ def routing_figure(data: PoolTestData, verdict: Verdict, family: str = "Serif"):
             _box(p, x, y, 240, pool_h, "No pool", ", ".join(labels),
                  fill="#f1f1f1", border=_GREY, text=_GREY, family=family)
             continue
-        shared = len(labels) > 1
+        shared = _pool_shared(n, verdict, owners)
         color = (_ORANGE if verdict.status == SHARED_EXPECTED else _RED) if shared else _GREEN
         total = owners.get(n)
         sub = ", ".join(labels) + (f" • {total} owner(s) in Redis" if total is not None else "")
@@ -231,8 +239,22 @@ def _cleared_html(data: PoolTestData) -> str:
             f'<td>{badge}<br/><span style="font-size:8pt;color:#555;">{_esc(e.outcome())}</span></td></tr>')
     same = sum(1 for e in data.cleared if e.resolved and e.same_session())
     fresh = sum(1 for e in data.cleared if e.resolved and e.after_session and not e.same_session())
-    summary = (f'<p style="color:#555;">{len(data.cleared)} clearing(s): {same} kept their session, '
-               f'{fresh} got a fresh one.</p>')
+    none = sum(1 for e in data.cleared if e.resolved and not e.after_session)
+    unseen = sum(1 for e in data.cleared if not e.resolved)
+    parts_ = [f"{same} kept their session", f"{fresh} got a fresh one"]
+    if none:
+        parts_.append(f"{none} had no session at the next routing read")
+    if unseen:
+        parts_.append(f"{unseen} not observed (the run ended first)")
+    # A window already diverted that lost its session walks back to production.
+    escaped = [e for e in data.cleared if e.resolved and e.before_pool is not None
+               and not e.same_session()]
+    summary = (f'<p style="color:#555;">{len(data.cleared)} clearing(s): {", ".join(parts_)}.</p>'
+               + (f'<p style="color:#c62828;"><b>{len(escaped)} diverted window(s) lost their '
+                  'session by clearing their data</b> and were no longer routed to their honeypot '
+                  'pool: ' + _esc(", ".join(data.frames[e.window].label for e in escaped
+                                            if e.window < len(data.frames))) + '.</p>'
+                  if escaped else ''))
     return (intro + summary
             + '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
             'style="border-collapse:collapse; color:#333;"><tr><th>Time</th><th>Before step</th>'
@@ -260,10 +282,37 @@ def _runs_html(data: PoolTestData) -> str:
             '<th>Name</th><th>Routing</th><th>Pool</th></tr>' + "".join(rows) + '</table>')
 
 
+def pool_owner_letters(data: PoolTestData, summ: ScalingSummary | None = None) -> dict[int, str]:
+    """Pool -> letter of the window that held it first as its own. Taking the
+    last window bound to a pool named a round-robin newcomer (J on D's pool 4)
+    as the owner."""
+    summ = summ or scaling_summary(data)
+    out = {p: data.frames[w].label[-1] for p, w in summ.owners.items() if w < len(data.frames)}
+    for f in data.frames:          # pools no timeline saw as owned: first frame bound to it
+        if f.pool is not None:
+            out.setdefault(f.pool, f.label[-1])
+    return out
+
+
+def expected_visitors(data: PoolTestData, summ: ScalingSummary) -> dict[int, set[str]]:
+    """Pool -> letters of windows whose traffic on it the run explains: they
+    borrowed it (case A) or share it at the resource limit (case B)."""
+    letter = lambda w: data.frames[w].label[-1] if w < len(data.frames) else "?"   # noqa: E731
+    out: dict[int, set[str]] = {}
+    for c in summ.borrow:
+        if c.borrowed is not None:
+            out.setdefault(c.borrowed, set()).add(letter(c.window))
+    for c in summ.limit:
+        if c.pool is not None:
+            out.setdefault(c.pool, set()).add(letter(c.window))
+            out[c.pool].update(letter(o) for o in c.shared_with)
+    return out
+
+
 def _evidence_html(data: PoolTestData) -> str:
     if not data.evidence:
         return ""
-    owner = {f.pool: f.label[-1] for f in data.frames if f.pool is not None}
+    owner = pool_owner_letters(data)
     out = ['<h2 style="color:#222;">What each honeypot container saw and changed</h2>',
            '<p style="color:#555;">Read from each pool\'s own eshop and database containers '
            f'since the run started ({_esc(data.since or "unknown")}). Requests are matched to '
@@ -281,10 +330,18 @@ def _evidence_html(data: PoolTestData) -> str:
             or '<li style="color:#777;">none</li>'
         files = "".join(f'<li style="font-size:8pt;">{_esc(f)}</li>' for f in ev.files_changed[:10]) \
             or '<li style="color:#777;">no files written</li>'
+        fmt = lambda d: ", ".join(f"{k.replace('Com_', '').lower()} +{v}" for k, v in d.items())   # noqa: E731
         if ev.db_delta is None:
             db = '<span style="color:#777;">no baseline (pool built during the run)</span>'
+        elif ev.db_attack is not None:
+            db = (f'<b>{_esc(fmt(ev.db_attack))}</b> beyond its own background'
+                  f'<br/><span style="font-size:8pt;color:#777;">total {_esc(fmt(ev.db_delta))}; the '
+                  'background (healthchecks, WP cron, content sync) was measured while every window '
+                  'was still on production</span>')
         else:
-            db = ", ".join(f"{k.replace('Com_', '').lower()} +{v}" for k, v in ev.db_delta.items())
+            db = (f'{_esc(fmt(ev.db_delta))}<br/><span style="font-size:8pt;color:#777;">total, '
+                  'including the pool\'s own background (not measured for a pool that came up '
+                  'during the run)</span>')
         out.append(
             f'<h3 style="color:#222;">{head}</h3>'
             f'<table width="100%" cellspacing="0" cellpadding="4" border="1" '
@@ -300,9 +357,10 @@ def _evidence_html(data: PoolTestData) -> str:
 def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     family = _report_font_family()
     verdict = analyze(data.frames, data.pool_state, data.steps, data.cleared)
-    owners = {f.pool: f.label[-1] for f in data.frames if f.pool is not None}
-    verdict.findings.extend(pool_evidence.cross_traffic(data.evidence, owners))
     summ = scaling_summary(data)
+    owners = pool_owner_letters(data, summ)
+    verdict.findings.extend(pool_evidence.cross_traffic(
+        data.evidence, owners, expected_visitors(data, summ)))
     first_delayed = len(data.frames) - data.delayed
     if data.delayed and summ.reserve.get("reached"):
         for c in summ.borrow:
@@ -693,7 +751,12 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
     plot_w = W - ml - mr
     panels = [("Memory in use", lambda u: u.mem_mb, "MB", _BLUE_INK),
               ("CPU in use", lambda u: u.cpu_percent, "% of one CPU", _BLUE_INK),
-              ("Pools running", lambda u: float(u.pools), "pools", _BLUE_INK)]
+              # Registered-ready pools when sampled: counting pools with any
+              # running container also counted ones still being built.
+              (("Pools ready", lambda u: float(u.ready if u.ready is not None else u.pools),
+                "registered with the router", _BLUE_INK)
+               if any(u.ready is not None for u in data.usage) else
+               ("Pools with running containers", lambda u: float(u.pools), "incl. builds", _BLUE_INK))]
     panel_h, gap, top = 110, 30, 56
     H = top + len(panels) * (panel_h + gap) + 34
     img, p = vector_figures.new_figure(W, H)
@@ -960,11 +1023,15 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
             wait_rows.append((label, data.duration - c.start, _ORANGE,
                               f"still borrowing pool {c.borrowed} at the end"))
             continue
-        note = (f"pool {c.borrowed} → own pool {c.own_pool}" if c.outcome == "own"
-                else f"pool {c.borrowed}, then shared at the limit")
-        if c.waited is not None:
+        if c.outcome == "own":
+            note, color = f"pool {c.borrowed} \u2192 own pool {c.own_pool}", _ORANGE
+        elif c.outcome == "abandoned":
+            note, color = (f"pool {c.borrowed}, until the window cleared its data", _GREY)
+        else:
+            note, color = f"pool {c.borrowed}, then shared at the limit", _RED
+        if c.waited is not None and c.outcome == "own":
             note += f" (manager: {c.waited:.0f} s)"
-        wait_rows.append((label, c.end - c.start, _ORANGE if c.outcome == "own" else _RED, note))
+        wait_rows.append((label, c.end - c.start, color, note))
     if res.get("requested"):
         took = (res.get("end") or data.duration) - res["start"]
         wait_rows.append((f"pre-build of {res['requested']} pool(s)", took, _PURPLE,
@@ -983,13 +1050,15 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     if data.usage:
         out.append(diagrams.figure_html(
             doc, usage_figure(data, summ, family), "pool-usage", fig,
-            "Memory, CPU and number of running honeypot pools (eshop + database containers, "
+            "Memory and CPU of the honeypot pool containers (eshop + database), and the number of "
+            "pools registered ready with the router ("
             "docker stats every 10 s, every 3 s around the scale-down). Dashed lines: green a pool "
             "finished building, red the resource limit was reached, brown a pool was removed. "
             "Shaded: the forced scale-down at the end of the run.", width=640))
         fig += 1
 
-    stats = load_stats(data.loads)
+    chosen, probed = latency_loads(data.loads)
+    stats = load_stats(chosen)
     if stats:
         rows_l, whisk = [], {}
         for i, st in enumerate(s for s in STATES if s in stats):
@@ -1001,9 +1070,17 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
             doc, _hbar_chart(rows_l, "ms", "Page load latency by where the window was served",
                              family, whisk),
             "pool-load-latency", fig,
-            "Every page load of every window during the run (browser navigation start to load "
-            "finished), grouped by where that window was routed right after it. Bar: median; "
-            "short tick: 90th percentile; line end: slowest load.", width=640))
+            ("Latency probes: the same product page loaded by one window at a time, three times "
+             "during the run (all windows on production, after the scale-up, at the end), timed "
+             "from navigation start to load finished and grouped by where that window was "
+             "routed right after."
+             if probed else
+             "Every page load of every window during the run, all windows loading at once (no "
+             "latency probe ran), so these mix different pages and mostly measure the test "
+             "machine; grouped by where the window was routed right after.")
+            + " Bar: median; short tick: 90th percentile; line end: slowest load."
+            + ("" if all(v["n"] >= 10 for v in stats.values()) else
+               " States with fewer than 10 loads are too few to compare."), width=640))
         fig += 1
     return "".join(out), fig
 
@@ -1087,6 +1164,40 @@ def _scaledown_html(data: PoolTestData) -> str:
     return "".join(out)
 
 
+def _borrow_outcome(c) -> str:
+    if c.outcome == "own":
+        return f"moved to its own pool {c.own_pool}"
+    if c.outcome == "abandoned":
+        return ("the window cleared its data and left this session behind"
+                + (f"; pool {c.own_pool} was later handed to it, unused" if c.own_pool else ""))
+    if c.outcome == "dropped":
+        return "limit reached: stays shared (case B)"
+    return "still waiting"
+
+
+def _abandoned_html(data: PoolTestData, summ: ScalingSummary) -> str:
+    """Sessions windows left behind by clearing their data: they keep their
+    pool assignment until it expires, so any pool they hold (or are handed
+    later) is taken from the budget without anyone using it."""
+    if not summ.abandoned:
+        return ""
+    name = lambda w: data.frames[w].label if w < len(data.frames) else f"Window {w + 1}"   # noqa: E731
+    rows = "".join(
+        f'<tr><td>{_esc(name(a.window))}</td><td>{_esc(a.session_id[:8])}\u2026</td>'
+        f'<td>{_mmss(a.at)}</td><td>{_esc("pool " + str(a.pool) if a.pool else "production")}</td>'
+        f'<td>{_esc("pool " + str(a.later_pool) if a.later_pool else "-")}</td></tr>'
+        for a in summ.abandoned)
+    return ('<h3 style="color:#222;">Sessions left behind by clearing browser data</h3>'
+            '<p style="color:#555;">A window that cleared its cookies and was not recognised as '
+            'the same client got a new session; the old one stays registered until it expires. A '
+            'pool it holds or is handed later is taken from the budget without anyone using it. '
+            'pool_manager only hands a new pool to a waiting session whose client sent a request '
+            'recently, and the forced scale-down at the end releases these sessions too.</p>'
+            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Session</th>'
+            '<th>Left at</th><th>Held then</th><th>Handed later</th></tr>' + rows + '</table>')
+
+
 def _round_robin_html(data: PoolTestData) -> str:
     """Both round-robin cases, explicitly: A (no free pool yet, scaling) and
     B (resource limit reached, no more pools)."""
@@ -1106,7 +1217,7 @@ def _round_robin_html(data: PoolTestData) -> str:
                        f'<td>{_mmss(c.start)}</td><td>{_mmss(c.end) if c.end is not None else "end of run"}</td>'
                        f'<td>{_secs((c.end - c.start) if c.end is not None else None)}'
                        f'{" (pool_manager: " + _secs(c.waited) + ")" if c.waited is not None else ""}</td>'
-                       f'<td>{_esc({"own": f"moved to its own pool {c.own_pool}", "dropped": "limit reached: stays shared (case B)", "waiting": "still waiting"}[c.outcome])}</td></tr>'
+                       f'<td>{_esc(_borrow_outcome(c))}</td></tr>'
                        for c in summ.borrow) + '</table>')
     else:
         out.append('<p style="color:#555;">Not observed: every window found a free pool the moment '
@@ -1121,8 +1232,12 @@ def _round_robin_html(data: PoolTestData) -> str:
                    'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Pool</th>'
                    '<th>Since</th><th>Shares with</th><th>How</th></tr>' + "".join(
                        f'<tr><td>{_esc(name(c.window))}</td><td>pool {c.pool}</td><td>{_mmss(c.since)}</td>'
-                       f'<td>{_esc(", ".join(name(o) for o in c.shared_with) or "a session outside the test")}</td>'
+                       f'<td>{_esc(", ".join([name(o) for o in c.shared_with] + c.shared_outside) or "-")}</td>'
                        f'<td>{_esc(c.how)}</td></tr>' for c in summ.limit) + '</table>')
+    elif summ.capped:
+        out.append('<p style="color:#555;">Not observed: the resource limit was reached, but every '
+                   'window diverted afterwards still found a free pool (a spare built before the '
+                   'limit), so nobody had to share.</p>')
     else:
         room = status.get("room")
         free = len((data.pool_state or {}).get("free", []))
@@ -1132,4 +1247,5 @@ def _round_robin_html(data: PoolTestData) -> str:
                 if isinstance(room, int) else "")
         out.append('<p style="color:#555;">Not observed: the resource limit was not reached during '
                    'the run.' + _esc(hint) + '</p>')
+    out.append(_abandoned_html(data, summ))
     return "".join(out)

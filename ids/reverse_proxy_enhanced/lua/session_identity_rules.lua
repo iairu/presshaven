@@ -149,6 +149,38 @@ function _M.rejection_record(cookie, status, now, hash_fn, scored, tamper_score,
     }
 end
 
+-- TLS fields that list what the client offered, ":"-separated (nginx prints
+-- values it doesn't know as hex, e.g. "0x2a2a").
+local TLS_LIST_FIELDS = { ssl_ciphers = true, ssl_curves = true }
+
+--- True for an RFC 8701 GREASE value: 0x?a?a with both bytes equal
+--- (0x0a0a, 0x1a1a, ... 0xfafa).
+function _M.is_grease(token)
+    local hi, lo = tostring(token):lower():match("^0x(%x%x)(%x%x)$")
+    return hi ~= nil and hi == lo and hi:sub(2, 2) == "a"
+end
+
+--- A ciphers/curves list with GREASE values removed. Chromium-based
+--- browsers (QtWebEngine included) put one random GREASE value into each
+--- list of every ClientHello and pick it afresh per TLS connection --
+--- confirmed with QtWebEngine: 0xfafa, 0xbaba, 0xcaca, 0x1a1a on four
+--- consecutive connections. Left in, the recovery key changed with every new
+--- connection, so a client that cleared its cookies (clearing site data also
+--- closes its connections) was only recovered when it happened to reuse one,
+--- and a diverted attacker could walk back to production.
+function _M.strip_grease(list)
+    if type(list) ~= "string" or list == "" then
+        return list
+    end
+    local kept = {}
+    for token in list:gmatch("[^:]+") do
+        if not _M.is_grease(token) then
+            kept[#kept + 1] = token
+        end
+    end
+    return table.concat(kept, ":")
+end
+
 --- Canonical string the recovery fingerprint is a hash of.
 ---
 --- @param  fields  table    Values keyed by FINGERPRINT_FIELDS names, plus
@@ -170,6 +202,9 @@ function _M.fingerprint_source(fields, use_ip)
     end
     for _, name in ipairs(_M.FINGERPRINT_FIELDS) do
         local v = fields[name]
+        if TLS_LIST_FIELDS[name] then
+            v = _M.strip_grease(v)
+        end
         parts[#parts + 1] = name .. "=" .. (type(v) == "string" and v or "")
     end
     return table.concat(parts, "\n")

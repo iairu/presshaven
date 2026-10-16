@@ -36,6 +36,7 @@ class Reconcile(unittest.TestCase):
         manager.SPARES = 1
         manager.PARALLEL_BUILDS = 2
         manager.IDLE_TIMEOUT_S = 0
+        manager.WAITING_ACTIVE_S = 60
         self.r = redis.Redis(host=HOST, port=int(os.environ.get("REDIS_TEST_PORT", "6379")),
                              decode_responses=True)
         self.r.flushall()
@@ -45,6 +46,7 @@ class Reconcile(unittest.TestCase):
         self.mgr.in_flight = set()
         self.mgr.backoff_until = 0.0
         self.mgr.build_started = {}
+        self.mgr.build_reasons = {}
         self.mgr.capped_reason = ""
         self.mgr._local = manager.threading.local()
         self.mgr.docker = mock.MagicMock()
@@ -57,8 +59,12 @@ class Reconcile(unittest.TestCase):
         # Builds finish when finish_builds() is called (synchronously).
         self.building = []
 
+        self.reasons = {}
+
         def fake_start(n, reason="spare"):
             self.started.append(n)
+            self.reasons[n] = reason
+            self.mgr.build_reasons[n] = reason
             self.mgr.in_flight.add(n)
             self.building.append(n)
         self.mgr.start_build = fake_start
@@ -76,6 +82,7 @@ class Reconcile(unittest.TestCase):
             n = self.building.pop(0)
             self.mgr.register_ready(n)
             self.mgr.in_flight.discard(n)
+            self.mgr.build_reasons.pop(n, None)
 
     def static_ids(self):
         return [str(i) for i in range(1, self.STATIC + 1)]
@@ -339,6 +346,37 @@ class Reconcile(unittest.TestCase):
         self.mgr.static_pool_pending = lambda n: False     # missing / exited / unhealthy
         self.run_reconcile()
         self.assertEqual(self.started, [self.STATIC + 1])
+
+    def test_new_pool_skips_a_waiting_session_whose_client_went_quiet(self):
+        """Window E's case: it cleared its cookies right after being diverted,
+        leaving its old session queued; G waits and is still active."""
+        self.m.WAITING_ACTIVE_S = 60
+        self.m.PARALLEL_BUILDS = 1
+        self.run_reconcile()
+        for i in range(self.STATIC):
+            self.assign(f"s{i}")
+        self.assign("abandoned")
+        self.assign("live")
+        self.r.hset(self.m.WAITING_SEEN_KEY, "abandoned", time.time() - 300)
+        self.r.hset(self.m.WAITING_SEEN_KEY, "live", time.time())
+        self.run_reconcile()
+        (h,) = self.events("handoff")
+        self.assertEqual(h["session"], "live")
+        self.assertIn("abandoned", self.r.zrange(self.m.WAITING_KEY, 0, -1))   # keeps its place
+        self.assertEqual(self.mgr.prune_waiting(), 0)    # but is no demand for a new build
+        self.r.hset(self.m.WAITING_SEEN_KEY, "abandoned", time.time())          # client is back
+        self.assertEqual(self.mgr.prune_waiting(), 1)
+
+    def test_build_for_a_waiter_is_not_labelled_spare_while_a_spare_builds(self):
+        self.run_reconcile()
+        for i in range(self.STATIC):
+            self.assign(f"s{i}")
+        self.run_reconcile(finish=False)            # all owned: a spare starts
+        spare = self.started[-1]
+        self.assign("w0")                          # then a session has to wait
+        self.run_reconcile(finish=False)
+        self.assertEqual(self.reasons[spare], "spare")
+        self.assertEqual(self.reasons[self.started[-1]], "waiting session")
 
     def test_expired_waiting_session_gets_no_pool(self):
         self.run_reconcile()

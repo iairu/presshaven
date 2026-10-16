@@ -50,6 +50,10 @@ _M.COUNTER_KEY = "honeypot_pool:counter"
 _M.PROVISION_KEY = "honeypot_pool:provision"
 _M.CAPPED_KEY = "honeypot_pool:capped"
 _M.WAITING_KEY = "honeypot_pool:waiting"
+-- HASH session id -> epoch seconds of its last request while it waits: the
+-- hand-off skips waiting sessions whose client has gone quiet (an attacker
+-- that cleared its cookies leaves its old session behind in the queue).
+_M.WAITING_SEEN_KEY = "honeypot_pool:waiting_seen"
 -- HASH pool number -> epoch seconds a request was last routed to it; pool_manager
 -- scales down pools nobody has used for POOL_IDLE_TIMEOUT_SECONDS.
 _M.LAST_SEEN_KEY = "honeypot_pool:last_seen"
@@ -99,6 +103,7 @@ local existing = redis.call('GET', KEYS[1])
 if existing then
   redis.call('EXPIRE', KEYS[1], ttl)
   if redis.call('ZSCORE', KEYS[7], ARGV[1]) then
+    redis.call('HSET', 'honeypot_pool:waiting_seen', ARGV[1], ARGV[4])
     return {tonumber(existing), 'pending'}
   end
   return {tonumber(existing), 'existing'}
@@ -128,6 +133,7 @@ if not pool then
   else
     mode = 'pending'
     redis.call('ZADD', KEYS[7], tonumber(ARGV[4]) or c, ARGV[1])
+    redis.call('HSET', 'honeypot_pool:waiting_seen', ARGV[1], ARGV[4])
     local max_waiting = tonumber(ARGV[3]) or 200
     redis.call('ZREMRANGEBYRANK', KEYS[7], 0, -(max_waiting + 1))
   end

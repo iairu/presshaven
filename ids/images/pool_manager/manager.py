@@ -51,6 +51,8 @@ OWNER_PREFIX = "honeypot_pool:owner:"
 PROVISION_KEY = "honeypot_pool:provision"
 CAPPED_KEY = "honeypot_pool:capped"
 WAITING_KEY = "honeypot_pool:waiting"
+# session id -> epoch of its last request while waiting (pool_router stamps it).
+WAITING_SEEN_KEY = "honeypot_pool:waiting_seen"
 # Extra unowned pools a client asks to have ready (an int, with a TTL) on top of
 # POOL_SPARES, e.g. the dashboard's pool test before its delayed windows attack.
 RESERVE_KEY = "honeypot_pool:reserve"
@@ -89,6 +91,19 @@ RETRY_BACKOFF_S = int(os.environ.get("POOL_RETRY_BACKOFF_SECONDS", "60"))
 MAX_MEMORY_MB = float(os.environ.get("POOL_MAX_MEMORY_MB", "0") or 0)
 MAX_CPUS = float(os.environ.get("POOL_MAX_CPUS", "0") or 0)
 POOL_MEM_MB, POOL_CPUS = pl.pool_cost(MODE)
+# What the budget charges per pool. Defaults to the containers' limits (the
+# most a pool can ever take); real use is far lower (a WordPress pool measured
+# ~430 MB / near-idle CPU in the pool test), so a limits-based budget stops
+# scaling at a fraction of what the host could carry. Set these closer to
+# measured use to fit more pools; POOL_MIN_FREE_MEM_MB and the load / disk
+# checks still stop growth if the host really runs short.
+POOL_MEM_MB = float(os.environ.get("POOL_RESERVE_MEM_MB", "") or POOL_MEM_MB)
+POOL_CPUS = float(os.environ.get("POOL_RESERVE_CPUS", "") or POOL_CPUS)
+# A waiting session counts as active (gets the next pool, counts as demand for
+# builds) only while its client sent a request this recently. A client that
+# cleared its cookies leaves its old session in the queue; without this the
+# next pool went to that abandoned session while a live attacker kept waiting.
+WAITING_ACTIVE_S = float(os.environ.get("POOL_WAITING_ACTIVE_SECONDS", "60") or 60)
 # Pools built at the same time while sessions wait for one.
 PARALLEL_BUILDS = max(1, int(os.environ.get("POOL_PARALLEL_BUILDS", "2")))
 # Scale down pools no request has reached for this long (seconds; 0 = never).
@@ -144,6 +159,7 @@ class Manager:
         self.in_flight: set[int] = set()   # pools being built (one thread each)
         self.backoff_until = 0.0
         self.build_started: dict[int, float] = {}
+        self.build_reasons: dict[int, str] = {}
         self.capped_reason = ""
         self.forced_removed: list[int] = []   # removed so far by an unfinished forced scale-down
         self._local = threading.local()    # per build thread: phase timings
@@ -234,8 +250,9 @@ class Manager:
         """Give unowned pool n to the session that has waited longest for a pool
         of its own (moving it off the pool it borrowed), or put n in the free
         set when nobody waits. Returns the session id it went to."""
-        res = self.redis.eval(HANDOFF_SCRIPT, 3, WAITING_KEY, FREE_KEY, READY_KEY,
-                              str(n), SESSION_KEY_PREFIX, OWNER_PREFIX)
+        res = self.redis.eval(HANDOFF_SCRIPT, 4, WAITING_KEY, FREE_KEY, READY_KEY, WAITING_SEEN_KEY,
+                              str(n), SESSION_KEY_PREFIX, OWNER_PREFIX,
+                              f"{time.time():.3f}", str(WAITING_ACTIVE_S))
         if not res:
             return None
         sid, since, old = res
@@ -627,9 +644,11 @@ class Manager:
         finally:
             self.in_flight.discard(n)
             self.build_started.pop(n, None)
+            self.build_reasons.pop(n, None)
 
     def start_build(self, n: int, reason: str = "spare") -> None:
         self.in_flight.add(n)
+        self.build_reasons[n] = reason
         self.build_started[n] = time.time()
         self.event("build_start", pool=n, reason=reason)
         threading.Thread(target=self._provision_thread, args=(n,), daemon=True).start()
@@ -644,11 +663,22 @@ class Manager:
 
     def prune_waiting(self) -> int:
         """Drop waiting sessions whose assignment has expired; returns how many
-        still wait for a pool of their own."""
-        for sid in self.redis.zrange(WAITING_KEY, 0, -1):
+        still wait for a pool of their own AND are active (see
+        WAITING_ACTIVE_S) -- only those are demand for a new build."""
+        now = time.time()
+        queued = self.redis.zrange(WAITING_KEY, 0, -1)
+        seen = self.redis.hgetall(WAITING_SEEN_KEY)
+        active = 0
+        for sid in queued:
             if not self.redis.exists(SESSION_KEY_PREFIX + sid):
                 self.redis.zrem(WAITING_KEY, sid)
-        return self.redis.zcard(WAITING_KEY)
+                self.redis.hdel(WAITING_SEEN_KEY, sid)
+            elif sid not in seen or now - float(seen[sid]) <= WAITING_ACTIVE_S:
+                active += 1
+        stray = [sid for sid in seen if sid not in set(queued)]
+        if stray:
+            self.redis.hdel(WAITING_SEEN_KEY, *stray)
+        return active
 
     def all_pools(self, ready: set[int]) -> set[int]:
         """Every pool that exists or is being built, compose-declared included."""
@@ -807,6 +837,7 @@ class Manager:
             dropped = self.redis.zrange(WAITING_KEY, in_flight, -1)
             if dropped:
                 self.redis.zrem(WAITING_KEY, *dropped)
+                self.redis.hdel(WAITING_SEEN_KEY, *dropped)
                 self.event("dropped_waiting", sessions=dropped, reason=reason)
             return
         if start <= 0 or time.time() < self.backoff_until:
@@ -814,7 +845,12 @@ class Manager:
         if waiting:
             log(f"{waiting} session(s) waiting for a pool of their own; "
                 f"building {start} more ({in_flight} already building, room for {room})")
-        for_waiting = max(0, waiting - free - in_flight)
+        # Builds started now are credited to waiting sessions unless a free pool
+        # or a build ALREADY started for a waiter covers them; an in-flight
+        # spare doesn't (it was meant for the next attacker, and crediting it
+        # to the waiter labelled a build for a waiting session as a "spare").
+        waiter_builds = sum(1 for r in self.build_reasons.values() if r == "waiting session")
+        for_waiting = max(0, waiting - free - waiter_builds)
         taken = set(pools)
         for i in range(start):
             n = pl.next_pool_number(taken, STATIC_COUNT)
@@ -842,7 +878,9 @@ class Manager:
 # Hands a newly ready (or newly idle) pool to the session that has waited
 # longest for one of its own: the session's assignment moves from the pool it
 # borrowed to this one (TTL kept), and the borrowed pool goes back to the free
-# set if nobody else owns it. Sessions whose assignment expired are skipped.
+# set if nobody else owns it. Sessions whose assignment expired are dropped;
+# sessions whose client sent nothing for POOL_WAITING_ACTIVE_SECONDS are
+# skipped (they keep their place in the queue, and get a pool once active).
 # Returns {session id, waiting since (epoch s), borrowed pool}, or nil.
 # With nobody waiting the pool becomes free. Atomic, so pool_router's
 # ASSIGN_SCRIPT never sees a half-moved session.
@@ -850,13 +888,18 @@ class Manager:
 #   ARGV: pool number, session key prefix, owner key prefix
 HANDOFF_SCRIPT = r"""
 local n = ARGV[1]
-while true do
-  local popped = redis.call('ZPOPMIN', KEYS[1])
-  if not popped or #popped == 0 then break end
-  local sid, since = popped[1], popped[2]
+local now, active = tonumber(ARGV[4]), tonumber(ARGV[5])
+for _, sid in ipairs(redis.call('ZRANGE', KEYS[1], 0, -1)) do
   local skey = ARGV[2] .. sid
   local old = redis.call('GET', skey)
-  if old then
+  local seen = tonumber(redis.call('HGET', KEYS[4], sid))
+  if not old then
+    redis.call('ZREM', KEYS[1], sid)          -- assignment expired: forget it
+    redis.call('HDEL', KEYS[4], sid)
+  elseif seen == nil or now - seen <= active then
+    local since = redis.call('ZSCORE', KEYS[1], sid)
+    redis.call('ZREM', KEYS[1], sid)
+    redis.call('HDEL', KEYS[4], sid)
     if old ~= n then
       local ttl = redis.call('TTL', skey)
       redis.call('SET', skey, n)
@@ -870,6 +913,7 @@ while true do
     redis.call('ZREM', KEYS[2], n)
     return {sid, since, old}
   end
+  -- else: its client has gone quiet; it keeps its place but not this pool
 end
 redis.call('ZADD', KEYS[2], 'NX', tonumber(n), n)
 return false

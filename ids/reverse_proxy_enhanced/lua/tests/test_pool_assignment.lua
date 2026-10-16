@@ -40,6 +40,7 @@ local function new_redis()
     local cmds = {}
     function cmds.GET(k) return kv[k] or false end
     function cmds.EXISTS(k) return kv[k] and 1 or 0 end
+    function cmds.HSET(k, f, v) zsets["h:" .. k] = zsets["h:" .. k] or {}; zsets["h:" .. k][f] = v; return 1 end
     function cmds.ZSCORE(k, m)
         local sc = zsets[k] and zsets[k][tostring(m)]
         return sc and tostring(sc) or false
@@ -161,6 +162,9 @@ do
     local w = r.zsets[rules.WAITING_KEY] or {}
     check("every pending session is queued, in arrival order",
           w["10.0.5.4"] and w["10.0.5.7"] and w["10.0.5.4"] < w["10.0.5.7"])
+    local seen = r.zsets["h:honeypot_pool:waiting_seen"] or {}
+    check("a pending session's activity is stamped for the hand-off",
+          seen["10.0.5.4"] ~= nil and seen["10.0.5.7"] ~= nil)
     check("the queue score is the time the session started waiting",
           math.abs(w["10.0.5.7"] - w["10.0.5.4"] - 4.5) < 1e-6)
     local p, m = r.assign("10.0.5.5")

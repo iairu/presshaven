@@ -36,7 +36,7 @@ from core import redis_inspect
 from core.docker_ctl import target_for
 from core.exploits import EXPLOIT_PRESETS
 from core import pool_evidence
-from core.pool_test_report import (CART_PLAN, FALLBACK_EXPLOITS, MAX_ATTEMPTS, MAX_WINDOWS,
+from core.pool_test_report import (capacity_warning, CART_PLAN, FALLBACK_EXPLOITS, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, ExploitRun, FrameResult,
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
                                     browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
@@ -141,8 +141,12 @@ class _UsageSampler(QThread):
             started = time.time()
             try:
                 u = collect_pool_usage(self._target)
+                try:
+                    ready = redis_inspect.ready_pool_count(self._target.remote)
+                except Exception:  # noqa: BLE001
+                    ready = None
                 self.samples.append(UsageSample(started - self._t0, u.containers, u.pools,
-                                                u.mem_bytes / 2 ** 20, u.cpu_percent))
+                                                u.mem_bytes / 2 ** 20, u.cpu_percent, ready))
             except Exception:  # noqa: BLE001 -- a gap in the curve, not a failed run
                 pass
             while not self._stop and time.time() - started < self.interval:
@@ -429,7 +433,12 @@ class PoolTestPage(QWidget):
         browser = self.browsers[index]
         if not browser.view.url().toString().startswith("http"):
             return None
-        return parse_cart(self._run_js(index, _CART_JS))
+        cart = parse_cart(self._run_js(index, _CART_JS))
+        if cart is None:
+            # Under load (pools being built) the shop can take longer than the
+            # first read allows; one slower retry before calling it unmeasured.
+            cart = parse_cart(self._run_js(index, _CART_JS, timeout_ms=15000))
+        return cart
 
     def _run_js(self, index: int, script: str, timeout_ms: int = 6000) -> str:
         """Run `script` in window `index` and return its result ("" on timeout)."""
@@ -567,6 +576,45 @@ class PoolTestPage(QWidget):
             except TypeError:
                 pass
 
+    def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
+        """Every window loads the same product page, one window at a time, so
+        page-load latency compares like with like: no mix of pages and no ten
+        loads competing for this machine's CPU at once. Each load is tagged
+        with where that window is served right after (the next _observe())."""
+        if not self._t0 or not self.browsers:
+            return
+        url = f"{self._base_url()}/product/{CART_PLAN[0][0][0]}/"
+        for w in range(len(self.browsers)):
+            if self._cancelled:
+                raise _Cancelled()
+            self._progress(f"Step {step}/{total_steps}: latency probe ({label}) — "
+                           f"window {self._letter(w)}", step, total)
+            browser = self.browsers[w]
+            loop = QEventLoop()
+            started, t = time.monotonic(), self._now()
+            got: list = [None]
+
+            def finished(ok, n=w):
+                got[0] = ok
+                loop.quit()
+            conn = browser.view.loadFinished.connect(finished)
+            browser.navigate(url)
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(loop.quit)
+            timer.start(15000)
+            loop.exec()
+            timer.stop()
+            try:
+                browser.view.loadFinished.disconnect(conn)
+            except TypeError:
+                pass
+            if got[0]:
+                self._pending_loads.append(LoadTiming(t, w, f"latency probe: {label}",
+                                                      (time.monotonic() - started) * 1000.0,
+                                                      probe=True))
+        self._settled_decisions(need_sessions=True)   # tags the probe loads
+
     # ---- run timeline (samples for the scaling / latency figures) ----
 
     def _now(self) -> float:
@@ -631,6 +679,12 @@ class PoolTestPage(QWidget):
             return
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
+        try:
+            remote = self._remote()
+            state = self._blocking(lambda: redis_inspect.pool_state(remote))
+        except Exception:  # noqa: BLE001 -- no warning then; the run reports it
+            state = {}
+        capacity = capacity_warning(self._count, self._delayed(), state)
         if QMessageBox.question(
             self, "Reset test sessions?",
             "The report starts from a clean slate: this machine's own sessions and honeypot "
@@ -645,6 +699,7 @@ class PoolTestPage(QWidget):
                if self.clear_check.isChecked() else "")
             + " At the end the windows' sessions are released and the pools they no longer "
             "need are scaled down at once (instead of after POOL_IDLE_TIMEOUT_SECONDS)."
+            + (f"\n\n\u26a0 {capacity}" if capacity else "")
             + "\n\nContinue?",
         ) != QMessageBox.StandardButton.Yes:
             return
@@ -982,7 +1037,11 @@ class PoolTestPage(QWidget):
                        "traffic", n, total)
         # No more requests from the windows: one would re-assign its bound session.
         self._load_all(["about:blank"] * len(self.browsers))
-        sids = [sid for sid in self._session_ids[:self._count] if sid]
+        # Every session a window held during the run, not just its current one:
+        # a window that cleared its data left its old session behind, still
+        # owning (or waiting for) a pool, which then outlived the scale-down.
+        sids = sorted({sid for sid in self._session_ids[:self._count] if sid}
+                      | {smp.session_id for smp in self._samples if smp.session_id})
         try:
             before = self._blocking(lambda: redis_inspect.pool_state(remote))
         except Exception:  # noqa: BLE001
@@ -1130,6 +1189,10 @@ class PoolTestPage(QWidget):
                  + (", then looks at " + ", ".join(dict.fromkeys(self._seen[w])) if self._seen[w] else "")
                  for w, items in enumerate(cart_plan)],
                 decisions, [self._grab(b) for b in self.browsers], self._read_carts()))
+            self._latency_probe("all on production", total_steps, total, step)
+            # Every window is still on production: the pools' DB counters since
+            # the baseline are their own background (healthchecks, cron, sync).
+            self._blocking(lambda: pool_evidence.mark_idle(target, baseline))
 
             queues = [self._exploit_queue(i) for i in range(count)]
             for w in now_windows:
@@ -1145,6 +1208,7 @@ class PoolTestPage(QWidget):
 
             if now_windows:
                 results.append(self._wait_for_scaling(next_step("pools scale up"), total_steps, total))
+                self._latency_probe("after the scale-up", total_steps, total, step)
 
             if later_windows:
                 results.append(self._prescale(next_step("pre-building pools for the delayed windows"),
@@ -1183,6 +1247,8 @@ class PoolTestPage(QWidget):
                 "owns, nobody changes pool, nobody is merged.",
                 [f"Opens {p.cve}" if p else self._browsed(w) for w, p in enumerate(second)], decisions,
                 [self._grab(b) for b in self.browsers], self._read_carts()))
+
+            self._latency_probe("at the end", total_steps, total, step)
 
             # Last step: open the cart page in every window -- what a shopper would see.
             next_step("every window opens its cart")
