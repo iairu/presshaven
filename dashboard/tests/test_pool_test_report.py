@@ -519,3 +519,16 @@ class IssueFixTests(unittest.TestCase):
         self.assertTrue(probed)
         self.assertEqual([x.ms for x in chosen], [400])
         self.assertEqual(latency_loads(loads[:1]), (loads[:1], False))
+
+
+class ResponseRealismTests(unittest.TestCase):
+    def test_counts_4xx_exploit_responses(self):
+        from core import pool_evidence as pe
+        ev = pe.ContainerEvidence(1, hits=[
+            pe.Hit("A", "GET", "/?page=advanced-form-integration-log&x=1", 404),
+            pe.Hit("A", "GET", "/product/mug/", 200),
+            pe.Hit("B", "GET", "/?action=dnd-wc-upload-file&name=shell", 404),
+            pe.Hit("B", "GET", "/style.css", 200)])   # asset: excluded by notable()
+        total, four, ex = pe.response_realism([ev])
+        self.assertEqual((total, four), (3, 2))
+        self.assertTrue(any("404" in e for e in ex))

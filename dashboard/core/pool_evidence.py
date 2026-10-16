@@ -256,6 +256,26 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
     return out
 
 
+def response_realism(evidence: list[ContainerEvidence]) -> tuple[int, int, list[str]]:
+    """(non-asset requests the honeypot pools answered, how many got a 4xx,
+    a few example 4xx paths). A 404/400 on an exploit's own endpoint tells the
+    attacker the targeted plugin is not installed, which weakens the decoy and
+    yields little interaction to record -- so a high share here is a
+    deception-fidelity signal, not a routing problem."""
+    total = four = 0
+    examples: list[str] = []
+    for ev in evidence:
+        for h in ev.notable(limit=1000):
+            if h.method != "GET" and h.method != "POST":
+                continue
+            total += 1
+            if 400 <= h.status < 500:
+                four += 1
+                if len(examples) < 4 and h.path not in examples:
+                    examples.append(f"{h.path[:70]} \u2192 {h.status}")
+    return total, four, examples
+
+
 def cross_traffic(evidence: list[ContainerEvidence], owners: dict[int, str],
                   expected: dict[int, set[str]] | None = None) -> list[str]:
     """Findings for pools that served a window other than their owner.

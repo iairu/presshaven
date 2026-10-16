@@ -1305,7 +1305,9 @@ class PoolTestPage(QWidget):
         return PoolTestData(
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             target_label=target.label, base_url=self._base_url(),
-            exploit=", ".join(f"{r.window}: {r.cve}" for r in runs), frames=frames,
+            exploit="; ".join(
+                f"{w}: " + ", ".join(r.cve for r in runs if r.window == w)
+                for w in sorted({r.window for r in runs})), frames=frames,
             pool_state=pool_state, steps=results, runs=runs, evidence=evidence,
             since=baseline.get("since", ""), duration=duration, delayed=delayed,
             samples=list(self._samples), loads=list(self._loads), events=events,

@@ -318,6 +318,16 @@ def _evidence_html(data: PoolTestData) -> str:
            f'since the run started ({_esc(data.since or "unknown")}). Requests are matched to '
            'windows by their User-Agent tag, so a pool should show its owner\'s exploits and '
            'nobody else\'s. A pool no window owns is shown for contrast.</p>']
+    total, four, examples = pool_evidence.response_realism(data.evidence)
+    if total and four / total >= 0.25:
+        out.append('<p style="color:#b35900;"><b>Deception note:</b> the honeypot answered '
+                   f'{four} of {total} non-asset requests with a 4xx status (e.g. '
+                   + _esc("; ".join(examples)) + '). A 404/400 on an exploit\'s own endpoint '
+                   'tells the attacker the targeted plugin is not installed, so these exploits '
+                   'neither wrote a file nor produced attacker interaction to record. To make '
+                   'the pools look vulnerable, install the targeted plugins or add decoy '
+                   'endpoints; check first whether production answers the same, since an '
+                   'identical response there is not itself a tell.</p>')
     for ev in sorted(data.evidence, key=lambda e: (e.pool not in owner, e.pool)):
         who = f"window {owner[ev.pool]}" if ev.pool in owner else "unowned spare"
         head = f'{_badge("pool " + str(ev.pool), _GREEN if ev.pool in owner else _GREY)} &nbsp;<b>{_esc(who)}</b>'
