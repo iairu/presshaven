@@ -1350,16 +1350,16 @@ class PoolTestPage(QWidget):
         outcome = (f"{k} free pool(s) ready after {took:.0f} s" if reserve["reached"]
                    else f"only {reserve['free']} of {k} free pool(s) after {took:.0f} s "
                         f"({reserve['reason']})")
+        # The outcome once, in the step's text: under each delayed window it
+        # read as if a pool were being built for that one window.
         actions = [self._browsed(w) for w in range(len(self.browsers))]
-        for w in windows:
-            actions[w] = f"{actions[w]} while its pool is built: {outcome}"
         return StepResult(
             title,
             f"Before windows {', '.join(self._letter(w) for w in windows)} attack, the test asks "
             f"pool_manager for {k} free pool(s) and waits until they are ready, so these "
             "windows find a pool of their own the moment they are diverted instead of "
             "borrowing one round-robin. If the resource limit stops the build first, they "
-            "share the ready pools round-robin instead.",
+            f"share the ready pools round-robin instead. Outcome: {outcome}.",
             actions, decisions, *self._capture())
 
     def _forced_scaledown(self, n: int, total_steps: int, total: int,
