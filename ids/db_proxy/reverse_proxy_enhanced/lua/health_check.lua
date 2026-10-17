@@ -182,7 +182,7 @@ end
 
 -- Pre-warm connections to a backend
 function _M.prewarm_backend_connections(backend_name, backend_url, num_connections)
-    ngx.log(ngx.INFO, "[PREWARM] Pre-warming ", num_connections, " connections to ", label(backend_name))
+    ngx.log(ngx.DEBUG, "[PREWARM] Pre-warming ", num_connections, " connections to ", label(backend_name))
     
     local httpc = http.new()
     httpc:set_timeouts(5000, 5000, 5000) -- 5s timeouts
@@ -229,7 +229,8 @@ function _M.prewarm_backend_connections(backend_name, backend_url, num_connectio
         end
     end
     
-    ngx.log(ngx.INFO, "[PREWARM] Pre-warming complete for ", label(backend_name), 
+    -- DEBUG unless something failed (every worker pre-warms every backend).
+    ngx.log(fail_count > 0 and ngx.WARN or ngx.DEBUG, "[PREWARM] Pre-warming complete for ", label(backend_name),
            ": ", success_count, " successful, ", fail_count, " failed")
     
     return success_count, fail_count

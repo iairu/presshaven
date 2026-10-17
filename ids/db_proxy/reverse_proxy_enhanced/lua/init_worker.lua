@@ -30,7 +30,7 @@ local function init_worker()
             return
         end
         
-        ngx.log(ngx.INFO, "[PREWARM] Starting connection pool pre-warming for worker ", ngx.worker.id())
+        ngx.log(ngx.DEBUG, "[PREWARM] Starting connection pool pre-warming for worker ", ngx.worker.id())
         
         -- Single-eshop / two-database topology: there are no honeypot_eshop_N
         -- backends to pre-warm any more (the one production_eshop serves both
@@ -66,7 +66,7 @@ local function init_worker()
                 "http://production_eshop",
                 20  -- 20 keepalive connections for the production instance
             )
-            ngx.log(ngx.INFO,
+            ngx.log(ngx.DEBUG,
                 "[PREWARM] Production backend: ",
                 success, " connections established, ", failed, " failed")
         end
@@ -83,13 +83,13 @@ local function init_worker()
                     "http://" .. svc,
                     5  -- 5 keepalive connections per pool instance
                 )
-                ngx.log(ngx.INFO,
+                ngx.log(ngx.DEBUG,
                     "[PREWARM] Honeypot pool ", i, " (", svc, " + honeypot_database_", i, "): ",
                     success, " connections established, ", failed, " failed")
             end
         end
         
-        ngx.log(ngx.INFO, "[PREWARM] Connection pool pre-warming completed for worker ", ngx.worker.id())
+        ngx.log(ngx.worker.id() == 0 and ngx.INFO or ngx.DEBUG, "[PREWARM] Connection pool pre-warming completed for worker ", ngx.worker.id())
     end
     
     -- Schedule pre-warming after a short delay to let services start

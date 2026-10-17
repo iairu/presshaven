@@ -40,7 +40,7 @@ local function init_worker()
             return
         end
         
-        ngx.log(ngx.INFO, "[PREWARM] Starting connection pool pre-warming for worker ", ngx.worker.id())
+        ngx.log(ngx.DEBUG, "[PREWARM] Starting connection pool pre-warming for worker ", ngx.worker.id())
         
         -- Ready honeypot pools (static ones from docker-compose.yml plus any
         -- pool_manager has created); see pool_router.get_pool_ids().
@@ -56,6 +56,7 @@ local function init_worker()
         -- Wait for each honeypot pool backend independently so that one slow
         -- instance does not block pre-warming of the others.
         local pool_ready = {}
+        local total_ok, total_failed = 0, 0
         for _, i in ipairs(pool_ids) do
             local svc      = "honeypot_eshop_" .. i
             local upstream = "honeypot_backend_" .. i
@@ -74,9 +75,7 @@ local function init_worker()
                 "http://production_eshop",
                 20  -- 20 keepalive connections for the production instance
             )
-            ngx.log(ngx.INFO,
-                "[PREWARM] Production backend: ",
-                success, " connections established, ", failed, " failed")
+            total_ok, total_failed = total_ok + success, total_failed + failed
         end
 
         -- Pre-warm each honeypot pool with a smaller connection budget.
@@ -91,13 +90,16 @@ local function init_worker()
                     "http://" .. svc,
                     5  -- 5 keepalive connections per pool instance
                 )
-                ngx.log(ngx.INFO,
-                    "[PREWARM] Honeypot pool ", i, " (", svc, " + honeypot_database_", i, "): ",
-                    success, " connections established, ", failed, " failed")
+                total_ok, total_failed = total_ok + success, total_failed + failed
             end
         end
         
-        ngx.log(ngx.INFO, "[PREWARM] Connection pool pre-warming completed for worker ", ngx.worker.id())
+        -- One summary line per worker, at INFO from worker 0 only (the others
+        -- at DEBUG unless a connection failed): per-backend INFO lines from
+        -- every worker came to ~160 lines per start on a 20-core host.
+        local level = total_failed > 0 and ngx.WARN or (ngx.worker.id() == 0 and ngx.INFO or ngx.DEBUG)
+        ngx.log(level, "[PREWARM] Connection pre-warming completed for worker ", ngx.worker.id(),
+            ": ", total_ok, " connections established, ", total_failed, " failed")
     end
     
     -- Schedule pre-warming after a short delay to let services start
