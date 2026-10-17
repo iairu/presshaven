@@ -82,9 +82,10 @@ class WarningTests(unittest.TestCase):
         self.assertTrue(dict(log_warnings(logs))["seed"].startswith("1 error line(s)"))
 
     def test_stop_warnings(self):
-        w = dict(stop_warnings({"suricata_ids": 137, "web": 143, "ok": 0}, ""))
+        w = dict(stop_warnings({"suricata_ids": 137, "web": 143, "ok": 0, "bad": 2}, ""))
         self.assertIn("killed", w["suricata_ids"])
-        self.assertIn("143", w["web"])
+        self.assertNotIn("web", w)          # 143: ended by SIGTERM, a clean stop
+        self.assertIn("2", w["bad"])
         self.assertNotIn("ok", w)
 
 

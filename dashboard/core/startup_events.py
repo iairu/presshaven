@@ -199,9 +199,13 @@ def stop_warnings(exit_codes: dict[str, int], log_text: str,
     """What a finished stop should flag: containers that exited non-zero while
     `down` stopped them (``exit_codes``, seen in ps between stop and removal)
     and services that logged error lines while shutting down. 137 is SIGKILL:
-    the container ignored SIGTERM for the whole stop timeout."""
+    the container ignored SIGTERM for the whole stop timeout; 143 is a process
+    that SIGTERM ended (under init: true it is passed on as that exit code),
+    which is a clean stop."""
     out: list[tuple[str, str]] = []
     for svc, code in sorted(exit_codes.items()):
+        if code == 143:
+            continue
         if code == 137:
             out.append((svc, "did not stop within the stop timeout and was killed (exit code 137)"))
         elif code:

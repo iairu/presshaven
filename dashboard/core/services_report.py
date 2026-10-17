@@ -23,6 +23,7 @@ blocks on an event until the GUI thread hands back a PNG path.
 """
 from __future__ import annotations
 
+import shlex
 import subprocess
 import threading
 import time
@@ -276,6 +277,38 @@ class ServicesReportWorker(QThread):
         threading.Thread(target=pump, daemon=True).start()
         return proc, lines
 
+    def _follow_exits(self, ps: list[dict]):
+        """Stream `docker events` die events for the containers running
+        before a stop, for their exit codes: `down` removes a container within
+        a second of its exit, so ps rarely shows the 137 of one killed at the
+        end of the stop timeout -- the report said none had to be killed while
+        five had. Returns (process, {service: exit code}) or (None, {})."""
+        codes: dict[str, int] = {}
+        by_name = {c.get("Name", ""): c.get("Service", "") for c in ps if c.get("ID")}
+        ids = [c["ID"] for c in ps if c.get("ID") and c.get("State") == "running"]
+        if not ids:
+            return None, codes
+        # --since: a die event in the moment before the subscription is up
+        # (the first container stops ~1 s into `down`) is replayed, not lost.
+        cmd = (f"docker events --since {int(time.time()) - 2} --filter event=die "
+               + " ".join(f"--filter container={shlex.quote(i)}" for i in ids)
+               + " --format '{{.Actor.Attributes.name}} {{index .Actor.Attributes \"exitCode\"}}'")
+        try:
+            argv, cwd = self._target.build_shell(cmd)
+            proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                                    text=True, errors="replace")
+        except OSError:
+            return None, codes
+
+        def pump():
+            for line in proc.stdout:
+                parts = line.split()
+                if len(parts) == 2 and parts[1].lstrip("-").isdigit():
+                    codes[by_name.get(parts[0], parts[0])] = int(parts[1])
+        threading.Thread(target=pump, daemon=True).start()
+        return proc, codes
+
     def _host_warnings(self) -> list[tuple[str, str]]:
         """Host kernel settings this stack needs (core/host_settings.py)."""
         from core import host_settings
@@ -409,6 +442,7 @@ class ServicesReportWorker(QThread):
         if prime:
             data.host_mem_bytes, data.cpu_count = prime[2] * 1024, prime[4]
         follower, stop_logs = self._follow_logs() if op == "stop" else (None, [])
+        exiter, die_codes = self._follow_exits(ps) if op == "stop" else (None, {})
         exit_codes: dict[str, int] = {}
 
         # The recording clock starts here, when the operation is launched --
@@ -519,12 +553,13 @@ class ServicesReportWorker(QThread):
             stop_sampling.set()
             for th in threads:
                 th.join(timeout=15)
-            if follower is not None:
-                follower.terminate()
-                try:
-                    follower.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    follower.kill()
+            for proc in (follower, exiter):
+                if proc is not None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
 
         # Best-effort final shot if we never captured an end state.
         if not captured_end:
@@ -540,6 +575,7 @@ class ServicesReportWorker(QThread):
         if op == "start":
             data.warnings = start_warnings(self._ps(), self._logs_since(data.duration_s + 15))
         else:
+            exit_codes.update({svc: code for svc, code in die_codes.items() if code})
             data.warnings = stop_warnings(exit_codes, "".join(stop_logs))
         data.warnings += self._host_warnings()
         if data.warnings:
