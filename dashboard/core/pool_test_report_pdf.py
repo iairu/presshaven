@@ -12,6 +12,7 @@ from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtGui import QColor, QTextDocument
 
 from core import diagrams, pool_evidence, vector_figures
+from core.startup_events import fmt_tick, nice_axis
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
                                      _pool_state_html, _report_font_family)
@@ -876,7 +877,8 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
         y0 = top + k * (panel_h + gap)
         vals = [value(u) for u in usage]
         ovals = [overlay(u) for u in usage if overlay and overlay(u) is not None] if overlay else []
-        vmax = max(vals + ovals + [1.0]) * 1.15
+        # Round steps (0 / 5,000 / 10,000 / 15,000 MB, not 0 / 8,387 / 16,775).
+        vmax, vstep = nice_axis(max(vals + ovals + [1.0]) * 1.05, 4)
         p.setFont(QFont(family, 9, QFont.Weight.Bold))
         p.setPen(QColor(_INK))
         head = f"{title} ({unit})"
@@ -884,12 +886,15 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
             head += f"  \u2014 blue: pool containers, grey: {overlay_label}"
         p.drawText(QPointF(ml, y0 - 4), head)
         p.setFont(font)
-        for frac in (0.0, 0.5, 1.0):
-            y = y0 + panel_h - frac * panel_h
+        k = 0
+        while k * vstep <= vmax + 1e-9:
+            v = k * vstep
+            k += 1
+            y = y0 + panel_h - (v / vmax) * panel_h
             p.setPen(QPen(QColor("#e6e6e6"), 1))
             p.drawLine(QPointF(ml, y), QPointF(ml + plot_w, y))
             p.setPen(QColor(_MUTED))
-            lab = f"{vmax * frac:,.0f}"
+            lab = f"{v:,.0f}" if vstep >= 1 else fmt_tick(v, vstep)
             p.drawText(QRectF(0, y - 8, ml - 8, 16), int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), lab)
         if sd.get("requested") is not None:
             x0 = X(sd["requested"])
