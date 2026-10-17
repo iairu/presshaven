@@ -71,9 +71,11 @@ def _percent(text: str) -> float:
         return 0.0
 
 
-def _run(target: Target, command: str, timeout: float) -> str:
+def _run(target: Target, command: str, timeout: float, partial: bool = False) -> str:
     """Run a shell one-liner in the target's compose dir (or over SSH), return
-    stdout ('' on any failure -- the caller degrades gracefully)."""
+    stdout ('' on any failure -- the caller degrades gracefully). With
+    ``partial``, stdout is kept even when the command exits non-zero: `docker
+    inspect a b c` exits 1 if any one of them is gone, yet prints the rest."""
     argv, cwd = target.build_shell(command)
     try:
         result = subprocess.run(
@@ -81,7 +83,7 @@ def _run(target: Target, command: str, timeout: float) -> str:
         )
     except (subprocess.TimeoutExpired, OSError):
         return ""
-    return result.stdout if result.returncode == 0 else ""
+    return result.stdout if result.returncode == 0 or partial else ""
 
 
 def collect_live(target: Target, timeout: float = 12.0) -> list[ContainerResource]:
@@ -310,9 +312,13 @@ class FastSampler:
         if not running:
             return
         ids = " ".join(shlex.quote(i) for i in running)
+        # partial: one container of the batch exiting between ps and inspect
+        # made inspect fail as a whole, and every new container of that check
+        # went unsampled until the next one -- a one-shot job that ran under
+        # 3 s (honeypot_db_migration) never got a reading at all.
         out = _run(self._target,
                    "docker inspect --format '{{.Id}} {{.State.Pid}}' " + ids,
-                   timeout=10)
+                   timeout=10, partial=True)
         for line in out.splitlines():
             parts = line.split()
             if len(parts) != 2 or not parts[1].isdigit():
@@ -534,7 +540,7 @@ def health_check_times(target: Target, svc_to_cid: dict[str, str],
         return []
     ids = " ".join(shlex.quote(c) for c in cid_to_svc)
     text = _run(target, "docker inspect --format '{{.Id}} {{json .State}}' " + ids,
-                timeout=timeout)
+                timeout=timeout, partial=True)
     return parse_health_inspect(text, cid_to_svc)
 
 
@@ -574,7 +580,7 @@ def health_schedule(target: Target, svc_to_cid: dict[str, str],
     # no such key, and that would fail the whole command.
     text = _run(target, "docker inspect --format "
                 "'{{.Id}}|{{json (index .Config \"Healthcheck\")}}|{{json .State}}' " + ids,
-                timeout=timeout)
+                timeout=timeout, partial=True)
     return parse_health_schedule(text, cid_to_svc)
 
 
