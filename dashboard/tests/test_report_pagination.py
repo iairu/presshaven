@@ -17,7 +17,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QSizeF
-    from PyQt6.QtGui import QTextDocument
+    from PyQt6.QtGui import QTextCursor, QTextDocument
     from PyQt6.QtWidgets import QApplication
     from core import report_pagination, vector_figures
 except ImportError:  # PyQt6 missing
@@ -95,6 +95,42 @@ class HeadingTests(unittest.TestCase):
         r, pr = lay.blockBoundingRect(head), lay.blockBoundingRect(para)
         line3 = pr.top() + para.layout().lineAt(2).rect().bottom()
         self.assertEqual(int(r.top() // PAGE), int(line3 // PAGE))
+
+
+@unittest.skipIf(report_pagination is None, "PyQt6 not installed")
+class TableTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication(sys.argv)
+
+    def test_table_split_before_its_image_row_moves_whole(self):
+        # A step table: text rows, then a row of screenshots that does not fit
+        # under them, so Qt pushes that row to the next page. The table
+        # (top to bottom ~88% of a page with that gap, ~50% without) must move.
+        doc = QTextDocument()
+        doc.setPageSize(QSizeF(600, PAGE))
+        fig, p = vector_figures.new_figure(100, 450)
+        p.end()
+        vector_figures.add_figure(doc, "f://1", fig)
+        doc.setHtml("<p>" + "line of text " * 320 + "</p><table border='1'>"
+                    "<tr><td>User A</td><td>User B</td></tr><tr><td>Looks around</td><td>Looks around</td></tr>"
+                    "<tr><td><img src='f://1' width='100'/></td><td><img src='f://1' width='100'/></td></tr></table>")
+        vector_figures.embed_figures(doc)
+        lay = doc.documentLayout()
+
+        def table_pages():
+            pages = set()
+            b = doc.begin()
+            while b.isValid():
+                if QTextCursor(b).currentTable() is not None:
+                    r = lay.blockBoundingRect(b)
+                    pages |= {int(r.top() // PAGE), int((r.bottom() - 1) // PAGE)}
+                b = b.next()
+            return pages
+
+        self.assertEqual(table_pages(), {0, 1})
+        report_pagination.keep_together(doc)
+        self.assertEqual(table_pages(), {1})
 
 
 if __name__ == "__main__":

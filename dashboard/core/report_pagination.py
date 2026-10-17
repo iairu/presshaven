@@ -112,15 +112,18 @@ def _first_violation(doc: QTextDocument, page_h: float) -> tuple[str, int] | Non
         return r.top() + (line.rect().bottom() if line.isValid() else r.height())
 
     found: list[tuple[float, tuple[str, int]]] = []
-    tables: dict[int, list] = {}      # first position -> [top, bottom, table]
+    tables: dict[int, list] = {}      # first position -> [top, bottom, table, {row: [top, bottom]}]
     b = doc.begin()
     while b.isValid():
         rect = lay.blockBoundingRect(b)
         table = QTextCursor(b).currentTable()
         if table is not None:
-            entry = tables.setdefault(table.firstPosition(), [rect.top(), rect.bottom(), table])
+            entry = tables.setdefault(table.firstPosition(), [rect.top(), rect.bottom(), table, {}])
             entry[0] = min(entry[0], rect.top())
             entry[1] = max(entry[1], rect.bottom())
+            row = entry[3].setdefault(table.cellAt(b.position()).row(), [rect.top(), rect.bottom()])
+            row[0] = min(row[0], rect.top())
+            row[1] = max(row[1], rect.bottom())
         elif b.blockFormat().headingLevel() > 0:
             # Keep with the first line of the next non-heading block...
             nxt = b.next()
@@ -169,8 +172,12 @@ def _first_violation(doc: QTextDocument, page_h: float) -> tuple[str, int] | Non
                 found.append((rect.top(), ("block", target.position())))
         b = b.next()
 
-    for start, (top, bottom, table) in tables.items():
-        if page(top) == page(bottom - 1) or bottom - top > page_h * _MAX_TABLE_SHARE:
+    for start, (top, bottom, table, rows) in tables.items():
+        # Its own height, without the gap Qt leaves where it pushed a row to
+        # the next page: top to bottom counted that gap, so a table split
+        # before its screenshot row looked too tall to move.
+        height = sum(r[1] - r[0] for r in rows.values())
+        if page(top) == page(bottom - 1) or height > page_h * _MAX_TABLE_SHARE:
             continue
         if table.format().pageBreakPolicy() & _ALWAYS_BEFORE:
             continue
