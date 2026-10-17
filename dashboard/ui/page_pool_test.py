@@ -114,6 +114,16 @@ _FORGE_STORAGE_JS = ("(function(v){var n=0,k=['SERVERID','session_id','sessionId
                      "try{sessionStorage.setItem(k[i],v);n++;}catch(e){}}return String(n);})(%s)")
 
 
+# True once the cart page shows its cart. The block cart's server HTML already
+# holds both its filled and empty-cart blocks; the root keeps "is-loading" until
+# the Store API answered and it rendered one. (Classic shortcode cart: its form
+# or empty message.)
+_CART_RENDERED_JS = ("(function(){var r=document.querySelector('.wp-block-woocommerce-cart');"
+                     "if(r){return !r.classList.contains('is-loading')"
+                     "&&!!r.querySelector('.wc-block-cart-items,.wc-block-cart__empty-cart__title');}"
+                     "return !!document.querySelector('form.woocommerce-cart-form,.cart-empty');})()")
+
+
 # The HTTP status, title and URL of the page a window is on (status 0: no
 # response, e.g. Chromium's error page after a failed load).
 _PAGE_STATUS_JS = ("(function(){var s=0;try{var n=performance.getEntriesByType('navigation')[0];"
@@ -663,6 +673,20 @@ class PoolTestPage(QWidget):
                 browser.view.loadFinished.disconnect(conn)
             except TypeError:
                 pass
+
+    def _wait_for_render(self, script: str, timeout_ms: int) -> None:
+        """Poll every window (on a page that loaded) until `script` returns
+        true there, or `timeout_ms` passes."""
+        pending = {w for w, b in enumerate(self.browsers)
+                   if self._load_ok[w] and b.view.url().toString().startswith("http")}
+        deadline = time.monotonic() + timeout_ms / 1000
+        while pending and time.monotonic() < deadline:
+            for w in sorted(pending):
+                if self._run_js(w, script, 2000) is True:
+                    pending.discard(w)
+            if pending:
+                self._spin(500)
+        self._spin(300)      # let the last ones paint
 
     def _page_status(self, w: int) -> dict:
         """{"s": HTTP status (0 = none / error page), "t": title, "u": URL} of
@@ -1606,7 +1630,9 @@ class PoolTestPage(QWidget):
             self._mark("Every window opens its cart")
             self._load_all([self._base_url() + "/cart/"] * len(self.browsers),
                            "Every window opens its cart")
-            self._spin(2500)   # the block cart renders from the Store API after load
+            # The block cart renders from the Store API after the page has
+            # loaded: a fixed 2.5 s wait still screenshotted bare "Cart" pages.
+            self._wait_for_render(_CART_RENDERED_JS, 10000)
             decisions = self._settled_decisions(need_sessions=True)
             results.append(StepResult(
                 "Every window opens its cart",
