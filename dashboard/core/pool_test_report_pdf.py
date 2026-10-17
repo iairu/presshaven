@@ -812,7 +812,16 @@ def scaling_timeline_figure(data: PoolTestData, summ: ScalingSummary, family: st
     band = title_h + step_h + len(rows_end) * (fm.height() + 2) + 6
     win_top = band
     build_top = win_top + len(windows) * row_h + (28 if builds or removals else 0)
-    plot_bottom = build_top + (len(builds) + len(removals)) * row_h + 6
+    # A removed pool that was built during the run is marked on its build row;
+    # only the others (compose-declared or built before the run) get a row.
+    removal_row = {}
+    for k, rm in enumerate(removals):
+        rows = [i for i, b in enumerate(builds) if b.pool == rm.pool and b.start <= rm.at]
+        removal_row[k] = rows[-1] if rows else None
+    extra = [k for k, row in removal_row.items() if row is None]
+    for n, k in enumerate(extra):
+        removal_row[k] = len(builds) + n
+    plot_bottom = build_top + (len(builds) + len(extra)) * row_h + 6
     names = _phase_names(builds)
     items = [(_STATE_FILL[s], _STATE_LABEL[s]) for s in STATES]
     items += [(_phase_color(names, n), f"build: {n}") for n in names]
@@ -880,13 +889,15 @@ def scaling_timeline_figure(data: PoolTestData, summ: ScalingSummary, family: st
         p.setPen(QColor(_INK))
         p.drawText(QPointF(8, build_top - 10), "Pools built" + (" / removed" if removals else ""))
     for k, rm in enumerate(removals):
-        y = build_top + (len(builds) + k) * row_h
+        y = build_top + removal_row[k] * row_h
+        x0, x1 = X(rm.at - rm.seconds), X(rm.at)
+        _bar(p, x0, max(x1, x0 + 4), y, bar_h, _REMOVED)
+        if removal_row[k] < len(builds):
+            continue            # the build row already names the pool
         p.setFont(font)
         p.setPen(QColor(_INK))
         p.drawText(QRectF(8, y, ml - 14, bar_h), int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
                    f"pool {rm.pool}")
-        x0, x1 = X(rm.at - rm.seconds), X(rm.at)
-        _bar(p, x0, max(x1, x0 + 4), y, bar_h, _REMOVED)
         label = f"removed in {rm.seconds:.1f} s \u00b7 " + ("forced" if rm.forced else
                                                              f"idle {rm.idle:.0f} s" if rm.idle else "idle")
         lx = max(x1, x0 + 4) + 4
