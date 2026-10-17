@@ -279,6 +279,10 @@ class ClearEvent:
     planted_sha1: str = ""
     rejection: dict | None = None
     rejections_checked: bool = False   # the Redis rejection log could be read
+    # A hijack: whose session it claimed, and the pool that session was on
+    # (None: on production) -- a diverted victim is preferred.
+    claimed_window: int | None = None
+    claimed_pool: int | None = None
 
     def clears_cookies(self) -> bool:
         return self.variant in ("cookies", "all")
@@ -320,7 +324,12 @@ class ClearEvent:
 
     def removed(self) -> str:
         if self.forges_cookie():
-            return f"SERVERID = {self.planted[:14]}\u2026 (claims session {self.claimed_session[:8]})"
+            victim = ""
+            if self.claimed_window is not None:
+                victim = (f" of User {chr(65 + self.claimed_window)}, on "
+                          + (f"pool {self.claimed_pool}" if self.claimed_pool is not None else "production"))
+            return (f"SERVERID = {self.planted[:14]}\u2026 (claims session {self.claimed_session[:8]}"
+                    f"{victim})")
         if self.variant == "forge_storage":
             return f"{self.storage_keys} storage entr{'y' if self.storage_keys == 1 else 'ies'} written"
         parts = []

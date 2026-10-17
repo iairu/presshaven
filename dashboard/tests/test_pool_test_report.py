@@ -457,6 +457,14 @@ class ClearBrowserDataTests(unittest.TestCase):
         self.assertIn("never reads browser storage", storage.outcome())
         self.assertFalse(storage.clears_cookies())
 
+    def test_hijack_names_its_victim(self):
+        from core.pool_test_report import ClearEvent
+        e = ClearEvent(1.0, 0, 2, "hijack_cookie", SID[0], planted="b" * 32 + ".x", claimed_session=SID[1],
+                       claimed_window=3, claimed_pool=7)
+        self.assertIn("of User D, on pool 7", e.removed())
+        e.claimed_pool = None
+        self.assertIn("of User D, on production", e.removed())
+
     def test_accepted_forgery_fails_the_run(self):
         from core.pool_test_report import TAMPER_ACCEPTED, ClearEvent
         steps = [self._step("attack", 1, 2, 3), self._step("forged", 2, 2, 3, sids=[SID[1], SID[1], SID[2]])]

@@ -989,9 +989,20 @@ class PoolTestPage(QWidget):
         w = event.window
         browser = self.browsers[w]
         if event.variant == "hijack_cookie":
+            # The session worth stealing is one that is already diverted (it
+            # owns a honeypot pool): success would show as this window
+            # jumping onto that pool. Otherwise any other window's session.
+            latest: dict[int, int | None] = {}
+            for smp in self._samples:
+                latest[smp.window] = smp.pool
             others = [i for i in range(len(self.browsers)) if i != w and self._session_ids[i]]
-            event.claimed_session = (self._session_ids[random.choice(others)] if others
-                                     else secrets.token_hex(16))
+            diverted = [i for i in others if latest.get(i) is not None]
+            if others:
+                victim = random.choice(diverted or others)
+                event.claimed_session = self._session_ids[victim]
+                event.claimed_window, event.claimed_pool = victim, latest.get(victim)
+            else:
+                event.claimed_session = secrets.token_hex(16)
         else:
             event.claimed_session = secrets.token_hex(16)
         fake = f"{event.claimed_session}.{secrets.token_hex(20)}"
