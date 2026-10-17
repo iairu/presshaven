@@ -1049,7 +1049,7 @@ class PoolTestPage(QWidget):
             e.after_session, e.after_pool, e.after_route = d.session_id, d.pool, d.route
             e.resolved = True
             if e.window < len(step.actions):
-                step.actions[e.window] = (f"First {e.what()} ({e.outcome()}); then "
+                step.actions[e.window] = (f"{e.action_note()}; then "
                                           + step.actions[e.window][:1].lower()
                                           + step.actions[e.window][1:])
 

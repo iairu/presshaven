@@ -325,6 +325,22 @@ class ClearEvent:
     def what(self) -> str:
         return CLEAR_TEXT.get(self.variant, self.variant)
 
+    def short_outcome(self) -> str:
+        """The outcome in a word or two, for the step tables' action cells."""
+        if not self.resolved:
+            return "not observed"
+        if self.is_forgery():
+            d = self.detection()
+            return {"detected": "rejected", "accepted": "ACCEPTED"}.get(d, d)
+        if self.same_session():
+            return "kept its session"
+        return "fresh session" if self.after_session else "no session"
+
+    def action_note(self) -> str:
+        """'◆ hijack attempt → rejected' -- the marker a step table shows in the
+        window's action; the tamper table has the detail."""
+        return f"\u25c6 {self.short()} \u2192 {self.short_outcome()}"
+
     def short(self) -> str:
         """A few words for narrow cells (the step tables, the tamper table's
         first line); what() is the full sentence."""

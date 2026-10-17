@@ -457,6 +457,15 @@ class ClearBrowserDataTests(unittest.TestCase):
         self.assertIn("never reads browser storage", storage.outcome())
         self.assertFalse(storage.clears_cookies())
 
+    def test_action_note_is_short(self):
+        from core.pool_test_report import ClearEvent
+        e = ClearEvent(1.0, 0, 2, "hijack_cookie", SID[0], planted="x", claimed_session=SID[1],
+                       rejections_checked=True, rejection={"status": "bad_signature"},
+                       after_session=SID[0], resolved=True)
+        self.assertEqual(e.action_note(), "\u25c6 hijack attempt \u2192 rejected")
+        c = ClearEvent(1.0, 0, 2, "cookies", SID[0], after_session=SID[0], resolved=True)
+        self.assertEqual(c.action_note(), "\u25c6 cleared cookies \u2192 kept its session")
+
     def test_hijack_names_its_victim(self):
         from core.pool_test_report import ClearEvent
         e = ClearEvent(1.0, 0, 2, "hijack_cookie", SID[0], planted="b" * 32 + ".x", claimed_session=SID[1],
