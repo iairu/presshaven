@@ -291,6 +291,14 @@ def _cleared_html(data: PoolTestData) -> str:
                  "session changed": "followed by a session change", "not observed": "not observed"}
         summary += (f' {len(forged)} forgery(ies): '
                     + ", ".join(f"{n} {words.get(k, k)}" for k, n in counts.items()) + '.')
+        scored = [e for e in forged if e.rejection and e.rejection.get("scored")]
+        if scored:
+            who = ", ".join(
+                f"{data.frames[e.window].label if e.window < len(data.frames) else e.window + 1} "
+                f"(+{e.rejection.get('score', 0)} before step {e.step + 1})" for e in scored)
+            summary += (f' A rejected forgery is scored as tampering and stays on the window\'s session: '
+                        f'{who}. That is the raised score under those windows in the step tables from '
+                        'then on; it diverts the window only once its total reaches the threshold.')
         unscored = [e for e in forged if e.rejection and not e.rejection.get("scored")]
         if unscored:
             summary += (' Rejections were logged but not scored as tampering: the proxy has no stable '
