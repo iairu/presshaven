@@ -707,6 +707,26 @@ def load_problems(log: list[dict]) -> tuple[int, int, list[dict]]:
     return len(log), attempts, never
 
 
+def load_failures_by_step(log: list[dict], busy: list[tuple[float, float]] = ()) -> tuple[list[tuple[str, int]], int]:
+    """([(step, loads that needed a retry)] in the order the steps ran, how
+    many of those loads ran while a pool was being built or removed).
+    `busy` are (start, end) times of pool builds and removals: Docker adds or
+    removes network interfaces then, which aborts loads in flight. The
+    summary only said how many failed, not where."""
+    order: list[str] = []
+    counts: dict[str, int] = {}
+    during = 0
+    for e in sorted(log, key=lambda e: float(e.get("t", 0))):
+        step = str(e.get("step") or "?")
+        if step not in counts:
+            order.append(step)
+        counts[step] = counts.get(step, 0) + 1
+        t = float(e.get("t", 0))
+        # t is when the step's loads began; its retries back off for ~15 s.
+        during += any(a <= t + 15 and t <= b for a, b in busy)
+    return [(step, counts[step]) for step in order], during
+
+
 def classify(batch: list[Sample]) -> list[str]:
     """State of each sample in one simultaneous read of the windows:
     production, borrowed (sharing a pool only until its own is built), shared

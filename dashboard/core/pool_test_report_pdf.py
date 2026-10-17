@@ -23,7 +23,7 @@ from core.pool_test_report import (load_problems, REASSIGN_FAILED, REASSIGNED, R
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
-                                   CART_UNREADABLE, cart_marks, cart_resets, latency_loads, load_stats,
+                                   CART_UNREADABLE, cart_marks, cart_resets, latency_loads, load_failures_by_step, load_stats,
                                    scaling_summary, score_causes,
                                    usage_at)
 
@@ -1205,6 +1205,12 @@ def _memory_scope_html(data: PoolTestData, summ: ScalingSummary) -> str:
                       for k, v in rows) + '</table>')
 
 
+def _short_step(step: str) -> str:
+    """A load-log step name, short: "latency probe: after the scale-up" stays,
+    a long step title is cut."""
+    return step if len(step) <= 48 else step[:46].rstrip() + "\u2026"
+
+
 def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int) -> tuple[str, int]:
     """Section: how fast pools were added, how long windows borrowed a pool,
     and page-load latency per routing state. Returns (html, next figure no)."""
@@ -1235,6 +1241,11 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                 + (f"; {len(never)} never loaded (listed below)" if never else "; every one loaded in the end")
                 + ". Chromium aborts loads in flight (ERR_NETWORK_CHANGED) whenever Docker adds or "
                   "removes a container's network interface, i.e. while pools are built or removed.")
+        busy = [(b.start, b.start + b.seconds) for b in builds_done] \
+            + [(r.at - r.seconds, r.at) for r in summ.removals]
+        by_step, during = load_failures_by_step(data.load_log, busy)
+        text += (f" {during} of the {loads} ran while a pool was being built or removed. By step: "
+                 + "; ".join(f"{_short_step(step)} {n}" for step, n in by_step) + ".")
         rows.append(("Failed page loads", text))
     if status:
         lim = []

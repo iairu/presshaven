@@ -417,6 +417,15 @@ class PrebuildTests(unittest.TestCase):
 
 
 class LoadLogTests(unittest.TestCase):
+    def test_failures_by_step_and_during_builds(self):
+        from core.pool_test_report import load_failures_by_step
+        log = [{"t": 100, "step": "Honeypot pools scale up"}, {"t": 30, "step": "User D attacks"},
+               {"t": 101, "step": "Honeypot pools scale up"}, {"t": 400, "step": "latency probe: at the end"}]
+        by_step, during = load_failures_by_step(log, [(60, 120)])
+        self.assertEqual(by_step, [("User D attacks", 1), ("Honeypot pools scale up", 2),
+                                   ("latency probe: at the end", 1)])
+        self.assertEqual(during, 2)
+
     def test_counts_per_load_not_per_attempt(self):
         from core.pool_test_report import load_problems
         log = [{"window": 0, "attempts": 3, "outcome": "retried"},
