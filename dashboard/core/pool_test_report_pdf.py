@@ -158,7 +158,14 @@ def _cart_section_html(data: PoolTestData) -> str:
                 'on and an empty cart there is expected. If a cart shows up again after that, the browser '
                 'did not bring it back: the stack restored it, and the report notes it below the table. '
                 'That restored cart is then the one the later steps are compared with. Clearing only localStorage or '
-                'sessionStorage leaves the cart cookie in place, so the cart must stay as it was.</p>')
+                'sessionStorage leaves the cart cookie in place, so the cart must stay as it was.</p>'
+                '<p style="color:#555;">The cart does not come back even when the stack recognises the '
+                'window again and gives it its old session (fingerprint recovery, see Session tamper-proofing). '
+                'That is by design: the session decides <i>where</i> a visitor is routed, while the cart lives '
+                'only in the browser\'s <i>fh_cart</i> cookie, so that every instance &ndash; production or any '
+                'honeypot pool, each with its own database &ndash; can rebuild it without sharing state. The '
+                'server keeps no copy of a cart, so a visitor who deletes their cookies loses it, exactly as on '
+                'a shop without a honeypot.</p>')
     return ('<h2 style="color:#222;">Cart persistence</h2>'
             '<p style="color:#555;">A visitor diverted to a honeypot is served by a different database, so '
             'WooCommerce\'s own cart session does not exist there. The storefront therefore carries the '
