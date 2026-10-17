@@ -223,7 +223,10 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
            'once diverted, why the router diverted it. A CVE pattern match or a request for a '
            'vulnerable plugin diverts the session whatever its score, so a diverted window can show a '
            'score below the diversion threshold (80 by default); only &ldquo;score over the '
-           'threshold&rdquo; depends on it.</p>']
+           'threshold&rdquo; depends on it. The score adds up over the session\'s requests (capped at '
+           '100) and slowly fades between them, so one diverted window may show 94 where another shows '
+           '100 until its next suspicious request; once diverted, the session stays bound to its pool '
+           'whatever its score does.</p>']
     # At most STEP_COLUMNS windows side by side, the rest in a second block
     # under them: ten columns ran off the page's right edge (window J's
     # column was cut off) and squeezed the badges until they broke mid-word.
