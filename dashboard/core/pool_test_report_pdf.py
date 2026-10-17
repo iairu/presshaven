@@ -1518,8 +1518,11 @@ def _scaledown_html(data: PoolTestData) -> str:
     if before and after:
         cpus = data.host_cpus or 0
         if cpus:
-            cpu_row = (f"{before.cpu_percent / cpus:.0f} % \u2192 {after.cpu_percent / cpus:.0f} % "
-                       f"of all {cpus} CPUs")
+            # One decimal: idle pools use a few % of one core, which divided
+            # by 20 CPUs rounded to "0 % \u2192 0 %".
+            cpu_row = (f"{before.cpu_percent / cpus:.1f} % \u2192 {after.cpu_percent / cpus:.1f} % "
+                       f"of all {cpus} CPUs ({before.cpu_percent:.0f} % \u2192 "
+                       f"{after.cpu_percent:.0f} % of one CPU)")
         else:
             cpu_row = f"{before.cpu_percent:.0f} % \u2192 {after.cpu_percent:.0f} % of one CPU"
         rows += [("Memory in use (measured, pool containers)",
