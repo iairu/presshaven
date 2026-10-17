@@ -15,7 +15,7 @@ from core import diagrams, pool_evidence, vector_figures
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
                                      _pool_state_html, _report_font_family)
-from core.pool_test_report import (BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
+from core.pool_test_report import (TAMPER_ACCEPTED, BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
@@ -24,7 +24,7 @@ from core.pool_test_report import (BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, M
                                    usage_at)
 
 _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY, MERGED: _RED,
-                 CART_LOST: _RED, UNSTABLE: _ORANGE}
+                 CART_LOST: _RED, UNSTABLE: _ORANGE, TAMPER_ACCEPTED: _RED}
 
 
 def _short(session_id: str) -> str:
@@ -201,20 +201,41 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
     return "".join(out)
 
 
+_DETECTION_BADGE = {
+    "detected": ("rejected", _GREEN),
+    "ignored": ("ignored", _GREEN),
+    "accepted": ("ACCEPTED", _RED),
+    "not logged": ("not logged", _ORANGE),
+    "session changed": ("session changed", _ORANGE),
+    "not observed": ("not observed", _GREY),
+}
+
+
 def _cleared_html(data: PoolTestData) -> str:
-    """Every time a window cleared its own browser data, and what the stack did
-    with it afterwards -- reported as observed, not judged."""
+    """Every time a window cleared or forged its own session data, and what the
+    stack did with it afterwards. Clearings are reported as observed; a
+    forgery is also checked: the proxy must reject a forged cookie (its
+    rejection log in Redis has the planted value's SHA-1) and never hand out
+    the session it claims, and must ignore forged browser storage."""
     if data.clear_seed is None:
         return ""
-    intro = ('<h2 style="color:#222;">Windows clearing their browser data</h2>'
-             '<p style="color:#555;">Between steps, random windows cleared their own data the way a '
-             'regular visitor does from the browser\'s settings: every cookie of the site, its '
-             'localStorage and sessionStorage, or both. Nothing was forged or rewritten. The table '
-             'shows what each window had before, and the session and route the stack gave it once '
-             'the next step settled. A window that lost its cookies also lost WooCommerce\'s cart '
-             f'cookie, so its cart starts over there. Random seed: {data.clear_seed}.</p>')
+    intro = ('<h2 style="color:#222;">Session tamper-proofing</h2>'
+             '<p style="color:#555;">Between steps, random windows tampered with their own session. '
+             'Some <b>cleared</b> their data the way a regular visitor does from the browser\'s '
+             'settings (every cookie of the site, its localStorage and sessionStorage, or both): the '
+             'stack should still recognise the window by its passive fingerprint (TLS hello, '
+             'User-Agent, Accept-Language, IP) and keep it on its session. Others <b>forged</b> it: '
+             'their SERVERID cookie was rewritten to an invented session, or to another window\'s '
+             'session (a hijack attempt), with a made-up signature. The real cookie is '
+             '&ldquo;&lt;session id&gt;.&lt;HMAC&gt;&rdquo; and only the proxy holds the key, so a '
+             'forged one must be rejected as not signed by the server &ndash; logged in Redis '
+             '(<i>session_cookie_rejections</i>, by the SHA-1 of the value, matched here against the '
+             'value planted) &ndash; and the window recovered into its own session, never the claimed '
+             'one. A fake session written into localStorage / sessionStorage is never sent to the '
+             'server, so it must change nothing. A window that lost its cookies also lost '
+             f'WooCommerce\'s cart cookie, so its cart starts over there. Random seed: {data.clear_seed}.</p>')
     if not data.cleared:
-        return intro + '<p style="color:#777;">No window cleared its data in this run.</p>'
+        return intro + '<p style="color:#777;">No window tampered with its session in this run.</p>'
 
     def where(pool, route):
         if pool is not None:
@@ -232,34 +253,61 @@ def _cleared_html(data: PoolTestData) -> str:
             badge = (_badge("same session", _BLUE_INK) if e.same_session()
                      else _badge("fresh session", _BLUE_INK) if e.after_session
                      else _badge("no session", _GREY))
+        if e.is_forgery():
+            text, color = _DETECTION_BADGE.get(e.detection(), (e.detection(), _GREY))
+            badge = _badge(text, color) + " " + badge
         rows.append(
             f'<tr><td>{_mmss(e.t)}</td><td>{e.step + 1}: {_esc(step)}</td><td><b>{_esc(label)}</b></td>'
             f'<td>{_esc(e.what())}<br/><span style="font-size:8pt;color:#555;">{_esc(e.removed())}</span></td>'
             f'<td style="font-size:8pt;">{before}</td><td style="font-size:8pt;">{after}</td>'
             f'<td>{badge}<br/><span style="font-size:8pt;color:#555;">{_esc(e.outcome())}</span></td></tr>')
-    same = sum(1 for e in data.cleared if e.resolved and e.same_session())
-    fresh = sum(1 for e in data.cleared if e.resolved and e.after_session and not e.same_session())
-    none = sum(1 for e in data.cleared if e.resolved and not e.after_session)
-    unseen = sum(1 for e in data.cleared if not e.resolved)
+    clears = [e for e in data.cleared if not e.is_forgery()]
+    forged = [e for e in data.cleared if e.is_forgery()]
+    same = sum(1 for e in clears if e.resolved and e.same_session())
+    fresh = sum(1 for e in clears if e.resolved and e.after_session and not e.same_session())
+    none = sum(1 for e in clears if e.resolved and not e.after_session)
+    unseen = sum(1 for e in clears if not e.resolved)
     parts_ = [f"{same} kept their session", f"{fresh} got a fresh one"]
     if none:
         parts_.append(f"{none} had no session at the next routing read")
     if unseen:
         parts_.append(f"{unseen} not observed (the run ended first)")
+    summary = f'<p style="color:#555;">{len(clears)} clearing(s): {", ".join(parts_)}.'
+    if forged:
+        counts: dict[str, int] = {}
+        for e in forged:
+            counts[e.detection()] = counts.get(e.detection(), 0) + 1
+        words = {"detected": "rejected by the proxy", "ignored": "ignored (browser storage)",
+                 "accepted": "ACCEPTED", "not logged": "not accepted but no rejection logged",
+                 "session changed": "followed by a session change", "not observed": "not observed"}
+        summary += (f' {len(forged)} forgery(ies): '
+                    + ", ".join(f"{n} {words.get(k, k)}" for k, n in counts.items()) + '.')
+        unscored = [e for e in forged if e.rejection and not e.rejection.get("scored")]
+        if unscored:
+            summary += (' Rejections were logged but not scored as tampering: the proxy has no stable '
+                        'signing key (SESSION_SIGNING_KEY unset), so it can\'t tell a forged cookie '
+                        'from one issued before its last restart.')
+        if any(e.forges_cookie() and not e.rejections_checked for e in forged):
+            summary += ' The rejection log could not be read from Redis.'
+    summary += '</p>'
     # A window already diverted that lost its session walks back to production.
-    escaped = [e for e in data.cleared if e.resolved and e.before_pool is not None
-               and not e.same_session()]
-    summary = (f'<p style="color:#555;">{len(data.cleared)} clearing(s): {", ".join(parts_)}.</p>'
-               + (f'<p style="color:#c62828;"><b>{len(escaped)} diverted window(s) lost their '
-                  'session by clearing their data</b> and were no longer routed to their honeypot '
-                  'pool: ' + _esc(", ".join(data.frames[e.window].label for e in escaped
-                                            if e.window < len(data.frames))) + '.</p>'
-                  if escaped else ''))
-    return (intro + summary
+    escaped = [e for e in clears if e.resolved and e.before_pool is not None and not e.same_session()]
+    accepted = [e for e in forged if e.accepted_forgery()]
+    alerts = ''
+    if accepted:
+        alerts += ('<p style="color:#c62828;"><b>The stack accepted a forged session cookie</b>: '
+                   + _esc(", ".join(f"{data.frames[e.window].label} got session {e.claimed_session[:8]}"
+                                    for e in accepted if e.window < len(data.frames))) + '.</p>')
+    if escaped:
+        alerts += (f'<p style="color:#c62828;"><b>{len(escaped)} diverted window(s) lost their '
+                   'session by clearing their data</b> and were no longer routed to their honeypot '
+                   'pool: ' + _esc(", ".join(data.frames[e.window].label for e in escaped
+                                             if e.window < len(data.frames))) + '.</p>')
+    return (intro + summary + alerts
             + '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><tr><th>Time</th><th>Before step</th>'
-            '<th>Window</th><th>Cleared</th><th>Session before</th><th>Session after</th>'
-            '<th>What the stack did</th></tr>' + "".join(rows) + '</table>')
+            'style="border-collapse:collapse; color:#333;"><thead><tr><th>Time</th><th>Before step</th>'
+            '<th>Window</th><th>Tampering</th><th>Session before</th><th>Session after</th>'
+            '<th>What the stack did</th></tr></thead>' + "".join(rows) + '</table>')
 
 
 def _runs_html(data: PoolTestData) -> str:
@@ -392,8 +440,10 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              f'Target: {_esc(data.target_label)} &nbsp; ({_esc(data.base_url)})<br/>'
              f'Patterns: {_esc(data.pattern)}<br/>'
              f'Windows: {len(data.frames)}<br/>'
-             'Browser data cleared: ' + (f'{len(data.cleared)} time(s), in random windows'
-                                         if data.clear_seed is not None else 'off')
+             'Session tamper-proofing: ' + (
+                 f'{sum(1 for e in data.cleared if not e.is_forgery())} clearing(s) and '
+                 f'{sum(1 for e in data.cleared if e.is_forgery())} forgery(ies), in random windows'
+                 if data.clear_seed is not None else 'off')
              + '</td></tr></table><hr/>',
              '<h2 style="color:#222;">Result</h2>',
              f'<p>{_badge(verdict.status.replace("_", " ").upper(), _STATUS_COLOR.get(verdict.status, _RED))} '
@@ -625,7 +675,7 @@ def scaling_timeline_figure(data: PoolTestData, summ: ScalingSummary, family: st
     if removals:
         items.append((_REMOVED, "pool removed (scale-down)"))
     if data.cleared:
-        items.append((_INK, "window cleared its browser data (diamond)"))
+        items.append((_INK, "window cleared or forged its session data (diamond)"))
     H = int(_legend(None, ml, plot_bottom + 24, items, family, plot_w)) + 8
 
     img, p = vector_figures.new_figure(W, H)
@@ -1087,7 +1137,7 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
         "resource limit was reached), and every pool built during the run, its phases shaded "
         "dark to light. Dashed grey arrows: a finished pool handed to the window that waited "
         "for it. Numbered dotted lines: the steps below."
-        + (" Black diamonds: a window cleared its browser data." if data.cleared else ""),
+        + (" Black diamonds: a window cleared or forged its session data." if data.cleared else ""),
         width=640))
     fig += 1
     if builds_done:

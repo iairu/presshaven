@@ -250,13 +250,29 @@ class MainWindow(QMainWindow):
 
     # ---- navigation / target plumbing ----
 
-    def _grab_health_screenshot(self) -> str:
+    def _grab_health_screenshot(self, target_key: str | None = None,
+                                containers: list[dict] | None = None) -> str:
         """Bring the Global Visualization page on-screen briefly, grab it, and return a PNG
         path for the Extras thesis export. Restores the previous page. Returns
-        "" if the grab fails -- the export tolerates a missing screenshot."""
+        "" if the grab fails -- the export tolerates a missing screenshot.
+
+        With ``target_key`` (the Services report) it instead draws just that
+        target's tiles from ``containers``, a `ps` result the caller already
+        has (HealthPage.snapshot_target()) -- no page switch, no poll wait."""
         import os
         import tempfile
         from PyQt6.QtCore import QEventLoop, QTimer
+
+        if target_key is not None:
+            try:
+                image = self.health_page.snapshot_target(target_key, containers or [])
+                if image is None or image.isNull():
+                    return ""
+                path = os.path.join(tempfile.mkdtemp(prefix="services_health_"), "health.png")
+                image.save(path)
+                return path
+            except Exception:  # noqa: BLE001 -- best-effort screenshot
+                return ""
 
         prev = self.stack.currentIndex()
         try:

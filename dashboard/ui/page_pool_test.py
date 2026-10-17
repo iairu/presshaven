@@ -21,12 +21,15 @@ many still wait for theirs.
 """
 from __future__ import annotations
 
+import hashlib
 import random
+import secrets
 import time
 from datetime import datetime
 
 from PyQt6.QtCore import QEventLoop, Qt, QThread, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtNetwork import QNetworkCookie
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
     QProgressBar, QPushButton, QSpinBox, QSplitter, QVBoxLayout, QWidget,
@@ -36,7 +39,7 @@ from core import redis_inspect
 from core.docker_ctl import target_for
 from core.patterns import PATTERN_PRESETS
 from core import pool_evidence
-from core.pool_test_report import (capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
+from core.pool_test_report import (COOKIE_FORGERIES, capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
                                     browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
@@ -82,6 +85,14 @@ BROWSE_EVERY_S = 10.0
 # data" does; returns how many entries were removed.
 _CLEAR_STORAGE_JS = ("(function(){var n=0;try{n+=localStorage.length;localStorage.clear();}catch(e){}"
                      "try{n+=sessionStorage.length;sessionStorage.clear();}catch(e){}return String(n);})()")
+
+
+# Writes a made-up session into the page origin's localStorage and
+# sessionStorage under the names a client-side session would use; returns how
+# many entries it wrote. %s is the fake value (a JSON string literal).
+_FORGE_STORAGE_JS = ("(function(v){var n=0,k=['SERVERID','session_id','sessionId','wc_session'];"
+                     "for(var i=0;i<k.length;i++){try{localStorage.setItem(k[i],v);n++;}catch(e){}"
+                     "try{sessionStorage.setItem(k[i],v);n++;}catch(e){}}return String(n);})(%s)")
 
 
 # Reads the shop's own cart (WooCommerce Store API) from inside a window, so the
@@ -219,13 +230,19 @@ class PoolTestPage(QWidget):
         self.reset_btn.setToolTip("Clear every frame's cookies, so each starts a fresh session.")
         self.reset_btn.clicked.connect(self.reset_sessions)
         bar.addWidget(self.reset_btn)
-        self.clear_check = QCheckBox("Clear browser data in random windows")
+        self.clear_check = QCheckBox("Session tamper-proofing")
         self.clear_check.setChecked(True)
         self.clear_check.setToolTip(
-            "During the report run, a few random windows clear their own cookies and/or "
-            "localStorage between steps, the way a regular visitor clears their browsing "
-            "data. The PDF shows each time it happened and what the stack did with the "
-            "window afterwards (its old session back or a fresh one, and which pool).")
+            "During the report run, random windows tamper with their own session between "
+            "steps:\n"
+            "\u2022 delete it: clear their cookies and/or localStorage, the way a visitor clears "
+            "their browsing data -- the stack must still recognise the window (passive "
+            "fingerprint) and keep it on its session;\n"
+            "\u2022 forge it: rewrite the SERVERID cookie to an invented session or to another "
+            "window's session with a made-up signature -- the proxy must reject it as not "
+            "signed by the server (logged in Redis) and never hand out the claimed session; "
+            "or write a fake session into localStorage, which the server must ignore.\n"
+            "The PDF shows each event and what the stack did with the window afterwards.")
         bar.addWidget(self.clear_check)
         self.export_btn = QPushButton("Export report (PDF)")
         self.export_btn.setToolTip(
@@ -696,8 +713,9 @@ class PoolTestPage(QWidget):
             "per batch of new pools)."
             + (f" The last {self._delayed()} window(s) attack only after pools were pre-built "
                "for them." if self._delayed() else "")
-            + (" Between steps, a few random windows clear their own cookies and/or "
-               "localStorage, like a visitor clearing their browsing data."
+            + (" Between steps, a few random windows tamper with their session: they clear "
+               "their cookies and/or localStorage, or forge their session cookie or storage, "
+               "to check the stack still tells the windows apart and rejects forged sessions."
                if self.clear_check.isChecked() else "")
             + " At the end the windows' sessions are released and the pools they no longer "
             "need are scaled down at once (instead of after POOL_IDLE_TIMEOUT_SECONDS)."
@@ -797,17 +815,21 @@ class PoolTestPage(QWidget):
         """Every window opens its next page."""
         self._load_all([self._browse_url(w) for w in range(len(self.browsers))], step)
 
-    # ---- windows clearing their own browser data ----
+    # ---- windows clearing or forging their own session data ----
 
     def _clear_browser_data(self, window: int, variant: str, step: int,
                             before: Decision | None) -> ClearEvent:
-        """Window `window` clears its own data the way a visitor would from the
-        browser's settings: its site storage (from the page, as "clear site
-        data" does) and/or every cookie in its profile. Nothing is rewritten."""
+        """Window `window` tampers with its own session. A clearing removes its
+        data the way a visitor would from the browser's settings: its site
+        storage (from the page, as "clear site data" does) and/or every cookie
+        in its profile. A forgery rewrites it (_forge_session_data)."""
         event = ClearEvent(self._now(), window, step, variant,
                            before_session=self._session_ids[window],
                            before_pool=before.pool if before is not None else None)
         browser = self.browsers[window]
+        if event.is_forgery():
+            self._forge_session_data(event)
+            return event
         if variant in ("storage", "all") and browser.view.url().toString().startswith("http"):
             got = self._run_js(window, _CLEAR_STORAGE_JS)
             event.storage_keys = int(got) if str(got).isdigit() else 0
@@ -819,10 +841,58 @@ class PoolTestPage(QWidget):
                 self._spin(100)
         return event
 
+    def _forge_session_data(self, event: ClearEvent) -> None:
+        """Rewrite window `event.window`'s session the way a client-side
+        attacker would. Cookie forgeries replace SERVERID with
+        "<session id>.<signature>" where the signature is made up (the real
+        one is an HMAC only the proxy can compute): an invented id, or another
+        window's real id (a hijack attempt). A storage forgery writes a fake
+        session into localStorage / sessionStorage."""
+        w = event.window
+        browser = self.browsers[w]
+        if event.variant == "hijack_cookie":
+            others = [i for i in range(len(self.browsers)) if i != w and self._session_ids[i]]
+            event.claimed_session = (self._session_ids[random.choice(others)] if others
+                                     else secrets.token_hex(16))
+        else:
+            event.claimed_session = secrets.token_hex(16)
+        fake = f"{event.claimed_session}.{secrets.token_hex(20)}"
+        if event.variant == "forge_storage":
+            if browser.view.url().toString().startswith("http"):
+                got = self._run_js(w, _FORGE_STORAGE_JS % ('"' + fake + '"'))
+                event.storage_keys = int(got) if str(got).isdigit() else 0
+            event.planted = fake
+            return
+        # Same name, host and path as the proxy's own cookie, so it replaces it.
+        base = QUrl(self._base_url() + "/")
+        cookie = QNetworkCookie(SESSION_COOKIE.encode(), fake.encode())
+        cookie.setPath("/")
+        cookie.setHttpOnly(True)
+        cookie.setSecure(base.scheme() == "https")
+        browser.profile.cookieStore().setCookie(cookie, base)
+        event.planted = fake
+        event.planted_sha1 = hashlib.sha1(fake.encode()).hexdigest()
+        deadline = time.monotonic() + 3.0          # setCookie() is asynchronous
+        while self._session_ids[w] != event.claimed_session and time.monotonic() < deadline:
+            self._spin(100)
+
     def _resolve_cleared(self, cleared: list[ClearEvent], results: list[StepResult]) -> None:
-        """Fill in what each clearing led to from the step it happened before,
-        and say it in that step's action for the window."""
+        """Fill in what each clearing or forgery led to from the step it
+        happened before, and say it in that step's action for the window. For a
+        forged cookie, look its SHA-1 up in the proxy's rejection log."""
+        rejections: dict[str, dict] | None = None
+        if any(e.variant in COOKIE_FORGERIES for e in cleared):
+            remote = self._remote()
+            try:
+                rejections = {}
+                for r in self._blocking(lambda: redis_inspect.cookie_rejections(remote)):
+                    rejections.setdefault(r.get("cookie_sha1", ""), r)
+            except Exception:  # noqa: BLE001 -- the report says the log was unreadable
+                rejections = None
         for e in cleared:
+            if e.forges_cookie() and rejections is not None:
+                e.rejections_checked = True
+                e.rejection = rejections.get(e.planted_sha1)
             if e.step >= len(results):
                 continue
             step = results[e.step]
@@ -1173,8 +1243,9 @@ class PoolTestPage(QWidget):
         runs: list[PatternRun] = []
         used: set[str] = set()
         step = 0
-        # Clearing starts once every window has filled its cart (step 3) and can
-        # happen before any later step up to the cart page; never the scale-down.
+        # Tampering (clearing or forging session data) starts once every window
+        # has filled its cart (step 3) and can happen before any later step up
+        # to the cart page; never the scale-down.
         clear_seed = random.randrange(2 ** 31) if self.clear_check.isChecked() else None
         schedule = clear_schedule(list(range(3, total_steps)), count,
                                   random.Random(clear_seed)) if clear_seed is not None else {}
@@ -1184,7 +1255,8 @@ class PoolTestPage(QWidget):
             nonlocal step
             step += 1
             for w, variant in schedule.get(step, []):
-                self._progress(f"Step {step}/{total_steps}: {FRAMES[w][0]} clears its browser data",
+                doing = "forges" if variant in COOKIE_FORGERIES or variant == "forge_storage" else "clears"
+                self._progress(f"Step {step}/{total_steps}: {FRAMES[w][0]} {doing} its session data",
                                step, total)
                 before = results[-1].decisions[w] if results and w < len(results[-1].decisions) else None
                 cleared.append(self._clear_browser_data(w, variant, len(results), before))

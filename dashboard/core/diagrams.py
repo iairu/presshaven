@@ -178,6 +178,67 @@ def architecture_diagram(family: str = "Serif") -> VectorFigure:
     return img
 
 
+# Box colours per chart group of the Services report (startup_events.chart_groups).
+_GROUP_STYLE = {
+    "One-shot jobs": ("#fff7e6", _ORANGE, "run once at start-up, then exit"),
+    "Databases": ("#eef0f2", _GREY, "MySQL pools / Elasticsearch"),
+    "Shops": ("#e8f3ea", _GREEN, "production and honeypot WordPress"),
+    "Edge & monitoring": ("#e7effa", _BLUE, "proxy, IDS, log shipping, support jobs"),
+}
+
+
+def stack_services_diagram(title: str, groups: list[tuple[str, list[str]]],
+                           family: str = "Serif") -> VectorFigure:
+    """The services of ONE compose stack, one box per chart group of the
+    Services report, each box listing exactly the containers that group's
+    CPU / memory charts plot -- so the figure and the charts below it never
+    disagree about what was measured. ``groups`` is chart_groups() output
+    (a single untitled group for a small stack)."""
+    W = 920
+    pad, gap = 20, 18
+    line_h = 18
+    head_h = 44
+    cols = 1 if len(groups) == 1 else 2
+    box_w = (W - 2 * pad - (cols - 1) * gap) / cols
+    name_cols = 2 if cols == 1 else 1
+    heights = [head_h + math.ceil(len(m) / name_cols) * line_h + 12 for _t, m in groups]
+    rows = [heights[i:i + cols] for i in range(0, len(heights), cols)]
+    H = 40 + sum(max(r) for r in rows) + gap * (len(rows) - 1) + pad
+    img, p = _new(W, int(H))
+    p.setFont(QFont(family, 12, QFont.Weight.Bold))
+    p.setPen(QColor(_INK))
+    p.drawText(20, 24, title)
+    y = 40.0
+    for r, row_heights in enumerate(rows):
+        for c in range(len(row_heights)):
+            gtitle, members = groups[r * cols + c]
+            fill, border, sub = _GROUP_STYLE.get(gtitle.split(" (")[0],
+                                                 ("#efe8f7", _PURPLE, ""))
+            x = pad + c * (box_w + gap)
+            h = max(row_heights)
+            p.setPen(QPen(QColor(border), 2))
+            p.setBrush(QColor(fill))
+            p.drawRoundedRect(QRectF(x, y, box_w, h), 8, 8)
+            p.setPen(QColor(border))
+            p.setFont(QFont(family, 10, QFont.Weight.Bold))
+            p.drawText(QRectF(x + 10, y + 6, box_w - 20, 18), int(Qt.AlignmentFlag.AlignLeft),
+                       gtitle or "Containers")
+            p.setFont(QFont(family, 8))
+            p.drawText(QRectF(x + 10, y + 24, box_w - 20, 16), int(Qt.AlignmentFlag.AlignLeft),
+                       sub if gtitle else f"{len(members)} containers")
+            p.setPen(QColor(_INK))
+            p.setFont(QFont(family, 9))
+            per_col = math.ceil(len(members) / name_cols)
+            col_w = (box_w - 20) / name_cols
+            for i, svc in enumerate(members):
+                nx = x + 10 + (i // per_col) * col_w
+                ny = y + head_h + (i % per_col) * line_h
+                p.drawText(QRectF(nx, ny, col_w, line_h), int(Qt.AlignmentFlag.AlignLeft), svc)
+        y += max(row_heights) + gap
+    p.end()
+    return img
+
+
 def _db_proxy_architecture_diagram(family: str) -> VectorFigure:
     """architecture_diagram() for the database proxy layer: the proxy forwards
     everything to ONE eshop, whose db.php drop-in connects to the production

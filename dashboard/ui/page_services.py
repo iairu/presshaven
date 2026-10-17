@@ -36,6 +36,7 @@ class TargetPanel(QGroupBox):
         # to embed Health-page screenshots in the report.
         self._health_screenshot_provider = health_screenshot_provider
         self._svc_worker: services_report.ServicesReportWorker | None = None
+        self._remove_finished_after_report = False
         self._svc_out_path = ""
         self._svc_render_error = ""
         # Whether the LogPanel's current process is a mutating compose
@@ -156,7 +157,14 @@ class TargetPanel(QGroupBox):
         if self._mutating_action:
             self._mutating_action = False
             if _exit_code == 0 and getattr(self, "_last_mutating_args", ())[:1] == ("up",):
-                self._remove_finished_containers()
+                # While a report records this start, leave finished jobs in
+                # place until it is done: removing them took their logs with
+                # them, so the report's warnings missed the seed jobs' error
+                # lines that their tiles' badges were showing.
+                if self._svc_worker is None:
+                    self._remove_finished_containers()
+                else:
+                    self._remove_finished_after_report = True
             # If a "…with PDF graph export" is recording, let it know the
             # compose command has now exited (with this code) so a stop is
             # recorded right up to the down command finishing, not just until
@@ -229,7 +237,10 @@ class TargetPanel(QGroupBox):
     def _run_with_export(self, operation: str) -> None:
         if self._svc_worker is not None:
             return  # an export is already running for this target
-        default_name = f"services_{operation}_{self.target.key}.pdf"
+        # Named like the target the report says it is ("ids (local)" ->
+        # ids-local), not by the internal project key ("edge-local").
+        where = "remote" if self.target.is_remote else "local"
+        default_name = f"services_{operation}_{self.target.spec.label}-{where}.pdf"
         path, _ = QFileDialog.getSaveFileName(
             self, f"Save {operation} graph report", default_name, "PDF files (*.pdf)")
         if not path:
@@ -257,16 +268,22 @@ class TargetPanel(QGroupBox):
         worker.start()
 
     def _on_svc_health_shot(self, key: str) -> None:
-        """GUI-thread: grab the Global Visualization page and hand the path back to the worker
-        (which is blocked waiting for it)."""
+        """GUI-thread: draw this target's tiles from the worker's own `ps`
+        result and hand the path back to the worker (which is blocked waiting
+        for it), with the error-badge counts the tiles show."""
         path = ""
-        if self._health_screenshot_provider is not None:
+        worker = self._svc_worker
+        if self._health_screenshot_provider is not None and worker is not None:
             try:
-                path = self._health_screenshot_provider() or ""
+                path = self._health_screenshot_provider(self.target.key, worker.shot_containers) or ""
             except Exception:  # noqa: BLE001
                 path = ""
-        if self._svc_worker is not None:
-            self._svc_worker.provide_health_shot(key, path)
+        badges = {}
+        if self._error_monitor is not None and worker is not None:
+            names = {c.get("Service", "") for c in worker.shot_containers} - {""}
+            badges = {svc: n for svc in names if (n := self._error_monitor.count_for(self.target.key, svc))}
+        if worker is not None:
+            worker.provide_health_shot(key, path, badges)
 
     def _on_svc_finished(self, data) -> None:
         # Render on the GUI thread (QPrinter/QtGui); teardown reads the error.
@@ -284,6 +301,9 @@ class TargetPanel(QGroupBox):
         if self._svc_worker is not None:
             self._svc_worker.deleteLater()
             self._svc_worker = None
+        if self._remove_finished_after_report:
+            self._remove_finished_after_report = False
+            self._remove_finished_containers()
         self.start_export_btn.setEnabled(True)
         self.stop_export_btn.setEnabled(True)
         if error:

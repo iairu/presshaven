@@ -406,6 +406,28 @@ def pool_events(remote: RemoteConfig | None, timeout: float = 15.0) -> list[dict
     return out
 
 
+# The proxy's log of rejected (edited / forged / unsigned) session cookies,
+# newest first (session_identity_rules.lua: REJECTIONS_KEY).
+COOKIE_REJECTIONS_KEY = "session_cookie_rejections"
+
+
+def cookie_rejections(remote: RemoteConfig | None, count: int = 500,
+                      timeout: float = 15.0) -> list[dict]:
+    """The newest ``count`` rejected session cookies the proxy logged: each
+    {"at", "status", "cookie_sha1", "claimed_id", "scored", "score", "ip", ...}.
+    The cookie value itself is never stored, only its SHA-1."""
+    out = []
+    for line in _run_redis_cli(remote, "LRANGE", COOKIE_REJECTIONS_KEY, "0", str(count - 1),
+                               timeout=timeout).splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(e, dict) and e.get("cookie_sha1"):
+            out.append(e)
+    return out
+
+
 def set_pool_reserve(remote: RemoteConfig | None, pools: int, ttl: int = 1800,
                      timeout: float = 10.0) -> None:
     """Ask pool_manager to keep `pools` unowned pools ready (on top of

@@ -372,6 +372,55 @@ class ClearBrowserDataTests(unittest.TestCase):
                     self.assertIn(variant, CLEAR_TEXT)
         self.assertEqual(clear_schedule([], 3, random.Random(1)), {})
 
+    def test_schedule_always_has_a_clearing_and_a_forgery(self):
+        import random
+        from core.pool_test_report import FORGE_KEYS, clear_schedule
+        for seed in range(50):
+            variants = [v for events in clear_schedule([3, 4, 5], 3, random.Random(seed)).values()
+                        for _w, v in events]
+            self.assertTrue(any(v in FORGE_KEYS for v in variants))
+            self.assertTrue(any(v not in FORGE_KEYS for v in variants))
+            off = [v for events in clear_schedule([3, 4, 5], 3, random.Random(seed), forge=False).values()
+                   for _w, v in events]
+            self.assertFalse(any(v in FORGE_KEYS for v in off))
+        # One window has no other session to hijack.
+        for seed in range(50):
+            for events in clear_schedule([3, 4, 5, 6], 1, random.Random(seed)).values():
+                self.assertNotIn("hijack_cookie", [v for _w, v in events])
+
+    def test_forged_cookie_detection(self):
+        from core.pool_test_report import ClearEvent
+        rejected = ClearEvent(1.0, 0, 2, "forge_cookie", SID[0], 1, planted="e" * 32 + ".f",
+                              claimed_session="e" * 32, rejections_checked=True,
+                              rejection={"status": "bad_signature", "scored": True, "score": 50},
+                              after_session=SID[0], after_pool=1, resolved=True)
+        self.assertEqual(rejected.detection(), "detected")
+        self.assertIn("rejected (bad_signature, scored +50 as tampering); kept its session",
+                      rejected.outcome())
+        unlogged = ClearEvent(1.0, 0, 2, "forge_cookie", SID[0], planted="x", claimed_session="e" * 32,
+                              rejections_checked=True, after_session=SID[0], resolved=True)
+        self.assertEqual(unlogged.detection(), "not logged")
+        hijack = ClearEvent(1.0, 0, 2, "hijack_cookie", SID[0], planted="x", claimed_session=SID[1],
+                            rejections_checked=True, after_session=SID[1], resolved=True)
+        self.assertTrue(hijack.accepted_forgery())
+        self.assertEqual(hijack.detection(), "accepted")
+        storage = ClearEvent(1.0, 0, 2, "forge_storage", SID[0], storage_keys=8,
+                             after_session=SID[0], resolved=True)
+        self.assertEqual(storage.detection(), "ignored")
+        self.assertIn("never reads browser storage", storage.outcome())
+        self.assertFalse(storage.clears_cookies())
+
+    def test_accepted_forgery_fails_the_run(self):
+        from core.pool_test_report import TAMPER_ACCEPTED, ClearEvent
+        steps = [self._step("attack", 1, 2, 3), self._step("forged", 2, 2, 3, sids=[SID[1], SID[1], SID[2]])]
+        f = [FrameResult(label=f"F{i}", session_id=s, pool=p)
+             for i, (s, p) in enumerate(((SID[1], 2), (SID[1], 2), (SID[2], 3)))]
+        hijack = ClearEvent(1.0, 0, 1, "hijack_cookie", SID[0], 1, planted="x", claimed_session=SID[1],
+                            after_session=SID[1], after_pool=2, resolved=True)
+        v = analyze(f, state(ready=(1, 2, 3)), steps, [hijack])
+        self.assertEqual(v.status, TAMPER_ACCEPTED)
+        self.assertIn("F0 forged its SERVERID", v.findings[0])
+
     def test_outcome_is_observed_not_judged(self):
         from core.pool_test_report import ClearEvent
         kept = ClearEvent(1.0, 0, 2, "cookies", SID[0], 1, cookies=["SERVERID"],

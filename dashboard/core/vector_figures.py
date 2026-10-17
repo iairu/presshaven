@@ -147,4 +147,14 @@ def embed_figures(doc: QTextDocument) -> int:
         cur.setPosition(pos + length, QTextCursor.MoveMode.KeepAnchor)
         # One image fragment can hold several adjacent identical images.
         cur.insertText("￼" * length, obj)
+    _relayout(doc)
     return len(found)
+
+
+def _relayout(doc: QTextDocument) -> None:
+    """Lay the whole document out again after editing it in place. After an
+    edit QTextDocumentLayout only re-lays the document lazily, and blocks
+    past the point it got to report zero height -- which printing (it reuses
+    this layout when a page size is set) and page-break measurements then
+    believe."""
+    doc.markContentsDirty(0, doc.characterCount())

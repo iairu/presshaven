@@ -376,7 +376,8 @@ class FastSampler:
             base = "/sys/fs/cgroup" + m.group(1).rstrip()
             cpu, mem = os.path.join(base, "cpu.stat"), os.path.join(base, "memory.current")
             if os.path.exists(cpu) and os.path.exists(mem):
-                return {"mode": "v2", "cpu": cpu, "mem": mem}
+                return {"mode": "v2", "cpu": cpu, "mem": mem,
+                        "max": os.path.join(base, "memory.max")}
             return None
         cpu_sub = mem_sub = None
         for line in cg.splitlines():
@@ -396,7 +397,8 @@ class FastSampler:
                 break
         mem = f"/sys/fs/cgroup/memory{mem_sub}/memory.usage_in_bytes" if mem_sub else None
         if cpu and mem and os.path.exists(mem):
-            return {"mode": "v1", "cpu": cpu, "mem": mem}
+            return {"mode": "v1", "cpu": cpu, "mem": mem,
+                    "max": f"/sys/fs/cgroup/memory{mem_sub}/memory.limit_in_bytes"}
         return None
 
     @staticmethod
@@ -436,6 +438,20 @@ class FastSampler:
                 out.append((svc, max(0.0, cpu_pct), mem))
             else:
                 out.append((svc, 0.0, mem))
+        return out
+
+    def mem_limits(self) -> dict[str, int]:
+        """{service: memory limit in bytes} for containers that have one
+        (cgroup v2 "max" / v1's huge sentinel mean unlimited and are left out)."""
+        out: dict[str, int] = {}
+        for svc, paths in list(self._paths.items()):
+            try:
+                with open(paths.get("max", ""), encoding="ascii", errors="replace") as fh:
+                    raw = fh.read().strip()
+            except OSError:
+                continue
+            if raw.isdigit() and int(raw) < 1 << 60:
+                out[svc] = int(raw)
         return out
 
     @property

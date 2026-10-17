@@ -6,8 +6,8 @@ a small window or look tiny on a large one.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF, QUrl, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QPainter, QPen
+from PyQt6.QtCore import QPointF, QRectF, QUrl, Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QImage, QPainter, QPen
 from PyQt6.QtWidgets import (
     QGraphicsObject, QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView,
 )
@@ -75,6 +75,18 @@ STATUS_COLORS = {
     "exited_bad": QColor("#c9302c"),     # exited, nonzero code
     "created": QColor("#e0a030"),        # created but never started (see classify())
     "down": QColor("#2b2b2b"),           # not present at all
+}
+# Short legend wording per status (the Health page's LegendWidget and the
+# report snapshots, render_group()).
+STATUS_LABELS = {
+    "healthy": "Up, healthy",
+    "starting": "Starting (health pending)",
+    "running": "Up (no healthcheck)",
+    "unhealthy": "Up, unhealthy",
+    "exited_ok": "Exited OK (code 0)",
+    "exited_bad": "Exited with error",
+    "created": "Created (never started)",
+    "down": "Down / not created",
 }
 
 class ServiceNode(QGraphicsObject):
@@ -234,6 +246,8 @@ class HealthDiagram(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
         self.nodes: dict[tuple[str, str], ServiceNode] = {}
+        # target_key -> scene rect of its group (title + border), for render_group().
+        self._group_rects: dict[str, QRectF] = {}
         self._selected_key: tuple[str, str] | None = None
         self._last_rebuild_args: tuple | None = None
         # The unscaled scene size we last fit the viewport to -- see
@@ -267,6 +281,7 @@ class HealthDiagram(QGraphicsView):
         self._last_rebuild_args = (targets, results)
         self.scene_.clear()
         self.nodes.clear()
+        self._group_rects.clear()
 
         # One uniform width for every node in the whole diagram (rather than
         # per-node) so the grid stays visually aligned -- sized to fit the
@@ -327,6 +342,7 @@ class HealthDiagram(QGraphicsView):
                 QPen(_border_color()), QBrush(Qt.BrushStyle.NoBrush),
             )
             border.setZValue(-10)
+            self._group_rects[target.key] = QRectF(-4, y_cursor - 4, group_w + 8, group_h + 8)
 
             y_cursor = group_top + group_h + GROUP_GAP_Y
 
@@ -334,6 +350,44 @@ class HealthDiagram(QGraphicsView):
             self.nodes[self._selected_key].set_selected_look(True)
 
         self._maybe_fit_to_viewport()
+
+    def render_group(self, target_key: str, scale: float = 2.0) -> QImage | None:
+        """One target's group of tiles (title, tiles, badges) rendered
+        straight from the scene at ``scale``, with the status-colour key
+        above it -- for the Services report, where a grab of the whole
+        window shrank the tiles past reading and showed other targets too.
+        None if the target isn't in the diagram."""
+        src = self._group_rects.get(target_key)
+        if src is None:
+            return None
+        font = QFont()
+        font.setPointSize(8)
+        fm = QFontMetrics(font)
+        # Legend entries wrapped to the group's width.
+        entries, x, row = [], 0.0, 0
+        items = list(STATUS_LABELS.items()) + [("badge", "badge: log lines with an error word")]
+        for key, text in items:
+            w = 14 + fm.horizontalAdvance(text) + 14
+            if x > 0 and x + w > src.width():
+                x, row = 0.0, row + 1
+            entries.append((key, text, x, row))
+            x += w
+        legend_h = (row + 1) * (fm.height() + 4) + 6
+        img = QImage(int(src.width() * scale), int((src.height() + legend_h) * scale),
+                     QImage.Format.Format_ARGB32)
+        img.fill(_canvas_bg())
+        p = QPainter(img)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.scale(scale, scale)
+        p.setFont(font)
+        for key, text, ex, er in entries:
+            y = 4 + er * (fm.height() + 4)
+            p.fillRect(QRectF(ex + 4, y + 1, 10, 10), STATUS_COLORS.get(key, ERROR_BADGE_COLOR))
+            p.setPen(_title_color())
+            p.drawText(QPointF(ex + 18, y + fm.ascent()), text)
+        self.scene_.render(p, QRectF(0, legend_h, src.width(), src.height()), src)
+        p.end()
+        return img
 
     def _maybe_fit_to_viewport(self) -> None:
         """Re-fits the view's zoom to the current content, but only when

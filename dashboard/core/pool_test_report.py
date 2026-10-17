@@ -100,6 +100,7 @@ MERGED = "merged"
 INCOMPLETE = "incomplete"
 UNSTABLE = "unstable"
 CART_LOST = "cart_lost"
+TAMPER_ACCEPTED = "tamper_accepted"
 
 
 @dataclass
@@ -191,65 +192,130 @@ def parse_cart(store_api_json: str) -> CartState | None:
         return None
 
 
-# ---- clearing browser data ---------------------------------------------------
+# ---- session tamper-proofing: clearing and forging session data ------------
 #
-# With clearing on, random windows clear their own browser data between steps,
-# the way a regular visitor does from the browser's settings: the site's
-# cookies, its localStorage/sessionStorage, or both. Nothing is forged or
-# rewritten. The report records, as observed, what the stack did with the
-# window afterwards (its old session back, or a fresh one, and which pool).
+# With tamper-proofing on, random windows tamper with their own session between
+# steps. Some clear their data the way a regular visitor does from the
+# browser's settings: the site's cookies, its localStorage/sessionStorage, or
+# both. The stack should keep them on their session by its passive
+# fingerprint. Others forge it:
+#   * forge_cookie  -- SERVERID rewritten to an invented session id with a
+#                      made-up signature,
+#   * hijack_cookie -- SERVERID rewritten to ANOTHER window's real session id
+#                      with a made-up signature (a session-hijack attempt),
+#   * forge_storage -- a fake session written into localStorage and
+#                      sessionStorage.
+# A forged cookie must fail the proxy's HMAC check: the proxy logs it to Redis
+# (session_cookie_rejections, by the SHA-1 of the value) and recovers the
+# window's real session by fingerprint, never the claimed one. Browser storage
+# is never sent to the server, so a forged one must change nothing at all.
+# The report records, as observed, what the stack did with the window.
 
 CLEAR_VARIANTS = [("cookies", "cleared its cookies"),
                   ("storage", "cleared its localStorage and sessionStorage"),
                   ("all", "cleared all site data (cookies, localStorage, sessionStorage)")]
-CLEAR_TEXT = dict(CLEAR_VARIANTS)
+FORGE_VARIANTS = [("forge_cookie", "forged its session cookie (invented session id, made-up signature)"),
+                  ("hijack_cookie", "forged its session cookie to another window's session id "
+                                    "(made-up signature)"),
+                  ("forge_storage", "wrote a fake session into its localStorage and sessionStorage")]
+CLEAR_TEXT = dict(CLEAR_VARIANTS + FORGE_VARIANTS)
+FORGE_KEYS = {k for k, _t in FORGE_VARIANTS}
+COOKIE_FORGERIES = {"forge_cookie", "hijack_cookie"}
 
-# Chance that an eligible step starts with one window clearing its data.
+# Chance that an eligible step starts with one window tampering with its session.
 CLEAR_CHANCE = 0.5
 
 
-def clear_schedule(steps: list[int], windows: int, rng) -> dict[int, list[tuple[int, str]]]:
-    """{step number: [(window, variant), ...]} -- who clears what before which
-    step. Each step gets one event with CLEAR_CHANCE; a run with eligible steps
-    always gets at least one, so the report has something to show."""
+def clear_schedule(steps: list[int], windows: int, rng,
+                   forge: bool = True) -> dict[int, list[tuple[int, str]]]:
+    """{step number: [(window, variant), ...]} -- who clears or forges what
+    before which step. Each step gets one event with CLEAR_CHANCE; a run with
+    eligible steps always gets at least one clearing and (with ``forge``) at
+    least one forgery, so the report has something to show. A hijack needs a
+    second window to steal from."""
     if not steps or windows <= 0:
         return {}
-    variants = [k for k, _t in CLEAR_VARIANTS]
+    clears = [k for k, _t in CLEAR_VARIANTS]
+    forges = [k for k, _t in FORGE_VARIANTS if windows > 1 or k != "hijack_cookie"] if forge else []
+    variants = clears + forges
     out: dict[int, list[tuple[int, str]]] = {}
     for n in steps:
         if rng.random() < CLEAR_CHANCE:
             out[n] = [(rng.randrange(windows), rng.choice(variants))]
-    if not out:
-        out[rng.choice(steps)] = [(rng.randrange(windows), rng.choice(variants))]
+    for pool in (clears, forges):
+        if pool and not any(v in pool for events in out.values() for _w, v in events):
+            free = [n for n in steps if n not in out] or steps
+            out.setdefault(rng.choice(free), []).append((rng.randrange(windows), rng.choice(pool)))
     return out
 
 
 @dataclass
 class ClearEvent:
-    """One window clearing its own browser data, and what the stack did next."""
+    """One window clearing or forging its own session data, and what the stack did next."""
     t: float                      # seconds since the run started
     window: int
     step: int                     # index into PoolTestData.steps of the step it happened before
-    variant: str                  # a key of CLEAR_VARIANTS
+    variant: str                  # a key of CLEAR_TEXT
     before_session: str
     before_pool: int | None = None
     cookies: list[str] = field(default_factory=list)   # names of the cookies deleted
-    storage_keys: int = 0         # localStorage + sessionStorage entries removed
+    storage_keys: int = 0         # localStorage + sessionStorage entries removed / written
     after_session: str = ""       # the window's session once the step settled
     after_pool: int | None = None
     after_route: str = ""
     resolved: bool = False        # the step after it was read back
+    # Forgeries: the value planted, the session id it claimed, its SHA-1 (what
+    # the proxy logs instead of the value) and the proxy's rejection record
+    # ({"status", "scored", "score", ...}) found for it in Redis.
+    planted: str = ""
+    claimed_session: str = ""
+    planted_sha1: str = ""
+    rejection: dict | None = None
+    rejections_checked: bool = False   # the Redis rejection log could be read
 
     def clears_cookies(self) -> bool:
         return self.variant in ("cookies", "all")
 
+    def is_forgery(self) -> bool:
+        return self.variant in FORGE_KEYS
+
+    def forges_cookie(self) -> bool:
+        return self.variant in COOKIE_FORGERIES
+
     def same_session(self) -> bool:
         return bool(self.before_session) and self.after_session == self.before_session
+
+    def accepted_forgery(self) -> bool:
+        """The stack took the forged session: the window ended up in the
+        session its forged cookie claimed."""
+        return (self.forges_cookie() and self.resolved and bool(self.claimed_session)
+                and self.after_session == self.claimed_session)
+
+    def detection(self) -> str:
+        """For a forgery: 'detected', 'ignored' (storage, as designed),
+        'accepted', 'not logged', or 'not observed'."""
+        if not self.is_forgery():
+            return ""
+        if self.accepted_forgery():
+            return "accepted"
+        if not self.forges_cookie():
+            if not self.resolved:
+                return "not observed"
+            return "ignored" if self.same_session() or not self.before_session else "session changed"
+        if self.rejection:
+            return "detected"
+        if not self.rejections_checked:
+            return "not observed"
+        return "not logged"
 
     def what(self) -> str:
         return CLEAR_TEXT.get(self.variant, self.variant)
 
     def removed(self) -> str:
+        if self.forges_cookie():
+            return f"SERVERID = {self.planted[:14]}\u2026 (claims session {self.claimed_session[:8]})"
+        if self.variant == "forge_storage":
+            return f"{self.storage_keys} storage entr{'y' if self.storage_keys == 1 else 'ies'} written"
         parts = []
         if self.clears_cookies():
             parts.append(f"{len(self.cookies)} cookie(s)"
@@ -264,11 +330,23 @@ class ClearEvent:
             return "not observed: the run ended before the window loaded another page"
         where = (f"pool {self.after_pool}" if self.after_pool is not None
                  else "production" if self.after_route == "PRODUCTION" else "no route yet")
+        if self.accepted_forgery():
+            return f"ACCEPTED the forged session {self.claimed_session[:8]}, served by {where}"
+        prefix = ""
+        if self.forges_cookie():
+            if self.rejection:
+                scored = (f", scored +{self.rejection.get('score', 0)} as tampering"
+                          if self.rejection.get("scored") else ", not scored (no stable signing key)")
+                prefix = f"rejected ({self.rejection.get('status', '?')}{scored}); "
+            elif self.rejections_checked:
+                prefix = "no rejection logged for the planted cookie; "
+        elif self.variant == "forge_storage":
+            prefix = "the server never reads browser storage; "
         if not self.after_session:
-            return "no session afterwards"
+            return prefix + "no session afterwards"
         if self.same_session():
-            return f"kept its session, served by {where}"
-        return f"given a fresh session, served by {where}"
+            return prefix + f"kept its session, served by {where}"
+        return prefix + f"given a fresh session, served by {where}"
 
 
 def cart_resets(cleared: list[ClearEvent] | None) -> set[tuple[int, int]]:
@@ -820,6 +898,13 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
             merged.append(f"{seen[f.session_id]} and {f.label}")
         elif f.session_id:
             seen[f.session_id] = f.label
+    accepted = [e for e in cleared or [] if e.accepted_forgery()]
+    if accepted:
+        return Verdict(TAMPER_ACCEPTED, "A forged session cookie was accepted", [
+            f"{frames[e.window].label if e.window < len(frames) else e.window + 1} forged its "
+            f"SERVERID to claim session {e.claimed_session[:8]} and the stack served it that session."
+            for e in accepted] + ["The proxy must reject a cookie whose HMAC doesn't verify "
+                                  "(session_identity_rules.verify) and never look its id up."], by_pool)
     if merged:
         return Verdict(MERGED, "Frames were merged into one session", [
             f"{pair} hold the same session id, so they are one user, not two."
@@ -856,6 +941,11 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
         moved.append(", ".join(fresh) + " cleared browser data, got a fresh session and was "
                      "not diverted again before the run ended, so it is on production.")
     cart_issues = cart_violations(steps or [], cart_resets(cleared))
+    unlogged = [e for e in cleared or [] if e.detection() == "not logged"]
+    if unlogged:
+        moved.append("No rejection was logged for the forged cookie of "
+                     + ", ".join(frames[e.window].label for e in unlogged if e.window < len(frames))
+                     + " (session_cookie_rejections in Redis), although the stack did not accept it.")
     # The registry counts every session on a pool; more owners than windows
     # on it means it is shared with a session outside the test (e.g. one a
     # window abandoned by clearing its data), even with one window on it.

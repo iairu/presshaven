@@ -25,7 +25,7 @@ from core.log_error_match import is_error_log_line
 from ui.error_monitor import ErrorLogMonitor
 from ui.flow_layout import FlowLayout
 from core.container_status import classify, is_ready, status_detail
-from ui.health_diagram import HealthDiagram, STATUS_COLORS
+from ui.health_diagram import HealthDiagram, STATUS_COLORS, STATUS_LABELS
 from ui.log_export import LogExporter
 from ui.process_runner import LogPanel
 from ui.responsive import ResponsiveSplitter
@@ -116,16 +116,7 @@ class LegendWidget(QWidget):
         # the point of wrapping at all. Confirmed live: an earlier full-
         # sentence "created" entry alone forced a ~520px floor. Full
         # context lives in the tooltip instead.
-        labels = {
-            "healthy": "Up, healthy",
-            "starting": "Starting (health pending)",
-            "running": "Up (no healthcheck)",
-            "unhealthy": "Up, unhealthy",
-            "exited_ok": "Exited OK (code 0)",
-            "exited_bad": "Exited with error",
-            "created": "Created (never started)",
-            "down": "Down / not created",
-        }
+        labels = STATUS_LABELS
         tooltips = {
             "starting": "Running, but its healthcheck hasn't passed yet. The databases "
                         "can sit here for a few minutes on a first start while they initialise.",
@@ -327,6 +318,22 @@ class HealthPage(QWidget):
             self._refresh_detail_label()
         self._update_restart_progress()
         self._update_uptimes(targets, results)
+
+    def snapshot_target(self, target_key: str, containers: list[dict], scale: float = 2.0):
+        """Show ``containers`` (a fresh `docker compose ps -a` the caller
+        already has) for one target and return an image of just that
+        target's tiles (HealthDiagram.render_group()). Used by the Services
+        report, so its screenshots show exactly the state it logged: waiting
+        for the background poller left them up to a poll behind (a stopped
+        stack still drawn green), and an empty result would otherwise be
+        debounced as a blip."""
+        targets = self._get_targets()
+        self._targets_by_key = {t.key: t for t in targets}
+        self._last_results = {**self._last_results, target_key: containers}
+        self._empty_streak[target_key] = 0 if containers else _EMPTY_GRACE_POLLS + 1
+        self.diagram.rebuild(targets, self._last_results)
+        self._update_uptimes(targets, self._last_results)
+        return self.diagram.render_group(target_key, scale)
 
     def _debounce_empty(
         self, results: dict[str, list[dict]], targets,
