@@ -129,23 +129,31 @@ def _cart_section_html(data: PoolTestData) -> str:
     for e in data.cleared:
         if e.clears_cookies():
             cleared_before.setdefault((e.step, e.window), e)
-    badge = {CART_UNREADABLE: ("unreadable", _GREY), CART_NONE: ("no cart yet", _GREY),
-             CART_CLEARED: ("empty since its cookies were cleared", _GREY),
-             CART_RESTORED: ("cart back after clearing", _BLUE_INK),
-             CART_SAME: ("same cart", _GREEN), CART_CHANGED: ("CART CHANGED", _RED)}
+    # One short symbol per cell (the step tables show the full carts): ten
+    # windows of "same cart / on production" badges wrapped into four pages.
+    symbol = {CART_UNREADABLE: ("?", _GREY), CART_NONE: ("&ndash;", _GREY),
+              CART_CLEARED: ("&#9675;", _GREY), CART_RESTORED: ("&#8634;", _BLUE_INK),
+              CART_SAME: ("&#10003;", _GREEN), CART_CHANGED: ("&#10007;", _RED)}
     rows = []
     for n, (step, row) in enumerate(zip(data.steps, marks)):
         cells = []
         for i, mark in enumerate(row):
             d = step.decisions[i] if i < len(step.decisions) else None
-            where = (f"pool {d.pool}" if d is not None and d.pool is not None else "production")
-            text, color = badge[mark]
-            flag = ('<br/><span style="font-size:8pt;color:#1565c0;"><b>&#9670; cookies cleared '
-                    'before this step</b></span>' if (n, i) in cleared_before else "")
-            cells.append(f'<td>{_badge(text, color)}{flag}<br/>'
-                         f'<span style="font-size:8pt;color:#555;">on {_esc(where)}</span></td>')
-        rows.append(f'<tr><td>{_esc(step.title)}</td>{"".join(cells)}</tr>')
-    head = "".join(f"<th>{_esc(f.label)}</th>" for f in data.frames)
+            where = (f"P{d.pool}" if d is not None and d.pool is not None else "prod")
+            sym, color = symbol[mark]
+            flag = '<span style="color:#1565c0;">&#9670;</span>' if (n, i) in cleared_before else ""
+            cells.append(f'<td align="center"><span style="color:{color}; font-size:12pt;"><b>{sym}</b></span>'
+                         f'{flag}<br/><span style="font-size:7pt; color:#555;">{where}</span></td>')
+        rows.append(f'<tr><td align="center"><b>{n + 1}</b></td>{"".join(cells)}</tr>')
+    head = "".join(f'<th>{_esc(f.label.replace("User ", ""))}</th>' for f in data.frames)
+    legend = ('<p style="color:#555; font-size:9pt;">Rows are the steps of <i>Step by step</i>, columns the '
+              'windows (A = User A, ...). <span style="color:#2e7d32;"><b>&#10003;</b></span> same cart as filled, '
+              '<span style="color:#c62828;"><b>&#10007;</b></span> cart changed, '
+              '<b>&#9675;</b> empty since its cookies were cleared, '
+              '<span style="color:#1565c0;"><b>&#8634;</b></span> cart back after clearing, '
+              '<b>&ndash;</b> no cart yet, <b>?</b> unreadable; '
+              '<span style="color:#1565c0;">&#9670;</span> cookies cleared before this step. Under each mark: '
+              'where the window was served (P3 = honeypot pool 3, prod = production).</p>')
     ok = ('Every cart stayed exactly as filled, on production and in every honeypot pool.'
           if not cleared_before else
           'Every cart stayed exactly as filled, on production and in every honeypot pool, until its '
@@ -174,9 +182,9 @@ def _cart_section_html(data: PoolTestData) -> str:
             'cart in a cookie and rebuilds it on whichever instance serves the next request. Each window '
             'filled its cart on production; the cart was then read back after every step, through the same '
             'cookies and routing as the window\'s own traffic.</p>'
-            + clearing +
-            '<table width="100%" cellspacing="0" cellpadding="4" border="1" style="border-collapse:collapse;">'
-            f'<tr><th>Step</th>{head}</tr>' + "".join(rows) + '</table>' + verdict)
+            + clearing + legend +
+            '<table width="100%" cellspacing="0" cellpadding="2" border="1" style="border-collapse:collapse;">'
+            f'<thead><tr><th>Step</th>{head}</tr></thead>' + "".join(rows) + '</table>' + verdict)
 
 
 # Windows per row in the step tables (as on the Segmentation Validation page).
