@@ -170,6 +170,26 @@ class _Cancelled(Exception):
     """Raised inside the scenario when the user presses Cancel."""
 
 
+# A grab that comes back solid black (nothing painted yet) is retried this
+# often, this far apart.
+GRAB_REPAINT_TRIES = 4
+GRAB_REPAINT_MS = 250
+
+
+def _flat_black(pixmap) -> bool:
+    """True when the grab is (almost) entirely black: the view had not painted
+    yet. A white near-empty page is a real screenshot and stays."""
+    img = pixmap.toImage()
+    if img.isNull() or img.width() < 4 or img.height() < 4:
+        return False
+    dark = total = 0
+    for y in range(0, img.height(), max(1, img.height() // 30)):
+        for x in range(0, img.width(), max(1, img.width() // 30)):
+            total += 1
+            dark += img.pixelColor(x, y).lightness() < 16
+    return total > 0 and dark / total >= 0.99
+
+
 class _LoadRelay(QObject):
     """A window's page loads, as "did the server answer". loadFinished(False)
     also fires for a page that came back with an HTTP error (a honeypot's 404
@@ -915,6 +935,17 @@ class PoolTestPage(QWidget):
     def _grab(self, browser: BrowserWidget):
         from ui.page_patterns import PatternsPage
         pixmap = browser.view.grab()
+        # A near-empty page (WordPress's "0" for a rejected admin-ajax call)
+        # can finish loading before the view paints its first frame, and the
+        # grab is then the black backing store: two step-14 screenshots were
+        # solid black while the same response in other windows was white.
+        # Give it a few repaints before falling back.
+        for _ in range(GRAB_REPAINT_TRIES):
+            if pixmap.isNull() or not _flat_black(pixmap):
+                break
+            browser.view.update()
+            self._spin(GRAB_REPAINT_MS)
+            pixmap = browser.view.grab()
         if pixmap.isNull() or PatternsPage._looks_blank(pixmap):  # noqa: SLF001
             fallback = PatternsPage.screen_grab(browser.view)
             if not fallback.isNull() and not PatternsPage._looks_blank(fallback):  # noqa: SLF001
