@@ -563,13 +563,18 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     scaling, _next_fig = _scaling_html(data, doc, family, 2)
     parts.append(scaling)
     parts.append(_round_robin_html(data))
+    # Read at the end of the run, before the forced scale-down: placed right
+    # above it, which then shows what was left. (It used to come last, titled
+    # "at export time", and contradicted the scale-down's "10 -> 3".)
+    parts.append('<h2 style="color:#222;">Pool registry at the end of the run</h2>'
+                 '<p style="color:#555; font-size:9pt;">As read from Redis just before the forced '
+                 'scale-down below.</p>')
+    parts.append(_pool_state_html(data.pool_state))
     parts.append(_scaledown_html(data))
     parts.append(_cart_section_html(data))
     parts.append(_runs_html(data))
     parts.append(_steps_html(data, doc))
     parts.append(_evidence_html(data))
-    parts.append('<h2 style="color:#222;">Pool registry at export time</h2>')
-    parts.append(_pool_state_html(data.pool_state))
 
     shots = [f for f in data.frames if f.screenshot is not None and not f.screenshot.isNull()
              and not data.steps]
