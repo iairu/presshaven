@@ -692,7 +692,26 @@ def scaling_timeline_figure(data: PoolTestData, summ: ScalingSummary, family: st
         else:
             rows_end[row] = left + w
         placed.append((left, row, m))
-    title_h, step_h = 28, 18
+    # Step numbers on rows of their own: steps 1-10 all happen in the first
+    # couple of minutes, and on one row their numbers ran together.
+    step_font = QFont(family, 8)
+    sfm = QFontMetrics(step_font)
+    step_rows_end: list[float] = []
+    step_placed = []   # (x, left, row, number)
+    for i, (t, _title) in enumerate(data.marks, start=1):
+        x = X(t)
+        w = sfm.horizontalAdvance(str(i))
+        left = x - w / 2
+        row = next((r for r, end in enumerate(step_rows_end) if left > end + 3), None)
+        if row is None:
+            step_rows_end.append(left + w)
+            row = len(step_rows_end) - 1
+        else:
+            step_rows_end[row] = left + w
+        step_placed.append((x, left, row, i))
+    step_row_h = sfm.height()
+    title_h = 28
+    step_h = max(1, len(step_rows_end)) * step_row_h + 4
     band = title_h + step_h + len(rows_end) * (fm.height() + 2) + 6
     win_top = band
     build_top = win_top + len(windows) * row_h + (28 if builds or removals else 0)
@@ -716,13 +735,13 @@ def scaling_timeline_figure(data: PoolTestData, summ: ScalingSummary, family: st
     _time_axis(p, ml, ml + plot_w, plot_bottom, span, family, grid_top=win_top - 4)
 
     # Step ticks (numbers match the "Step by step" section).
-    p.setFont(QFont(family, 8))
-    for i, (t, _title) in enumerate(data.marks, start=1):
-        x = X(t)
+    p.setFont(step_font)
+    for x, left, row, i in step_placed:
+        y = title_h + row * step_row_h
         p.setPen(QPen(QColor("#bdbdbd"), 1, Qt.PenStyle.DotLine))
-        p.drawLine(QPointF(x, title_h + step_h - 2), QPointF(x, plot_bottom))
+        p.drawLine(QPointF(x, y + step_row_h), QPointF(x, plot_bottom))
         p.setPen(QColor(_MUTED))
-        p.drawText(QPointF(x - 3, title_h + 10), str(i))
+        p.drawText(QPointF(left, y + sfm.ascent()), str(i))
     for left, row, (x, label, color, dashed) in placed:
         y = title_h + step_h + row * (fm.height() + 2)
         pen = QPen(QColor(color), 1.5)
