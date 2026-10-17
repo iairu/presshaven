@@ -1496,6 +1496,14 @@ class PoolTestPage(QWidget):
             elapsed = int(time.monotonic() - start)
             if not state.get("scaledown_pending"):
                 done = self._now()
+                # pool_state() reads the ready set before the pending flag, in
+                # separate calls: a read spanning the last removal paired the
+                # ready list from before it with "done" (the clean-up reported
+                # pools 1-4 left while pool_manager had already removed pool 4).
+                try:
+                    state = self._blocking(lambda: redis_inspect.pool_state(remote))
+                except Exception:  # noqa: BLE001
+                    pass
                 break
             if elapsed >= SCALEDOWN_TIMEOUT_S:
                 break
