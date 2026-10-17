@@ -39,6 +39,8 @@ _MAX_KEEP_SHARE = 0.5
 _MAX_TABLE_SHARE = 0.6
 # A paragraph of at most this many lines is never split across pages.
 _SHORT_PARAGRAPH_LINES = 4
+# Lines of the following paragraph a heading keeps on its page.
+_HEADING_LINES = 3
 
 _ALWAYS_BEFORE = QTextFormat.PageBreakFlag.PageBreak_AlwaysBefore
 
@@ -101,9 +103,12 @@ def _first_violation(doc: QTextDocument, page_h: float) -> tuple[str, int] | Non
     def page(y: float) -> int:
         return int(y // page_h)
 
-    def first_line_bottom(block) -> float:
+    def first_line_bottom(block, lines: int = 1) -> float:
+        """Bottom of the block's first `lines` lines (all of them if fewer)."""
         r = lay.blockBoundingRect(block)
-        line = block.layout().lineAt(0)
+        layout = block.layout()
+        n = min(lines, layout.lineCount())
+        line = layout.lineAt(n - 1) if n else layout.lineAt(0)
         return r.top() + (line.rect().bottom() if line.isValid() else r.height())
 
     found: list[tuple[float, tuple[str, int]]] = []
@@ -131,7 +136,12 @@ def _first_violation(doc: QTextDocument, page_h: float) -> tuple[str, int] | Non
                     after = after.next()
                 if after.isValid() and after.blockFormat().headingLevel() == 0:
                     nxt = after
-            if nxt.isValid() and page(rect.top()) != page(first_line_bottom(nxt) - 1) \
+            # Text keeps HEADING_LINES lines under its heading: one line left
+            # behind ("Scale-down" + its first line at a page bottom) reads as
+            # an orphaned heading too.
+            keep = _HEADING_LINES if QTextCursor(nxt).currentTable() is None and nxt.isValid() \
+                and _OBJECT_CHAR not in nxt.text() else 1
+            if nxt.isValid() and page(rect.top()) != page(first_line_bottom(nxt, keep) - 1) \
                     and not _breaks_before(b) and rect.height() < page_h * _MAX_KEEP_SHARE:
                 # A sub-heading right under a section heading and its intro
                 # ("3. ..." + intro + "Before: ...") moves with them.

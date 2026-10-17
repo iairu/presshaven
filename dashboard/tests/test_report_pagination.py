@@ -66,5 +66,36 @@ class FitFiguresTests(unittest.TestCase):
         self.assertEqual(round(_figure_rect(doc).height()), 900)
 
 
+@unittest.skipIf(report_pagination is None, "PyQt6 not installed")
+class HeadingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication(sys.argv)
+
+    def test_heading_keeps_three_lines_of_its_paragraph(self):
+        doc = QTextDocument()
+        doc.setPageSize(QSizeF(600, PAGE))
+        # Filler so that the heading and the first line or two of the long
+        # paragraph fall at the bottom of page 1.
+        for filler in range(40, 3000, 2):
+            doc.setHtml("<p>" + "word " * filler + "</p><h2>Scale-down</h2><p>" + "text " * 400 + "</p>")
+            lay = doc.documentLayout()
+            head = doc.begin().next()
+            para = head.next()
+            r, pr = lay.blockBoundingRect(head), lay.blockBoundingRect(para)
+            line2 = pr.top() + para.layout().lineAt(1).rect().bottom()
+            if int(r.top() // PAGE) == 0 and int(line2 // PAGE) == 1:
+                break
+        else:
+            self.skipTest("could not place the heading at a page bottom")
+        report_pagination.keep_together(doc)
+        lay = doc.documentLayout()
+        head = doc.begin().next()
+        para = head.next()
+        r, pr = lay.blockBoundingRect(head), lay.blockBoundingRect(para)
+        line3 = pr.top() + para.layout().lineAt(2).rect().bottom()
+        self.assertEqual(int(r.top() // PAGE), int(line3 // PAGE))
+
+
 if __name__ == "__main__":
     unittest.main()
