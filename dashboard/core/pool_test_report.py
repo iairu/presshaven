@@ -241,7 +241,12 @@ def clear_schedule(steps: list[int], windows: int, rng,
     eligible steps always gets at least one clearing and (with ``forge``) at
     least one cookie forgery and one storage forgery, so the report has every
     kind to show. With a second window to steal from, at least one of the
-    cookie forgeries is a hijack, after the first eligible step."""
+    cookie forgeries is a hijack, after the first eligible step.
+
+    The events are spread over the windows (one each while there are windows
+    left), and no window forges its cookie twice: each rejected forgery adds
+    to the window's risk score, and two of them diverted a delayed window to
+    a honeypot before it ever attacked."""
     if not steps or windows <= 0:
         return {}
     clears = [k for k, _t in CLEAR_VARIANTS]
@@ -264,6 +269,24 @@ def clear_schedule(steps: list[int], windows: int, rng,
             v == "hijack_cookie" and n > steps[0] for n, events in out.items() for _w, v in events):
         later = [n for n in steps[1:] if n not in out] or steps[1:] or steps
         out.setdefault(rng.choice(later), []).append((rng.randrange(windows), "hijack_cookie"))
+    used: set[int] = set()
+    forged: set[int] = set()
+    for n in sorted(out):
+        events = []
+        for w, v in out[n]:
+            cookie = v in COOKIE_FORGERIES
+            if w in used or (cookie and w in forged):
+                free = [x for x in range(windows) if x not in used] \
+                    or [x for x in range(windows) if not (cookie and x in forged)]
+                if free:
+                    w = rng.choice(free)
+                else:            # every window forged its cookie once already
+                    v = "forge_storage"
+            used.add(w)
+            if v in COOKIE_FORGERIES:
+                forged.add(w)
+            events.append((w, v))
+        out[n] = events
     return out
 
 

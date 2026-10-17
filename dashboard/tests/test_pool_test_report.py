@@ -510,6 +510,19 @@ class ClearBrowserDataTests(unittest.TestCase):
             for events in clear_schedule([3, 4, 5, 6], 1, random.Random(seed)).values():
                 self.assertNotIn("hijack_cookie", [v for _w, v in events])
 
+    def test_no_window_forges_its_cookie_twice(self):
+        # Each rejected forgery scores +50: two diverted a delayed window
+        # before its attack. Events also go to different windows first.
+        import random
+        from core.pool_test_report import COOKIE_FORGERIES, clear_schedule
+        for seed in range(300):
+            sched = clear_schedule(list(range(3, 16)), 10, random.Random(seed))
+            events = [ev for n in sorted(sched) for ev in sched[n]]
+            forgers = [w for w, v in events if v in COOKIE_FORGERIES]
+            self.assertEqual(len(forgers), len(set(forgers)), seed)
+            windows = [w for w, _v in events]
+            self.assertEqual(len(set(windows)), min(10, len(windows)), seed)
+
     def test_forged_cookie_detection(self):
         from core.pool_test_report import ClearEvent
         rejected = ClearEvent(1.0, 0, 2, "forge_cookie", SID[0], 1, planted="e" * 32 + ".f",
