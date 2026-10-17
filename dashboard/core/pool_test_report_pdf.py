@@ -1124,10 +1124,14 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                         else f"(not finished after {SCALEDOWN_TIMEOUT_TEXT})")))
     if res.get("requested"):
         took = (res.get("end") or data.duration) - res["start"]
+        built = sum(1 for b in summ.builds if b.reason == "reserve")
+        already = res.get("free_at_start")
+        how = (f": {built} built for it, {already} spare(s) already free"
+               if already is not None else f" ({built} built for it)")
         rows.append(("Pre-build for the delayed windows",
-                     f"{res['requested']} pool(s) ready after {took:.0f} s" if res.get("reached")
-                     else f"{res.get('free', 0)} of {res['requested']} ready after {took:.0f} s "
-                          f"({res.get('reason') or 'stopped'})"))
+                     (f"{res['requested']} free pool(s) ready after {took:.0f} s" if res.get("reached")
+                      else f"{res.get('free', 0)} of {res['requested']} free after {took:.0f} s "
+                           f"({res.get('reason') or 'stopped'})") + how))
     out.append('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
                'style="border-collapse:collapse; color:#333;">'
                + "".join(f'<tr><td width="32%"><b>{_esc(k)}</b></td><td>{_esc(v)}</td></tr>' for k, v in rows)

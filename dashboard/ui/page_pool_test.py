@@ -1205,6 +1205,9 @@ class PoolTestPage(QWidget):
                 free = len(state.get("free", []))
                 building = (state.get("status") or {}).get("building", {})
                 reserve["free"] = free
+                # Spares that were already free when the pre-build was asked
+                # for: the report counts them apart from the pools built.
+                reserve.setdefault("free_at_start", free)
                 elapsed = int(time.monotonic() - start)
                 if free >= k:
                     reserve.update(reached=True, end=self._now())
