@@ -74,6 +74,121 @@ function _M.is_static_asset(uri, static_asset_patterns)
 end
 
 -- ---------------------------------------------------------------------------
+-- Generic Layer-1 signatures (init.lua: threat.suspicious_patterns). A match
+-- adds +15. Each entry says HOW it matches, because a bare Lua pattern was
+-- the source of both false positives and false negatives:
+--   * "." is any character, so ".tar" matched "s-tar-ter-kit" and ".old"
+--     matched "g-old"; "page=" matched "per_page=" and "or.*1.*=.*1" matched
+--     "st-or-e/v1/products?per_page=100" -- a normal WooCommerce Store API
+--     call scored +65, one step short of being diverted;
+--   * "-" and "[" are pattern operators, so "dnd-wc-upload-file",
+--     "file[path]" and "wp-config-" never matched, and "cwmpUpdateOptions"
+--     never met the lower-cased URI.
+-- Kinds:
+--   plain(s)   -- the literal text anywhere in the URI (lower case);
+--   ext(e)     -- a file extension at the end of a path segment;
+--   param(n)   -- a query parameter NAME (after "?" or "&");
+--   segment(s) -- a whole path segment ("/admin", not "/admin-schemes.css");
+--   pat(p)     -- a real Lua pattern, for syntax that needs one.
+-- Recon tokens that never matched because of the "-" bug ("/wp-admin/",
+-- "/wp-content/", "/wp-includes/", "/wp-login", "wp-login.php") are left out
+-- rather than switched on: every admin-ajax, plugin and login request of a
+-- normal visitor would start scoring. Same for "redirect_to=", which
+-- WordPress puts on every login link.
+-- ---------------------------------------------------------------------------
+local function plain(s) return { kind = "plain", match = s, name = s } end
+local function ext(e) return { kind = "ext", match = e, name = e } end
+local function param(n) return { kind = "param", match = n, name = n .. "=" } end
+local function segment(s) return { kind = "segment", match = s, name = s } end
+local function pat(p, name) return { kind = "pattern", match = p, name = name } end
+
+_M.SUSPICIOUS_PATTERNS = {
+    -- WSTG-INPV-01: Directory traversal
+    plain("../"), plain("..\\"),
+
+    -- WSTG-INPV-05: SQL injection (real syntax, word boundaries)
+    pat("union[^%a].-select[^%a]", "union.*select"),
+    pat("['\"%s%)]or%s+['\"]?%w+['\"]?%s*=%s*['\"]?%w", "or.*1.*=.*1"),
+    pat("select[^%a].-[^%a]from[^%a]", "select.*from"),
+    pat("drop[^%a]+table[^%a]", "drop.*table"),
+    pat("insert[^%a]+into[^%a]", "insert.*into"),
+    pat("sleep%s*%(", "sleep"),
+    pat("benchmark%s*%(", "benchmark"),
+
+    -- WSTG-INPV-02: XSS
+    plain("<script"), plain("javascript:"), plain("onerror="), plain("onload="),
+    pat("alert%s*%(", "alert"),
+
+    -- WSTG-INPV-12: Command injection
+    pat(";%s*cat[%s%+]", ";cat"), pat(";%s*ls[%s%+;&|]", ";ls"), pat(";%s*ls$", ";ls"),
+    pat("|%s*nc[%s%+]", "|nc"), pat("&&%s*curl[%s%+]", "&&curl"),
+
+    -- WSTG-INPV-11: File inclusion
+    plain("php://"), plain("file://"), plain("data://"),
+
+    -- WSTG-CONF: Sensitive file access
+    plain("wp-config.php"), plain("wp-config-"),
+    ext(".env"), ext(".bak"), ext(".old"), ext(".backup"), ext(".sql"),
+    ext(".tar"), ext(".gz"), ext(".zip"), ext(".htaccess"), ext(".htpasswd"),
+    segment("/backup"), plain("readme.html"), plain("install.php"),
+    plain("setup-config.php"), plain("phpinfo"), plain("crossdomain.xml"),
+
+    -- WSTG-INFO: Reconnaissance probes
+    segment("/admin"), segment("/administrator"), segment("/phpmyadmin"), plain("xmlrpc.php"),
+
+    -- WSTG-IDNT: User enumeration
+    param("author"), plain("/wp-json/wp/v2/users"), param("rest_route"),
+
+    -- WSTG-AUTHZ: Privilege escalation (known CVE parameters)
+    plain("wcal_action=checkout_link"),   -- CVE-2023-2986
+    param("integration_id"),              -- CVE-2024-2387
+    plain("cwmpupdateoptions"),           -- CVE-2025-2266
+    plain("mwb_wgm_preview_mail"),        -- CVE-2025-47577
+    plain("dnd-wc-upload-file"),          -- CVE-2025-4403
+    plain("pc_added_uploaded_image"),     -- CVE-2025-10142
+    plain("file[path]"),                  -- CVE-2024-50508
+
+    -- WSTG-INPV: Other injection (parameter names)
+    param("cmd"), param("template"), param("page"), param("file"), param("redirect"),
+
+    -- WSTG-INPV-15: HTTP splitting
+    plain("%0d%0a"),
+
+    -- WSTG-AUTHZ: IDOR parameters
+    param("user_id"), param("customer_id"), param("order_id"), param("post_id"),
+    plain("context=edit"),
+
+    -- WSTG-ATHN: Authentication attacks
+    plain("action=lostpassword"), plain("action=register"),
+
+    -- WSTG-CONF: Cloud / storage
+    plain("s3-backup"),
+}
+
+-- Whether one generic entry matches a lower-cased URI (see SUSPICIOUS_PATTERNS).
+-- A plain string entry is a Lua pattern, as the list used to be.
+local function generic_match(entry, u)
+    if type(entry) == "string" then
+        return string.find(u, entry) ~= nil
+    end
+    local kind, m = entry.kind, entry.match
+    if kind == "plain" then
+        return string.find(u, m, 1, true) ~= nil
+    end
+    local path = u:match("^[^?#]*") or u
+    if kind == "ext" then
+        local e = pattern_utils.escape_pattern(m)
+        return string.find(path, e .. "$") ~= nil or string.find(path, e .. "/") ~= nil
+    elseif kind == "segment" then
+        local s = pattern_utils.escape_pattern(m)
+        return string.find(path, s .. "$") ~= nil or string.find(path, s .. "/") ~= nil
+    elseif kind == "param" then
+        return string.find(u, "[?&]" .. pattern_utils.escape_pattern(m) .. "=") ~= nil
+    end
+    return string.find(u, m) ~= nil
+end
+
+-- ---------------------------------------------------------------------------
 -- analyze_uri_patterns(uri, suspicious_patterns)
 --
 -- Scores the raw request URI string against two layers of patterns: the
@@ -82,7 +197,8 @@ end
 -- mappings (Layer 2, unchanged from the original pattern_analyzer.lua).
 --
 -- @param uri                  string
--- @param suspicious_patterns  table|nil  List of Lua patterns.
+-- @param suspicious_patterns  table|nil  Generic entries (see SUSPICIOUS_PATTERNS;
+--                             a plain string is a Lua pattern).
 -- @param max_score            number|nil Clamp the returned score to this
 --                             (the caller passes _G.config.threat.max_risk_score).
 --                             The overall request score is capped at that max
@@ -109,10 +225,10 @@ function _M.analyze_uri_patterns(uri, suspicious_patterns, max_score)
 
     -- Layer 1: generic suspicious patterns supplied by the caller.
     if suspicious_patterns then
-        for _, pattern in ipairs(suspicious_patterns) do
-            if string.find(uri_lower_decoded, pattern) or string.find(uri_lower, pattern) then
+        for _, entry in ipairs(suspicious_patterns) do
+            if generic_match(entry, uri_lower_decoded) or generic_match(entry, uri_lower) then
                 result.score = result.score + 15
-                table.insert(result.patterns, pattern)
+                table.insert(result.patterns, type(entry) == "table" and entry.name or entry)
             end
         end
     end
@@ -125,12 +241,12 @@ function _M.analyze_uri_patterns(uri, suspicious_patterns, max_score)
         {pattern = "%%2e%%2e/", score = 20, name = "encoded_directory_traversal"},
 
         -- WSTG-INPV-05: SQL Injection
-        {pattern = "union.*select", score = 25, name = "sql_union"},
-        {pattern = "or.*1.*=.*1",   score = 20, name = "sql_or_condition"},
-        {pattern = "'.*or.*'",       score = 20, name = "sql_quote_or"},
-        {pattern = "select.*from",   score = 15, name = "sql_select"},
-        {pattern = "drop.*table",    score = 30, name = "sql_drop"},
-        {pattern = "insert.*into",   score = 20, name = "sql_insert"},
+        {pattern = "union[^%a].-select[^%a]", score = 25, name = "sql_union"},
+        {pattern = "['\"%s%)]or%s+['\"]?%w+['\"]?%s*=%s*['\"]?%w", score = 20, name = "sql_or_condition"},
+        {pattern = "'%s*or%s",        score = 20, name = "sql_quote_or"},
+        {pattern = "select[^%a].-[^%a]from[^%a]", score = 15, name = "sql_select"},
+        {pattern = "drop[^%a]+table[^%a]", score = 30, name = "sql_drop"},
+        {pattern = "insert[^%a]+into[^%a]", score = 20, name = "sql_insert"},
 
         -- WSTG-INPV-02: Reflected / Stored XSS
         {pattern = "<script",    score = 25, name = "xss_script"},
@@ -140,10 +256,10 @@ function _M.analyze_uri_patterns(uri, suspicious_patterns, max_score)
         {pattern = "alert%s*%(", score = 15, name = "xss_alert"},
 
         -- WSTG-INPV-12: Command Injection
-        {pattern = ";.*cat",    score = 25, name = "cmd_cat"},
-        {pattern = ";.*ls",     score = 20, name = "cmd_ls"},
-        {pattern = "|.*nc",     score = 30, name = "cmd_netcat"},
-        {pattern = "&&.*curl",  score = 25, name = "cmd_curl"},
+        {pattern = ";%s*cat[%s%+]", score = 25, name = "cmd_cat"},
+        {pattern = ";%s*ls[%s%+;&|]", score = 20, name = "cmd_ls"},
+        {pattern = "|%s*nc[%s%+]", score = 30, name = "cmd_netcat"},
+        {pattern = "&&%s*curl[%s%+]", score = 25, name = "cmd_curl"},
         {pattern = "`.*`",      score = 20, name = "cmd_backticks"},
 
         -- WSTG-INPV-11: Local/Remote File Inclusion
@@ -173,10 +289,12 @@ function _M.analyze_uri_patterns(uri, suspicious_patterns, max_score)
         {pattern = "author=%d+",           score = 80, name = "author_enum"},
 
         -- WSTG-INFO-02 / WSTG-INFO-03: Reconnaissance probes.
-        {pattern = "/admin",        score =  5, name = "admin_scan"},
-        {pattern = "/administrator", score =  5, name = "administrator_scan"},
+        {pattern = "/admin[/?#]",   score =  5, name = "admin_scan"},
+        {pattern = "/admin$",       score =  5, name = "admin_scan"},
+        {pattern = "/administrator[/?#]", score = 5, name = "administrator_scan"},
         {pattern = "/phpmyadmin",   score = 10, name = "phpmyadmin_scan"},
-        {pattern = "/backup",       score = 10, name = "backup_scan"},
+        {pattern = "/backup[/?#%.]", score = 10, name = "backup_scan"},
+        {pattern = "/backup$",      score = 10, name = "backup_scan"},
         {pattern = "/%.env",        score = 20, name = "env_file_scan"},
 
         -- WSTG-IDNT: WordPress user enumeration via REST API

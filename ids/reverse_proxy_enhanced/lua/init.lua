@@ -264,112 +264,14 @@ _G.config = {
             "/wp%-includes/js/",
             "/wp%-includes/fonts/"
         },
-        -- suspicious_patterns: Generic OWASP WSTG-INPV attack signatures.
-        -- Each pattern is a Lua string pattern (not PCRE) tested against the
-        -- lower-cased request URI.  A match adds +15 to the risk score.
-        -- More specific checks with individual scores live in pattern_analyzer.lua.
-        suspicious_patterns = {
-            -- WSTG-INPV-01: Directory traversal
-            "%.%.%/",                    -- ../ traversal
-            "%.%.%\\",                  -- ..\\ traversal (Windows)
-            
-            -- WSTG-INPV-05: SQL Injection
-            "union.*select",            -- UNION-based SQLi
-            "or.*1.*=.*1",              -- OR 1=1 SQLi
-            "select.*from",             -- SELECT FROM SQLi
-            "drop.*table",              -- DROP TABLE SQLi
-            "insert.*into",             -- INSERT INTO SQLi
-            "sleep",                    -- SLEEP time-based SQLi
-            "benchmark",                -- BENCHMARK time-based SQLi
-            
-            -- WSTG-INPV-02: XSS
-            "<script",                  -- Script tag injection
-            "javascript:",              -- JavaScript protocol
-            "onerror=",                 -- onerror handler
-            "onload=",                  -- onload handler
-            "alert",                    -- alert call
-            
-            -- WSTG-INPV-12: Command Injection
-            ";cat",                     -- Command chaining with cat
-            ";ls",                      -- Command chaining with ls
-            "|nc",                      -- Netcat pipe
-            "&&curl",                   -- Curl chaining
-            
-            -- WSTG-INPV-11: File Inclusion
-            "php://",                   -- PHP stream wrapper
-            "file://",                  -- File protocol
-            "data://",                  -- Data protocol
-            
-            -- WSTG-CONF: Sensitive file access
-            "wp-config.php",            -- WordPress config
-            "wp-config-",               -- wp-config.php.bak, wp-config.php.old
-            ".env",                     -- Environment file
-            ".bak",                     -- Backup files
-            ".old",                     -- Old files
-            ".backup",                  -- Backup extension
-            ".sql",                     -- SQL dump files
-            ".tar",                     -- Tar archives
-            ".gz",                      -- Gzip files
-            ".zip",                     -- Zip archives
-            "backup",                   -- Backup keyword in path
-            "readme.html",              -- WordPress readme
-            "install.php",              -- Install script
-            "setup-config.php",         -- WordPress setup
-            ".htaccess",                -- Apache config
-            ".htpasswd",                -- Apache passwords
-            "phpinfo",                  -- PHP info pages
-            "crossdomain.xml",          -- Flash policy
-            
-            -- WSTG-INFO: Reconnaissance probes
-            "/admin",                   -- Admin path
-            "/administrator",           -- Administrator path
-            "/phpmyadmin",              -- phpMyAdmin
-            "/wp-admin/",               -- WordPress admin
-            "/wp-login",                -- WordPress login
-            "/wp-includes/",            -- WordPress includes
-            "/wp-content/",             -- WordPress content
-            "xmlrpc.php",               -- XML-RPC endpoint
-            
-            -- WSTG-IDNT: User enumeration
-            "author=",                  -- Author enumeration
-            "/wp-json/wp/v2/users",     -- REST API users
-            "rest_route=",              -- REST route
-            
-            -- WSTG-AUTHZ: Privilege escalation
-            "wcal_action=checkout_link", -- CVE-2023-2986
-            "integration_id",           -- CVE-2024-2387
-            "cwmpUpdateOptions",        -- CVE-2025-2266
-            "mwb_wgm_preview_mail",     -- CVE-2025-47577
-            "dnd-wc-upload-file",       -- CVE-2025-4403
-            "pc_added_uploaded_image",  -- CVE-2025-10142
-            "file[path]",               -- CVE-2024-50508
-            
-            -- WSTG-INPV: Other injection
-            "cmd=",                     -- Command parameter
-            "template=",                -- Template injection
-            "page=",                    -- Page inclusion
-            "file=",                    -- File inclusion
-            "redirect=",                -- Redirect injection
-            "redirect_to=",             -- WordPress redirect
-            
-            -- WSTG-INPV-15: HTTP Splitting
-            "%%0d%%0a",                   -- CRLF injection
-            
-            -- WSTG-AUTHZ: IDOR patterns
-            "user_id=",                 -- User ID parameter
-            "customer_id=",             -- Customer ID
-            "order_id=",                -- Order ID
-            "post_id=",                 -- Post ID
-            "context=edit",             -- WordPress edit context
-            
-            -- WSTG-ATHN: Authentication attacks
-            "wp-login.php",             -- WordPress login
-            "action=lostpassword",      -- Password reset
-            "action=register",          -- Registration
-            
-            -- WSTG-CONF: Cloud/Storage
-            "s3-backup",                -- S3 backup path
-        },
+        -- suspicious_patterns: Generic OWASP WSTG-INPV attack signatures, tested
+        -- against the lower-cased request URI; a match adds +15 to the risk
+        -- score. More specific checks with individual scores live in
+        -- pattern_rules.analyze_uri_patterns().
+        -- Defined (and unit tested) in pattern_rules.lua: each entry says how it
+        -- matches (literal text, file extension, parameter name, path segment
+        -- or a real Lua pattern), so dots and dashes are never wildcards.
+        suspicious_patterns = require("pattern_rules").SUSPICIOUS_PATTERNS,
 
         -- static_asset_patterns: URI suffixes and path prefixes that identify
         -- static assets (CSS, JS, images, fonts).  Requests matching any of
