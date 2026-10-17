@@ -1121,7 +1121,7 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
         rows.append(("Forced scale-down at the end",
                      f"{_pools_before_count(sd)} \u2192 {len(sd.get('pools_after', []))} pool(s) "
                      + (f"in {sd['done'] - sd['requested']:.0f} s" if sd.get("done") is not None
-                        else f"(not finished after {SCALEDOWN_TIMEOUT_TEXT})")))
+                        else f"(not finished after {SCALEDOWN_TIMEOUT_TEXT})") + _static_note(sd)))
     if res.get("requested"):
         took = (res.get("end") or data.duration) - res["start"]
         built = sum(1 for b in summ.builds if b.reason == "reserve")
@@ -1317,7 +1317,8 @@ def _scaledown_html(data: PoolTestData) -> str:
              else f"not within {SCALEDOWN_TIMEOUT_TEXT}"),
             ("Pools", f"{nb} \u2192 {na} ({', '.join(map(str, sd.get('pools_before', []))) or '-'}"
                       + (f" + {', '.join(map(str, building))} being built" if building else "")
-                      + f" \u2192 {', '.join(map(str, sd.get('pools_after', []))) or '-'})"),
+                      + f" \u2192 {', '.join(map(str, sd.get('pools_after', []))) or '-'})"
+                      + _static_note(sd)),
             ("Pools removed", ", ".join(f"pool {r.pool} ({r.seconds:.1f} s)" for r in removed) or "none"
              + (" (the compose-declared pools cover the spare count; nothing above it was running)"
                 if not removed else ""))]
@@ -1349,6 +1350,24 @@ def _scaledown_html(data: PoolTestData) -> str:
                    + _esc(", ".join(f"pool {r.pool} (idle {r.idle:.0f} s)" for r in idle)) + '.</p>')
     out.append(_reassign_html(data, sd))
     return "".join(out)
+
+
+# Pools 1..N are declared in docker-compose.yml (pool_router_rules.STATIC_POOL_COUNT):
+# a scale-down frees them but never removes them.
+STATIC_POOLS = 3
+
+
+def _static_note(sd: dict) -> str:
+    """Why more pools than the spare count are left after a scale-down."""
+    kept = [n for n in sd.get("pools_after", []) if int(n) <= STATIC_POOLS]
+    if not kept:
+        return ""
+    spares = sd.get("spares")
+    which = (f"pool {kept[0]} is" if len(kept) == 1
+             else f"pools {', '.join(map(str, kept))} are")
+    return (f"; {which} declared in docker-compose.yml, only freed, "
+            "never removed" + (f", so more than the spare count ({spares}) remain" if spares is not None
+                               and len(sd.get("pools_after", [])) > int(spares) else ""))
 
 
 def _reassign_html(data: PoolTestData, sd: dict) -> str:
