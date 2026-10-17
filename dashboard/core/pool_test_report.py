@@ -675,6 +675,12 @@ def timelines(samples: list[Sample], end: float) -> dict[int, list[tuple[float, 
     for t in sorted(batches):
         batch = batches[t]
         for smp, state in zip(batch, classify(batch)):
+            if not smp.session_id and smp.window in out:
+                # A read without a session (the window had just cleared its
+                # cookies; the next request recovers it) says nothing about
+                # where it is served: keep the previous state rather than draw
+                # a dip to production.
+                continue
             segs = out.setdefault(smp.window, [])
             pool = smp.pool if state != PRODUCTION else None
             if segs and segs[-1][2] == state and segs[-1][3] == pool:

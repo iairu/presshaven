@@ -203,6 +203,12 @@ class ScalingTests(unittest.TestCase):
         self.assertEqual((s.builds[0].pool, s.builds[0].reason, s.builds[0].seconds), (2, "waiting session", 28))
         self.assertEqual(s.limit, [])
 
+    def test_a_read_without_a_session_is_not_a_dip_to_production(self):
+        from core.pool_test_report import OWN, PoolTestData, Sample, timelines
+        samples = [Sample(0, 0, "a", "HONEYPOT", 1, False), Sample(10, 0, "", "NO SESSION", None, False),
+                   Sample(20, 0, "a", "HONEYPOT", 1, False)]
+        self.assertEqual([seg[2] for seg in timelines(samples, 30)[0]], [OWN])
+
     def test_a_borrow_between_two_reads_comes_from_the_handoff(self):
         from core.pool_test_report import scaling_summary
         P, H5 = ("PRODUCTION", None, False), ("HONEYPOT", 5, False)
