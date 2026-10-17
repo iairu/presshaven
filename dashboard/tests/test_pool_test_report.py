@@ -203,6 +203,19 @@ class ScalingTests(unittest.TestCase):
         self.assertEqual((s.builds[0].pool, s.builds[0].reason, s.builds[0].seconds), (2, "waiting session", 28))
         self.assertEqual(s.limit, [])
 
+    def test_reads_after_the_scale_down_are_not_the_run(self):
+        from core.pool_test_report import OWN, scaling_summary
+        H1, H2 = ("HONEYPOT", 1, False), ("HONEYPOT", 2, False)
+        # Both own a pool for the whole run; after the scale-down request (t=60)
+        # the reassignment check finds window 1 parked on pool 1, waiting.
+        d = self._data([(0, [H1, H2]), (50, [H1, H2]), (70, [H1, ("HONEYPOT", 1, True)])])
+        d.scaledown = {"requested": 60}
+        s = scaling_summary(d)
+        self.assertEqual(s.borrow, [])
+        self.assertEqual([seg[2] for seg in s.timelines[1]], [OWN])
+        d.scaledown = {}
+        self.assertEqual(len(scaling_summary(d).borrow), 1)      # without the cut it was counted
+
     def test_newcomer_on_a_pool_at_the_limit_is_case_b(self):
         from core.pool_test_report import scaling_summary
         P, H = ("PRODUCTION", None, False), ("HONEYPOT", 1, False)

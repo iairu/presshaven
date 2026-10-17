@@ -804,6 +804,17 @@ def _arrival(segs: list, pool: int | None) -> float:
     return next((sg[0] for sg in segs if sg[3] == pool and sg[2] in (OWN, SHARED)), float("inf"))
 
 
+def run_samples(data: PoolTestData) -> list[Sample]:
+    """The routing samples of the run proper: up to the forced scale-down
+    request. After it, the reassignment check sends the windows back to the
+    shop, the router parks the still-flagged sessions on a surviving pool
+    while pool_manager builds new ones -- reads that were counted as
+    "borrowed although pools had been pre-built" and "still borrowing at the
+    end" for windows that never borrowed during the run."""
+    cut = (data.scaledown or {}).get("requested")
+    return [s for s in data.samples if cut is None or s.t < cut]
+
+
 def scaling_summary(data: PoolTestData) -> ScalingSummary:
     """Pool builds, case A (borrowed while scaling) and case B (shared at the
     resource limit) from the samples and pool_manager's event log."""
@@ -847,8 +858,9 @@ def scaling_summary(data: PoolTestData) -> ScalingSummary:
         builds.append(PoolBuild(int(pool), float(e["at"]), None, False, e.get("reason", "")))
     builds.sort(key=lambda b: b.start)
 
-    tl = timelines(data.samples, data.duration)
-    stl = session_timelines(data.samples, data.duration)
+    samples = run_samples(data)
+    tl = timelines(samples, data.duration)
+    stl = session_timelines(samples, data.duration)
     order: dict[int, list[str]] = {}            # window -> its sessions, in order
     for (w, sid), segs in sorted(stl.items(), key=lambda kv: kv[1][0][0]):
         order.setdefault(w, []).append(sid)

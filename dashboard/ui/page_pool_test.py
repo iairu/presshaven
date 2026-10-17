@@ -301,6 +301,7 @@ class PoolTestPage(QWidget):
         self._reserve: dict = {}
         self._baseline: dict = {}   # pool_evidence baseline of the running report
         self._host_cpus, self._host_mem_total = 0, 0.0   # edge host, for the report
+        self._sampling = False   # routing reads go into the run's timeline (see _observe)
         self._load_ok = [True] * MAX_WINDOWS     # last page load per window succeeded
         # This run's failed page loads (each failed attempt), loads that never
         # succeeded after every retry, and error pages reloaded before a step.
@@ -781,7 +782,11 @@ class PoolTestPage(QWidget):
         give the loads since the last batch the state their window is in now."""
         for i, d in enumerate(decisions):
             self._style_decision(i, d)
-        if not self._t0:
+        if not self._t0 or not self._sampling:
+            # After the forced scale-down the windows' routing is no longer the
+            # run's (the reassignment check has its own table): don't add it,
+            # or its page loads, to the timeline and latency figures.
+            self._pending_loads = []
             return
         t = self._now()
         batch = [Sample(t, i, d.session_id, d.route, d.pool, d.waiting)
@@ -1257,6 +1262,7 @@ class PoolTestPage(QWidget):
         scale down right away, rather than after POOL_IDLE_TIMEOUT_SECONDS,
         sampling resource use before, during and after."""
         remote = self._remote()
+        self._sampling = False          # the run's timeline ends here (see _observe)
         self._progress(f"Step {n}/{total_steps}: forced scale-down — stopping the windows' "
                        "traffic", n, total)
         # No more requests from the windows: one would re-assign its bound session.
@@ -1384,6 +1390,7 @@ class PoolTestPage(QWidget):
         self._t0 = time.time()
         self._load_failures = self._load_unrecovered = self._load_recovered = 0
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
+        self._sampling = True
         self._reserve = {}
         self._visits = [0] * MAX_WINDOWS
         sampler = _UsageSampler(target, self._t0, self)
