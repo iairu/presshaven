@@ -224,7 +224,7 @@ def _cleared_html(data: PoolTestData) -> str:
     intro = ('<h2 style="color:#222;">Session tamper-proofing</h2>'
              '<p style="color:#555;">Between steps, random windows tampered with their own session. '
              'Some <b>cleared</b> their data the way a regular visitor does from the browser\'s '
-             'settings (every cookie of the site, its localStorage and sessionStorage, or both): the '
+             'settings (every cookie of the site, or all its site data): the '
              'stack should still recognise the window by its passive fingerprint (TLS hello, '
              'User-Agent, Accept-Language, IP) and keep it on its session. Others <b>forged</b> it: '
              'their SERVERID cookie was rewritten to an invented session, or to another window\'s '

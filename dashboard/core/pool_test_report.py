@@ -212,14 +212,18 @@ def parse_cart(store_api_json: str) -> CartState | None:
 # is never sent to the server, so a forged one must change nothing at all.
 # The report records, as observed, what the stack did with the window.
 
+# Clearing only localStorage/sessionStorage is not scheduled: the shop keeps
+# nothing there, so it removed 0 entries and tested nothing. Browser storage is
+# covered by forge_storage instead (a fake session written there must change
+# nothing). "storage" stays readable for reports made before.
 CLEAR_VARIANTS = [("cookies", "cleared its cookies"),
-                  ("storage", "cleared its localStorage and sessionStorage"),
                   ("all", "cleared all site data (cookies, localStorage, sessionStorage)")]
+LEGACY_VARIANTS = [("storage", "cleared its localStorage and sessionStorage")]
 FORGE_VARIANTS = [("forge_cookie", "forged its session cookie (invented session id, made-up signature)"),
                   ("hijack_cookie", "forged its session cookie to another window's session id "
                                     "(made-up signature)"),
                   ("forge_storage", "wrote a fake session into its localStorage and sessionStorage")]
-CLEAR_TEXT = dict(CLEAR_VARIANTS + FORGE_VARIANTS)
+CLEAR_TEXT = dict(CLEAR_VARIANTS + FORGE_VARIANTS + LEGACY_VARIANTS)
 FORGE_KEYS = {k for k, _t in FORGE_VARIANTS}
 COOKIE_FORGERIES = {"forge_cookie", "hijack_cookie"}
 
@@ -232,18 +236,20 @@ def clear_schedule(steps: list[int], windows: int, rng,
     """{step number: [(window, variant), ...]} -- who clears or forges what
     before which step. Each step gets one event with CLEAR_CHANCE; a run with
     eligible steps always gets at least one clearing and (with ``forge``) at
-    least one forgery, so the report has something to show. A hijack needs a
-    second window to steal from."""
+    least one cookie forgery and one storage forgery, so the report has every
+    kind to show. A hijack needs a second window to steal from."""
     if not steps or windows <= 0:
         return {}
     clears = [k for k, _t in CLEAR_VARIANTS]
-    forges = [k for k, _t in FORGE_VARIANTS if windows > 1 or k != "hijack_cookie"] if forge else []
-    variants = clears + forges
+    cookie_forges = ([k for k in ("forge_cookie", "hijack_cookie") if windows > 1 or k != "hijack_cookie"]
+                     if forge else [])
+    storage_forges = ["forge_storage"] if forge else []
+    variants = clears + cookie_forges + storage_forges
     out: dict[int, list[tuple[int, str]]] = {}
     for n in steps:
         if rng.random() < CLEAR_CHANCE:
             out[n] = [(rng.randrange(windows), rng.choice(variants))]
-    for pool in (clears, forges):
+    for pool in (clears, cookie_forges, storage_forges):
         if pool and not any(v in pool for events in out.values() for _w, v in events):
             free = [n for n in steps if n not in out] or steps
             out.setdefault(rng.choice(free), []).append((rng.randrange(windows), rng.choice(pool)))

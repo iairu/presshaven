@@ -257,7 +257,7 @@ class PoolTestPage(QWidget):
         self.clear_check.setToolTip(
             "During the report run, random windows tamper with their own session between "
             "steps:\n"
-            "\u2022 delete it: clear their cookies and/or localStorage, the way a visitor clears "
+            "\u2022 delete it: clear their cookies or all site data, the way a visitor clears "
             "their browsing data -- the stack must still recognise the window (passive "
             "fingerprint) and keep it on its session;\n"
             "\u2022 forge it: rewrite the SERVERID cookie to an invented session or to another "
@@ -851,7 +851,7 @@ class PoolTestPage(QWidget):
             + (f" The last {self._delayed()} window(s) attack only after pools were pre-built "
                "for them." if self._delayed() else "")
             + (" Between steps, a few random windows tamper with their session: they clear "
-               "their cookies and/or localStorage, or forge their session cookie or storage, "
+               "their cookies or all site data, or forge their session cookie or storage, "
                "to check the stack still tells the windows apart and rejects forged sessions."
                if self.clear_check.isChecked() else "")
             + " At the end the windows' sessions are released and the pools they no longer "

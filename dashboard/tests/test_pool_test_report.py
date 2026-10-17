@@ -423,8 +423,10 @@ class ClearBrowserDataTests(unittest.TestCase):
         for seed in range(50):
             variants = [v for events in clear_schedule([3, 4, 5], 3, random.Random(seed)).values()
                         for _w, v in events]
-            self.assertTrue(any(v in FORGE_KEYS for v in variants))
+            self.assertTrue(any(v in ("forge_cookie", "hijack_cookie") for v in variants))
+            self.assertIn("forge_storage", variants)
             self.assertTrue(any(v not in FORGE_KEYS for v in variants))
+            self.assertNotIn("storage", variants)       # storage-only clearing tested nothing
             off = [v for events in clear_schedule([3, 4, 5], 3, random.Random(seed), forge=False).values()
                    for _w, v in events]
             self.assertFalse(any(v in FORGE_KEYS for v in off))
