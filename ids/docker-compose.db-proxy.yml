@@ -336,7 +336,7 @@ services:
       - production_network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 5
       # 420s, not 30s: only matters on a genuinely empty volume -- confirmed
@@ -673,7 +673,7 @@ services:
     pids_limit: 200
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 5
       # See production_database's healthcheck comment above for why 420s.
@@ -708,7 +708,7 @@ services:
       "
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
+      interval: 30s
       timeout: 3s
       retries: 5
       start_period: 10s

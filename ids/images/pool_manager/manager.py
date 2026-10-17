@@ -142,6 +142,31 @@ LOG_CONFIG = {"type": "json-file", "config": {"max-size": "10m", "max-file": "3"
 NS = 1_000_000_000
 
 
+def _keep_healthcheck_start_interval() -> None:
+    """docker-py (7.1) rebuilds every healthcheck dict through Healthcheck(),
+    which knows no start_interval and drops it. Keep it (Docker API 1.44+):
+    the pools probe every 1-2 s until their first success, so a build is not
+    slowed down by the 30 s steady-state interval. A no-op where docker is
+    stubbed (the unit tests)."""
+    try:
+        import docker.types.containers as container_types
+        from docker.types.healthcheck import Healthcheck
+    except ImportError:
+        return
+
+    class HealthcheckWithStartInterval(Healthcheck):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            start_interval = kwargs.get("start_interval", kwargs.get("StartInterval"))
+            if start_interval is not None:
+                self["StartInterval"] = start_interval
+
+    container_types.Healthcheck = HealthcheckWithStartInterval
+
+
+_keep_healthcheck_start_interval()
+
+
 def log(msg: str) -> None:
     print(f"[pool_manager {time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
@@ -477,9 +502,11 @@ class Manager:
             cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "SYS_NICE"],
             mem_limit="512m", nano_cpus=500_000_000, pids_limit=200,
             log_config=LOG_CONFIG, restart_policy={"Name": "unless-stopped"},
+            # Every 30 s once healthy (each probe is a docker exec; ten pools
+            # at 10 s kept dockerd/containerd busy), every 1 s until then.
             healthcheck={"test": ["CMD", "mysqladmin", "ping", "-h", "localhost"],
-                         "interval": 10 * NS, "timeout": 5 * NS, "retries": 5,
-                         "start_period": 60 * NS})
+                         "interval": 30 * NS, "timeout": 5 * NS, "retries": 5,
+                         "start_period": 60 * NS, "start_interval": 1 * NS})
 
     def provision_wordpress(self, n: int) -> None:
         """WordPress layer: a full honeypot_eshop_N + honeypot_database_N pair."""
@@ -572,7 +599,7 @@ class Manager:
             log_config=LOG_CONFIG, restart_policy={"Name": "unless-stopped"},
             healthcheck={"test": ["CMD", "curl", "-f", "http://localhost/"],
                          "interval": 30 * NS, "timeout": 10 * NS, "retries": 3,
-                         "start_period": 60 * NS})
+                         "start_period": 60 * NS, "start_interval": 2 * NS})
         for extra in ("production_network", "monitoring_network"):
             self.docker.networks.get(self._net(extra)).connect(wp)
         wp.start()
