@@ -82,6 +82,15 @@ transforms:
       .honeypot_system = "ids"
       .tags = ["suricata", "ids", "honeypot"]
 
+  # Backstop for the Suricata anomaly feedback loop (suricata.yaml turns
+  # anomaly records off): only alerts and whatever else Suricata is told to
+  # log go to the SIEM, never per-packet stream anomalies.
+  suricata_eve_filter:
+    type: filter
+    inputs:
+      - suricata_eve_tag
+    condition: '.event_type != "anomaly"'
+
   suricata_fast_tag:
     type: remap
     inputs:
@@ -146,7 +155,7 @@ sinks:
     version: "2"
     inputs:
       - docker_tag
-      - suricata_eve_tag
+      - suricata_eve_filter
       - suricata_fast_tag
       - nginx_access_tag
       - nginx_security_tag

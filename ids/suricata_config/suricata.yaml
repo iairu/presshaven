@@ -116,12 +116,17 @@ outputs:
               mode: extra-data
               deployment: reverse
               header: X-Forwarded-For
+        # Anomaly records are off for the same reason as flow/stats above, and
+        # worse: capturing on "any" sees every container packet twice (veth
+        # and bridge), so TCP stream tracking flags nearly every packet
+        # (stream.est_invalid_ack, est_packet_out_of_window, ...). Each record
+        # went to eve.json, vector_outbound shipped it to the SIEM on port
+        # 6000, and Suricata saw that shipping traffic too -- a feedback
+        # loop that produced 43 million anomaly events in one hour of a pool
+        # test (310 alerts). Nothing reads them (init_worker takes alerts
+        # only; no Kibana dashboard uses event_type:anomaly).
         - anomaly:
-            enabled: yes
-            types:
-              decode: yes
-              stream: yes
-              applayer: yes
+            enabled: no
 
   # NOTE: unified2-alert output was removed – it is not supported in Suricata 7.x
   # and causes a fatal startup error. The eve-log output above replaces it.
@@ -368,8 +373,11 @@ pcap:
   - interface: any
     # Promiscuous mode
     promisc: yes
-    # BPF filter - match all packets
-    bpf-filter: "ip or ip6 or arp"
+    # BPF filter: all traffic except the log pipeline's own -- Vector shipping
+    # to the SIEM aggregator (6000), Elasticsearch (9200) and Kibana (5601)
+    # on this host. Inspecting it only produced events about shipping
+    # events (see the anomaly note under outputs).
+    bpf-filter: "(ip or ip6 or arp) and not port 6000 and not port 9200 and not port 5601"
     # Checksum validation (disable: Docker veth/bridge traffic commonly has
     # invalid/offloaded checksums that would otherwise cause valid packets
     # to be dropped as "bad checksum" before they ever reach detection).
