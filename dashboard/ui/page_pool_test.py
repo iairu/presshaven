@@ -92,6 +92,11 @@ POOL_REFRESH_MS = 5000
 # navigation. Windows still on an error page are reloaded before every step.
 LOAD_RETRY_DELAYS_MS = (800, 2000, 4000, 8000)
 LOAD_RETRIES = len(LOAD_RETRY_DELAYS_MS)
+# An attack page is retried at most this often, and only after a failure with
+# no response at all (see _LoadRelay): an HTTP error answer means the honeypot
+# got the request. A load cut off by ERR_NETWORK_CHANGED left the step's
+# screenshot on Chrome's error page and its cart unreadable.
+ATTACK_RETRIES = 1
 
 # How long the clean-up after the reassignment check waits for the pool builds
 # that check started, before removing them (a build takes about a minute).
@@ -658,7 +663,7 @@ class PoolTestPage(QWidget):
         self.progress_bar.setValue(current)
         self.progress_label.setText(message)
 
-    def _load_all(self, urls: list[str], step: str = "", no_retry: frozenset = frozenset()) -> None:
+    def _load_all(self, urls: list[str], step: str = "", attacks: frozenset = frozenset()) -> None:
         """Navigate each frame to its URL and wait for all loads (hard timeout,
         so one stuck page cannot hang the export). Each completed load's time
         is recorded for the latency figures, under `step`; its routing state is
@@ -683,9 +688,11 @@ class PoolTestPage(QWidget):
             def finished(ok, n=i, u=url, b=browser):
                 if n not in pending:
                     return
-                # Windows in `no_retry` (an attack request) are never sent again:
-                # the attack step counts its own attempts.
-                if not ok and u.startswith("http") and retries[n] < LOAD_RETRIES and n not in no_retry:
+                # Windows in `attacks` (an attack request) get ATTACK_RETRIES:
+                # `ok` is False only when no response came back at all, and the
+                # attack step counts its own attempts.
+                limit = ATTACK_RETRIES if n in attacks else LOAD_RETRIES
+                if not ok and u.startswith("http") and retries[n] < limit:
                     # Transient (see LOAD_RETRY_DELAYS_MS): load it again, and
                     # give the retry a full timeout of its own.
                     delay = LOAD_RETRY_DELAYS_MS[retries[n]]
@@ -1197,7 +1204,7 @@ class PoolTestPage(QWidget):
             for w in active:
                 urls[w] = self._base_url() + state[w][0].path
                 self._pattern_urls.add(urls[w])
-            self._load_all(urls, title, no_retry=frozenset(active))
+            self._load_all(urls, title, attacks=frozenset(active))
             self._spin(700)
             decisions = self._settled_decisions(need_sessions=True)
             for w in active:
@@ -1664,7 +1671,7 @@ class PoolTestPage(QWidget):
                     for w, p in enumerate(second)]
             self._pattern_urls.update(u for u, p in zip(urls, second) if p)
             self._load_all(urls, "All windows run a second pattern",
-                           no_retry=frozenset(w for w, p in enumerate(second) if p))
+                           attacks=frozenset(w for w, p in enumerate(second) if p))
             self._spin(700)
             decisions = self._settled_decisions(need_sessions=True)
             for i, d in enumerate(decisions):
