@@ -358,6 +358,39 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class ReassignmentTests(unittest.TestCase):
+    """What a window whose pool the forced scale-down removed got next."""
+
+    def test_outcomes(self):
+        from core.pool_test_report import reassignment_outcome
+        base = {"window": 0, "from": 7, "session_before": SID[0], "session_after": SID[0]}
+        kind, _ = reassignment_outcome(dict(base, pool=1, route="HONEYPOT", status=200))
+        self.assertEqual(kind, "reassigned")
+        kind, words = reassignment_outcome(dict(base, pool=1, route="HONEYPOT", status=502, title="502 Bad Gateway"))
+        self.assertEqual(kind, "error")
+        self.assertIn("HTTP 502", words)
+        self.assertEqual(reassignment_outcome(dict(base, pool=None, route="", status=0))[0], "error")
+        self.assertEqual(reassignment_outcome(dict(base, pool=7, route="HONEYPOT", status=200))[0], "stranded")
+        kind, words = reassignment_outcome(dict(base, pool=None, route="PRODUCTION", status=200,
+                                                session_after=SID[1]))
+        self.assertEqual(kind, "escaped")
+        self.assertIn("new session", words)
+        kind, words = reassignment_outcome(dict(base, pool=None, route="PRODUCTION", status=200))
+        self.assertEqual(kind, "escaped")
+        self.assertIn("no longer diverted", words)
+
+    def test_a_failed_move_fails_the_run(self):
+        from core.pool_test_report import REASSIGN_FAILED
+        f = [FrameResult(label=f"F{i}", session_id=SID[i], pool=i + 1) for i in range(3)]
+        ok = [{"window": 2, "from": 3, "pool": 1, "route": "HONEYPOT", "session_before": SID[2],
+               "session_after": SID[2], "status": 200}]
+        self.assertEqual(analyze(f, state(), None, None, ok).status, EXCLUSIVE)
+        bad = [dict(ok[0], status=502)]
+        v = analyze(f, state(), None, None, bad)
+        self.assertEqual(v.status, REASSIGN_FAILED)
+        self.assertIn("F2 (was on removed pool 3): HTTP 502", " ".join(v.findings))
+
+
 class ClearBrowserDataTests(unittest.TestCase):
     """Windows clearing their own cookies / storage mid-run, reported as observed."""
 

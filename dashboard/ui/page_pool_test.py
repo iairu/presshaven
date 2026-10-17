@@ -22,6 +22,7 @@ many still wait for theirs.
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import secrets
 import time
@@ -106,6 +107,13 @@ _CLEAR_STORAGE_JS = ("(function(){var n=0;try{n+=localStorage.length;localStorag
 _FORGE_STORAGE_JS = ("(function(v){var n=0,k=['SERVERID','session_id','sessionId','wc_session'];"
                      "for(var i=0;i<k.length;i++){try{localStorage.setItem(k[i],v);n++;}catch(e){}"
                      "try{sessionStorage.setItem(k[i],v);n++;}catch(e){}}return String(n);})(%s)")
+
+
+# The HTTP status, title and URL of the page a window is on (status 0: no
+# response, e.g. Chromium's error page after a failed load).
+_PAGE_STATUS_JS = ("(function(){var s=0;try{var n=performance.getEntriesByType('navigation')[0];"
+                   "s=n&&n.responseStatus||0;}catch(e){}return JSON.stringify("
+                   "{s:s,t:document.title||'',u:location.href});})()")
 
 
 # Reads the shop's own cart (WooCommerce Store API) from inside a window, so the
@@ -635,6 +643,15 @@ class PoolTestPage(QWidget):
                 browser.view.loadFinished.disconnect(conn)
             except TypeError:
                 pass
+
+    def _page_status(self, w: int) -> dict:
+        """{"s": HTTP status (0 = none / error page), "t": title, "u": URL} of
+        the page window `w` is showing."""
+        try:
+            got = json.loads(self._run_js(w, _PAGE_STATUS_JS) or "{}")
+        except ValueError:
+            got = {}
+        return {"s": int(got.get("s") or 0), "t": str(got.get("t") or ""), "u": str(got.get("u") or "")}
 
     def _product_ids(self, slugs: list[str]) -> dict[str, int]:
         """Product IDs for `slugs`, looked up from inside a window (see
@@ -1239,10 +1256,11 @@ class PoolTestPage(QWidget):
         # fresh session) rather than leaving it on a removed pool -- the
         # timeline then shows the move instead of a window frozen on a dead pool.
         removed = sorted(set(before.get("ready", [])) - set(state.get("ready", []) if state else []))
-        pool_before = {}
+        pool_before, session_before = {}, {}
         for smp in self._samples:
             if smp.t < requested and smp.pool is not None:
                 pool_before[smp.window] = smp.pool
+                session_before[smp.window] = smp.session_id
         reassign = []
         if removed:
             self._mark("Reassignment after removal")
@@ -1253,9 +1271,11 @@ class PoolTestPage(QWidget):
             for i, d in enumerate(decisions):
                 frm = pool_before.get(i)
                 if frm in removed:
-                    to = (f"pool {d.pool}" if d.pool is not None
-                          else "production (fresh session)")
-                    reassign.append({"window": i, "from": frm, "to": to,
+                    page = self._page_status(i)
+                    reassign.append({"window": i, "from": frm, "pool": d.pool, "route": d.route,
+                                     "session_before": session_before.get(i, ""),
+                                     "session_after": d.session_id,
+                                     "status": page["s"], "title": page["t"][:80],
                                      "stranded": d.pool == frm})
         for i, browser in enumerate(self.browsers):   # later manual use starts afresh
             browser.clear_cookies()

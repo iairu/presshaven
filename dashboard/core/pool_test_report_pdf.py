@@ -15,7 +15,8 @@ from core import diagrams, pool_evidence, vector_figures
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
                                      _pool_state_html, _report_font_family)
-from core.pool_test_report import (TAMPER_ACCEPTED, BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
+from core.pool_test_report import (REASSIGN_FAILED, REASSIGNED, REASSIGN_UNKNOWN, reassignment_outcome,
+                                   TAMPER_ACCEPTED, BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
@@ -24,7 +25,8 @@ from core.pool_test_report import (TAMPER_ACCEPTED, BORROWED, CART_LOST, EXCLUSI
                                    usage_at)
 
 _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY, MERGED: _RED,
-                 CART_LOST: _RED, UNSTABLE: _ORANGE, TAMPER_ACCEPTED: _RED}
+                 CART_LOST: _RED, UNSTABLE: _ORANGE, TAMPER_ACCEPTED: _RED,
+                 REASSIGN_FAILED: _RED}
 
 
 def _short(session_id: str) -> str:
@@ -414,7 +416,8 @@ def _evidence_html(data: PoolTestData) -> str:
 
 def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     family = _report_font_family()
-    verdict = analyze(data.frames, data.pool_state, data.steps, data.cleared)
+    verdict = analyze(data.frames, data.pool_state, data.steps, data.cleared,
+                      (data.scaledown or {}).get("reassign"))
     summ = scaling_summary(data)
     owners = pool_owner_letters(data, summ)
     verdict.findings.extend(pool_evidence.cross_traffic(
@@ -1322,8 +1325,9 @@ def _scaledown_html(data: PoolTestData) -> str:
 
 def _reassign_html(data: PoolTestData, sd: dict) -> str:
     """After a pool is removed, the window that was on it is sent back to the
-    shop once: it should land on a surviving pool (or a fresh session), not
-    stay on the gone pool. Answers whether removal reassigns its users."""
+    shop once: a diverted session must land on a surviving pool with its
+    session intact and get a working page. Records what it actually got
+    (see pool_test_report.reassignment_outcome())."""
     reassign = sd.get("reassign")
     if sd.get("removed_pools") is None:
         return ""
@@ -1332,24 +1336,51 @@ def _reassign_html(data: PoolTestData, sd: dict) -> str:
         return ('<h3 style="color:#222;">Reassignment after removal</h3>'
                 '<p style="color:#555;">No window was on a removed pool, so nothing had to be '
                 'reassigned.</p>')
-    stranded = [r for r in reassign if r.get("stranded")]
-    rows = "".join(
-        f'<tr><td>{_esc(name(r["window"]))}</td><td>pool {r["from"]}</td><td>{_esc(str(r["to"]))}</td>'
-        f'<td>{_badge("stranded", _RED) if r.get("stranded") else _badge("reassigned", _GREEN)}</td></tr>'
-        for r in reassign)
+    def where(r):
+        if r.get("pool") is not None:
+            return f"pool {r['pool']}"
+        return (r.get("route") or "no route").lower()
+    rows, bad, unknown = [], [], 0
+    for r in reassign:
+        if "status" not in r:          # a report from before the outcome was recorded
+            kind, words = REASSIGN_UNKNOWN, str(r.get("to", ""))
+        else:
+            kind, words = reassignment_outcome(r)
+        if kind == REASSIGN_UNKNOWN:
+            unknown += 1
+        elif kind != REASSIGNED:
+            bad.append(r)
+        colour = _GREEN if kind == REASSIGNED else _GREY if kind == REASSIGN_UNKNOWN else _RED
+        same = (r.get("session_before") and r.get("session_after") == r.get("session_before"))
+        session = (f'{_short(r.get("session_before", ""))} &rarr; '
+                   + ("same" if same else _short(r.get("session_after", "")) or "none")) if "status" in r else ""
+        status = (f'{r["status"]}' if r.get("status") else "error page") if "status" in r else ""
+        rows.append(f'<tr><td>{_esc(name(r["window"]))}</td><td>pool {r["from"]}</td>'
+                    f'<td>{_esc(where(r)) if "status" in r else _esc(str(r.get("to", "")))}</td>'
+                    f'<td style="font-size:8pt;">{session}</td><td>{status}</td>'
+                    f'<td>{_badge(kind, colour)}<br/><span style="font-size:8pt;color:#555;">'
+                    f'{_esc(words)}</span></td></tr>')
     verdict = ('<p style="color:#2e7d32;"><b>Every window whose pool was removed was moved to a '
-               'surviving pool or given a fresh session on its next request.</b></p>' if not stranded
-               else '<p style="color:#c62828;"><b>' + _esc(", ".join(name(r["window"]) for r in stranded))
-               + ' stayed on a removed pool.</b></p>')
+               'surviving pool with its session, and its page loaded.</b></p>' if not bad and not unknown
+               else f'<p style="color:#777;">{unknown} outcome(s) were not recorded (the HTTP status and '
+                    'sessions were not captured), so they are not verified.</p>' if not bad
+               else '<p style="color:#c62828;"><b>' + _esc(", ".join(name(r["window"]) for r in bad))
+               + ' did not stay in a honeypot after its pool was removed</b> (see the table): a '
+               'diverted user must be moved to a surviving pool with its session and risk intact.</p>')
     return ('<h3 style="color:#222;">Reassignment after removal</h3>'
             '<p style="color:#555;">A removed pool\'s owner keeps its session cookie; its pool '
-            'assignment was dropped when the pool went. Sent back to the shop once, the router '
-            'reassigns it rather than routing to the pool that no longer exists. (The forced '
-            'scale-down drops assignments on purpose; in normal operation idle scale-down only '
-            'removes pools no request has reached, so there is usually no active owner to move.)</p>'
+            'assignment was dropped when the pool went. Sent back to the shop once, a session that '
+            'was diverted should be routed to a surviving pool (shared round-robin if need be), keep '
+            'its session and risk, and get a working page &ndash; not a 502 from the removed pool\'s '
+            'container, and not production. The table records what the window actually got: its '
+            'session before and after, the HTTP status of the page it loaded, and where it was '
+            'routed. (The forced scale-down drops assignments on purpose; in normal operation idle '
+            'scale-down only removes pools no request has reached, so there is usually no active '
+            'owner to move.)</p>'
             '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Removed pool</th>'
-            '<th>Reassigned to</th><th></th></tr>' + rows + '</table>' + verdict)
+            'style="border-collapse:collapse; color:#333;"><thead><tr><th>Window</th><th>Removed pool</th>'
+            '<th>Routed to</th><th>Session</th><th>HTTP</th><th>Outcome</th></tr></thead>'
+            + "".join(rows) + '</table>' + verdict)
 
 
 def _borrow_outcome(c) -> str:

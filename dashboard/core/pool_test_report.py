@@ -101,6 +101,7 @@ INCOMPLETE = "incomplete"
 UNSTABLE = "unstable"
 CART_LOST = "cart_lost"
 TAMPER_ACCEPTED = "tamper_accepted"
+REASSIGN_FAILED = "reassign_failed"
 
 
 @dataclass
@@ -898,8 +899,44 @@ def sharing_justified(state: dict) -> bool:
     return not state.get("free") and bool(ready) and all(owners.get(n, 0) >= 1 for n in ready)
 
 
+# What became of a window whose pool the forced scale-down removed, once it was
+# sent back to the shop (reassignment_outcome()).
+REASSIGNED, REASSIGN_ERROR, REASSIGN_ESCAPED, REASSIGN_STRANDED, REASSIGN_UNKNOWN = (
+    "reassigned", "error", "escaped", "stranded", "unknown")
+
+
+def reassignment_outcome(r: dict) -> tuple[str, str]:
+    """(kind, plain words) for one reassignment record from the forced scale-down:
+    {"from": removed pool, "pool": pool after, "route": route after,
+     "session_before", "session_after", "status": HTTP status of the page it
+     loaded (0 = no response / Chromium error page), "title": page title}.
+
+    A window that was diverted must stay diverted: moved to a surviving pool,
+    with the same session, and the page must actually load. A 5xx or an error
+    page means the router sent it somewhere that no longer answers (the removed
+    pool's container); production or a new session means the attacker walked
+    out of the honeypot."""
+    status = int(r.get("status") or 0)
+    pool, route = r.get("pool"), r.get("route") or ""
+    before, after = r.get("session_before") or "", r.get("session_after") or ""
+    fresh = bool(before and after and after != before)
+    if status == 0 or status >= 500:
+        what = f"HTTP {status}" if status else "no response (browser error page)"
+        return REASSIGN_ERROR, f"{what} on the next request" + (f" ({r.get('title')})" if r.get("title") else "")
+    if pool is not None and pool == r.get("from"):
+        return REASSIGN_STRANDED, f"still routed to the removed pool {pool}"
+    if pool is not None and not fresh:
+        return REASSIGNED, f"moved to surviving pool {pool}, same session"
+    if pool is not None:
+        return REASSIGN_ESCAPED, f"pool {pool}, but under a new session (its risk history is gone)"
+    if route == "PRODUCTION" or not route:
+        return REASSIGN_ESCAPED, ("production with a new session" if fresh
+                                  else "production with its old session (no longer diverted)")
+    return REASSIGN_UNKNOWN, f"route {route.lower()}"
+
+
 def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | None = None,
-            cleared: list[ClearEvent] | None = None) -> Verdict:
+            cleared: list[ClearEvent] | None = None, reassign: list[dict] | None = None) -> Verdict:
     by_pool: dict[int, list[str]] = {}
     for f in frames:
         if f.pool is not None:
@@ -944,6 +981,20 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
                             + " (the attack has not pushed its score over the diversion "
                               "threshold, or has not been sent).")
         return Verdict(INCOMPLETE, "Not every frame reached a honeypot pool", findings, by_pool)
+
+    failed_moves = []
+    for r in reassign or []:
+        kind, words = reassignment_outcome(r)
+        if kind in (REASSIGN_ERROR, REASSIGN_ESCAPED, REASSIGN_STRANDED):
+            w = r.get("window", 0)
+            failed_moves.append(f"{frames[w].label if w < len(frames) else w + 1} (was on removed "
+                                f"pool {r.get('from')}): {words}.")
+    if failed_moves:
+        pools = ", ".join(f"{f.label} \u2192 pool {f.pool}" for f in frames)
+        return Verdict(REASSIGN_FAILED, "After the scale-down, diverted users were not kept in a "
+                       "honeypot", ["Before the scale-down: " + pools + "."] + failed_moves
+                       + ["A diverted session whose pool is removed must be moved to a surviving pool "
+                          "with its session (and risk) intact, and the page must load."], by_pool)
 
     moved = sticky_violations(steps or [], session_resets(cleared))
     unstable = bool(moved)
