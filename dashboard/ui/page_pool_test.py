@@ -380,6 +380,7 @@ class PoolTestPage(QWidget):
         store.loadAllCookies()
         # Whether this window's last page load succeeded (see _recover_error_pages).
         browser.view.loadFinished.connect(lambda ok, n=i: self._load_ok.__setitem__(n, ok))
+        browser.view.loadFinished.connect(lambda ok, n=i: ok and self._refresh_cart_label(n))
 
         box = QGroupBox(label)
         box_layout = QVBoxLayout(box)
@@ -523,12 +524,16 @@ class PoolTestPage(QWidget):
             self._style_cart(i, c)
         return carts
 
-    def _refresh_cart_labels(self) -> None:
-        """Non-blocking cart refresh for the live labels."""
-        for i, browser in enumerate(self.browsers):
-            if browser.view.url().toString().startswith("http"):
-                browser.page.runJavaScript(
-                    _CART_JS, lambda r, n=i: self._style_cart(n, parse_cart(r or "")))
+    def _refresh_cart_label(self, i: int) -> None:
+        """Read window `i`'s cart for its label (non-blocking). Runs when the
+        window finishes loading a page, the only time its cart can change --
+        polling every window's cart every 3 s sent the shop ~3 requests a
+        second for as long as the page was open, and kept the pools busy and
+        the log shippers loaded long after a report ended."""
+        browser = self.browsers[i]
+        if not self._exporting and browser.view.url().toString().startswith("http"):
+            browser.page.runJavaScript(
+                _CART_JS, lambda r, n=i: self._style_cart(n, parse_cart(r or "")))
 
     def _remote(self):
         return target_for("edge", self.state).remote
@@ -560,7 +565,6 @@ class PoolTestPage(QWidget):
             if job.error is None and not self._exporting:
                 for i, d in enumerate(job.result or []):
                     self._style_decision(i, d)
-                self._refresh_cart_labels()
             job.deleteLater()
         job.finished.connect(done)
         job.start()
@@ -1305,7 +1309,11 @@ class PoolTestPage(QWidget):
                                      "session_after": d.session_id,
                                      "status": page["s"], "title": page["t"][:80],
                                      "stranded": d.pool == frm})
-        for i, browser in enumerate(self.browsers):   # later manual use starts afresh
+        # Later manual use starts afresh, and the windows go quiet: left on the
+        # shop, they kept sending requests (and their recovered sessions kept
+        # pools busy) after the run.
+        self._load_all(["about:blank"] * len(self.browsers))
+        for i, browser in enumerate(self.browsers):
             browser.clear_cookies()
             self._session_ids[i] = ""
             self._style_decision(i, Decision())

@@ -48,10 +48,21 @@ sources:
     ignore_older_secs: 86400 # 24h
 
 transforms:
+  # reverse_proxy's stdout repeats what it writes to its log files (nginx logs
+  # every line to both /var/log/nginx/* and stdout), and those files are
+  # already shipped below with their own parsing. Shipping both doubled
+  # every proxy line -- ~10 per request at info level -- and was most of
+  # this shipper's CPU under steady traffic.
+  docker_dedupe:
+    type: filter
+    inputs:
+      - docker_in
+    condition: '.label."com.docker.compose.service" != "reverse_proxy"'
+
   docker_tag:
     type: remap
     inputs:
-      - docker_in
+      - docker_dedupe
     source: |
       .log_type = "docker"
       .environment = "${ENVIRONMENT:-development}"
@@ -110,6 +121,12 @@ transforms:
       .environment = "${ENVIRONMENT:-development}"
       .honeypot_system = "reverse_proxy"
       .tags = ["nginx", "error", "honeypot"]
+      # error.log holds every nginx/Lua line at info level and up (the request
+      # traces the dashboard parses), not only errors. Carry the line's own
+      # level, so the SIEM can tell a routine [info] trace from a real
+      # [error]/[crit] without reading the message.
+      lvl, err = parse_regex(string!(.message), r'^\S+ \S+ \[(?P<level>[a-z]+)\]')
+      .log_level = if err == null { lvl.level } else { "unknown" }
 
   redis_tag:
     type: remap
