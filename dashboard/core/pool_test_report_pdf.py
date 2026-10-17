@@ -1068,6 +1068,15 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     rows = [("Windows", f"{len(data.frames)}" + (f", of which {data.delayed} attacked only after "
                                                  "pools were pre-built for them" if data.delayed else "")),
             ("Run time", _mmss(data.duration))]
+    if data.load_failures:
+        rows.append(("Failed page loads", (
+            f"{data.load_failures} failed attempt(s), retried with back-off; "
+            + (f"{data.load_unrecovered} still failed after every retry"
+               + (f", {data.load_recovered} of them fixed by reloading before the next step"
+                  if data.load_recovered else "")
+               if data.load_unrecovered else "every one succeeded on a retry")
+            + ". Chromium aborts loads in flight (ERR_NETWORK_CHANGED) whenever Docker adds or "
+              "removes a container's network interface, i.e. while pools are built or removed.")))
     if status:
         lim = []
         if status.get("max_memory_mb"):

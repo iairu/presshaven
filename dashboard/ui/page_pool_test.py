@@ -83,13 +83,14 @@ SCALE_TIMEOUT_S = 900
 # so the timer keeps firing).
 POOL_REFRESH_MS = 5000
 
-# A page load that fails is retried this many times. Chromium aborts every
-# request in flight with ERR_NETWORK_CHANGED whenever a host network interface
-# appears or goes away -- which Docker does on each container it creates or
-# removes (veth pairs), so pools being built or scaled down during a run make
-# frames' loads fail at random. The retry is a plain new navigation.
-LOAD_RETRIES = 3
-LOAD_RETRY_DELAY_MS = 800
+# A page load that fails is retried after each of these delays. Chromium aborts
+# every request in flight with ERR_NETWORK_CHANGED whenever a host network
+# interface appears or goes away -- which Docker does on each container it
+# creates or removes (veth pairs). One pool build changes interfaces for about
+# a minute, so the delays back off to ~15 s in all; the retry is a plain new
+# navigation. Windows still on an error page are reloaded before every step.
+LOAD_RETRY_DELAYS_MS = (800, 2000, 4000, 8000)
+LOAD_RETRIES = len(LOAD_RETRY_DELAYS_MS)
 
 # While the report waits for pools, every window opens its next page this often.
 BROWSE_EVERY_S = 10.0
@@ -300,6 +301,10 @@ class PoolTestPage(QWidget):
         self._reserve: dict = {}
         self._baseline: dict = {}   # pool_evidence baseline of the running report
         self._host_cpus, self._host_mem_total = 0, 0.0   # edge host, for the report
+        self._load_ok = [True] * MAX_WINDOWS     # last page load per window succeeded
+        # This run's failed page loads (each failed attempt), loads that never
+        # succeeded after every retry, and error pages reloaded before a step.
+        self._load_failures = self._load_unrecovered = self._load_recovered = 0
 
         self.pool_label = QLabel("")
         self.pool_label.setWordWrap(True)
@@ -373,6 +378,8 @@ class PoolTestPage(QWidget):
         store.cookieAdded.connect(lambda c, n=i: self._on_cookie(n, c))
         store.cookieRemoved.connect(lambda c, n=i: self._on_cookie_removed(n, c))
         store.loadAllCookies()
+        # Whether this window's last page load succeeded (see _recover_error_pages).
+        browser.view.loadFinished.connect(lambda ok, n=i: self._load_ok.__setitem__(n, ok))
 
         box = QGroupBox(label)
         box_layout = QVBoxLayout(box)
@@ -616,17 +623,22 @@ class PoolTestPage(QWidget):
                 if n not in pending:
                     return
                 if not ok and u.startswith("http") and retries[n] < LOAD_RETRIES:
-                    # Transient (see LOAD_RETRIES): load it again, and give the
-                    # retry a full timeout of its own.
+                    # Transient (see LOAD_RETRY_DELAYS_MS): load it again, and
+                    # give the retry a full timeout of its own.
+                    delay = LOAD_RETRY_DELAYS_MS[retries[n]]
                     retries[n] += 1
+                    self._load_failures += 1
 
                     def again(n=n, u=u, b=b):
                         if n in pending:
                             started[n] = time.monotonic()
                             b.navigate(u)
-                    QTimer.singleShot(LOAD_RETRY_DELAY_MS, again)
-                    timer.start(9000 + LOAD_RETRY_DELAY_MS)
+                    QTimer.singleShot(delay, again)
+                    timer.start(9000 + delay)
                     return
+                if not ok and u.startswith("http"):
+                    self._load_failures += 1
+                    self._load_unrecovered += 1
                 if ok and u.startswith("http") and self._t0:
                     self._pending_loads.append(LoadTiming(
                         t, n, step, (time.monotonic() - started[n]) * 1000.0))
@@ -672,7 +684,7 @@ class PoolTestPage(QWidget):
     def _load_one(self, w: int, url: str, timeout_ms: int = 9000) -> bool:
         """Navigate window `w` alone and wait for the load (retried like _load_all)."""
         browser = self.browsers[w]
-        for _attempt in range(LOAD_RETRIES + 1):
+        for attempt in range(LOAD_RETRIES + 1):
             loop = QEventLoop()
             got: list = [False]
 
@@ -693,8 +705,24 @@ class PoolTestPage(QWidget):
                 pass
             if got[0]:
                 return True
-            self._spin(LOAD_RETRY_DELAY_MS)
+            self._load_failures += 1
+            if attempt < LOAD_RETRIES:
+                self._spin(LOAD_RETRY_DELAYS_MS[attempt])
+        self._load_unrecovered += 1
         return False
+
+    def _recover_error_pages(self) -> int:
+        """Reload every window whose last load failed (it shows Chromium's
+        error page, e.g. after ERR_NETWORK_CHANGED outlasted the retries), so
+        no step starts from an error page. Returns how many were reloaded."""
+        n = 0
+        for w, browser in enumerate(self.browsers):
+            url = browser.view.url().toString()
+            if not self._load_ok[w] and url.startswith("http"):
+                n += 1
+                if self._load_one(w, url):
+                    self._load_recovered += 1
+        return n
 
     def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
         """Every window loads the same product page, one window at a time, so
@@ -1332,6 +1360,7 @@ class PoolTestPage(QWidget):
         self._host_cpus = _h[0] if _h else 0
         self._host_mem_total = _h[1] if _h else 0.0
         self._t0 = time.time()
+        self._load_failures = self._load_unrecovered = self._load_recovered = 0
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
         self._reserve = {}
         self._visits = [0] * MAX_WINDOWS
@@ -1364,6 +1393,9 @@ class PoolTestPage(QWidget):
         def next_step(label: str) -> int:
             nonlocal step
             step += 1
+            if self._recover_error_pages():
+                self._progress(f"Step {step}/{total_steps}: reloaded windows left on an error page",
+                               step, total)
             for w, variant in schedule.get(step, []):
                 doing = "forges" if variant in COOKIE_FORGERIES or variant == "forge_storage" else "clears"
                 self._progress(f"Step {step}/{total_steps}: {FRAMES[w][0]} {doing} its session data",
@@ -1529,6 +1561,8 @@ class PoolTestPage(QWidget):
             marks=list(self._marks), reserve=dict(self._reserve),
             usage=list(sampler.samples), scaledown=scaledown,
             host_cpus=self._host_cpus, host_mem_total_mb=self._host_mem_total,
+            load_failures=self._load_failures, load_unrecovered=self._load_unrecovered,
+            load_recovered=self._load_recovered,
             cleared=cleared, clear_seed=clear_seed)
 
     def reset_sessions(self) -> None:

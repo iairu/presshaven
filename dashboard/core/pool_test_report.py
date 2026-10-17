@@ -570,6 +570,12 @@ class PoolTestData:
     # Windows clearing their browser data mid-run (clear_seed None: switched off).
     cleared: list[ClearEvent] = field(default_factory=list)
     clear_seed: int | None = None
+    # Page loads in the windows that failed (every failed attempt, mostly
+    # ERR_NETWORK_CHANGED while Docker adds or removes pool containers), loads
+    # that still failed after every retry, and error pages reloaded before a step.
+    load_failures: int = 0
+    load_unrecovered: int = 0
+    load_recovered: int = 0
 
 
 def classify(batch: list[Sample]) -> list[str]:
