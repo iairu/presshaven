@@ -524,6 +524,9 @@ class StepResult:
     # Windows whose last page load had failed when the step was read: their
     # screenshot (and cart) come from Chromium's error page, not the shop.
     failed: list[int] = field(default_factory=list)
+    # Per window: the HTTP status of the page it was on when the step was read
+    # (0 = unknown), so an error answer (a blank 400 page) is named, not just shown.
+    http: list[int] = field(default_factory=list)
 
 
 def sticky_violations(steps: list[StepResult], resets: set[tuple[int, int]] | None = None) -> list[str]:

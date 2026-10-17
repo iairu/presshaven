@@ -268,7 +268,9 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
                            f'{_esc(step.actions[i]) if i < len(step.actions) else ""}'
                            + ('<br/><span style="color:#c62828;"><b>&#9888; page failed to load: '
                               'screenshot and cart are from the error page</b></span>'
-                              if i in step.failed else '') + '</td>' for i in idx)
+                              if i in step.failed else '')
+                           + (f'<br/><span style="color:#555;">page answered HTTP {step.http[i]}</span>'
+                              if i < len(step.http) and step.http[i] >= 400 else '') + '</td>' for i in idx)
             decs = "".join(f'<td>{_decision_cell(step.decisions[i], diverted_by.get(i, "")) if i < len(step.decisions) else ""}</td>'
                            for i in idx)
             carts = ("".join(f'<td style="font-size:8pt;">{_cart_cell(step.carts[i]) if i < len(step.carts) else ""}'

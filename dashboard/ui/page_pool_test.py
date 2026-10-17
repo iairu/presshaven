@@ -820,12 +820,14 @@ class PoolTestPage(QWidget):
                         ", reload before the next step failed too"
         return n
 
-    def _capture(self) -> tuple[list, list, list[int]]:
+    def _capture(self) -> tuple[list, list, list[int], list[int]]:
         """Screenshots, carts, and the windows still on an error page (their
         last load failed), for a StepResult."""
         failed = [w for w, b in enumerate(self.browsers)
                   if not self._load_ok[w] and b.view.url().toString().startswith("http")]
-        return [self._grab(b) for b in self.browsers], self._read_carts(), failed
+        http = [self._relays[w].http_status if w < len(self._relays) else 0
+                for w in range(len(self.browsers))]
+        return [self._grab(b) for b in self.browsers], self._read_carts(), failed, http
 
     def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
         """Every window loads the same product page, one window at a time, so
