@@ -77,6 +77,11 @@ SCALEDOWN_TIMEOUT_S = 300
 # that is still borrowing one (a WordPress pool takes a few minutes).
 SCALE_TIMEOUT_S = 900
 
+# How often the pool state line ("Ready pools: ...") refreshes by itself, also
+# while a report export runs (the export's steps wait in nested event loops,
+# so the timer keeps firing).
+POOL_REFRESH_MS = 5000
+
 # While the report waits for pools, every window opens its next page this often.
 BROWSE_EVERY_S = 10.0
 
@@ -282,11 +287,19 @@ class PoolTestPage(QWidget):
         self.pool_label = QLabel("")
         self.pool_label.setWordWrap(True)
         self.refresh_btn = QPushButton("Refresh pool state")
+        self.refresh_btn.setToolTip(f"Also refreshes on its own every {POOL_REFRESH_MS // 1000} s, "
+                                    "including while a report is being exported.")
         self.refresh_btn.clicked.connect(self.refresh_pool_state)
         row = QHBoxLayout()
         row.addWidget(self.pool_label, stretch=1)
         row.addWidget(self.refresh_btn)
         layout.addLayout(row)
+        # The last report export's outcome, on its own line: the pool state
+        # above refreshes on a timer and would overwrite it.
+        self.export_label = QLabel("")
+        self.export_label.setWordWrap(True)
+        self.export_label.setVisible(False)
+        layout.addWidget(self.export_label)
 
         # Frames are created on demand and only hidden (cookies cleared) when the
         # window count goes down, so a QWebEngine profile is never torn down
@@ -313,6 +326,10 @@ class PoolTestPage(QWidget):
         self._poll = QTimer(self)
         self._poll.setInterval(3000)
         self._poll.timeout.connect(self.refresh_decisions)
+        # Keeps the pool state line current, export or not (see POOL_REFRESH_MS).
+        self._pool_poll = QTimer(self)
+        self._pool_poll.setInterval(POOL_REFRESH_MS)
+        self._pool_poll.timeout.connect(self.refresh_pool_state)
 
     # ---- frames ----
 
@@ -732,8 +749,9 @@ class PoolTestPage(QWidget):
         self.progress_label.setText("Preparing report...")
         self.cancel_btn.setEnabled(True)
         self.progress_row.setVisible(True)
+        self.export_label.setVisible(False)
         for w in (self.export_btn, self.open_all_btn, self.attack_all_btn, self.reset_btn,
-                  self.refresh_btn, self.count_spin, self.delayed_spin, self.clear_check):
+                  self.count_spin, self.delayed_spin, self.clear_check):
             w.setEnabled(False)
 
         error, data = "", None
@@ -744,13 +762,13 @@ class PoolTestPage(QWidget):
 
         self.progress_row.setVisible(False)
         for w in (self.export_btn, self.open_all_btn, self.attack_all_btn, self.reset_btn,
-                  self.refresh_btn, self.count_spin, self.delayed_spin, self.clear_check):
+                  self.count_spin, self.delayed_spin, self.clear_check):
             w.setEnabled(True)
         self._exporting = False
         self._poll.start()
 
         if self._cancelled and not error:
-            self.pool_label.setText("Report export cancelled.")
+            self._show_export_result("Report export cancelled.")
             return
         if data is not None and not error:
             self._progress("Rendering PDF...", total - 1, total)
@@ -760,10 +778,10 @@ class PoolTestPage(QWidget):
             except Exception as e:  # noqa: BLE001
                 error = str(e)
         if error:
-            self.pool_label.setText(f"✗ Report export failed: {error}")
+            self._show_export_result(f"✗ Report export failed: {error}")
             QMessageBox.warning(self, "Report export failed", error)
             return
-        self.pool_label.setText(f"✓ Report saved: {path} — {verdict.headline}.")
+        self._show_export_result(f"✓ Report saved: {path} — {verdict.headline}.")
         if QMessageBox.question(
             self, "Report saved", f"Saved pool test report to:\n{path}\n\nOpen it now?",
         ) == QMessageBox.StandardButton.Yes:
@@ -1426,10 +1444,16 @@ class PoolTestPage(QWidget):
             browser.clear_cookies()
             browser.navigate("about:blank")
 
+    def _show_export_result(self, text: str) -> None:
+        self.export_label.setText(text)
+        self.export_label.setVisible(True)
+
     def refresh_pool_state(self) -> None:
         """Read the pool registry off the GUI thread (a stopped stack makes the
-        docker call slow, and this runs every time the page is shown)."""
-        if self._exporting or getattr(self, "_pool_job", None) is not None:
+        docker call slow). Runs when the page is shown, on the button, and every
+        POOL_REFRESH_MS -- also during a report export, whose own registry
+        reads go through separate calls, so this one only updates the line."""
+        if getattr(self, "_pool_job", None) is not None:
             return
         remote = self._remote()
         job = _Job(lambda: redis_inspect.pool_state(remote), self)
@@ -1437,26 +1461,25 @@ class PoolTestPage(QWidget):
 
         def done() -> None:
             self._pool_job = None
-            if not self._exporting:
-                if job.error is not None:
-                    self.pool_label.setText(f"Pool state unavailable: {job.error}")
-                else:
-                    info = job.result
-                    owners = ", ".join(f"pool {n}: {c} session(s)"
-                                       for n, c in sorted(info["owners"].items()))
-                    text = f"Ready pools: {info['ready'] or 'none'} — owners: {owners or 'none'}"
-                    status = info.get("status") or {}
-                    if status:
-                        building = ", ".join(sorted(status.get("building", {})))
-                        text += (f" — room for {status.get('room', '?')} more pool(s) under the "
-                                 "resource limit" + (f", building {building}" if building else ""))
-                    if info.get("waiting"):
-                        text += (f" — scaling up: {info['waiting']} session(s) borrow a pool "
-                                 "until theirs is built")
-                    if info["capped"]:
-                        text += (f" — pool growth capped: {info['capped']} (further sessions "
-                                 "share the ready pools round-robin)")
-                    self.pool_label.setText(text)
+            if job.error is not None:
+                self.pool_label.setText(f"Pool state unavailable: {job.error}")
+            else:
+                info = job.result
+                owners = ", ".join(f"pool {n}: {c} session(s)"
+                                   for n, c in sorted(info["owners"].items()))
+                text = f"Ready pools: {info['ready'] or 'none'} — owners: {owners or 'none'}"
+                status = info.get("status") or {}
+                if status:
+                    building = ", ".join(sorted(status.get("building", {})))
+                    text += (f" — room for {status.get('room', '?')} more pool(s) under the "
+                             "resource limit" + (f", building {building}" if building else ""))
+                if info.get("waiting"):
+                    text += (f" — scaling up: {info['waiting']} session(s) borrow a pool "
+                             "until theirs is built")
+                if info["capped"]:
+                    text += (f" — pool growth capped: {info['capped']} (further sessions "
+                             "share the ready pools round-robin)")
+                self.pool_label.setText(text)
             job.deleteLater()
         job.finished.connect(done)
         job.start()
@@ -1465,8 +1488,10 @@ class PoolTestPage(QWidget):
         super().showEvent(event)
         self.refresh_pool_state()
         self._poll.start()
+        self._pool_poll.start()
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
         if not self._exporting:
             self._poll.stop()
+            self._pool_poll.stop()
