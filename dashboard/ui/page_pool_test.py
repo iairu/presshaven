@@ -283,6 +283,7 @@ class PoolTestPage(QWidget):
         self._marks: list[tuple[float, str]] = []
         self._reserve: dict = {}
         self._baseline: dict = {}   # pool_evidence baseline of the running report
+        self._host_cpus, self._host_mem_total = 0, 0.0   # edge host, for the report
 
         self.pool_label = QLabel("")
         self.pool_label.setWordWrap(True)
@@ -1237,8 +1238,9 @@ class PoolTestPage(QWidget):
             _h = self._blocking(lambda: host_stats(target))
         except Exception:  # noqa: BLE001
             _h = None
-        host_cpus = _h[0] if _h else 0
-        host_mem_total = _h[1] if _h else 0.0
+        # Read by _run_steps when it builds the report data.
+        self._host_cpus = _h[0] if _h else 0
+        self._host_mem_total = _h[1] if _h else 0.0
         self._t0 = time.time()
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
         self._reserve = {}
@@ -1436,7 +1438,7 @@ class PoolTestPage(QWidget):
             samples=list(self._samples), loads=list(self._loads), events=events,
             marks=list(self._marks), reserve=dict(self._reserve),
             usage=list(sampler.samples), scaledown=scaledown,
-            host_cpus=host_cpus, host_mem_total_mb=host_mem_total,
+            host_cpus=self._host_cpus, host_mem_total_mb=self._host_mem_total,
             cleared=cleared, clear_seed=clear_seed)
 
     def reset_sessions(self) -> None:
