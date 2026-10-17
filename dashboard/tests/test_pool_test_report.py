@@ -517,6 +517,13 @@ class ClearBrowserDataTests(unittest.TestCase):
         self.assertIn("never reads browser storage", storage.outcome())
         self.assertFalse(storage.clears_cookies())
 
+    def test_empty_storage_is_not_listed(self):
+        from core.pool_test_report import ClearEvent
+        e = ClearEvent(1.0, 0, 2, "all", SID[0], cookies=["SERVERID", "fh_cart"], storage_keys=0)
+        self.assertNotIn("storage", e.removed())
+        e.storage_keys = 3
+        self.assertIn("3 storage entries", e.removed())
+
     def test_action_note_is_short(self):
         from core.pool_test_report import ClearEvent
         e = ClearEvent(1.0, 0, 2, "hijack_cookie", SID[0], planted="x", claimed_session=SID[1],

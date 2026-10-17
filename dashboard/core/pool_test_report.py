@@ -374,7 +374,9 @@ class ClearEvent:
             named = ", ".join(key) + (f" + {rest} other(s)" if rest and key else
                                       f"{rest} other(s)" if rest else "")
             parts.append(f"{len(self.cookies)} cookie(s)" + (f" ({named})" if self.cookies else ""))
-        if self.variant in ("storage", "all"):
+        # The shop keeps nothing in browser storage, so clearing it usually
+        # removes nothing: only worth a mention when there was something.
+        if self.variant in ("storage", "all") and (self.storage_keys or self.variant == "storage"):
             parts.append(f"{self.storage_keys} storage entr{'y' if self.storage_keys == 1 else 'ies'}")
         return ", ".join(parts)
 
