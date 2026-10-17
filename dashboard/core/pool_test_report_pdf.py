@@ -434,19 +434,22 @@ def _runs_html(data: PoolTestData) -> str:
     for rnd, _w, _i, r in ordered:
         result = (_badge(f"diverted after {r.attempts}", _GREEN) if r.diverted
                   else _badge(f"not diverted in {r.attempts}", _RED))
+        # nowrap: in a narrow column "CVE-2024-2795" + "6" and the badge's
+        # count each wrapped onto a line of their own.
         note = " (replacement)" if r.replaced else ""
-        rows.append(f'<tr><td>{rnd}</td><td><b>{_esc(r.window)}</b></td><td>{_esc(r.cve)}{note}</td>'
-                    f'<td>{_esc(r.name)}</td><td>{result}</td>'
-                    f'<td>{_esc("pool " + str(r.pool) if r.pool is not None else "none")}</td></tr>')
+        nw = ' style="white-space:nowrap;"'
+        rows.append(f'<tr><td>{rnd}</td><td><b>{_esc(r.window)}</b></td><td{nw}>{_esc(r.cve)}{note}</td>'
+                    f'<td>{_esc(r.name)}</td><td{nw}>{result}</td>'
+                    f'<td{nw}>{_esc("pool " + str(r.pool) if r.pool is not None else "none")}</td></tr>')
     return ('<h2 style="color:#222;">Patterns run per window</h2>'
             '<p style="color:#555;">Each window runs a different pattern, picked from the ones '
             'a live probe showed divert within three attempts. If a chosen pattern still did '
             'not divert in three attempts, the next candidate is used instead.</p>'
             + _table_chunks('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
                             'style="border-collapse:collapse; color:#333;">',
-                            '<thead><tr><th width="10%">Round</th><th width="12%">Window</th>'
-                            '<th width="20%">Pattern</th><th width="27%">Name</th><th width="19%">Routing</th>'
-                            '<th width="12%">Pool</th></tr></thead>', rows, 10))
+                            '<thead style="white-space:nowrap;"><tr><th width="9%">Round</th><th width="11%">Window</th>'
+                            '<th width="23%">Pattern</th><th width="27%">Name</th><th width="20%">Routing</th>'
+                            '<th width="10%">Pool</th></tr></thead>', rows, 6))
 
 
 def pool_owner_letters(data: PoolTestData, summ: ScalingSummary | None = None) -> dict[int, str]:
