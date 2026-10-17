@@ -28,7 +28,8 @@ import secrets
 import time
 from datetime import datetime
 
-from PyQt6.QtCore import QEventLoop, Qt, QThread, QTimer, QUrl
+from PyQt6.QtCore import QEventLoop, QObject, Qt, QThread, QTimer, QUrl, pyqtSignal
+from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtNetwork import QNetworkCookie
 from PyQt6.QtWidgets import (
@@ -150,6 +151,33 @@ def product_ids_js(slugs: list[str]) -> str:
 
 class _Cancelled(Exception):
     """Raised inside the scenario when the user presses Cancel."""
+
+
+class _LoadRelay(QObject):
+    """A window's page loads, as "did the server answer". loadFinished(False)
+    also fires for a page that came back with an HTTP error (a honeypot's 404
+    or 400 to an attack request), which the report then retried as if the
+    network had failed -- sending the attack several more times -- and showed
+    as an error page. `done(answered)` is True whenever a response arrived,
+    whatever its status; False only for a failure before one (connection
+    refused, ERR_NETWORK_CHANGED, aborted). `http_status` is the last
+    response's status (0 when none)."""
+
+    done = pyqtSignal(bool)
+
+    def __init__(self, browser, parent=None):
+        super().__init__(parent)
+        self.http_status = 0
+        browser.page.loadingChanged.connect(self._on_loading)
+
+    def _on_loading(self, info) -> None:
+        status = info.status()
+        if status == QWebEngineLoadingInfo.LoadStatus.LoadStartedStatus:
+            return
+        http = info.errorDomain() == QWebEngineLoadingInfo.ErrorDomain.HttpStatusCodeDomain
+        answered = status == QWebEngineLoadingInfo.LoadStatus.LoadSucceededStatus or http
+        self.http_status = info.errorCode() if http else 0
+        self.done.emit(answered)
 
 
 class _Job(QThread):
@@ -316,7 +344,9 @@ class PoolTestPage(QWidget):
         self._baseline: dict = {}   # pool_evidence baseline of the running report
         self._host_cpus, self._host_mem_total = 0, 0.0   # edge host, for the report
         self._sampling = False   # routing reads go into the run's timeline (see _observe)
-        self._load_ok = [True] * MAX_WINDOWS     # last page load per window succeeded
+        self._load_ok = [True] * MAX_WINDOWS     # last page load per window got a response
+        self._relays: list[_LoadRelay] = []      # per window, see _LoadRelay
+        self._pattern_urls: set[str] = set()     # attack URLs: never reloaded (_recover_error_pages)
         self._load_log: list[dict] = []          # this run's loads that failed at first (_log_load)
 
         self.pool_label = QLabel("")
@@ -392,8 +422,10 @@ class PoolTestPage(QWidget):
         store.cookieRemoved.connect(lambda c, n=i: self._on_cookie_removed(n, c))
         store.loadAllCookies()
         # Whether this window's last page load succeeded (see _recover_error_pages).
-        browser.view.loadFinished.connect(lambda ok, n=i: self._load_ok.__setitem__(n, ok))
-        browser.view.loadFinished.connect(lambda ok, n=i: ok and self._refresh_cart_label(n))
+        relay = _LoadRelay(browser, self)
+        self._relays.append(relay)
+        relay.done.connect(lambda ok, n=i: self._load_ok.__setitem__(n, ok))
+        relay.done.connect(lambda ok, n=i: ok and self._refresh_cart_label(n))
 
         box = QGroupBox(label)
         box_layout = QVBoxLayout(box)
@@ -614,7 +646,7 @@ class PoolTestPage(QWidget):
         self.progress_bar.setValue(current)
         self.progress_label.setText(message)
 
-    def _load_all(self, urls: list[str], step: str = "") -> None:
+    def _load_all(self, urls: list[str], step: str = "", no_retry: frozenset = frozenset()) -> None:
         """Navigate each frame to its URL and wait for all loads (hard timeout,
         so one stuck page cannot hang the export). Each completed load's time
         is recorded for the latency figures, under `step`; its routing state is
@@ -639,7 +671,9 @@ class PoolTestPage(QWidget):
             def finished(ok, n=i, u=url, b=browser):
                 if n not in pending:
                     return
-                if not ok and u.startswith("http") and retries[n] < LOAD_RETRIES:
+                # Windows in `no_retry` (an attack request) are never sent again:
+                # the attack step counts its own attempts.
+                if not ok and u.startswith("http") and retries[n] < LOAD_RETRIES and n not in no_retry:
                     # Transient (see LOAD_RETRY_DELAYS_MS): load it again, and
                     # give the retry a full timeout of its own.
                     delay = LOAD_RETRY_DELAYS_MS[retries[n]]
@@ -660,7 +694,7 @@ class PoolTestPage(QWidget):
                 pending.discard(n)
                 if not pending:
                     loop.quit()
-            conns.append((browser, browser.view.loadFinished.connect(finished)))
+            conns.append((self._relays[i], self._relays[i].done.connect(finished)))
             browser.navigate(url)
         timer.start(9000)
         loop.exec()
@@ -668,9 +702,9 @@ class PoolTestPage(QWidget):
         for n in sorted(pending):      # never finished loading within the timeout
             if urls[n].startswith("http"):
                 self._log_load(t, step, n, urls[n], retries[n] + 1, "timed out")
-        for browser, conn in conns:
+        for relay, conn in conns:
             try:
-                browser.view.loadFinished.disconnect(conn)
+                relay.done.disconnect(conn)
             except TypeError:
                 pass
 
@@ -725,7 +759,8 @@ class PoolTestPage(QWidget):
             def finished(ok):
                 got[0] = ok
                 loop.quit()
-            conn = browser.view.loadFinished.connect(finished)
+            relay = self._relays[w]
+            conn = relay.done.connect(finished)
             browser.navigate(url)
             timer = QTimer(self)
             timer.setSingleShot(True)
@@ -734,7 +769,7 @@ class PoolTestPage(QWidget):
             loop.exec()
             timer.stop()
             try:
-                browser.view.loadFinished.disconnect(conn)
+                relay.done.disconnect(conn)
             except TypeError:
                 pass
             if got[0]:
@@ -762,7 +797,7 @@ class PoolTestPage(QWidget):
         n = 0
         for w, browser in enumerate(self.browsers):
             url = browser.view.url().toString()
-            if not self._load_ok[w] and url.startswith("http"):
+            if not self._load_ok[w] and url.startswith("http") and url not in self._pattern_urls:
                 n += 1
                 fixed = self._load_one(w, url, log=False)
                 # The load this repairs is already logged: mark it, don't add one.
@@ -801,7 +836,8 @@ class PoolTestPage(QWidget):
             def finished(ok, n=w):
                 got[0] = ok
                 loop.quit()
-            conn = browser.view.loadFinished.connect(finished)
+            relay = self._relays[w]
+            conn = relay.done.connect(finished)
             browser.navigate(url)
             timer = QTimer(self)
             timer.setSingleShot(True)
@@ -810,7 +846,7 @@ class PoolTestPage(QWidget):
             loop.exec()
             timer.stop()
             try:
-                browser.view.loadFinished.disconnect(conn)
+                relay.done.disconnect(conn)
             except TypeError:
                 pass
             if got[0]:
@@ -1146,7 +1182,8 @@ class PoolTestPage(QWidget):
                     for w in range(len(self.browsers))]
             for w in active:
                 urls[w] = self._base_url() + state[w][0].path
-            self._load_all(urls, title)
+                self._pattern_urls.add(urls[w])
+            self._load_all(urls, title, no_retry=frozenset(active))
             self._spin(700)
             decisions = self._settled_decisions(need_sessions=True)
             for w in active:
@@ -1488,6 +1525,7 @@ class PoolTestPage(QWidget):
         self._host_mem_total = _h[1] if _h else 0.0
         self._t0 = time.time()
         self._load_log = []
+        self._pattern_urls = set()
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
         self._sampling = True
         self._reserve = {}
@@ -1608,8 +1646,11 @@ class PoolTestPage(QWidget):
                 own = {r.cve for r in runs if r.window == self._letter(w)}
                 second.append(next((by_cve[c] for c in (plan[w][1], *FALLBACK_PATTERNS)
                                     if c in by_cve and c not in own), None))
-            self._load_all([self._base_url() + p.path if p else self._browse_url(w)
-                            for w, p in enumerate(second)], "All windows run a second pattern")
+            urls = [self._base_url() + p.path if p else self._browse_url(w)
+                    for w, p in enumerate(second)]
+            self._pattern_urls.update(u for u, p in zip(urls, second) if p)
+            self._load_all(urls, "All windows run a second pattern",
+                           no_retry=frozenset(w for w, p in enumerate(second) if p))
             self._spin(700)
             decisions = self._settled_decisions(need_sessions=True)
             for i, d in enumerate(decisions):
