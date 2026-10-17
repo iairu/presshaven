@@ -116,13 +116,25 @@ _FORGE_STORAGE_JS = ("(function(v){var n=0,k=['SERVERID','session_id','sessionId
 
 
 # True once the cart page shows its cart. The block cart's server HTML already
-# holds both its filled and empty-cart blocks; the root keeps "is-loading" until
-# the Store API answered and it rendered one. (Classic shortcode cart: its form
-# or empty message.)
+# holds both its filled and empty-cart blocks; the root keeps "is-loading"
+# until the Store API answered, and even then the line items and totals show
+# grey skeleton placeholders for a few seconds more -- the screenshots caught
+# those. So: no "is-loading", no skeleton left in the cart, and a product name
+# or the empty-cart message on show. (Classic shortcode cart: its form or
+# empty message.)
 _CART_RENDERED_JS = ("(function(){var r=document.querySelector('.wp-block-woocommerce-cart');"
                      "if(r){return !r.classList.contains('is-loading')"
-                     "&&!!r.querySelector('.wc-block-cart-items,.wc-block-cart__empty-cart__title');}"
+                     "&&!r.querySelector('[class*=skeleton]')"
+                     "&&!!r.querySelector('.wc-block-components-product-name,.wc-block-cart__empty-cart__title');}"
                      "return !!document.querySelector('form.woocommerce-cart-form,.cart-empty');})()")
+
+
+# Scrolls the rendered cart (its items, or the empty-cart message) to the top
+# of the window.
+_CART_SCROLL_JS = ("(function(){var e=document.querySelector('.wc-block-cart-items,"
+                   ".wc-block-cart__empty-cart__title,form.woocommerce-cart-form,.cart-empty,"
+                   ".wp-block-woocommerce-cart');if(e){e.scrollIntoView({block:'start'});"
+                   "window.scrollBy(0,-20);}return true;})()")
 
 
 # The HTTP status, title and URL of the page a window is on (status 0: no
@@ -1673,7 +1685,12 @@ class PoolTestPage(QWidget):
                            "Every window opens its cart")
             # The block cart renders from the Store API after the page has
             # loaded: a fixed 2.5 s wait still screenshotted bare "Cart" pages.
-            self._wait_for_render(_CART_RENDERED_JS, 10000)
+            self._wait_for_render(_CART_RENDERED_JS, 20000)
+            # The cart sits below the storefront header (~1200 px down): bring
+            # it into the window, or the screenshot shows only the heading.
+            for w in range(len(self.browsers)):
+                self._run_js(w, _CART_SCROLL_JS, 2000)
+            self._spin(500)
             decisions = self._settled_decisions(need_sessions=True)
             results.append(StepResult(
                 "Every window opens its cart",
