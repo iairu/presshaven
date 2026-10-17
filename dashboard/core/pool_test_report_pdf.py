@@ -330,12 +330,22 @@ def _cleared_html(data: PoolTestData) -> str:
 def _runs_html(data: PoolTestData) -> str:
     if not data.runs:
         return ""
+    # Runs are logged in the order they happened (the delayed windows attack
+    # later, so J could come before I); list them per round, by window. A
+    # replacement belongs to the round of the pattern it replaced.
+    rounds: dict[str, int] = {}
+    ordered = []
+    for i, r in enumerate(data.runs):
+        if not r.replaced:
+            rounds[r.window] = rounds.get(r.window, 0) + 1
+        ordered.append((max(1, rounds.get(r.window, 1)), r.window, i, r))
+    ordered.sort(key=lambda x: (x[0], x[1], x[2]))
     rows = []
-    for r in data.runs:
+    for rnd, _w, _i, r in ordered:
         result = (_badge(f"diverted after {r.attempts}", _GREEN) if r.diverted
                   else _badge(f"not diverted in {r.attempts}", _RED))
         note = " (replacement)" if r.replaced else ""
-        rows.append(f'<tr><td><b>{_esc(r.window)}</b></td><td>{_esc(r.cve)}{note}</td>'
+        rows.append(f'<tr><td>{rnd}</td><td><b>{_esc(r.window)}</b></td><td>{_esc(r.cve)}{note}</td>'
                     f'<td>{_esc(r.name)}</td><td>{result}</td>'
                     f'<td>{_esc("pool " + str(r.pool) if r.pool is not None else "none")}</td></tr>')
     return ('<h2 style="color:#222;">Patterns run per window</h2>'
@@ -343,8 +353,9 @@ def _runs_html(data: PoolTestData) -> str:
             'a live probe showed divert within three attempts. If a chosen pattern still did '
             'not divert in three attempts, the next candidate is used instead.</p>'
             '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Pattern</th>'
-            '<th>Name</th><th>Routing</th><th>Pool</th></tr>' + "".join(rows) + '</table>')
+            'style="border-collapse:collapse; color:#333;"><thead><tr><th>Round</th><th>Window</th>'
+            '<th>Pattern</th><th>Name</th><th>Routing</th><th>Pool</th></tr></thead>'
+            + "".join(rows) + '</table>')
 
 
 def pool_owner_letters(data: PoolTestData, summ: ScalingSummary | None = None) -> dict[int, str]:
