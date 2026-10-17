@@ -67,9 +67,21 @@ _KIBANA_LEVEL_RE = re.compile(r"^\[[^\]]+\]\[\s*([A-Z]+)\s*\]\[")
 _KIBANA_QUIET_LEVELS = {"TRACE", "DEBUG", "INFO"}
 
 
+# nginx / OpenResty error-log format: "2026/10/17 10:22:23 [info] 9#9: *29
+# ...". Same reasoning as Kibana's: the declared level is trusted when it is
+# a quiet one. The proxy's health_check.lua logs "[PREWARM] Pre-warming
+# complete for ...: 20 successful, 0 failed" at [info], and the "failed" in
+# "0 failed" raised a red badge and a start-report warning for every pass.
+_NGINX_LEVEL_RE = re.compile(r"^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d \[([a-z]+)\] ")
+_NGINX_QUIET_LEVELS = {"debug", "info", "notice"}
+
+
 def _message_is_error(message: str) -> bool:
     kibana_level = _KIBANA_LEVEL_RE.match(message)
     if kibana_level and kibana_level.group(1) in _KIBANA_QUIET_LEVELS:
+        return False
+    nginx_level = _NGINX_LEVEL_RE.match(message)
+    if nginx_level and nginx_level.group(1) in _NGINX_QUIET_LEVELS:
         return False
     return bool(_ERROR_RE.search(message))
 

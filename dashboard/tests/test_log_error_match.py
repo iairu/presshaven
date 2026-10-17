@@ -56,6 +56,16 @@ class ErrorWordTests(unittest.TestCase):
             "kibana  | [2026-08-13T16:49:29.727+00:00][WARN ][plugins.x] request failed",
         )
 
+    def test_nginx_quiet_level_is_trusted(self):
+        self.assertQuiet(
+            "reverse_proxy-1  | 2026/10/17 10:22:23 [info] 9#9: *29 [lua] health_check.lua:232: "
+            "prewarm_backend_connections(): [PREWARM] Pre-warming complete: 20 successful, 0 failed",
+        )
+        self.assertFlags(
+            "reverse_proxy-1  | 2026/10/17 10:22:23 [error] 9#9: *29 connect() failed (111)",
+            "reverse_proxy-1  | 2026/10/17 10:22:23 [warn] 9#9: upstream failed",
+        )
+
     def test_ansi_codes_and_prefix_are_stripped(self):
         self.assertFlags("\x1b[36mreverse_proxy-1  |\x1b[0m auth failed")
         # The service name itself is not part of the message.
