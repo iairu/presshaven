@@ -7,7 +7,7 @@ statistic it qualifies.
 
 What the reports use:
 
-  * ``wilson``      -- a rate k/n (e.g. "12 of 12 exploits diverted") with a
+  * ``wilson``      -- a rate k/n (e.g. "12 of 12 patterns diverted") with a
                        95% Wilson score interval. Unlike the textbook
                        p +/- 1.96*sqrt(p(1-p)/n) it stays inside 0..100% and is
                        sensible for small n and for 0% / 100%.

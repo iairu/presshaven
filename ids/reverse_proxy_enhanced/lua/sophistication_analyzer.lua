@@ -1,4 +1,4 @@
--- sophistication_analyzer.lua - Attacker sophistication classifier
+-- sophistication_analyzer.lua - User sophistication classifier
 --
 -- PURPOSE:
 --   Heuristically classifies the traffic in a session as originating from a
@@ -7,13 +7,13 @@
 --   style tool loops, or an LLM copilot used interactively by a human).
 --
 --   This is intentionally NOT a machine-learning classifier. Consistent
---   with the rest of the threat-scoring pipeline (see threat_analyzer.lua
+--   with the rest of the risk-scoring pipeline (see pattern_analyzer.lua
 --   and COUNTERARGUMENTS.md Q7 on the deliberate choice of explainable
 --   rule-based detection over black-box ML), it is a deterministic, fully
 --   inspectable weighted rule set over signals that are cheap to compute
 --   from data already collected during routing: inter-request timing,
 --   headers, User-Agent, and the CVE/pattern precision already produced by
---   threat_analyzer.analyze_request(). Every contributing signal is
+--   pattern_analyzer.analyze_request(). Every contributing signal is
 --   returned in the `signals` list so the classification is auditable in
 --   session/ELK logs, not just a bare label.
 --
@@ -34,8 +34,8 @@
 -- }
 --
 -- CALLER CONTRACT:
---   Called from nginx.conf's access_by_lua_block, after threat_analyzer and
---   router have both run, so the current request's threat_result and the
+--   Called from nginx.conf's access_by_lua_block, after pattern_analyzer and
+--   router have both run, so the current request's pattern_result and the
 --   routing decision are available. Pure computation, no I/O — safe to run
 --   on every non-static request without a meaningful latency impact.
 
@@ -45,7 +45,7 @@ local MIN_SAMPLES_FOR_TIMING = 3
 local MAX_TIMING_SAMPLES = 15
 
 -- Known automated tool / scanner UA fragments. Kept as a separate list from
--- threat_analyzer's malicious_uas so this module can be tuned independently;
+-- pattern_analyzer's flagged_uas so this module can be tuned independently;
 -- overlap between the two lists is intentional and expected.
 local SCRIPTED_UA_FRAGMENTS = {
     "sqlmap", "nmap", "masscan", "zap", "acunetix", "nikto", "dirb",
@@ -221,18 +221,18 @@ local function score_headers(headers)
     return scores, note
 end
 
---- Score payload precision using the current request's threat_result. A
+--- Score payload precision using the current request's pattern_result. A
 --- request that racks up many distinct low-value pattern hits (spray-and-
 --- pray) reads as scripted; a request that hits few, precise, high-value
 --- signals (a CVE-specific match with minimal noise) reads as targeted,
 --- deliberate exploitation, more typical of a manual operator or an AI
 --- agent executing a specific, reasoned plan.
-local function score_precision(threat_result)
+local function score_precision(pattern_result)
     local scores = { scripted = 0, ai_assisted = 0, manual = 0 }
-    if not threat_result then return scores, nil end
+    if not pattern_result then return scores, nil end
 
-    local pattern_count = threat_result.patterns_matched and #threat_result.patterns_matched or 0
-    local cve_count = threat_result.cve_matched and #threat_result.cve_matched or 0
+    local pattern_count = pattern_result.patterns_matched and #pattern_result.patterns_matched or 0
+    local cve_count = pattern_result.cve_matched and #pattern_result.cve_matched or 0
 
     local note
     if pattern_count >= 6 then
@@ -252,19 +252,19 @@ local function score_precision(threat_result)
 end
 
 -- ---------------------------------------------------------------------------
--- classify_session(session_data, threat_result, headers)
+-- classify_session(session_data, pattern_result, headers)
 --
 -- @param session_data  table  Current session (must have at least
 --                              .user_agent and .last_activity to produce
 --                              useful signals; degrades gracefully without).
--- @param threat_result table  Output of threat_analyzer.analyze_request()
+-- @param pattern_result table  Output of pattern_analyzer.analyze_request()
 --                              for the current request.
 -- @param headers       table  ngx.req.get_headers() result for the current
 --                              request (caller-supplied to avoid a second
 --                              fetch of the same table).
 -- @return table  See module header for the output shape.
 -- ---------------------------------------------------------------------------
-function _M.classify_session(session_data, threat_result, headers)
+function _M.classify_session(session_data, pattern_result, headers)
     session_data = session_data or {}
 
     local totals = { scripted = 0, ai_assisted = 0, manual = 0 }
@@ -274,7 +274,7 @@ function _M.classify_session(session_data, threat_result, headers)
     local timing_scores, timing_note = score_timing(timing_samples)
     local ua_scores, ua_note = score_user_agent(session_data.user_agent or "")
     local header_scores, header_note = score_headers(headers)
-    local precision_scores, precision_note = score_precision(threat_result)
+    local precision_scores, precision_note = score_precision(pattern_result)
 
     for _, part in ipairs({ timing_scores, ua_scores, header_scores, precision_scores }) do
         totals.scripted = totals.scripted + part.scripted
@@ -299,7 +299,7 @@ function _M.classify_session(session_data, threat_result, headers)
     -- low-confidence guess — an academically honest failure mode for the
     -- thesis dataset, and consistent with the rest of the pipeline's
     -- preference for explainable, conservative thresholds over forced
-    -- decisions (see threat_analyzer.lua's honeypot_threshold rationale).
+    -- decisions (see pattern_analyzer.lua's honeypot_threshold rationale).
     local ranked = {
         { key = "scripted", score = totals.scripted },
         { key = "ai_assisted", score = totals.ai_assisted },

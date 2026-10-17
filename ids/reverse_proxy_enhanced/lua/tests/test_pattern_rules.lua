@@ -1,14 +1,14 @@
--- test_threat_rules.lua - Standalone unit tests
+-- test_pattern_rules.lua - Standalone unit tests
 --
 -- Runs under a plain `lua` interpreter (no OpenResty/ngx required), since
--- threat_rules.lua has no ngx.* or _G.* dependency by design.
+-- pattern_rules.lua has no ngx.* or _G.* dependency by design.
 --
 -- Usage:
 --   cd ids/reverse_proxy_enhanced/lua/tests
---   lua test_threat_rules.lua
+--   lua test_pattern_rules.lua
 
 package.path = "../?.lua;" .. package.path
-local rules = require "threat_rules"
+local rules = require "pattern_rules"
 
 local passed, failed = 0, 0
 

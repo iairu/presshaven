@@ -1,17 +1,17 @@
-"""Exploit test-scenario -> PDF report generator for the Attack Simulation page.
+"""Pattern test-scenario -> PDF report generator for the Attack Simulation page.
 
-Runs a fixed battery of exploit scenarios against the live reverse_proxy and
-captures each one's real threat output (HTTP status, threat score, routing
-decision, and the threat-analyzer's per-signal +N breakdown), plus an
-embedded-browser screenshot of the page each exploit actually landed on, and
+Runs a fixed battery of pattern scenarios against the live reverse_proxy and
+captures each one's real threat output (HTTP status, risk score, routing
+decision, and the pattern-analyzer's per-signal +N breakdown), plus an
+embedded-browser screenshot of the page each pattern actually landed on, and
 renders it all to a single PDF.
 
 SCENARIOS (in report order):
-  1. One section PER preset (core/exploits.EXPLOIT_PRESETS, or the Exploits
+  1. One section PER preset (core/patterns.PATTERN_PRESETS, or the Patterns
      page's category selection when it passes one): reset threat
-     state, run the exploit via curl, screenshot the browser at that URL.
+     state, run the pattern via curl, screenshot the browser at that URL.
      Each starts from a clean slate so the reported score is that CVE's own
-     isolated score, not one inflated by the previous exploits.
+     isolated score, not one inflated by the previous patterns.
   2. "Threat increase": reset ONCE, then run two semi-random presets
      alternately for THREE rounds (six requests) with NO reset in between,
      so the per-request score visibly ratchets up toward the honeypot
@@ -34,7 +34,7 @@ this file / nginx.conf's /internal-threat-reset location):
   in-process, instantly. Both together give a verified score-0 baseline.
 
 THE SECRET: the same INTERNAL_TEST_SECRET this project already uses to gate
-reverse_proxy's X-Route-Target / X-Threat-Score debug response headers (see
+reverse_proxy's X-Route-Target / X-Risk-Score debug response headers (see
 nginx.conf / lua/init.lua). This report reads those headers straight off the
 curl response rather than scraping logs for the score, so "what the report
 says the score was" is exactly what the proxy put on the wire.
@@ -55,8 +55,8 @@ from urllib.parse import unquote
 # parsed [FINAL DECISION] event's detail ("Score: 45/80 | Reason: cve_pattern_match").
 _REASON_RE = re.compile(r"Reason:\s*([A-Za-z_][A-Za-z0-9_]*)")
 _THRESHOLD_RE = re.compile(r"Score:\s*-?\d+\s*/\s*(\d+)")
-# threat_analyzer.lua's "FINAL SCORE: 35/80 (...)": this request's own score,
-# before it is added to the attacker's accumulated score that routing uses.
+# pattern_analyzer.lua's "FINAL SCORE: 35/80 (...)": this request's own score,
+# before it is added to the user's accumulated score that routing uses.
 # nginx's "<pid>#<tid>: *<connection>" prefix: ties a request's log lines together.
 _CONN_RE = re.compile(r"\b(\d+#\d+: \*\d+) ")
 # Tarpit hold logged by older proxies (router.lua's apply_botnet_slowdown(),
@@ -71,16 +71,16 @@ from core import honeypot_layer, redis_inspect
 from core import resource_stats as rs
 from core.docker_ctl import Target
 from core.env_upload import EnvUploadError, load_project_env
-from core.exploits import EXPLOIT_PRESETS, ExploitPreset
-from core.threat_log_parser import parse_line
+from core.patterns import PATTERN_PRESETS, PatternPreset
+from core.pattern_log_parser import parse_line
 
 # Default when SCORE_DECAY_HALF_LIFE_SECONDS is unset in .env -- matches
 # lua/init.lua's own `... or 300` fallback.
 DEFAULT_HALF_LIFE_SECONDS = 300
 
-# How long to record per-container resource usage after each exploit, for the
+# How long to record per-container resource usage after each pattern, for the
 # PDF's CPU/memory/log graphs, and how long to record a baseline BEFORE it (so
-# the graphs show the pre-exploit level the exploit's spike stands out from).
+# the graphs show the pre-pattern level the pattern's spike stands out from).
 RESOURCE_CAPTURE_SECONDS = 15.0
 RESOURCE_PRE_SECONDS = 2.0
 # Refresh the (slower) log-size sweep at most this often during that capture;
@@ -91,12 +91,12 @@ _RESOURCE_LOG_REFRESH_SECONDS = 6.0
 # (local host): sub-second, for a much denser, more useful usage curve than the
 # ~2s cadence `docker stats` forces.
 RESOURCE_SAMPLE_INTERVAL = 0.25
-# Background work (see ExploitOutcome.background) is marked on the resource
+# Background work (see PatternOutcome.background) is marked on the resource
 # graphs only when its container's CPU reached this (percent) right after it.
 BACKGROUND_MIN_CPU = 10.0
-# Before each exploit, wait (at most QUIET_MAX_WAIT_S) for a moment when no
-# heavy background job is due from RESOURCE_PRE_SECONDS before the exploit
-# to QUIET_AFTER_S after it, so the exploit's own spike isn't buried under
+# Before each pattern, wait (at most QUIET_MAX_WAIT_S) for a moment when no
+# heavy background job is due from RESOURCE_PRE_SECONDS before the pattern
+# to QUIET_AFTER_S after it, so the pattern's own spike isn't buried under
 # an eshop health check or proxy probe landing at the same time.
 QUIET_AFTER_S = 4.0
 # How long the SIEM (Vector -> Elasticsearch) may take to index a request.
@@ -110,18 +110,18 @@ _PROXY_PROBES = {"HEAD /robots.txt": 15.0, "GET /wp-admin/install.php": 30.0}
 
 
 @dataclass
-class ExploitOutcome:
-    """One curl exploit run's measured threat output."""
+class PatternOutcome:
+    """One curl pattern run's measured threat output."""
     label: str
     cve: str
     severity: str
     method: str
     path: str
     http_status: str = ""
-    score: int | None = None          # X-Threat-Score response header
+    score: int | None = None          # X-Risk-Score response header
     route: str = ""                    # X-Route-Target response header ("honeypot"/"production")
     signals: list[str] = field(default_factory=list)  # "URI pattern (+25)" style breakdown
-    verdict: str = ""                  # threat-analyzer's own FINAL SCORE verdict text
+    verdict: str = ""                  # pattern-analyzer's own FINAL SCORE verdict text
     analyzer_score: str = ""           # ...and its score, e.g. "35/80" (this request alone)
     tarpit_s: float = 0.0              # proxy's tarpit hold before the eshop got it
     reason: str = ""                   # router.lua's routing reason (e.g. "cve_pattern_match")
@@ -135,14 +135,14 @@ class ExploitOutcome:
     # the reverse proxy layer's separate honeypot eshops isolate every preset.
     db_isolated: bool = True
     coverage_note: str = ""
-    # ~15s of per-container resource samples captured right after the exploit,
+    # ~15s of per-container resource samples captured right after the pattern,
     # for the PDF's CPU/memory/log graphs. Each entry is
     # (elapsed_seconds, {service: (cpu_percent, mem_bytes, log_bytes)}).
     resource_samples: list = field(default_factory=list)
     # How resource_samples were read: cgroup files (dense, local host) or
     # `docker stats` (~2s per sample), and why, for the PDF's caption.
     resource_source: str = ""
-    # ---- test categorization (see core/exploits.ExploitPreset) ----
+    # ---- test categorization (see core/patterns.PatternPreset) ----
     kind: str = "cve"
     component: str = "plugin"
     plugin: str = ""
@@ -160,14 +160,14 @@ class ExploitOutcome:
     # The request paths of that series, to tell its requests apart from
     # background ones in the eshops' access logs.
     request_paths: list[str] = field(default_factory=list)
-    # Work that ran during the capture without being part of the exploit and
-    # visibly moved its container's CPU, as (seconds relative to the exploit,
+    # Work that ran during the capture without being part of the pattern and
+    # visibly moved its container's CPU, as (seconds relative to the pattern,
     # service, what): Docker health checks (each eshop's fetches its whole
     # homepage every 30s, the databases' ping every 10s), the reverse proxy's
     # own backend probes, and WordPress cron. Marked on the resource graphs:
-    # their spikes are often as big as the exploit's own.
+    # their spikes are often as big as the pattern's own.
     background: list = field(default_factory=list)
-    # The eshop container(s) whose access log shows the exploit's own requests
+    # The eshop container(s) whose access log shows the pattern's own requests
     # (production, or the honeypot pool it was diverted to); their lines are
     # drawn bold on the resource graphs.
     served_by: list[str] = field(default_factory=list)
@@ -176,7 +176,7 @@ class ExploitOutcome:
     served_per_request: list[str] = field(default_factory=list)
     # When the first request was sent (epoch), and a Kibana screenshot of
     # the requests the proxy logged around it (core/kibana_timeline.py).
-    exploit_epoch: float = 0.0
+    pattern_epoch: float = 0.0
     kibana_timeline_path: str = ""
     # Per request of the series, in order: what the proxy decided for it, as
     # {"route", "score", "reason", "verdict"}. The top-level score/route/
@@ -205,19 +205,19 @@ class ReportData:
     # core.honeypot_layer id the edge stack ran while the report was measured.
     honeypot_layer: str = honeypot_layer.DEFAULT_LAYER
     # The Attack Simulation page's test-category selection the report was run for
-    # (core.exploits.selection_label), and how many presets it covered.
+    # (core.patterns.selection_label), and how many presets it covered.
     selection: str = ""
     selected_count: int = 0
     total_count: int = 0
 
-    per_exploit: list[ExploitOutcome] = field(default_factory=list)
+    per_pattern: list[PatternOutcome] = field(default_factory=list)
 
     increase_cves: list[str] = field(default_factory=list)
-    increase_steps: list[ExploitOutcome] = field(default_factory=list)
+    increase_steps: list[PatternOutcome] = field(default_factory=list)
 
     decay_peak: int = 0
     decay_samples: list[DecaySample] = field(default_factory=list)
-    # The moderate exploit used to seed a decayable peak after un-poisoning the
+    # The moderate pattern used to seed a decayable peak after un-poisoning the
     # host IP (see ReportWorker.run) -- surfaced in the PDF so the decay curve's
     # starting value is explained.
     decay_seed_cve: str = ""
@@ -279,7 +279,7 @@ def _quiet_delay(now: float, periodic: list, pre: float, after: float,
                  max_wait: float, step: float = 0.25) -> float:
     """Seconds to wait before starting a capture so that no event of any
     ``(last_epoch, period_s)`` series falls between ``pre`` (+0.5) seconds
-    before the exploit and ``after`` seconds after it. The exploit fires
+    before the pattern and ``after`` seconds after it. The pattern fires
     ``pre`` seconds after the capture starts. 0 when nothing is due or no
     quiet moment exists within ``max_wait``."""
     def due(lo: float, hi: float) -> bool:
@@ -300,25 +300,25 @@ def _quiet_delay(now: float, periodic: list, pre: float, after: float,
     return 0.0
 
 
-def _request_detail(o: "ExploitOutcome") -> dict:
-    """What the proxy decided for one request (see ExploitOutcome.request_details)."""
+def _request_detail(o: "PatternOutcome") -> dict:
+    """What the proxy decided for one request (see PatternOutcome.request_details)."""
     return {"route": o.route or "?", "score": o.score, "reason": o.reason,
             "verdict": o.verdict, "analyzer_score": o.analyzer_score,
             "tarpit_s": o.tarpit_s, "error": o.error}
 
 
-def _served_per_request(eshop_requests: list, exploit_paths: list,
+def _served_per_request(eshop_requests: list, pattern_paths: list,
                         request_times: list) -> list:
     """The eshop service that logged each request of the series, in order
     (``""`` when none did). ``eshop_requests`` is ``(epoch, service,
-    "METHOD /target")``; ``exploit_paths`` and ``request_times`` (epoch) are
+    "METHOD /target")``; ``pattern_paths`` and ``request_times`` (epoch) are
     the series' paths and send times. A series often repeats one path, so each
     request takes the first not yet claimed log line for its path written at
     or after it was sent (access-log lines are written when the response
     finishes)."""
     used: set[int] = set()
     out: list[str] = []
-    for path, sent in zip(exploit_paths, request_times):
+    for path, sent in zip(pattern_paths, request_times):
         own = {path, unquote(path)}
         svc = ""
         for i, (t, s, req) in enumerate(eshop_requests):
@@ -333,10 +333,10 @@ def _served_per_request(eshop_requests: list, exploit_paths: list,
     return out
 
 
-def _served_by(eshop_requests: list, exploit_paths: list) -> list:
+def _served_by(eshop_requests: list, pattern_paths: list) -> list:
     """Services whose access log (``(epoch, service, "METHOD /target")``)
-    contains one of ``exploit_paths``, in order of first appearance."""
-    own = set(exploit_paths) | {unquote(p) for p in exploit_paths}
+    contains one of ``pattern_paths``, in order of first appearance."""
+    own = set(pattern_paths) | {unquote(p) for p in pattern_paths}
     out: list[str] = []
     for _t, svc, req in eshop_requests:
         target = req.split(" ", 1)[-1]
@@ -346,17 +346,17 @@ def _served_by(eshop_requests: list, exploit_paths: list) -> list:
 
 
 def _background_events(health_checks: list, eshop_requests: list,
-                       exploit_paths: list, exploit_t: float, samples: list) -> list:
+                       pattern_paths: list, pattern_t: float, samples: list) -> list:
     """Merge Docker health checks (``(epoch, service)``) and eshop access-log
     requests (``(epoch, service, "METHOD /target")``) that are NOT the
-    exploit's own (``exploit_paths``) into ``(seconds_relative_to_exploit,
+    pattern's own (``pattern_paths``) into ``(seconds_relative_to_pattern,
     service, what)``, keeping only those inside the capture window that pushed
     their container's CPU to at least BACKGROUND_MIN_CPU within the next
     couple of seconds -- the rest left no visible spike and would only clutter
     the graph."""
     if not samples:
         return []
-    own = set(exploit_paths) | {unquote(p) for p in exploit_paths}
+    own = set(pattern_paths) | {unquote(p) for p in pattern_paths}
     events = [(t, svc, "Docker health check") for t, svc in health_checks]
     for t, svc, req in eshop_requests:
         target = req.split(" ", 1)[-1]
@@ -365,7 +365,7 @@ def _background_events(health_checks: list, eshop_requests: list,
     t_lo, t_hi = samples[0][0], samples[-1][0]
     out = []
     for abs_t, svc, what in sorted(events):
-        t = round(abs_t - exploit_t, 2)
+        t = round(abs_t - pattern_t, 2)
         if not t_lo <= t <= t_hi:
             continue
         peak = max((snap[svc][0] for st, snap in samples
@@ -390,10 +390,10 @@ class ReportWorker(QThread):
 
     def __init__(self, target: Target, base_url: str, decay_window_s: int = 120,
                  decay_samples: int = 7, increase_rounds: int = 3, parent=None,
-                 presets: list[ExploitPreset] | None = None, selection: str = ""):
+                 presets: list[PatternPreset] | None = None, selection: str = ""):
         super().__init__(parent)
         # The presets to report on (the page's category selection); all by default.
-        self._presets = list(presets) if presets else list(EXPLOIT_PRESETS)
+        self._presets = list(presets) if presets else list(PATTERN_PRESETS)
         self._selection = selection
         self._target = target
         self._base_url = base_url.rstrip("/")
@@ -439,36 +439,36 @@ class ReportWorker(QThread):
                 honeypot_layer=honeypot_layer.active().id,
                 selection=self._selection,
                 selected_count=len(self._presets),
-                total_count=len(EXPLOIT_PRESETS),
+                total_count=len(PATTERN_PRESETS),
             )
             # Progress is reported as a fraction of the whole export on a fixed
             # 0..1000 (per-mille) scale, so the bar advances smoothly WITHIN each
-            # phase (notably the ~17s resource capture per exploit and the decay
+            # phase (notably the ~17s resource capture per pattern and the decay
             # sampling) instead of jumping a whole step and then sitting still.
             # The three phases get weighted slices of that range.
             #
-            # NOTE ON ORDER: threat decay is MEASURED FIRST, before any exploit
+            # NOTE ON ORDER: threat decay is MEASURED FIRST, before any pattern
             # flags the host IP, even though the PDF presents it last. The
             # effective score a request sees folds in the IP's reputation
-            # (threat_analyzer adds check_ip_reputation()), and that reputation
+            # (pattern_analyzer adds check_ip_reputation()), and that reputation
             # is continuously re-imported from Suricata's alert log by a
-            # background worker -- so once the per-exploit / increase scenarios
+            # background worker -- so once the per-pattern / increase scenarios
             # have hammered the IP, every "benign" decay probe keeps picking that
             # reputation back up, re-accumulates, resets the decay clock and pins
             # the score at 100 no matter how thoroughly Redis is flushed. Running
             # decay on a still-clean IP is the only way the session score is
             # actually free to fade.
-            n_exploits = len(self._presets)
+            n_patterns = len(self._presets)
             DECAY_END = 0.22      # measured first, on a clean IP (see note above)
-            EXPLOIT_END = 0.88    # per-exploit sections: the bulk (N x ~17s capture)
-            # increase fills EXPLOIT_END..1.0
+            PATTERN_END = 0.88    # per-pattern sections: the bulk (N x ~17s capture)
+            # increase fills PATTERN_END..1.0
 
             # --- threat decay (measured FIRST, presented last) ---
-            # Un-poison the host IP, then seed a single simple exploit whose
+            # Un-poison the host IP, then seed a single simple pattern whose
             # score lands below the permaflag ceiling, and sample the effective
             # score fading over the window. _seed_decay_peak does the un-poison
             # (and re-tries seeds until one is actually decayable).
-            self._emit(0.0, "Threat decay: un-poisoning host IP + seeding a decayable exploit")
+            self._emit(0.0, "Threat decay: un-poisoning host IP + seeding a decayable pattern")
             _seed_outcome, decay_preset = self._seed_decay_peak(secret)
             data.decay_seed_cve = (f"{decay_preset.cve} ({decay_preset.name})"
                                    if decay_preset else "")
@@ -481,14 +481,14 @@ class ReportWorker(QThread):
                     f"Threat decay: sample {i}/{n}"))
             data.decay_peak = data.decay_samples[0].score if data.decay_samples else 0
 
-            # --- per-exploit sections (reset before each) ---
-            span = EXPLOIT_END - DECAY_END
+            # --- per-pattern sections (reset before each) ---
+            span = PATTERN_END - DECAY_END
             for idx, preset in enumerate(self._presets):
                 if self._cancel:
                     return
-                slice_w = span / n_exploits
+                slice_w = span / n_patterns
                 base = DECAY_END + idx * slice_w
-                self._emit(base, f"Exploit {preset.cve} -- {preset.name}")
+                self._emit(base, f"Pattern {preset.cve} -- {preset.name}")
                 self._reset(secret)
                 cap_msg = (f"Recording resource usage around {preset.cve} "
                            f"(-{int(RESOURCE_PRE_SECONDS)}s to +{int(RESOURCE_CAPTURE_SECONDS)}s)")
@@ -501,19 +501,19 @@ class ReportWorker(QThread):
                 outcome.resource_source = self._resource_source
                 self._emit(base + 0.90 * slice_w, f"Screenshot of {preset.cve}")
                 outcome.screenshot_path = self._grab_screenshot(
-                    self._base_url + preset.path, f"exploit-{preset.cve}")
+                    self._base_url + preset.path, f"pattern-{preset.cve}")
                 self._emit(base + 0.95 * slice_w, f"Kibana request timeline of {preset.cve}")
                 outcome.kibana_timeline_path = self._grab_kibana_timeline(
-                    outcome.exploit_epoch, f"kibana-{preset.cve}")
-                data.per_exploit.append(outcome)
+                    outcome.pattern_epoch, f"kibana-{preset.cve}")
+                data.per_pattern.append(outcome)
 
             # --- threat increase (reset once, then accumulate) ---
             if self._cancel:
                 return
-            self._emit(EXPLOIT_END, "Threat increase (2 semi-random exploits x 3 rounds)")
+            self._emit(PATTERN_END, "Threat increase (2 semi-random patterns x 3 rounds)")
             self._reset(secret)
-            # From the selection when it has two exploits, else from all of them.
-            pool = self._presets if len(self._presets) >= 2 else EXPLOIT_PRESETS
+            # From the selection when it has two patterns, else from all of them.
+            pool = self._presets if len(self._presets) >= 2 else PATTERN_PRESETS
             pair = random.sample(pool, 2)
             data.increase_cves = [f"{p.cve} ({p.name})" for p in pair]
             total_reqs = self._increase_rounds * 2
@@ -522,13 +522,13 @@ class ReportWorker(QThread):
                 for p in pair:
                     if self._cancel:
                         return
-                    outcome = self._run_exploit(p, secret)
+                    outcome = self._run_pattern(p, secret)
                     outcome.label = f"Round {rnd}: {p.name}"
                     outcome.screenshot_path = self._grab_screenshot(
                         self._base_url + p.path, f"increase-r{rnd}-{p.cve}")
                     data.increase_steps.append(outcome)
                     done += 1
-                    self._emit(EXPLOIT_END + (done / total_reqs) * (1.0 - EXPLOIT_END),
+                    self._emit(PATTERN_END + (done / total_reqs) * (1.0 - PATTERN_END),
                                f"Threat increase: request {done}/{total_reqs}")
 
             self._emit(0.99, "Reading honeypot pool state")
@@ -580,7 +580,7 @@ class ReportWorker(QThread):
     _DECAY_SEED_MAX = 85
 
     def _seed_decay_peak(self, secret: str):
-        """Un-poison the host IP and seed a SIMPLE exploit that lands a DECAYABLE
+        """Un-poison the host IP and seed a SIMPLE pattern that lands a DECAYABLE
         peak, returning (outcome, preset).
 
         A maxing score permaflags and never decays -- e.g. author enumeration
@@ -591,7 +591,7 @@ class ReportWorker(QThread):
         winning attempt is the state the decay sampling then measures."""
         # Prefer seeds from the selection, then the rest: the seed only has to
         # land a decayable score, so any CVE preset will do.
-        ordered = self._presets + [p for p in EXPLOIT_PRESETS if p not in self._presets]
+        ordered = self._presets + [p for p in PATTERN_PRESETS if p not in self._presets]
         candidates = [p for p in ordered if p.cve.upper().startswith("CVE-")][:8]
         if not candidates:
             candidates = ordered[:1]
@@ -601,7 +601,7 @@ class ReportWorker(QThread):
             if self._cancel:
                 break
             self._unpoison(secret)
-            outcome = self._run_exploit(preset, secret)
+            outcome = self._run_pattern(preset, secret)
             chosen = preset
             if outcome.score is not None and self._DECAY_SEED_MIN <= outcome.score <= self._DECAY_SEED_MAX:
                 break
@@ -647,16 +647,16 @@ class ReportWorker(QThread):
         except (subprocess.TimeoutExpired, OSError):
             pass
 
-    def _run_series(self, preset: ExploitPreset, secret: str) -> ExploitOutcome:
-        """Send the preset's request series (core.exploits.ExploitPreset.requests)
+    def _run_series(self, preset: PatternPreset, secret: str) -> PatternOutcome:
+        """Send the preset's request series (core.patterns.PatternPreset.requests)
         WITHOUT resetting between requests, and record on which request the
-        attacker was first diverted to the honeypot. The outcome shown for the
+        user was first diverted to the honeypot. The outcome shown for the
         preset is the first request's; later requests only add to
         route_sequence/detected_at."""
         paths = preset.requests()
         times = [time.time()]
         sent = [preset.path]
-        outcome = self._run_exploit(preset, secret)
+        outcome = self._run_pattern(preset, secret)
         routes = [outcome.route or "?"]
         details = [_request_detail(outcome)]
         if outcome.route.lower() == "honeypot":
@@ -667,7 +667,7 @@ class ReportWorker(QThread):
                     break
                 times.append(time.time())
                 sent.append(path)
-                nxt = self._run_exploit(preset, secret, path=path)
+                nxt = self._run_pattern(preset, secret, path=path)
                 routes.append(nxt.route or "?")
                 details.append(_request_detail(nxt))
                 if nxt.route.lower() == "honeypot":
@@ -680,8 +680,8 @@ class ReportWorker(QThread):
         outcome.request_paths = sent
         return outcome
 
-    def _run_exploit(self, preset: ExploitPreset, secret: str, path: str | None = None) -> ExploitOutcome:
-        outcome = ExploitOutcome(
+    def _run_pattern(self, preset: PatternPreset, secret: str, path: str | None = None) -> PatternOutcome:
+        outcome = PatternOutcome(
             label=preset.name, cve=preset.cve, severity=preset.severity,
             method=preset.method, path=path or preset.path,
             kind=preset.kind, component=preset.component, plugin=preset.plugin,
@@ -712,7 +712,7 @@ class ReportWorker(QThread):
         return outcome
 
     @staticmethod
-    def _fill_from_headers(outcome: ExploitOutcome, raw: str) -> None:
+    def _fill_from_headers(outcome: PatternOutcome, raw: str) -> None:
         # -i output: status line + response headers (HTTP/2 header names are
         # lowercase) then a blank line then the body. We only need the head.
         head = raw.split("\r\n\r\n", 1)[0].split("\n\n", 1)[0]
@@ -720,7 +720,7 @@ class ReportWorker(QThread):
             low = line.lower()
             if line.upper().startswith("HTTP/") and not outcome.http_status:
                 outcome.http_status = line.strip()
-            elif low.startswith("x-threat-score:"):
+            elif low.startswith("x-risk-score:"):
                 try:
                     outcome.score = int(line.split(":", 1)[1].strip())
                 except ValueError:
@@ -728,7 +728,7 @@ class ReportWorker(QThread):
             elif low.startswith("x-route-target:"):
                 outcome.route = line.split(":", 1)[1].strip()
 
-    def _fill_from_logs(self, outcome: ExploitOutcome, since_ts: float) -> None:
+    def _fill_from_logs(self, outcome: PatternOutcome, since_ts: float) -> None:
         """Parse reverse_proxy logs emitted since the request for the +N
         signal breakdown and the analyzer's verdict -- best-effort context,
         never fatal to the report."""
@@ -766,15 +766,15 @@ class ReportWorker(QThread):
                 # router.lua's [FINAL DECISION] line carries the ACTUAL routing
                 # reason (e.g. "cve_pattern_match") and the honeypot_threshold.
                 # This is what explains a honeypot routing whose numeric score
-                # is below that threshold -- a CVE/exploit match diverts on its
+                # is below that threshold -- a CVE/pattern match diverts on its
                 # own, the score gate is only ONE of several routing triggers.
                 # Last match in the window wins = this request's own decision
-                # (it runs after the pre-exploit reset).
+                # (it runs after the pre-pattern reset).
                 m = _REASON_RE.search(event.detail)
                 if m:
                     outcome.reason = m.group(1)
                 # Parse the threshold off the RAW log line, not event.detail:
-                # threat_log_parser normalises the fraction's denominator to
+                # pattern_log_parser normalises the fraction's denominator to
                 # SCORE_MAX (100) for the dashboard's score badge, but here we
                 # want the ACTUAL honeypot routing threshold the proxy logged
                 # ("Score: N/80"), so the report's threshold matches reality.
@@ -789,7 +789,7 @@ class ReportWorker(QThread):
 
     def _sample_decay(self, secret: str, on_progress=None) -> list[DecaySample]:
         """Issue benign homepage requests over the decay window, reading the
-        effective score off each response's X-Threat-Score header. A clean
+        effective score off each response's X-Risk-Score header. A clean
         request doesn't move the session's last_threat_time anchor (see
         router.lua), so this observes real decay rather than resetting it.
 
@@ -831,27 +831,27 @@ class ReportWorker(QThread):
             res = subprocess.run(argv, capture_output=True, text=True, timeout=20)
         except (subprocess.TimeoutExpired, OSError):
             return None
-        tmp = ExploitOutcome(label="", cve="", severity="", method="GET", path="/")
+        tmp = PatternOutcome(label="", cve="", severity="", method="GET", path="/")
         self._fill_from_headers(tmp, res.stdout)
         return tmp.score
 
     def _capture_around(self, run_fn, on_progress=None):
         """Record per-container resource usage (CPU %, memory, log size) around
-        an exploit and return ``(outcome, samples)``.
+        a pattern and return ``(outcome, samples)``.
 
-        The capture brackets the exploit: ~RESOURCE_PRE_SECONDS of baseline
+        The capture brackets the pattern: ~RESOURCE_PRE_SECONDS of baseline
         BEFORE it fires, then RESOURCE_CAPTURE_SECONDS after, so the graphs show
-        the pre-exploit level the spike stands out from. ``run_fn`` is the
-        callable that actually fires the exploit; it runs at t=0. ``on_progress``
+        the pre-pattern level the spike stands out from. ``run_fn`` is the
+        callable that actually fires the pattern; it runs at t=0. ``on_progress``
         (if given) is called with a 0..1 fraction of the capture window so the
         caller can advance the progress bar as the ~17s capture runs.
 
         Sampling runs on its OWN thread on a fixed clock, so it keeps going
-        while run_fn fires the exploit. It used to be one loop that stopped for
+        while run_fn fires the pattern. It used to be one loop that stopped for
         the whole of run_fn (curl, then a `docker compose logs` read, for up to
         three requests) and for each log-size sweep (a `docker run`): that left
         a gap of several seconds right after t=0, and the first sample after it
-        averaged the CPU of the whole gap, so the exploit's spike was diluted
+        averaged the CPU of the whole gap, so the pattern's spike was diluted
         and drawn seconds late, or vanished. The log-size sweep is likewise on
         a thread of its own.
 
@@ -860,7 +860,7 @@ class ReportWorker(QThread):
         usage curve, falling back to `docker stats` (~2s/sample) otherwise. A
         CPU% reading is the average over the interval since the previous one,
         so it is placed at that interval's midpoint. Sample times are relative
-        to the exploit (negative before it). Returns a list of
+        to the pattern (negative before it). Returns a list of
         (elapsed_seconds, {service: (cpu_percent, mem_bytes, log_bytes)})."""
         total_window = RESOURCE_PRE_SECONDS + RESOURCE_CAPTURE_SECONDS
 
@@ -928,8 +928,8 @@ class ReportWorker(QThread):
                     log_sweeps.append(((t + time.time()) / 2, by_svc))
                 stop.wait(_RESOURCE_LOG_REFRESH_SECONDS)
 
-        # Time the exploit into a quiet gap between the stack's own timers
-        # (see QUIET_AFTER_S). Nothing is faked or paused: the exploit is
+        # Time the pattern into a quiet gap between the stack's own timers
+        # (see QUIET_AFTER_S). Nothing is faked or paused: the pattern is
         # simply sent at a moment when no health check or probe is due.
         periodic = [(end, interval) for svc, end, interval in
                     rs.health_schedule(self._target, svc_to_cid) if "eshop" in svc]
@@ -951,11 +951,11 @@ class ReportWorker(QThread):
                 _prog(time.time() - pre_start)
                 time.sleep(min(0.2, max(0.0, deadline - time.time())))
 
-        # --- pre-exploit baseline ---
+        # --- pre-pattern baseline ---
         _wait_until(pre_start + RESOURCE_PRE_SECONDS)
 
-        # --- fire the exploit (t = 0); sampling carries on meanwhile ---
-        exploit_t = time.time()
+        # --- fire the pattern (t = 0); sampling carries on meanwhile ---
+        pattern_t = time.time()
         try:
             outcome = run_fn()
         except BaseException:
@@ -963,7 +963,7 @@ class ReportWorker(QThread):
             raise
         # A request series can outlast the window: keep a few seconds after its
         # last request so that request's footprint is on the graph too.
-        _wait_until(max(exploit_t + RESOURCE_CAPTURE_SECONDS, time.time() + 3.0))
+        _wait_until(max(pattern_t + RESOURCE_CAPTURE_SECONDS, time.time() + 3.0))
         stop.set()
         for th in threads:
             th.join(timeout=25)
@@ -975,18 +975,18 @@ class ReportWorker(QThread):
             return min(log_sweeps, key=lambda sw: abs(sw[0] - t))[1]
 
         samples = [
-            (round(t - exploit_t, 2),
+            (round(t - pattern_t, 2),
              {svc: (cpu, mem, _logs_at(t).get(svc, 0)) for svc, (cpu, mem) in cm.items()})
             for t, cm in sorted(cpu_snaps, key=lambda s: s[0])
         ]
-        outcome.exploit_epoch = exploit_t
-        outcome.request_times = [round(t - exploit_t, 2) for t in outcome.request_times]
+        outcome.pattern_epoch = pattern_t
+        outcome.request_times = [round(t - pattern_t, 2) for t in outcome.request_times]
         reqs = rs.eshop_requests(self._target, svc_to_cid, pre_start - 1)
         outcome.background = _background_events(
             rs.health_check_times(self._target, svc_to_cid),
-            reqs, outcome.request_paths, exploit_t, samples)
+            reqs, outcome.request_paths, pattern_t, samples)
         outcome.served_per_request = _served_per_request(
-            reqs, outcome.request_paths, [t + exploit_t for t in outcome.request_times])
+            reqs, outcome.request_paths, [t + pattern_t for t in outcome.request_times])
         outcome.served_by = ([svc for i, svc in enumerate(outcome.served_per_request)
                               if svc and svc not in outcome.served_per_request[:i]]
                              or _served_by(reqs, outcome.request_paths))
@@ -1003,19 +1003,19 @@ class ReportWorker(QThread):
         self._shot_event.wait(timeout=20)
         return self._shot_result.get(key, "")
 
-    def _grab_kibana_timeline(self, exploit_epoch: float, key: str) -> str:
+    def _grab_kibana_timeline(self, pattern_epoch: float, key: str) -> str:
         """Ask the GUI thread for a Kibana screenshot of the requests from
-        RESOURCE_PRE_SECONDS before ``exploit_epoch`` to RESOURCE_CAPTURE_SECONDS
+        RESOURCE_PRE_SECONDS before ``pattern_epoch`` to RESOURCE_CAPTURE_SECONDS
         after it; "" when there's no Kibana or the capture failed."""
-        if self._cancel or not exploit_epoch:
+        if self._cancel or not pattern_epoch:
             return ""
         # The SIEM indexes a few seconds behind; let the window's last
         # requests arrive before Kibana is asked for them.
-        end = exploit_epoch + RESOURCE_CAPTURE_SECONDS
+        end = pattern_epoch + RESOURCE_CAPTURE_SECONDS
         while not self._cancel and time.time() < end + KIBANA_INGEST_LAG_S:
             time.sleep(0.2)
         self._shot_event.clear()
         self._shot_result.pop(key, None)
-        self.kibana_timeline_request.emit(exploit_epoch - RESOURCE_PRE_SECONDS, end, key)
+        self.kibana_timeline_request.emit(pattern_epoch - RESOURCE_PRE_SECONDS, end, key)
         self._shot_event.wait(timeout=60)
         return self._shot_result.get(key, "")

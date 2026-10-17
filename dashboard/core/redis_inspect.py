@@ -59,15 +59,15 @@ _LIST_KEYS_SCRIPT = (
 
 # Clears threat_ips entries, and the sessions (with their per-session pool
 # assignments and fingerprint pointers), of any IP that can only be internal-to-this-docker-host traffic (RFC1918 private
-# ranges + loopback) -- the dashboard's own exploit-runner curls, manual
+# ranges + loopback) -- the dashboard's own pattern-runner curls, manual
 # browser testing done directly on this machine, container-to-container
 # health checks, and Suricata's own host-network visibility all show up as
 # one of these (confirmed live throughout this project's development: the
 # shared client IP for anything hitting a published port from the host
 # itself is the docker bridge gateway address, e.g. 172.21.0.1). A genuine
-# external attacker reaching a real two-host deployment's published port
+# external user reaching a real two-host deployment's published port
 # keeps their real public source IP -- Docker's DNAT preserves it on that
-# leg -- so this can never touch real attacker data, only this dev
+# leg -- so this can never touch real user data, only this dev
 # environment's own self-generated noise.
 #
 # All three stores done server-side in one round-trip (not N docker-exec
@@ -244,11 +244,11 @@ def get_value(remote: RemoteConfig | None, key: str, key_type: str, timeout: flo
     return json.dumps(parsed, indent=2, sort_keys=True)
 
 
-def get_threat_scores(remote: RemoteConfig | None, timeout: float = 15.0) -> dict[str, int]:
+def get_risk_scores(remote: RemoteConfig | None, timeout: float = 15.0) -> dict[str, int]:
     """{ip: raw_score} from the "threat_ips" key (see router.lua/
     init_worker.lua), for page_redis.py's bar chart. This is the raw,
     ever-only-increasing stored value (capped at 100) -- NOT the same
-    number threat_analyzer.lua actually applies to a request's score,
+    number pattern_analyzer.lua actually applies to a request's score,
     which is a time-decayed view of this (suricata_rules.decayed_score()),
     smaller once any time has passed since `updated`. Seeing a bigger
     number here than in reverse_proxy's own logs for the same IP is
@@ -274,9 +274,9 @@ def get_threat_scores(remote: RemoteConfig | None, timeout: float = 15.0) -> dic
 
 def clear_local_threat_state(remote: RemoteConfig | None, timeout: float = 15.0) -> dict:
     """Un-poisons threat_ips/session/pool-assignment state for the shared
-    host IP (see _UNPOISON_SCRIPT) so exploit testing always starts from a
+    host IP (see _UNPOISON_SCRIPT) so pattern testing always starts from a
     clean, production-routed session -- run this before/after running
-    exploits from the Attack Simulation page. Returns a summary dict:
+    patterns from the Attack Simulation page. Returns a summary dict:
     {"sessions_removed": int, "pool_assignments_removed": [session id, ...],
     "threat_ips_removed": [ip, ...]}."""
     out = _run_redis_cli(remote, "EVAL", _UNPOISON_SCRIPT, "0", timeout=timeout).strip()
@@ -298,7 +298,7 @@ def flush_all(remote: RemoteConfig | None, timeout: float = 15.0) -> None:
     FLUSHALL` (same command this project's own README documents as the
     "flush all Redis state" one-liner). Used by page_redis.py's "Reset
     Redis KV store" button: this is where router.lua's session-level
-    scoring lives (session:*), threat_analyzer.lua's IP-reputation
+    scoring lives (session:*), pattern_analyzer.lua's IP-reputation
     classification (threat_ips, fed by Suricata/admin/vulnerability/
     AbuseIPDB detections), pool_router.lua's sticky pool assignments
     (honeypot_pool_session:*), and rate limiting -- unlike

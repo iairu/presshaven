@@ -26,7 +26,7 @@ up and operate it. It can:
 - **Edit the remote `.env` in place** and **remote-control Docker** there: start, restart, stop and
   purge each stack, tail logs, open a shell in a container, regenerate certificates, and watch a live
   health diagram of every container. Local and remote targets work side by side.
-- Drive both stacks (`ids/` and `siem/`), run exploit scenarios against the shop, inspect Redis, manage
+- Drive both stacks (`ids/` and `siem/`), run pattern scenarios against the shop, inspect Redis, manage
   backups, and export PDF reports. A setup wizard walks through all of it on first launch.
 
 ### 1. System packages (Arch Linux)
@@ -94,7 +94,7 @@ Solarized and High Contrast themes are available under Connectors & Config:
 ![Global Visualization, Console Light theme](docs/screenshots/dashboard-global-visualization-light.png)
 
 **Knowledge Base** holds the glossary, guided labs and a threat brief per attack preset;
-**Reporting** exports the implementation chapter, architecture overview and exploit / CVE matrix
+**Reporting** exports the implementation chapter, architecture overview and pattern / CVE matrix
 as PDFs:
 
 | Knowledge Base | Reporting |

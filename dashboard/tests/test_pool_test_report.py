@@ -65,7 +65,7 @@ class VerdictTests(unittest.TestCase):
 class DecisionTests(unittest.TestCase):
     def test_parse_decision(self):
         from core.pool_test_report import Decision, parse_decision, StepResult, sticky_violations
-        d = parse_decision("s", '{"threat_score": 85, "honeypot_bound": true, "honeypot_reason": "high_threat_score"}', "2")
+        d = parse_decision("s", '{"risk_score": 85, "honeypot_bound": true, "honeypot_reason": "high_risk_score"}', "2")
         self.assertEqual((d.route, d.pool, d.score), ("HONEYPOT", 2, 85))
         self.assertIn("pool 2", d.text())
         self.assertEqual(parse_decision("s", "", "").route, "PRODUCTION")
@@ -93,28 +93,28 @@ class DecisionTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
-    def test_plan_exploits_exist_and_are_browser_runnable(self):
-        from core.exploits import EXPLOIT_PRESETS
-        from core.pool_test_report import EXPLOIT_PLAN, FALLBACK_EXPLOITS
-        by_cve = {p.cve: p for p in EXPLOIT_PRESETS}
-        planned = [c for pair in EXPLOIT_PLAN for c in pair]
-        self.assertEqual(len(planned), len(set(planned)), "windows must run different exploits")
-        for cve in planned + FALLBACK_EXPLOITS:
+    def test_plan_patterns_exist_and_are_browser_runnable(self):
+        from core.patterns import PATTERN_PRESETS
+        from core.pool_test_report import PATTERN_PLAN, FALLBACK_PATTERNS
+        by_cve = {p.cve: p for p in PATTERN_PRESETS}
+        planned = [c for pair in PATTERN_PLAN for c in pair]
+        self.assertEqual(len(planned), len(set(planned)), "windows must run different patterns")
+        for cve in planned + FALLBACK_PATTERNS:
             self.assertIn(cve, by_cve)
             self.assertEqual(by_cve[cve].method, "GET", cve)
             self.assertEqual(by_cve[cve].headers, {}, cve)
-        self.assertFalse(set(planned) & set(FALLBACK_EXPLOITS))
+        self.assertFalse(set(planned) & set(FALLBACK_PATTERNS))
 
     def test_window_plan_covers_every_window_count(self):
-        from core.pool_test_report import (CART_PLAN, EXPLOIT_PLAN, MAX_WINDOWS, MIN_WINDOWS,
+        from core.pool_test_report import (CART_PLAN, PATTERN_PLAN, MAX_WINDOWS, MIN_WINDOWS,
                                            window_plan)
-        self.assertEqual(window_plan(3), EXPLOIT_PLAN)
+        self.assertEqual(window_plan(3), PATTERN_PLAN)
         self.assertGreaterEqual(len(CART_PLAN), MAX_WINDOWS)
         for n in range(MIN_WINDOWS, MAX_WINDOWS + 1):
             plan = window_plan(n)
             self.assertEqual(len(plan), n)
             firsts = [a for a, _b in plan]
-            self.assertEqual(len(firsts), len(set(firsts)), f"{n} windows: first exploits repeat")
+            self.assertEqual(len(firsts), len(set(firsts)), f"{n} windows: first patterns repeat")
             self.assertTrue(all(a != b for a, b in plan))
 
 
@@ -458,7 +458,7 @@ class ReportRunRegressionTests(unittest.TestCase):
                    for w, (sid, r, p, wt) in enumerate(row)]
         events = [{"type": "handoff", "pool": 5, "session": "e_old", "borrowed": 1, "waited": 52, "at": 132},
                   {"type": "capped", "reason": "resource limit reached", "at": 164}]
-        frames_ = [FrameResult(f"Attacker {c}", session_id=s, pool=p)
+        frames_ = [FrameResult(f"User {c}", session_id=s, pool=p)
                    for c, s, p in (("A", "a", 1), ("E", "e_new", None), ("H", "h", 8), ("I", "i", 5))]
         self.state = {"ready": [1, 5, 8], "free": [], "capped": "resource limit reached",
                       "owners": {1: 1, 5: 2, 8: 1}}
@@ -476,11 +476,11 @@ class ReportRunRegressionTests(unittest.TestCase):
         self.assertEqual(s.owners[1], 0)
 
     def test_verdict_counts_registry_owners(self):
-        frames_ = [FrameResult(f"Attacker {c}", session_id=f"{c * 32}", pool=p)
+        frames_ = [FrameResult(f"User {c}", session_id=f"{c * 32}", pool=p)
                    for c, p in (("A", 1), ("E", 1), ("H", 8), ("I", 5))]
         state = dict(self.state, owners={1: 2, 5: 2, 8: 1})
         v = analyze(frames_, state)
-        self.assertIn("Pool 5 is shared by Attacker I and 1 session(s) outside the test.", v.findings)
+        self.assertIn("Pool 5 is shared by User I and 1 session(s) outside the test.", v.findings)
         self.assertNotIn(8, [n for n in v.by_pool if f"Pool {n} is shared" in " ".join(v.findings)])
 
 
@@ -522,7 +522,7 @@ class IssueFixTests(unittest.TestCase):
 
 
 class ResponseRealismTests(unittest.TestCase):
-    def test_counts_4xx_exploit_responses(self):
+    def test_counts_4xx_pattern_responses(self):
         from core import pool_evidence as pe
         ev = pe.ContainerEvidence(1, hits=[
             pe.Hit("A", "GET", "/?page=advanced-form-integration-log&x=1", 404),

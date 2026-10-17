@@ -365,7 +365,7 @@ def reseed_command(
     already-running one -- this is what covers that case). force=True
     passes FORCE_RESEED=1 so an already-installed WordPress gets wiped
     and rebuilt from scratch (used by the dashboard's "Reset demo store"
-    action, e.g. to restore a clean storefront after running exploits
+    action, e.g. to restore a clean storefront after running patterns
     against it); force=False just replays the normal idempotent
     no-op-if-already-installed behavior every `docker compose up`
     already gets for free, useful only to watch it happen / confirm it's

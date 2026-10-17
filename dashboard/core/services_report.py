@@ -5,7 +5,7 @@ overall host CPU/RAM (from /proc, local or over SSH) plus per-container CPU and
 memory (docker stats), watches `docker compose ps` for major events (containers
 appearing, going healthy/unhealthy, stopping) and grabs the dashboard's Health
 page at a few stages (before / coming up / settled). It then renders a single
-PDF, in the same bundled Baskerville face as the exploit report, with:
+PDF, in the same bundled Baskerville face as the pattern report, with:
 
   * an overall system CPU % + RAM % chart,
   * per-container CPU and memory charts,
@@ -16,7 +16,7 @@ PDF, in the same bundled Baskerville face as the exploit report, with:
 
 The worker (a QThread) only MEASURES; the Services panel runs the actual
 `docker compose up -d` / `down` alongside it. Screenshots must be taken on the
-GUI thread, so -- like core.exploit_report -- the worker emits a request and
+GUI thread, so -- like core.pattern_report -- the worker emits a request and
 blocks on an event until the GUI thread hands back a PNG path.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from core import resource_stats as rs
 from core.container_status import classify, start_settled
 from core.startup_events import chart_groups, detect_events as _detect_events, start_warnings
 from core.docker_ctl import Target
-from core.exploit_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc
+from core.pattern_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc
 from core import diagrams, vector_figures
 from core.vector_figures import VectorFigure
 from core import report_stats as st
@@ -410,7 +410,7 @@ def _ts_chart(series: dict, colors: dict, events: list, y_label: str,
     """A multi-series time-series chart with a dashed red vertical line per
     event marker (see _event_markers). Each marker's number sits on white in a
     band above the plot, on its own row when tags would overlap -- the same
-    layout the exploit report uses -- and the event key below the host chart
+    layout the pattern report uses -- and the event key below the host chart
     says what each number means.
     ``series`` maps name -> [(t, value), ...]; ``colors`` name -> QColor."""
     W = 900

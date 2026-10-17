@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from core.colors import RED
 from core.docker_ctl import targets_for
 from core.redis_inspect import (
-    RedisInspectError, RedisKeyInfo, dbsize, flush_all, get_threat_scores, get_value, list_keys,
+    RedisInspectError, RedisKeyInfo, dbsize, flush_all, get_risk_scores, get_value, list_keys,
 )
 from core.state import AppState, RemoteConfig
 from ui import theme
@@ -55,7 +55,7 @@ class RedisPage(QWidget):
         # rest of the time, but visible progress feedback matters here
         # since that restart alone can take over a minute (nginx's
         # graceful shutdown waits out in-flight keepalive connections --
-        # same as ExploitsPage's "Unpoison host IP" restart).
+        # same as PatternsPage's "Unpoison host IP" restart).
         self.action_log = LogPanel(show_stop_button=False)
         self.action_log.setMaximumHeight(120)
         self.action_log.finished.connect(self._on_reset_restart_finished)
@@ -114,13 +114,13 @@ class RedisPage(QWidget):
         if not confirm(
             self, "Confirm Redis reset",
             "This wipes EVERY key in session_store's Redis (FLUSHALL) -- "
-            "including attacker IP classification/reputation (threat_ips, "
+            "including user IP classification/reputation (threat_ips, "
             "built up from Suricata/admin/vulnerability/AbuseIPDB detections) "
             "and all active sessions (every visitor, including yourself, will "
             "be logged out and re-scored from scratch on their next request). "
             "Rate limits and sticky honeypot pool assignments are cleared too. "
             "reverse_proxy is then restarted automatically, since "
-            "threat_analyzer.lua's hot-path IP-reputation check reads an "
+            "pattern_analyzer.lua's hot-path IP-reputation check reads an "
             "in-memory copy of threat_ips that FLUSHALL alone doesn't touch "
             "-- without the restart, stale scores would keep being applied "
             "despite Redis itself being empty. This cannot be undone. "
@@ -186,15 +186,15 @@ class RedisPage(QWidget):
 
     def _refresh_chart(self, remote: RemoteConfig | None) -> None:
         try:
-            scores = get_threat_scores(remote)
+            scores = get_risk_scores(remote)
         except RedisInspectError:
             scores = {}
 
         chart = QChart()
         if scores:
-            # raw_score, not the decayed score threat_analyzer.lua actually
+            # raw_score, not the decayed score pattern_analyzer.lua actually
             # applies per-request -- see core/redis_inspect.py's
-            # get_threat_scores() docstring.
+            # get_risk_scores() docstring.
             chart.setTitle("threat_ips raw_score by IP")
             bar_set = QBarSet("raw_score")
             ips = list(scores.keys())

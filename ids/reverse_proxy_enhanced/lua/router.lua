@@ -10,10 +10,10 @@
 --   1b. install.php on a not-yet-installed WordPress (and not already
 --       honeypot_bound) → always production (legitimate setup wizard)
 --   2. Session already honeypot_bound → sticky honeypot (same pool via Redis)
---   3. Threat score ≥ honeypot_threshold → honeypot (high threat, WSTG-INPV)
---   4. CVE pattern matched → honeypot (exploit attempt detected)
+--   3. Risk score ≥ honeypot_threshold → honeypot (high risk, WSTG-INPV)
+--   4. CVE pattern matched → honeypot (CVE pattern detected)
 --   5. Vulnerable plugin URI → honeypot (direct plugin endpoint access)
---   6. Bad IP reputation → honeypot (known malicious IP from threat_intel)
+--   6. Bad IP reputation → honeypot (known flagged IP from threat_intel)
 --   7. Multiple admin-access attempts (≥3) → honeypot (WSTG-ATHN-04)
 --   8. Accumulated suspicious activities (≥5) → honeypot
 --   9. Rapid automation detected → honeypot (WSTG-INFO-02)
@@ -24,14 +24,14 @@
 --   When a request is routed to the honeypot, pool_router.lua is consulted to
 --   determine which specific pool instance (honeypot_eshop_1/2/3) the attacking
 --   IP should be sent to.  Once assigned, the IP always hits the same pool so
---   the attacker sees a consistent fake environment.  The assigned pool number is
+--   the user sees a consistent fake environment.  The assigned pool number is
 --   also stored in the session under session_data.honeypot_pool so that
 --   session-bound re-routing (session already honeypot_bound) can use the same pool
 --   without an extra Redis lookup.
 --
 -- KEY DATA FLOWS:
 --   nginx.conf access_by_lua_block
---     → threat_analyzer.analyze_request()   (scoring)
+--     → pattern_analyzer.analyze_request()   (scoring)
 --     → session_handler.get_session()        (state lookup)
 --     → router.decide_route()               (THIS MODULE)
 --       → pool_router.get_or_assign_pool()  (pool selection)
@@ -41,7 +41,7 @@
 -- NO TARPIT:
 --   The proxy never holds a request back. An earlier tarpit
 --   (apply_botnet_slowdown) slept 0.5-3 s for hostile or automated clients,
---   which let an attacker tell the honeypot from production by latency.
+--   which let a user tell the honeypot from production by latency.
 --   Every visitor, on either route, gets the same proxy latency.
 --
 -- DEPENDENCIES:
@@ -72,8 +72,8 @@ local _M = {}
 -- attack sessions are not evicted mid-way.
 --
 -- The pool belongs to the SESSION (pool_owner = the session id), not to the
--- client IP: two attackers behind one address get separate sessions and so
--- separate pools, and an attacker who changes address keeps both as long as
+-- client IP: two users behind one address get separate sessions and so
+-- separate pools, and a user who changes address keeps both as long as
 -- the session follows them (signed cookie, or the passive-fingerprint
 -- recovery in session_handler.lua). remote_ip is only used for logging and
 -- AbuseIPDB, which are about addresses by nature.
@@ -95,7 +95,7 @@ local function assign_honeypot_pool(routing_decision, extra_session_data, remote
     -- Merge caller-supplied session fields with the pool assignment metadata
     -- on top of whatever routing_decision.session_data already holds --
     -- for a brand-new visitor whose very first request already trips this
-    -- stage (the common case for CVE/exploit probes), that's the full
+    -- stage (the common case for CVE/pattern probes), that's the full
     -- record decide_route's session-bootstrap step just built via
     -- session_handler.create_session() (user_agent, ip_address, metadata,
     -- ...). Overwriting it outright here used to silently drop those fields
@@ -125,7 +125,7 @@ local function assign_honeypot_pool(routing_decision, extra_session_data, remote
     sd.offenses          = (sd.offenses or 0) + 1
     routing_decision.session_data = sd
 
-    -- Keep the assignment alive in Redis while the attacker is still active.
+    -- Keep the assignment alive in Redis while the user is still active.
     pool_router.refresh_assignment_ttl(pool_owner)
 
     -- Report to AbuseIPDB, but only for deterministic, high-confidence
@@ -149,14 +149,14 @@ local function assign_honeypot_pool(routing_decision, extra_session_data, remote
 end
 
 -- ---------------------------------------------------------------------------
--- decide_route(session_data, threat_result, remote_ip)
+-- decide_route(session_data, pattern_result, remote_ip)
 --
 -- Core routing function called from nginx.conf access_by_lua_block on every
 -- non-static request.  Returns a routing_decision table which the caller uses
 -- to set ngx.var.backend_upstream and update the session.
 --
 -- @param session_data  table|nil  Existing session (nil for brand-new visitors).
--- @param threat_result table      Output from threat_analyzer.analyze_request().
+-- @param pattern_result table      Output from pattern_analyzer.analyze_request().
 -- @param remote_ip     string     Client IP address (ngx.var.remote_addr).
 -- @return              table      routing_decision:
 --                                   .target          "production"|"honeypot"
@@ -167,7 +167,7 @@ end
 --                                                    access log (absent on the
 --                                                    early static/install exits)
 -- ---------------------------------------------------------------------------
-function _M.decide_route(session_data, threat_result, remote_ip, session_id)
+function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
     local routing_decision = {
         target = "production",
         upstream = "production_backend",
@@ -214,10 +214,10 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     -- Guarded on "not already honeypot_bound": a session already flagged as
     -- hostile must not be able to launder itself back to production just by
     -- requesting install.php. This has to run here, BEFORE Stage 7, not just
-    -- as a scoring fast path in threat_analyzer.lua -- Stage 7 diverts after
+    -- as a scoring fast path in pattern_analyzer.lua -- Stage 7 diverts after
     -- 3 /wp-admin/* hits purely on request COUNT, independent of score, which
     -- would still break the wizard's multi-step flow (step=1, step=2, ...)
-    -- even with threat_result.score forced to 0.
+    -- even with pattern_result.score forced to 0.
     if not session_data.honeypot_bound
         and router_rules.is_install_wizard_uri(ngx.var.request_uri)
         and not wp_install_state.is_installed("production_backend") then
@@ -230,8 +230,8 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
 
     -- Score accumulation: fold the session's own decaying suspicion
     -- history into THIS request's fresh score, before ANY stage below
-    -- compares threat_result.score against a threshold. From here on,
-    -- threat_result.score IS the accumulated/decayed effective score --
+    -- compares pattern_result.score against a threshold. From here on,
+    -- pattern_result.score IS the accumulated/decayed effective score --
     -- every stage that reads it (Stage 2's re-check, Stage 3's
     -- honeypot_threshold gate, the suspicious-activity logging at the
     -- bottom of this function) automatically benefits without needing
@@ -239,17 +239,17 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     --
     -- Confirmed live this was the real gap behind escalating-but-
     -- individually-below-threshold probing going undetected: a session
-    -- that had already triggered two separate exploits (scoring, say, 20
+    -- that had already triggered two separate patterns (scoring, say, 20
     -- then 55 in isolation) went right back to a raw "20" the third time
-    -- the FIRST exploit was retried -- every stage only ever saw
-    -- threat_result.score in isolation, with the session's own history
+    -- the FIRST pattern was retried -- every stage only ever saw
+    -- pattern_result.score in isolation, with the session's own history
     -- completely inert outside of the honeypot_bound sticky-routing
     -- re-check this block replaces.
     --
     -- A new signal (this request's OWN fresh score > 10 -- the same
     -- "worth remembering" bar this file already used elsewhere before
     -- this change) ACCUMULATES onto the session's decayed base rather
-    -- than being judged alone, capped at max_threat_score so it can't
+    -- than being judged alone, capped at max_risk_score so it can't
     -- grow unbounded. A negligible/clean request (fresh score <= 10,
     -- e.g. loading a plain page) neither adds to nor resets the running
     -- total -- it just sees whatever the currently-decayed base already
@@ -260,51 +260,51 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     do
         local decayed_base = router_rules.decayed_score(
             session_data, ngx.time(), _G.config.threat.score_decay_half_life_seconds, _G.config.threat)
-        local fresh_score = threat_result.score
+        local fresh_score = pattern_result.score
         new_signal_fired = fresh_score > 10
         -- Decision-making fields for the security access log / Kibana
         -- (router_rules.decision_trace); nginx.conf copies them into
         -- ngx.var after this returns.
         routing_decision.trace = router_rules.decision_trace(
-            fresh_score, decayed_base, session_data, threat_result,
+            fresh_score, decayed_base, session_data, pattern_result,
             _G.config.threat.score_decay_half_life_seconds, _G.config.threat)
         if new_signal_fired then
-            threat_result.score = math.min(_G.config.threat.max_threat_score, decayed_base + fresh_score)
+            pattern_result.score = math.min(_G.config.threat.max_risk_score, decayed_base + fresh_score)
         else
-            threat_result.score = math.max(fresh_score, decayed_base)
+            pattern_result.score = math.max(fresh_score, decayed_base)
         end
         -- Round to a clean integer -- decayed_base is router_rules.
         -- decayed_score()'s exponential decay (peak * 0.5^half_lives), a
         -- raw float essentially never landing on a whole number. From here
-        -- on threat_result.score drives every later stage's threshold
+        -- on pattern_result.score drives every later stage's threshold
         -- check AND every log line for this request (including nginx.conf's
         -- [FINAL DECISION] "Score: N"), so a 15-decimal-place fraction like
         -- "84.484160391042" was leaking straight into logs a dashboard user
         -- reads, with no meaning at that precision.
-        threat_result.score = math.floor(threat_result.score + 0.5)
+        pattern_result.score = math.floor(pattern_result.score + 0.5)
     end
 
     -- Stage 2: Sticky honeypot routing.
     -- Once a session is marked honeypot_bound (by any routing stage on a prior
     -- request), all subsequent requests from the same session are locked to the
-    -- same honeypot pool instance.  This preserves the attacker's illusion of
+    -- same honeypot pool instance.  This preserves the user's illusion of
     -- a single persistent target: WordPress state changes they made in earlier
     -- requests (cookies, wp-login tokens, uploaded files) are still visible.
     if session_data.honeypot_bound then
-        -- threat_result.score already folds in the session's own
+        -- pattern_result.score already folds in the session's own
         -- decayed/accumulated history (see above), so this is just the
         -- plain threshold check. Previously this checked the CURRENT
         -- request's isolated score, which meant a single clean request
         -- (e.g. just loading "/") fully reset a session that had
         -- triggered a CVE match moments earlier -- confirmed live this
-        -- let an attacker freely alternate "run exploit" / "visit
-        -- homepage" to re-run every exploit against production from a
+        -- let a user freely alternate "run pattern" / "visit
+        -- homepage" to re-run every pattern against production from a
         -- clean slate each time.
-        if threat_result.score < 30 then
+        if pattern_result.score < 30 then
             routing_decision.target = "production"
             routing_decision.upstream = "production_backend"
             ngx.log(ngx.INFO, "[ROUTING] Session bound but accumulated/decayed score below threshold - "
-                    .. "allowing production | Score: ", threat_result.score)
+                    .. "allowing production | Score: ", pattern_result.score)
             return routing_decision
         end
         -- The session's Redis pool assignment decides the pool, not the copy
@@ -336,7 +336,7 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
         if new_signal_fired then
             routing_decision.update_session = true
             local sd = routing_decision.session_data or {}
-            sd.threat_score = threat_result.score
+            sd.risk_score = pattern_result.score
             sd.last_threat_time = ngx.time()
             -- Another genuinely new attack signal on an already-bound session:
             -- count it so repeat exploitation keeps slowing this session's
@@ -346,7 +346,7 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
         end
 
         -- Carry the ORIGINAL binding reason (set once, back when this
-        -- session was first flagged -- e.g. "high_threat_score",
+        -- session was first flagged -- e.g. "high_risk_score",
         -- "cve_pattern_match") through in routing_decision.session_data
         -- too, not just in this function's own log line below. Without
         -- this, nginx.conf's [FINAL DECISION] log (which only has
@@ -375,24 +375,24 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
         return routing_decision
     end
     
-    -- Stage 3: Threat-score threshold (WSTG-INPV catch-all).
-    -- The threat_analyzer accumulates scores across URI patterns, headers,
+    -- Stage 3: Risk-score threshold (WSTG-INPV catch-all).
+    -- The pattern_analyzer accumulates scores across URI patterns, headers,
     -- CVE matches, and IP reputation.  If the total meets honeypot_threshold
     -- (default 80, set in init.lua), the request is diverted regardless of
     -- which specific patterns triggered the score.
-    if threat_result.score >= _G.config.threat.honeypot_threshold then
+    if pattern_result.score >= _G.config.threat.honeypot_threshold then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = threat_result.score,
-            honeypot_reason = "high_threat_score",
+            risk_score    = pattern_result.score,
+            honeypot_reason = "high_risk_score",
         }, remote_ip, pool_owner)
 
-        ngx.log(ngx.WARN, "[ROUTING] 🚨 HIGH THREAT SCORE -> HONEYPOT | Score: ", threat_result.score,
+        ngx.log(ngx.WARN, "[ROUTING] 🚨 HIGH RISK SCORE -> HONEYPOT | Score: ", pattern_result.score,
                 "/", _G.config.threat.honeypot_threshold, " | IP: ", remote_ip,
-                " | URI: ", ngx.var.request_uri, " | Patterns: ", table.concat(threat_result.patterns_matched or {}, ", "))
+                " | URI: ", ngx.var.request_uri, " | Patterns: ", table.concat(pattern_result.patterns_matched or {}, ", "))
 
         _G.utils.log_security_event("routing_to_honeypot", {
-            reason    = "high_threat_score",
-            score     = threat_result.score,
+            reason    = "high_risk_score",
+            score     = pattern_result.score,
             ip        = remote_ip,
             pool      = routing_decision.session_data.honeypot_pool,
             session_id = session_data.id
@@ -401,26 +401,26 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
         return routing_decision
     end
     
-    -- Stage 4: CVE-specific exploit patterns (immediate diversion).
-    -- CVE matches in threat_analyzer.analyze_cve_patterns() score +40 each.
+    -- Stage 4: CVE-specific patterns (immediate diversion).
+    -- CVE matches in pattern_analyzer.analyze_cve_patterns() score +40 each.
     -- Even a single CVE match on a low-baseline request can cross the 80-point
     -- threshold; this explicit stage ensures diversion even for requests where
     -- the overall score is below threshold but a CVE was still matched.
     -- Covered patterns are defined in _G.config.vulnerability.cve_patterns (init.lua).
-    if threat_result.cve_matched and #threat_result.cve_matched > 0 then
+    if pattern_result.cve_matched and #pattern_result.cve_matched > 0 then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = threat_result.score,
+            risk_score    = pattern_result.score,
             honeypot_reason = "cve_pattern_match",
-            matched_cves    = threat_result.cve_matched,
+            matched_cves    = pattern_result.cve_matched,
         }, remote_ip, pool_owner)
 
-        ngx.log(ngx.WARN, "[ROUTING] 🎯 CVE EXPLOIT DETECTED -> HONEYPOT | CVEs: ",
-                table.concat(threat_result.cve_matched, ", "), " | Score: ", threat_result.score,
+        ngx.log(ngx.WARN, "[ROUTING] 🎯 CVE PATTERN DETECTED -> HONEYPOT | CVEs: ",
+                table.concat(pattern_result.cve_matched, ", "), " | Score: ", pattern_result.score,
                 " | IP: ", remote_ip, " | URI: ", ngx.var.request_uri)
 
         _G.utils.log_security_event("routing_to_honeypot", {
             reason    = "cve_pattern_match",
-            cves      = threat_result.cve_matched,
+            cves      = pattern_result.cve_matched,
             ip        = remote_ip,
             pool      = routing_decision.session_data.honeypot_pool,
             session_id = session_data.id
@@ -438,12 +438,12 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     local uri = ngx.var.request_uri or ""
     if _M.is_vulnerable_plugin_access(uri) then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = math.max(threat_result.score, 60),
+            risk_score    = math.max(pattern_result.score, 60),
             honeypot_reason = "vulnerable_plugin_access",
         }, remote_ip, pool_owner)
 
         ngx.log(ngx.WARN, "[ROUTING] 🔌 VULNERABLE PLUGIN ACCESS -> HONEYPOT | Score: ",
-                math.max(threat_result.score, 60), " | IP: ", remote_ip, " | URI: ", uri)
+                math.max(pattern_result.score, 60), " | IP: ", remote_ip, " | URI: ", uri)
 
         _G.utils.log_security_event("routing_to_honeypot", {
             reason    = "vulnerable_plugin_access",
@@ -463,39 +463,39 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     -- (suricata_rules.severity_to_score); any IP scoring > 50 is diverted
     -- immediately regardless of the current request's content.
     --
-    -- threat_result.ip_reputation is what the address CONTRIBUTES, already
-    -- limited by shared_ip_rules (threat_analyzer.check_ip_reputation): zero
+    -- pattern_result.ip_reputation is what the address CONTRIBUTES, already
+    -- limited by shared_ip_rules (pattern_analyzer.check_ip_reputation): zero
     -- on a shared address and at most ip_reputation_cap otherwise. With the
     -- default cap (10) this stage never fires, so a carrier-grade NAT user
     -- is never diverted for a neighbour's alerts; an operator who knows
     -- their clients don't share addresses can raise IP_REPUTATION_CAP above
     -- 50 to turn it back on for unshared addresses.
-    if threat_result.ip_reputation > 50 then
+    if pattern_result.ip_reputation > 50 then
         -- honeypot_reason stays one of the fixed category strings every
         -- other stage uses (matches abuseipdb_rules.REASON_CATEGORIES'
         -- whitelist, which does exact-string lookup) -- NOT the rich,
-        -- per-signature text in threat_result.ip_reputation_reason (that
+        -- per-signature text in pattern_result.ip_reputation_reason (that
         -- already reaches Kibana via the WARN log line a few lines below
         -- and via threat_ips[ip].reason in Redis; it would never match the
         -- whitelist if used here directly). Distinguishing "flagged by
         -- Suricata" from "flagged by the AbuseIPDB blacklist feed" (both
         -- populate the same threat_ips structure) makes Suricata-confirmed
-        -- attackers reportable for the first time -- "bad_ip_reputation"
+        -- users reportable for the first time -- "bad_ip_reputation"
         -- was never in the whitelist regardless of source.
         local reputation_reason = "bad_ip_reputation"
-        if threat_result.ip_reputation_reason
-            and threat_result.ip_reputation_reason:find("^suricata: ") then
+        if pattern_result.ip_reputation_reason
+            and pattern_result.ip_reputation_reason:find("^suricata: ") then
             reputation_reason = "suricata_confirmed_alert"
         end
 
         assign_honeypot_pool(routing_decision, {
-            threat_score    = threat_result.score,
+            risk_score    = pattern_result.score,
             honeypot_reason = reputation_reason,
         }, remote_ip, pool_owner)
 
         ngx.log(ngx.WARN, "[ROUTING] 🚫 BAD IP REPUTATION -> HONEYPOT | IP Rep Score: ",
-                threat_result.ip_reputation, " | Threat Score: ", threat_result.score,
-                " | Reason: ", threat_result.ip_reputation_reason or "unknown",
+                pattern_result.ip_reputation, " | Risk Score: ", pattern_result.score,
+                " | Reason: ", pattern_result.ip_reputation_reason or "unknown",
                 " | IP: ", remote_ip, " | URI: ", uri)
 
         return routing_decision
@@ -511,21 +511,21 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
         local admin_attempts = session_data.admin_attempts or 0
         if admin_attempts >= 2 then
             assign_honeypot_pool(routing_decision, {
-                threat_score    = math.max(threat_result.score, 40),
+                risk_score    = math.max(pattern_result.score, 40),
                 honeypot_reason = "multiple_admin_attempts",
             }, remote_ip, pool_owner)
             ngx.log(ngx.WARN, "[ROUTING] 🔐 MULTIPLE ADMIN ATTEMPTS -> HONEYPOT | Attempts: ",
-                    admin_attempts + 1, " | Score: ", math.max(threat_result.score, 40),
+                    admin_attempts + 1, " | Score: ", math.max(pattern_result.score, 40),
                     " | IP: ", remote_ip, " | URI: ", uri)
         else
             -- Increment admin attempts but stay on production
             routing_decision.update_session = true
             routing_decision.session_data = {
                 admin_attempts = admin_attempts + 1,
-                threat_score = math.max(session_data.threat_score or 0, threat_result.score)
+                risk_score = math.max(session_data.risk_score or 0, pattern_result.score)
             }
             ngx.log(ngx.INFO, "[ROUTING] ⚠️  Admin access attempt #", admin_attempts + 1, 
-                    " -> PRODUCTION (warning) | Score: ", threat_result.score, 
+                    " -> PRODUCTION (warning) | Score: ", pattern_result.score, 
                     " | IP: ", remote_ip, " | URI: ", uri)
         end
         
@@ -540,12 +540,12 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     -- false-positive rate on aggressive but legitimate API clients.
     if session_data.suspicious_activities and #session_data.suspicious_activities >= 5 then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = threat_result.score,
+            risk_score    = pattern_result.score,
             honeypot_reason = "accumulated_suspicious_activities",
         }, remote_ip, pool_owner)
 
         ngx.log(ngx.WARN, "[ROUTING] 📊 ACCUMULATED SUSPICIOUS ACTIVITIES -> HONEYPOT | Count: ",
-                #session_data.suspicious_activities, " | Score: ", threat_result.score,
+                #session_data.suspicious_activities, " | Score: ", pattern_result.score,
                 " | IP: ", remote_ip, " | URI: ", uri)
 
         return routing_decision
@@ -553,20 +553,20 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     
     -- Stage 9: Rapid-automation / botnet detection (WSTG-INFO-02).
     -- is_rapid_automation() checks request-per-second rate stored in the
-    -- session and the detect_automation() result from threat_analyzer.
+    -- session and the detect_automation() result from pattern_analyzer.
     -- Threshold is 20 req/s to avoid penalising legitimate single-page apps
     -- that prefetch multiple API endpoints on load.
     -- NOTE: Only route to honeypot if automation is detected AND the threat
     -- score is already elevated (>= 40). This prevents false positives on
     -- legitimate CLI tools like curl accessing the homepage.
-    if _M.is_rapid_automation(session_data, threat_result) and threat_result.score >= 40 then
+    if _M.is_rapid_automation(session_data, pattern_result) and pattern_result.score >= 40 then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = math.max(threat_result.score, 45),
+            risk_score    = math.max(pattern_result.score, 45),
             honeypot_reason = "rapid_automation_detected",
         }, remote_ip, pool_owner)
 
         ngx.log(ngx.WARN, "[ROUTING] 🤖 RAPID AUTOMATION DETECTED -> HONEYPOT | Score: ",
-                math.max(threat_result.score, 45), " | IP: ", remote_ip,
+                math.max(pattern_result.score, 45), " | IP: ", remote_ip,
                 " | Request Count: ", session_data.request_count or 0, " | URI: ", uri)
 
         return routing_decision
@@ -579,19 +579,19 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     -- diverted before the file reaches the production filesystem.
     if _M.is_suspicious_upload() then
         assign_honeypot_pool(routing_decision, {
-            threat_score    = math.max(threat_result.score, 50),
+            risk_score    = math.max(pattern_result.score, 50),
             honeypot_reason = "suspicious_file_upload",
         }, remote_ip, pool_owner)
 
         ngx.log(ngx.WARN, "[ROUTING] 📤 SUSPICIOUS FILE UPLOAD -> HONEYPOT | Score: ",
-                math.max(threat_result.score, 50), " | IP: ", remote_ip, " | URI: ", uri)
+                math.max(pattern_result.score, 50), " | IP: ", remote_ip, " | URI: ", uri)
 
         return routing_decision
     end
     
-    -- Probabilistic routing for moderate threat scores (Commented out - change math.random for something else or remove)
-    -- if threat_result.score >= 25 and threat_result.score < _G.config.threat.honeypot_threshold then
-    --     local probability = (threat_result.score - 25) / (_G.config.threat.honeypot_threshold - 25)
+    -- Probabilistic routing for moderate risk scores (Commented out - change math.random for something else or remove)
+    -- if pattern_result.score >= 25 and pattern_result.score < _G.config.threat.honeypot_threshold then
+    --     local probability = (pattern_result.score - 25) / (_G.config.threat.honeypot_threshold - 25)
     --     if math.random() < probability then
     --         routing_decision.target = "honeypot"
     --         routing_decision.upstream = "honeypot_backend"
@@ -599,7 +599,7 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     --         routing_decision.session_data = {
     --             honeypot_bound = true,
     --             route_preference = "honeypot",
-    --             threat_score = threat_result.score,
+    --             risk_score = pattern_result.score,
     --             honeypot_reason = "probabilistic_routing"
     --         }
     --         
@@ -610,15 +610,15 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
     
     -- Update session with current threat information if staying on production.
     -- Uses new_signal_fired (THIS request's own fresh score > 10, computed
-    -- before the accumulation block above overwrote threat_result.score)
-    -- rather than threat_result.score itself -- that's now the accumulated/
+    -- before the accumulation block above overwrote pattern_result.score)
+    -- rather than pattern_result.score itself -- that's now the accumulated/
     -- decayed value, and using it here would treat a totally clean request
     -- riding on residual decayed suspicion as if something new had
     -- happened, refreshing last_threat_time and defeating decay.
-    if threat_result.suspicious or new_signal_fired then
+    if pattern_result.suspicious or new_signal_fired then
         routing_decision.update_session = true
         routing_decision.session_data = {
-            threat_score = math.max(session_data.threat_score or 0, threat_result.score),
+            risk_score = math.max(session_data.risk_score or 0, pattern_result.score),
             last_threat_time = ngx.time(),
             -- Only a genuinely NEW signal counts as an offense; a request
             -- that's merely "suspicious" off residual decayed score must not
@@ -632,29 +632,29 @@ function _M.decide_route(session_data, threat_result, remote_ip, session_id)
             session_data.suspicious_activities = {}
         end
         
-        if threat_result.suspicious then
+        if pattern_result.suspicious then
             table.insert(session_data.suspicious_activities, {
                 timestamp = ngx.time(),
                 uri = ngx.var.request_uri,
-                threat_score = threat_result.score,
-                patterns = threat_result.patterns_matched
+                risk_score = pattern_result.score,
+                patterns = pattern_result.patterns_matched
             })
             
             routing_decision.session_data.suspicious_activities = session_data.suspicious_activities
             
             ngx.log(ngx.INFO, "[ROUTING] ⚠️  Suspicious activity logged but staying on PRODUCTION | Score: ", 
-                    threat_result.score, "/", _G.config.threat.honeypot_threshold, 
+                    pattern_result.score, "/", _G.config.threat.honeypot_threshold, 
                     " | Suspicious count: ", #session_data.suspicious_activities + 1, "/5", 
                     " | IP: ", remote_ip, " | URI: ", uri)
         end
     end
     
     -- Default to production - log clean requests
-    if threat_result.score == 0 then
+    if pattern_result.score == 0 then
         ngx.log(ngx.INFO, "[ROUTING] ✅ Clean request -> PRODUCTION | Score: 0 | IP: ", 
                 remote_ip, " | URI: ", uri)
-    elseif threat_result.score > 0 and threat_result.score < _G.config.threat.honeypot_threshold then
-        ngx.log(ngx.INFO, "[ROUTING] ⚡ Low threat -> PRODUCTION | Score: ", threat_result.score, 
+    elseif pattern_result.score > 0 and pattern_result.score < _G.config.threat.honeypot_threshold then
+        ngx.log(ngx.INFO, "[ROUTING] ⚡ Low threat -> PRODUCTION | Score: ", pattern_result.score, 
                 "/", _G.config.threat.honeypot_threshold, " | IP: ", remote_ip, " | URI: ", uri)
     end
     
@@ -686,8 +686,8 @@ function _M.is_admin_access(uri)
 end
 
 -- Check for rapid automation patterns
-function _M.is_rapid_automation(session_data, threat_result)
-    return router_rules.is_rapid_automation(session_data, threat_result, ngx.time())
+function _M.is_rapid_automation(session_data, pattern_result)
+    return router_rules.is_rapid_automation(session_data, pattern_result, ngx.time())
 end
 
 -- Check for suspicious file uploads

@@ -37,7 +37,7 @@ ids/production_eshop_files/wp-content/wflogs/
 # the kind of mistake this file is meant to prevent.
 ids/production_eshop_files/wp-config.php
 
-# Dashboard PDF exports (exploit / services / implementation reports) --
+# Dashboard PDF exports (pattern / services / implementation reports) --
 # generated artifacts, not source content.
 dashboard/*.pdf
 

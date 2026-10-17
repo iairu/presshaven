@@ -15,7 +15,7 @@ DASHBOARD_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = DASHBOARD_DIR.parent
 sys.path.insert(0, str(DASHBOARD_DIR))
 
-from core import cert_ctl, threat_log_parser  # noqa: E402
+from core import cert_ctl, pattern_log_parser  # noqa: E402
 from core.colors import GREEN, RED  # noqa: E402
 from core.env_file import EnvFile, seed_from_example  # noqa: E402
 from core.line_buffer import LineBuffer  # noqa: E402
@@ -86,10 +86,10 @@ class LineBufferTests(unittest.TestCase):
 
 
 class ThreatLogParserTests(unittest.TestCase):
-    parse = staticmethod(threat_log_parser.parse_line)
+    parse = staticmethod(pattern_log_parser.parse_line)
 
     def test_header_summary_outcome(self):
-        ev = self.parse("[LOCATION / HEADER] route_decision='honeypot' threat_score='85', client: 1.2.3.4")
+        ev = self.parse("[LOCATION / HEADER] route_decision='honeypot' risk_score='85', client: 1.2.3.4")
         self.assertEqual((ev.kind, ev.label, ev.score, ev.color), ("outcome", "Routed to HONEYPOT", 85, RED))
 
     def test_final_decision_normalizes_denominator(self):
@@ -103,13 +103,19 @@ class ThreatLogParserTests(unittest.TestCase):
         self.assertEqual(ev.color, GREEN)
 
     def test_signal_delta(self):
-        ev = self.parse("[THREAT ANALYZER] 🎯 CVE match (+40) | CVE-2023-28121")
+        ev = self.parse("[PATTERN ANALYZER] 🎯 CVE match (+40) | CVE-2023-28121")
         self.assertEqual((ev.kind, ev.label, ev.color), ("signal", "CVE match (+40)", RED))
         self.assertEqual(ev.detail, "CVE-2023-28121")
 
+    def test_pre_rename_log_lines_still_parse(self):
+        ev = self.parse("[THREAT ANALYZER] 🎯 CVE match (+40) | CVE-2023-28121")
+        self.assertEqual((ev.kind, ev.label), ("signal", "CVE match (+40)"))
+        ev = self.parse("[LOCATION / HEADER] route_decision='honeypot' threat_score='85'")
+        self.assertEqual(ev.score, 85)
+
     def test_docker_timestamp_is_captured_through_ansi_reset(self):
         line = ("reverse_proxy-1  | \x1b[0m2026-08-09T10:32:37.684747138Z "
-                "[LOCATION / HEADER] route_decision='production' threat_score='0'")
+                "[LOCATION / HEADER] route_decision='production' risk_score='0'")
         ev = self.parse(line)
         self.assertEqual(ev.timestamp, "2026-08-09T10:32:37.684747138Z")
         self.assertEqual(ev.score, 0)

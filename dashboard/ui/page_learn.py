@@ -8,12 +8,12 @@ Four tabs, all driven by core/learning.py:
     ticked steps persist in AppState.learn_completed_steps.
   - Glossary: searchable terms, each with a plain definition and what it
     means in this project.
-  - Exploit lessons: one lesson per exploit preset (attack class, OWASP Top
+  - Pattern lessons: one lesson per pattern preset (attack class, OWASP Top
     10, MITRE ATT&CK, how it works, defence).
 
 Links of the form ``page:<id>`` anywhere on this page emit
 open_page_requested(id); MainWindow switches the sidebar to that page.
-The HTML builders (page_guide_html, exploit_lesson_html) are module-level
+The HTML builders (page_guide_html, pattern_lesson_html) are module-level
 so other pages can show the same text in their own help popups.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QTabWidget, QTextBrowser, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from core.exploits import EXPLOIT_PRESETS, ExploitPreset
+from core.patterns import PATTERN_PRESETS, PatternPreset
 from core.learning import (
     GLOSSARY, LABS, PAGE_GUIDES, GlossaryTerm, lab_progress, lesson_for, search_glossary,
 )
@@ -52,7 +52,7 @@ def page_guide_html(page_id: str, label: str, link: bool = False) -> str:
             f"<b>Notice:</b> {_esc(guide.notice)}</p>")
 
 
-def exploit_lesson_html(preset: ExploitPreset) -> str:
+def pattern_lesson_html(preset: PatternPreset) -> str:
     parts = [f"<h3>{_esc(preset.name)}</h3>",
              f"<p><b>{_esc(preset.cve)}</b> &middot; severity <b>{_esc(preset.severity)}</b>"
              f" &middot; <code>{_esc(preset.method)} {_esc(preset.path)}</code></p>",
@@ -68,9 +68,9 @@ def exploit_lesson_html(preset: ExploitPreset) -> str:
             f"<h4>How it works</h4><p>{_esc(lesson.how_it_works)}</p>"
             f"<h4>How to defend</h4><p>{_esc(lesson.defence)}</p>")
     parts.append("<h4>What the honeypot does</h4><p>The reverse proxy recognises this "
-                 "request's pattern, adds points to the session's threat score and routes "
+                 "request's pattern, adds points to the session's risk score and routes "
                  "it to the decoy shop, where the attack 'works' against fake data. Watch "
-                 "it happen on the Attack Simulation page's Threat analyzer tab.</p>")
+                 "it happen on the Attack Simulation page's Pattern analyzer tab.</p>")
     return "".join(parts)
 
 
@@ -94,16 +94,16 @@ page for help about that page.</p>
 <ol>
 <li><b>Client</b> sends an HTTP request to the shop.</li>
 <li>The <b>reverse proxy</b> (OpenResty + Lua) scores it: URL patterns, headers, known CVE
-exploits, IP reputation, automation tools, uploads. Each signal adds points.</li>
+patterns, IP reputation, automation tools, uploads. Each signal adds points.</li>
 <li>If the session's score reaches the <b>threshold (80/100)</b>, or a CVE or bad IP is
 seen, the session goes to the <b>honeypot</b>, a decoy copy of the shop. Otherwise it goes to
 <b>production</b>.</li>
-<li>Once on the honeypot the session <b>stays there</b> (sticky), so the attacker doesn't
+<li>Once on the honeypot the session <b>stays there</b> (sticky), so the user doesn't
 notice. Scores slowly <b>decay</b> so innocent users recover.</li>
 <li>Every decision, plus <b>Suricata</b> network alerts, is shipped to the <b>SIEM</b>
 (Vector, Elasticsearch, Kibana) for analysis.</li>
 </ol>
-<p><i>Safety note:</i> the exploit presets are real attack patterns. Only fire them at
+<p><i>Safety note:</i> the pattern presets are real attack patterns. Only fire them at
 systems you run yourself, like this lab.</p>
 <h2>Tour of the dashboard</h2>
 """
@@ -124,7 +124,7 @@ class LearnPage(QWidget):
         self.tabs.addTab(self._build_start_tab(), "Start here")
         self.tabs.addTab(self._build_labs_tab(), "Guided labs")
         self.tabs.addTab(self._build_glossary_tab(), "Glossary")
-        self.tabs.addTab(self._build_lessons_tab(), "Exploit lessons")
+        self.tabs.addTab(self._build_lessons_tab(), "Pattern lessons")
 
     # ---- shared ----
 
@@ -276,12 +276,12 @@ class LearnPage(QWidget):
                 self.glossary_list.setCurrentRow(i)
                 return
 
-    # ---- Exploit lessons ----
+    # ---- Pattern lessons ----
 
     def _build_lessons_tab(self) -> QWidget:
         splitter = QSplitter()
         self.lesson_list = QListWidget()
-        for preset in EXPLOIT_PRESETS:
+        for preset in PATTERN_PRESETS:
             item = QListWidgetItem(f"{preset.cve}  {preset.name}")
             item.setData(_STEP_ROLE, preset)
             self.lesson_list.addItem(item)
@@ -296,4 +296,4 @@ class LearnPage(QWidget):
     def _show_lesson(self, item: QListWidgetItem | None, _prev=None) -> None:
         if item is None:
             return
-        self.lesson_view.setHtml(exploit_lesson_html(item.data(_STEP_ROLE)))
+        self.lesson_view.setHtml(pattern_lesson_html(item.data(_STEP_ROLE)))

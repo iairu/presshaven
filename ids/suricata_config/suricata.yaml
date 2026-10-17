@@ -107,7 +107,7 @@ outputs:
             # extra-data adds the client from the X-Forwarded-For header the
             # proxy sets (proxy_params) as separate http.xff / alert.xff fields, leaving
             # src_ip alone, so init_worker's reputation feed is unchanged;
-            # the SIEM's Vector uses xff as attacker_ip when present.
+            # the SIEM's Vector uses xff as client_ip when present.
             # deployment: reverse takes the LAST address in the header, the
             # one nginx's $proxy_add_x_forwarded_for appended itself, which
             # a client can't forge.

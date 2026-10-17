@@ -186,7 +186,7 @@ do
     -- REAL_ALERT's src_ip -- the exact shape of the container-to-container
     -- misattribution documented in this module's KNOWN CAVEAT (and, live,
     -- in threat_ips: two internal addresses scored 100 with no real
-    -- external attacker behind them) -- must be filtered.
+    -- external user behind them) -- must be filtered.
     check("REAL_ALERT's own src_ip (172.21.0.9) is private", rules.is_private_ip(REAL_ALERT.src_ip))
 
     check("10.x is private", rules.is_private_ip("10.0.0.1"))
@@ -197,7 +197,7 @@ do
     check("192.168.x is private", rules.is_private_ip("192.168.1.1"))
 
     check("a real public IP is NOT private", not rules.is_private_ip("8.8.8.8"))
-    check("a real public IP is NOT private (attacker-shaped)", not rules.is_private_ip("203.0.113.42"))
+    check("a real public IP is NOT private (user-shaped)", not rules.is_private_ip("203.0.113.42"))
 
     check("nil is NOT private (never crashes)", not rules.is_private_ip(nil))
     check("non-IP string is NOT private (never crashes)", not rules.is_private_ip("not-an-ip"))

@@ -38,7 +38,7 @@
 --   Tokens and their metadata are stored in the Redis session_store under the
 --   key prefix "honeytoken:".  Each token entry contains:
 --     { token_id, type, value, injected_at, injected_to_ip, use_count }
---   The injection timestamp allows measuring time-to-use (attacker dwell time).
+--   The injection timestamp allows measuring time-to-use (user dwell time).
 --
 -- DETECTION FLOW:
 --   1. analyze_request_for_tokens() is called from nginx.conf access_by_lua_block
@@ -73,7 +73,7 @@ local _M = {}
 local TOKEN_KEY_PREFIX = "honeytoken:"
 
 -- Token TTL in Redis (30 days).  Long TTL keeps tokens traceable even after
--- the attacker pauses activity for weeks.
+-- the user pauses activity for weeks.
 local TOKEN_TTL = 2592000
 
 -- Shared installation-specific salt used to make tokens unique per deployment.
@@ -334,7 +334,7 @@ end
 --- This function is designed to be called from a header_filter_by_lua_block or
 --- body_filter_by_lua_block on the honeypot location.  It appends a hidden HTML
 --- comment to the response body containing several honeytoken "hints" that a
---- careful attacker inspecting the page source will notice and try to use.
+--- careful user inspecting the page source will notice and try to use.
 ---
 --- The comment is injected only into text/html responses to avoid corrupting
 --- JSON API responses (which are checked separately via inject_into_api_response).

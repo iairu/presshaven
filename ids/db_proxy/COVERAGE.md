@@ -5,7 +5,7 @@ developed on the `db-proxy-single-eshop` branch). See [README.md](README.md).
 
 ## How it differs from the default layer
 
-This layer does not run a separate WordPress + MySQL pool per attacker. It has
+This layer does not run a separate WordPress + MySQL pool per user. It has
 **one** WordPress instance (`production_eshop`) and **two** databases:
 
 | WordPress proxy level (pools, default) | Database proxy level (this layer) |
@@ -15,7 +15,7 @@ This layer does not run a separate WordPress + MySQL pool per attacker. It has
 | `honeypot_db_seed_1/2/3` + `honeypot_db_migration` | `honeypot_db_init` (clone-of-prod + scrub) |
 | `pool_router.lua` picks a backend **container** per IP | `db.php` picks a **database** per request |
 
-`reverse_proxy` still runs the full threat-analysis pipeline. Its per-session
+`reverse_proxy` still runs the full pattern-analysis pipeline. Its per-session
 decision (`route_decision` = `production` | `honeypot`) is passed to the single
 WordPress as the **`X-Honeypot-Backend`** request header (`proxy_set_header`, so
 a client copy is always overwritten). The WordPress **db drop-in**
@@ -29,11 +29,11 @@ Container count dropped from ~15 to 8 running services — the requested
 
 ### Verified live
 - Benign request → `route_decision=production` → **production DB**.
-- After an exploit flags the IP → `route_decision=honeypot` → **honeypot DB**
+- After a pattern flags the IP → `route_decision=honeypot` → **honeypot DB**
   (served the honeypot's marker content, not production's).
 - **Forged-header defense:** a client sending `X-Honeypot-Backend: production`
   while flagged is still served the honeypot DB — the proxy overrides it, so an
-  attacker cannot escape the honeypot by forging the header.
+  user cannot escape the honeypot by forging the header.
 - Honeypot clone's `wp_users` are scrubbed to dummy accounts (`admin/webmaster/
   editor`, dummy hashes); production's real users/hashes are never in it.
 
@@ -68,7 +68,7 @@ effect is on disk or in the process is therefore *not* isolated.
 | CVE-2025-47577 (Gift Voucher **upload → RCE**) | Same upload path **and** code execution (see #3). |
 | CVE-2024-50508 (WP File Upload **path traversal** read/write) | Reads/writes arbitrary paths on the shared container filesystem. |
 | CVE-2025-10142 (PagSeguro **path traversal**, `../../etc/passwd`) | Reads the shared container filesystem, identical for both sides. |
-| GENERIC-WP-001 (**wp-config.php disclosure**) | Leaks the file that contains the **production** DB credentials (production is the default backend), so the attacker can then connect to the real DB directly. |
+| GENERIC-WP-001 (**wp-config.php disclosure**) | Leaks the file that contains the **production** DB credentials (production is the default backend), so the user can then connect to the real DB directly. |
 
 A webshell an attacker uploads on a honeypot-routed request is written to the
 same `wp-content/uploads` production serves. When it is later requested with no
@@ -86,11 +86,11 @@ Once an attacker achieves code execution in the shared PHP process (e.g.
 CVE-2025-47577), the per-request header routing is meaningless:
 - `wp-config.php` and the container environment expose **both** the production
   (`DB_*` / `WORDPRESS_DB_*`) and honeypot (`HONEYPOT_DB_*`) credentials.
-- The container is attached to `production_network`, so the attacker's code can
+- The container is attached to `production_network`, so the user's code can
   open its own connection straight to `production_database` regardless of the
   `X-Honeypot-Backend` header.
 
-No per-request DB switch can contain an attacker who controls the process doing
+No per-request DB switch can contain a user who controls the process doing
 the switching. This is the core, unavoidable limitation of collapsing the pools
 into one runtime.
 
@@ -103,7 +103,7 @@ The pools previously isolated this per instance.
 The honeypot and production are byte-identical code responding from the same
 host, differing only in DB contents. Timing/side-channel fingerprinting that
 could previously be muddied by separate pool instances now has a single target;
-a sophisticated attacker who compares on-disk artifacts across "sessions" sees
+a sophisticated user who compares on-disk artifacts across "sessions" sees
 one machine.
 
 ## Recommended mitigations (if pursued further)

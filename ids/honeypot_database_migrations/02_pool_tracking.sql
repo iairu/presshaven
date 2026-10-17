@@ -9,7 +9,7 @@
 --   honeypot pool instance (honeypot_eshop_N + honeypot_database_N).  Redis is
 --   the primary store for these assignments (fast, low-latency lookups on every
 --   request), but this SQL schema provides a durable, queryable audit trail that
---   survives Redis restarts and enables post-hoc analysis of which attacker was
+--   survives Redis restarts and enables post-hoc analysis of which user was
 --   active in which pool instance.
 --
 -- TABLE OVERVIEW:
@@ -18,7 +18,7 @@
 --                                The ip_suffix column stores the sanitized IP
 --                                (dots replaced with underscores) which can be
 --                                used as a safe table-name or file-name suffix
---                                when per-attacker artefacts need to be isolated.
+--                                when per-user artefacts need to be isolated.
 --
 -- NOTE: This migration is applied to every honeypot database instance
 --       (honeypot_database_1, honeypot_database_2, honeypot_database_3) by the
@@ -73,12 +73,12 @@ ON DUPLICATE KEY UPDATE
 -- instance it was assigned to.
 --
 -- COLUMN NOTES:
---   ip_address    Plain IPv4 or IPv6 address of the attacker.
+--   ip_address    Plain IPv4 or IPv6 address of the user.
 --   ip_suffix     Sanitized form of the IP suitable for embedding in identifiers:
 --                   192.168.1.100  →  192_168_1_100
 --                 This is the "IP address suffix" referenced in the checklist and
 --                 can be appended to table names, file names, or log prefixes to
---                 namespace per-attacker artefacts without unsafe characters.
+--                 namespace per-user artefacts without unsafe characters.
 --   pool_id       Which pool instance this IP was assigned to (FK to registry).
 --   honeypot_reason  The trigger that caused this IP to be flagged (matches the
 --                 honeypot_reason field written by router.lua / pool_router.lua).
@@ -87,12 +87,12 @@ ON DUPLICATE KEY UPDATE
 --   first_seen    Timestamp of the very first honeypot request (immutable after
 --                 INSERT).
 --   last_seen     Automatically updated to NOW() on every UPDATE, providing a
---                 "last active" time for the attacker session.
+--                 "last active" time for the user session.
 -- ============================================
 CREATE TABLE IF NOT EXISTS `honeypot_ip_assignments` (
     `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `ip_address`      VARCHAR(45)      NOT NULL
-                          COMMENT 'Raw attacker IP address (IPv4 or IPv6)',
+                          COMMENT 'Raw user IP address (IPv4 or IPv6)',
     `ip_suffix`       VARCHAR(64)      NOT NULL
                           COMMENT 'Sanitized IP usable as a table/file name suffix (dots → underscores)',
     `pool_id`         TINYINT UNSIGNED NOT NULL
@@ -111,14 +111,14 @@ CREATE TABLE IF NOT EXISTS `honeypot_ip_assignments` (
     UNIQUE  KEY `uq_ip_address`  (`ip_address`),
     -- Fast look-up by pool when analysing a specific instance.
     INDEX   `idx_pool_id`        (`pool_id`),
-    -- Range queries by assignment time (e.g. "all attackers seen today").
+    -- Range queries by assignment time (e.g. "all users seen today").
     INDEX   `idx_first_seen`     (`first_seen`),
-    -- Range queries by activity time (e.g. "currently active attackers").
+    -- Range queries by activity time (e.g. "currently active users").
     INDEX   `idx_last_seen`      (`last_seen`),
-    -- Allow look-up by sanitized suffix (used in per-attacker table naming).
+    -- Allow look-up by sanitized suffix (used in per-user table naming).
     INDEX   `idx_ip_suffix`      (`ip_suffix`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  COMMENT='Audit log mapping attacker IPs to their assigned honeypot pool instances.';
+  COMMENT='Audit log mapping user IPs to their assigned honeypot pool instances.';
 
 -- ============================================
 -- TABLE: honeypot_pool_events
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS `honeypot_ip_assignments` (
 CREATE TABLE IF NOT EXISTS `honeypot_pool_events` (
     `id`          BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `ip_address`  VARCHAR(45)      NOT NULL
-                      COMMENT 'Attacker IP address that triggered the event',
+                      COMMENT 'Client IP address that triggered the event',
     `pool_id`     TINYINT UNSIGNED     NULL DEFAULT NULL
                       COMMENT 'Pool instance involved (NULL for events not tied to a specific pool)',
     `event_type`  VARCHAR(50)      NOT NULL

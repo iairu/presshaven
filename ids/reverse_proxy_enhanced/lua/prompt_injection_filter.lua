@@ -4,7 +4,7 @@
 --   This module is NOT currently wired into any live LLM call. No
 --   LLM-driven feature exists yet in this codebase -- NEW_PLAN.md section
 --   5.3.2, "Dynamic Response Generation (LLM Integration)", describes a
---   *planned* honeypot feature that would feed attacker-controlled request
+--   *planned* honeypot feature that would feed user-controlled request
 --   data (URI, headers, POST body) into an LLM prompt to generate believable
 --   fake responses. This module is built ahead of that feature, as a
 --   standalone, independently testable defensive component so the design is
@@ -14,15 +14,15 @@
 --   Independent of that future use, injection-style payloads found in
 --   request data are anomalous on their own: a legitimate WooCommerce
 --   storefront visitor has no reason to send text engineered to look like a
---   chat-turn delimiter or a system-prompt override. threat_analyzer.lua
+--   chat-turn delimiter or a system-prompt override. pattern_analyzer.lua
 --   therefore wires detect() in as an additional content-inspection stage,
 --   so this module has a genuine, exercised code path today rather than
 --   sitting dead until the LLM feature exists (see the docs/MANUAL.md's
 --   no-dead-code convention, §7/§9).
 --
 -- THREAT MODEL (OWASP Top 10 for LLM Applications, LLM01: Prompt Injection):
---   If attacker-controlled request data is ever interpolated into an LLM
---   prompt, an attacker who suspects this could attempt to:
+--   If user-controlled request data is ever interpolated into an LLM
+--   prompt, a user who suspects this could attempt to:
 --     - Override the system prompt / hidden instructions
 --       ("ignore previous instructions", "new instructions:", ...)
 --     - Hijack the model's persona
@@ -42,7 +42,7 @@
 --                                sequences are replaced with a placeholder,
 --                                not silently dropped, so a future LLM
 --                                feature can still log the original
---                                attacker-supplied text separately without
+--                                user-supplied text separately without
 --                                ever executing it as an instruction)
 --
 -- PORTABILITY:
@@ -60,7 +60,7 @@ local _M = {}
 --   plain = false -> pattern is a Lua pattern (supports %s+, .- wildcards
 --                     for "word ... word" phrasing variants).
 local INJECTION_PATTERNS = {
-    -- Instruction override: attacker tries to supersede prior instructions.
+    -- Instruction override: user tries to supersede prior instructions.
     { category = "instruction_override", pattern = "ignore%s+.-instructions", weight = 40, plain = false },
     { category = "instruction_override", pattern = "ignore%s+.-prompt",       weight = 35, plain = false },
     { category = "instruction_override", pattern = "disregard%s+.-above",     weight = 35, plain = false },
@@ -68,7 +68,7 @@ local INJECTION_PATTERNS = {
     { category = "instruction_override", pattern = "override%s+.-instructions", weight = 35, plain = false },
     { category = "instruction_override", pattern = "new instructions",       weight = 30, plain = true },
 
-    -- Role/persona hijack: attacker tries to redefine the model's identity
+    -- Role/persona hijack: user tries to redefine the model's identity
     -- or inject a fake chat turn to make the model believe new instructions
     -- came from a trusted role.
     { category = "role_hijack", pattern = "you are now",     weight = 30, plain = true },
@@ -80,7 +80,7 @@ local INJECTION_PATTERNS = {
     { category = "role_hijack", pattern = "<|im_start|>",    weight = 30, plain = true },
     { category = "role_hijack", pattern = "<|im_end|>",      weight = 30, plain = true },
 
-    -- Prompt/system exfiltration: attacker tries to make the model reveal
+    -- Prompt/system exfiltration: user tries to make the model reveal
     -- its hidden instructions, which would also reveal the honeypot's
     -- deception strategy.
     { category = "prompt_exfiltration", pattern = "repeat%s+.-instructions", weight = 30, plain = false },
@@ -89,7 +89,7 @@ local INJECTION_PATTERNS = {
     { category = "prompt_exfiltration", pattern = "what were you told",      weight = 25, plain = true },
     { category = "prompt_exfiltration", pattern = "output everything above", weight = 25, plain = true },
 
-    -- Context/delimiter breaking: attacker tries to escape a wrapping
+    -- Context/delimiter breaking: user tries to escape a wrapping
     -- delimiter used to fence off untrusted input within the prompt.
     { category = "context_break", pattern = "```",  weight = 10, plain = true },
     { category = "context_break", pattern = "%-%-%-+%s*end", weight = 20, plain = false },
@@ -223,7 +223,7 @@ end
 -- ---------------------------------------------------------------------------
 -- detect(input)
 --
--- @param input string  Untrusted, attacker-controlled text (e.g. a decoded
+-- @param input string  Untrusted, user-controlled text (e.g. a decoded
 --                       request URI, a query parameter, or a form field).
 -- @return table  {
 --   risk_score      integer 0..100, sum of matched pattern weights (capped)
@@ -276,7 +276,7 @@ end
 -- prompt: matched instruction/role/exfiltration phrases and delimiter-
 -- breaking sequences are replaced with a visible placeholder rather than
 -- silently stripped, so a future LLM feature can still log what the
--- attacker attempted without ever having it interpreted as an instruction.
+-- user attempted without ever having it interpreted as an instruction.
 --
 -- @param input string
 -- @return string

@@ -2,7 +2,7 @@
 
 QPainter box-and-arrow figures (no external graphing lib) that every PDF export
 can embed and cross-reference: a system-architecture map, a request-routing
-flow, and the threat-scoring pipeline. Kept deliberately simple and high
+flow, and the risk-scoring pipeline. Kept deliberately simple and high
 contrast so they stay legible when the PDF downscales them to page width.
 
 Each figure returns a VectorFigure (core/vector_figures.py), so it stays vector
@@ -138,7 +138,7 @@ def architecture_diagram(family: str = "Serif") -> VectorFigure:
     specs = [
         ("client", cx - 90, 40, 180, 44, "Internet / clients", "", "#eef2f7", _INK),
         ("proxy", cx - 150, 130, 300, 62, "Reverse proxy",
-         "OpenResty + Lua: threat scoring & routing", "#e7effa", _BLUE),
+         "OpenResty + Lua: risk scoring & routing", "#e7effa", _BLUE),
         ("redis", 30, 132, 190, 60, "session_store (Redis)",
          "sessions, IP reputation", "#eef0f2", _GREY),
         ("suri", 700, 132, 190, 60, "Suricata IDS",
@@ -266,11 +266,11 @@ def request_flow_diagram(family: str = "Serif") -> VectorFigure:
 
 
 def scoring_pipeline_diagram(family: str = "Serif") -> VectorFigure:
-    """The threat-score accumulation pipeline."""
+    """The risk-score accumulation pipeline."""
     img, p = _new(920, 260)
     p.setFont(QFont(family, 12, QFont.Weight.Bold))
     p.setPen(QColor(_INK))
-    p.drawText(20, 24, "Threat-scoring pipeline")
+    p.drawText(20, 24, "Risk-scoring pipeline")
 
     stages = [
         ("URI patterns", "+15 each", "#e7effa", _BLUE),
@@ -314,7 +314,7 @@ def scoring_pipeline_diagram(family: str = "Serif") -> VectorFigure:
 
 def routing_decision_diagram(family: str = "Serif") -> VectorFigure:
     """The whole routing decision for one request, in the order the reverse
-    proxy makes it (nginx.conf access block, threat_analyzer.lua, router.lua's
+    proxy makes it (nginx.conf access block, pattern_analyzer.lua, router.lua's
     decide_route stages): identify the session, score the request, fold it
     into the session, then the first stage that fires sends the request to
     THIS session's honeypot pool; none firing means production. Also states
@@ -422,7 +422,7 @@ def routing_decision_diagram(family: str = "Serif") -> VectorFigure:
                "their reputation is ignored once 2 sessions were active on the address within "
                "an hour and capped at 10 otherwise, which is below the > 10 needed to count as "
                "a new signal, so it cannot divert anyone on its own. An address shared with an "
-               "attacker therefore leaves its other users on production. Bound but below 30: "
+               "user therefore leaves its other users on production. Bound but below 30: "
                "the session is released back to production.")
     p.end()
     return img
@@ -443,7 +443,7 @@ def db_proxy_bypass_diagram(family: str = "Serif") -> VectorFigure:
         ("client", cx - 110, 44, 220, 46, "Attacker", "file upload / traversal / RCE exploit",
          "#eef2f7", _INK),
         ("proxy", cx - 130, 130, 260, 62, "Reverse proxy",
-         "detects the exploit, tags it for the honeypot", "#e7effa", _BLUE),
+         "detects the pattern, tags it for the honeypot", "#e7effa", _BLUE),
         ("shop", cx - 130, 250, 260, 70, "WordPress eshop (one, shared)",
          "same files and PHP runtime for production and honeypot", "#fdecea", _RED),
         ("pdb", 20, 390, 160, 52, "Production DB", "real data", "#e8f3ea", _GREEN),
@@ -476,7 +476,7 @@ def db_proxy_bypass_diagram(family: str = "Serif") -> VectorFigure:
     p.setFont(QFont(family, 9))
     p.drawText(callout.adjusted(12, 34, -12, -10), wrap,
                "The problem is between the reverse proxy and the WordPress instance. "
-               "Even when the exploit is detected and routed \"to the honeypot\", it "
+               "Even when the pattern is detected and routed \"to the honeypot\", it "
                "still reaches the same WordPress that serves production. An uploaded "
                "file or a traversal lands on the shared filesystem, and RCE runs in the "
                "shared PHP runtime, where it can read wp-config.php's production "

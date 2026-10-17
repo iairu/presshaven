@@ -32,11 +32,11 @@
 #
 # ZERO-DOWNTIME / NON-DESTRUCTIVE APPLY STRATEGY:
 #   Never DROP/recreate a table (that's what would actually cause visible
-#   downtime on a honeypot pool's live DB, mid-attacker-session). Instead:
+#   downtime on a honeypot pool's live DB, mid-user-session). Instead:
 #     - wp_posts/wp_postmeta/wp_term_relationships/wp_wc_product_meta_lookup:
 #       DELETE rows scoped to the EXACT production ID set, then INSERT fresh
 #       copies of those same rows, all in one short transaction. Scoped
-#       deletes mean anything an attacker added (their own posts, uploaded-
+#       deletes mean anything a user added (their own posts, uploaded-
 #       shell metadata, unrelated rows) is never touched -- same "never
 #       destroy evidence" principle docker-compose.yml's init_setup already
 #       documents for its file-sync step.
@@ -46,13 +46,13 @@
 #   The production-side read uses --single-transaction so it never locks
 #   production tables either.
 #
-# EXPLOIT GATING (coordinates with pool_router.lua's is_pool_healthy()):
+# PATTERN GATING (coordinates with pool_router.lua's is_pool_healthy()):
 #   Around each pool's own apply step, this script sets/clears a short-TTL
 #   Redis flag (honeypot_pool_replicating:<N>). init_worker.lua mirrors that
 #   into the shared dict pool_router.lua's is_pool_healthy() already reads,
-#   so a pool mid-replication is transparently skipped for NEW attacker
+#   so a pool mid-replication is transparently skipped for NEW user
 #   assignments (via the existing unhealthy-pool failover path) and
-#   already-bound attackers on that pool are transparently served by another
+#   already-bound users on that pool are transparently served by another
 #   pool for the few seconds the sync takes -- no new blocking logic, no
 #   dropped connections. See pool_router.lua for the other half of this.
 #
@@ -67,7 +67,7 @@ PROD_HOST="production_database"
 
 # Single-eshop / honeypot-database-pool topology: honeypot database 1 is cloned
 # from production by honeypot_db_init; pool_manager clones more (honeypot_database_N)
-# as attackers are assigned and lists every ready one in Redis
+# as users are assigned and lists every ready one in Redis
 # (honeypot_pool:ready). POOL_NUMS is re-read each cycle by refresh_pool_nums();
 # this is the fallback.
 POOL_NUMS="1"
@@ -118,7 +118,7 @@ refresh_pool_nums() {
 # unrecognized flag is a FATAL parse error for redis-cli, not a warning --
 # every single invocation of both functions below was silently failing
 # ("Unrecognized option or bad number of args for: '--no-auth-warning'"),
-# meaning this exploit-gating mechanism had never actually run, on any
+# meaning this pattern-gating mechanism had never actually run, on any
 # cycle, since this flag was added. The "using a password on the command
 # line" warning this flag exists to suppress is harmless log noise by
 # comparison -- 2>/dev/null on both calls hides it without needing the

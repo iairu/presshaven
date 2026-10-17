@@ -18,7 +18,7 @@ sys.path.insert(0, str(DASHBOARD_DIR))
 
 from core import honeypot_layer  # noqa: E402
 from core.docker_ctl import Target  # noqa: E402
-from core.exploits import EXPLOIT_PRESETS  # noqa: E402
+from core.patterns import PATTERN_PRESETS  # noqa: E402
 from core.state import AppState  # noqa: E402
 
 
@@ -97,7 +97,7 @@ class DbProxyOverlayTests(unittest.TestCase):
         self.assertNotIn("HONEYPOT_LAYER", (IDS_DIR / "docker-compose.yml").read_text())
 
     def test_some_presets_are_marked_not_db_isolatable(self):
-        blocked = [p for p in EXPLOIT_PRESETS if not p.db_isolated]
+        blocked = [p for p in PATTERN_PRESETS if not p.db_isolated]
         self.assertTrue(blocked)
         for preset in blocked:
             with self.subTest(cve=preset.cve):

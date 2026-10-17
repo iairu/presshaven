@@ -80,7 +80,7 @@ local function init_worker()
         end
 
         -- Pre-warm each honeypot pool with a smaller connection budget.
-        -- Fewer connections per pool are needed because attacker traffic is a
+        -- Fewer connections per pool are needed because user traffic is a
         -- fraction of total traffic and is spread across the pool instances.
         for _, i in ipairs(pool_ids) do
             if pool_ready[i] then
@@ -169,7 +169,7 @@ local function init_worker()
         end
 
         -- WordPress install-state probe. Feeds wp_install_state.lua's cache,
-        -- which threat_analyzer.lua/router.lua consult so that
+        -- which pattern_analyzer.lua/router.lua consult so that
         -- /wp-admin/install.php is treated as legitimate traffic (not an
         -- attack) until production has actually completed its first-run
         -- setup wizard -- see wp_install_state.lua's header comment. 30s is
@@ -250,8 +250,8 @@ local function init_worker()
         -- classification TEXT (e.g. "Attempted Denial of Service"), never
         -- a real IP address -- confirmed live against a real fast.log line
         -- before this fix. That meant threat_ips was keyed by that string
-        -- instead of the attacker's IP, so Suricata alerts never actually
-        -- reached the real attacker's IP reputation record, silently, the
+        -- instead of the user's IP, so Suricata alerts never actually
+        -- reached the real user's IP reputation record, silently, the
         -- whole time. eve.json's fields are named JSON keys, not
         -- positionally inferred, so this bug class can't recur. See
         -- suricata_rules.lua for the pure parsing/scoring logic and its
@@ -378,7 +378,7 @@ local function init_worker()
                                 -- live: this was writing reverse_proxy's own
                                 -- bridge address into threat_ips at score
                                 -- 100 instead of (or in addition to) the
-                                -- real client/attacker IP. That address can
+                                -- real client/user IP. That address can
                                 -- never match a future request's real
                                 -- remote_ip anyway (check_ip_reputation()
                                 -- always looks up ngx.var.remote_addr,

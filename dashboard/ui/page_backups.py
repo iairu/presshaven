@@ -9,7 +9,7 @@ delete, export to a local file, import from one (ids/backups/
 manage_backups.sh is the non-dashboard equivalent, sharing the exact same
 labels.json manifest) -- and a "Reset demo store" action that re-runs the
 WP-CLI seed script (scripts/seed_production_db.sh) to rebuild a clean
-WooCommerce/Elementor storefront, e.g. after exploits have been run
+WooCommerce/Elementor storefront, e.g. after patterns have been run
 against it."""
 from __future__ import annotations
 
@@ -203,7 +203,7 @@ class BackupsPage(QWidget):
             f"with the contents of:\n\n{selected.filename}\n"
             f"({selected.mtime.strftime('%Y-%m-%d %H:%M:%S UTC')})\n\n"
             "Any data written since that backup was taken (including anything "
-            "an attacker may have added since) will be lost. This cannot be undone. "
+            "a user may have added since) will be lost. This cannot be undone. "
             "Continue?",
         ):
             return
@@ -225,7 +225,7 @@ class BackupsPage(QWidget):
             f"with the contents of:\n\n{selected.filename}\n"
             f"({selected.mtime.strftime('%Y-%m-%d %H:%M:%S UTC')})\n\n"
             "Any file changes since that backup was taken (including anything "
-            "an attacker may have uploaded since) will be overwritten where the "
+            "a user may have uploaded since) will be overwritten where the "
             "archive has a matching file, though nothing added since is deleted. "
             "This cannot be undone. Continue?",
         ):
@@ -311,7 +311,7 @@ class BackupsPage(QWidget):
             self, "Confirm demo store reset",
             f"This wipes and rebuilds the ENTIRE live production database on {target.label} "
             "(WordPress, WooCommerce, Elementor, every product/page/order) from a clean "
-            "seed -- everything currently there, including anything an attacker has done, "
+            "seed -- everything currently there, including anything a user has done, "
             "will be lost. This cannot be undone. Continue?",
         ):
             return

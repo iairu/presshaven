@@ -304,7 +304,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Script File Upload Attempt"; f
 # but a real customer browsing. nginx itself already treats these same
 # extensions as "no attack surface" (see nginx.conf's static-asset
 # location block and router.lua's Stage 1 fast-path, both bypassing ALL
-# threat scoring for them) -- this rule just didn't share that judgment,
+# risk scoring for them) -- this rule just didn't share that judgment,
 # so it's now excluded here too, using the identical extension list.
 # What's left genuinely is a rate check on dynamic/page requests, which is
 # what "High Rate HTTP Requests" as a DoS signal is actually meant to

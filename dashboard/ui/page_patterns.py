@@ -1,18 +1,18 @@
 """Attack Simulation page: an embedded browser on the eshop (address bar included --
 production by default, but reverse_proxy's own routing decides whether a
 given request actually lands on production or a honeypot pool, same as a
-real visitor), an exploit-preset dropdown (core/exploits.py) with two
-SEPARATE one-click buttons -- "Run exploit (curl)" sends the preset's real
-request (its own headers/body -- the actual payload), "Run exploit
+real visitor), a pattern-preset dropdown (core/patterns.py) with two
+SEPARATE one-click buttons -- "Run pattern (curl)" sends the preset's real
+request (its own headers/body -- the actual payload), "Run pattern
 (browser)" navigates the embedded browser to the preset's URL as a plain
 GET using whatever session the browser already holds. Deliberately two
 buttons, not one that did both: that used to send TWO different requests
 per click (curl with the real payload, then an automatic bare-GET browser
 navigation to the same path) with two different signal profiles a couple
-seconds apart, which made the threat-analyzer log look internally
-inconsistent for what looked like "one exploit run" -- see
-_run_selected_exploit_curl()/_run_selected_exploit_browser(). A live
-threat-analyzer log tail sits next to the browser so the routing decision
+seconds apart, which made the pattern-analyzer log look internally
+inconsistent for what looked like "one pattern run" -- see
+_run_selected_pattern_curl()/_run_selected_pattern_browser(). A live
+pattern-analyzer log tail sits next to the browser so the routing decision
 is visible as it happens, and a Postman-style manual request builder
 (method/URL/headers/body, loadable from the same presets, sent via curl)
 covers anything the canned presets don't.
@@ -22,20 +22,20 @@ off-the-record profile, see browser_widget.py) rather than touching Redis
 directly. Since sessions became tamper-proof (signed cookie + passive
 fingerprint recovery, lua/session_identity_rules.lua), losing the cookie no
 longer starts a fresh session: the proxy recognises the same browser and
-hands its session back, exactly as it does for an attacker who clears
+hands its session back, exactly as it does for a user who clears
 cookies. "Unpoison host IP" below removes the session itself. That only
-affects the BROWSER though -- exploits themselves run via curl (stateless,
+affects the BROWSER though -- patterns themselves run via curl (stateless,
 no cookies at all), so a poisoned threat_ips/session entry for the shared
-host IP (every exploit run from this machine, and any local browser
+host IP (every pattern run from this machine, and any local browser
 testing, shows up as the same docker-bridge-gateway IP -- confirmed live
 throughout this project's development) sticks around independently of the
-browser's own cookies and can make the NEXT exploit run land on a
+browser's own cookies and can make the NEXT pattern run land on a
 honeypot pool from the start regardless of which CVE it's testing.
 "Unpoison host IP" (core/redis_inspect.clear_local_threat_state) is the
 server-side equivalent: wipes threat_ips/session:*/honeypot_pool_session:*/fp_session:*
-entries for any private/loopback IP, so exploit runs always start from a
-clean slate. Confirmed it can never touch real attacker data -- a genuine
-external attacker's source IP survives Docker's DNAT on a real two-host
+entries for any private/loopback IP, so pattern runs always start from a
+clean slate. Confirmed it can never touch real user data -- a genuine
+external user's source IP survives Docker's DNAT on a real two-host
 deployment, so it would never fall in that private/loopback range.
 """
 from __future__ import annotations
@@ -57,21 +57,21 @@ from PyQt6.QtGui import QDesktopServices, QPixmap
 from core import honeypot_layer
 from core.docker_ctl import target_for
 from core.env_upload import EnvUploadError, load_project_env
-from core.exploits import (COMPONENTS, EXPLOIT_PRESETS, KINDS, SURFACES, ExploitPreset,
+from core.patterns import (COMPONENTS, PATTERN_PRESETS, KINDS, SURFACES, PatternPreset,
                            build_curl_argv, filter_presets, group_presets, selection_label)
-from core import exploit_report_pdf
-from core.exploit_report import ReportError, ReportWorker
+from core import pattern_report_pdf
+from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
 from core.state import AppState
 from core.learning import explain_event, lesson_for
-from core.threat_log_parser import COLOR_HIGH, COLOR_LOW, COLOR_MED, SCORE_MAX, LineBuffer, ThreatEvent, parse_line
+from core.pattern_log_parser import COLOR_HIGH, COLOR_LOW, COLOR_MED, SCORE_MAX, LineBuffer, PatternEvent, parse_line
 from ui import theme
 from ui.common import ErrorBanner
 from ui.flow_layout import FlowLayout, labeled
 from ui.responsive import ResponsiveSplitter
 from ui.browser_widget import BrowserWidget
 from ui.kibana_timeline_capture import KibanaTimelineCapture
-from ui.page_learn import exploit_lesson_html
+from ui.page_learn import pattern_lesson_html
 from ui.process_runner import LogPanel
 
 _METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"]
@@ -103,7 +103,7 @@ def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
     URI (no spaces) overflows the card. This inserts zero-width spaces into
     long non-space runs -- and marks natural separators (/ & ? = , |) as break
     points -- so setWordWrap(True) can fold the line. It edits only what the
-    widget DISPLAYS; "Copy selected" reads the original ThreatEvent text (see
+    widget DISPLAYS; "Copy selected" reads the original PatternEvent text (see
     _event_copy_text), so the copied string keeps no zero-width characters."""
     text = label.text()
     out: list[str] = []
@@ -122,7 +122,7 @@ def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
 
 def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
                            kind: str = "", component: str = "", surface: str = "") -> None:
-    """(Re)fill a combo with the exploit presets. In the database proxy
+    """(Re)fill a combo with the pattern presets. In the database proxy
     honeypot layer, grey out (disable) the CVEs that the single-eshop /
     two-database honeypot cannot isolate (db_isolated=False). In the default
     reverse proxy layer every preset is enabled. Keeps the current preset
@@ -136,16 +136,16 @@ def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
     why); see ids/ids/db_proxy/COVERAGE.md.
 
     kind/component/surface narrow the list to one test category (see
-    core.exploits.ExploitPreset); "" means any. The list is grouped under
+    core.patterns.PatternPreset); "" means any. The list is grouped under
     bold, non-selectable headings naming the categories the selection
-    leaves open (core.exploits.group_presets)."""
+    leaves open (core.patterns.group_presets)."""
     previous = combo.currentData()
     grey_out = honeypot_layer.is_database()
     combo.blockSignals(True)
     combo.clear()
     if include_blank:
         combo.addItem("(blank request)", None)
-    for heading, presets in group_presets(EXPLOIT_PRESETS, kind, component, surface):
+    for heading, presets in group_presets(PATTERN_PRESETS, kind, component, surface):
         if heading:
             _add_group_heading(combo, heading)
         for preset in presets:
@@ -171,7 +171,7 @@ def _add_group_heading(combo: QComboBox, heading: str) -> None:
         item.setFont(font)
 
 
-def _add_preset_item(combo: QComboBox, preset: ExploitPreset, grey_out: bool) -> None:
+def _add_preset_item(combo: QComboBox, preset: PatternPreset, grey_out: bool) -> None:
     label = f"{preset.cve} -- {preset.name}"
     blocked = grey_out and not preset.db_isolated
     if blocked:
@@ -195,7 +195,7 @@ def _add_preset_item(combo: QComboBox, preset: ExploitPreset, grey_out: bool) ->
         item.setToolTip(tip)
 
 
-def _event_copy_text(event: ThreatEvent) -> str:
+def _event_copy_text(event: PatternEvent) -> str:
     """Plain-text rendering of one event -- exactly its label/detail as
     shown on the card, with its real log timestamp prepended (falls back to
     "unknown time" if the tail wasn't run with --timestamps, or the line
@@ -208,13 +208,13 @@ def _event_copy_text(event: ThreatEvent) -> str:
 
 
 class _EventCard(QFrame):
-    """One threat-event card -- a selection checkbox plus the event's
+    """One pattern-event card -- a selection checkbox plus the event's
     label/detail, colored by event.color. Selection state lives on the
-    card itself (self.checkbox) so ThreatDiagramWidget can just walk its
+    card itself (self.checkbox) so PatternDiagramWidget can just walk its
     layout for "Copy selected" rather than maintaining a parallel list that
     could drift out of sync with which cards actually still exist."""
 
-    def __init__(self, event: ThreatEvent, parent=None):
+    def __init__(self, event: PatternEvent, parent=None):
         super().__init__(parent)
         self.event = event
 
@@ -242,7 +242,7 @@ class _EventCard(QFrame):
         text_layout.setSpacing(2)
         label = QLabel(event.label)
         label.setStyleSheet(f"color: {event.color}; font-weight: bold;")
-        # Wrap the label too (some events -- e.g. a "HIGH THREAT SCORE" routing
+        # Wrap the label too (some events -- e.g. a "HIGH RISK SCORE" routing
         # line -- can carry long text). TextWrapAnywhere so an unbreakable token
         # (a long percent-encoded URI with no spaces) still wraps instead of
         # overflowing the card.
@@ -267,18 +267,18 @@ class _EventCard(QFrame):
         card_layout.addLayout(text_layout, stretch=1)
 
 
-class ThreatDiagramWidget(QWidget):
-    """Scrolling, newest-first timeline of colored threat-analyzer event
+class PatternDiagramWidget(QWidget):
+    """Scrolling, newest-first timeline of colored pattern-analyzer event
     cards -- the "what just happened, and why" view, complementing the
-    raw log tab. Fed one ThreatEvent at a time by ExploitsPage as its
-    threat_log tail streams in.
+    raw log tab. Fed one PatternEvent at a time by PatternsPage as its
+    pattern_log tail streams in.
 
     Each card carries a selection checkbox -- "Copy selected" builds a
     plain-text block from every checked card (one or many), each line
     exactly the card's own label/detail text plus its real log timestamp
-    (ThreatEvent.timestamp, from `docker compose logs --timestamps` --
-    see page_exploits.py's _start_threat_log() and
-    core/threat_log_parser.py's _DOCKER_TIMESTAMP_RE)."""
+    (PatternEvent.timestamp, from `docker compose logs --timestamps` --
+    see page_patterns.py's _start_pattern_log() and
+    core/pattern_log_parser.py's _DOCKER_TIMESTAMP_RE)."""
 
     MAX_EVENTS = 200
 
@@ -288,7 +288,7 @@ class ThreatDiagramWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         top_row = QHBoxLayout()
-        top_row.addWidget(QLabel("Threat-analyzer activity, newest first:"))
+        top_row.addWidget(QLabel("Pattern-analyzer activity, newest first:"))
         top_row.addStretch()
         self.select_all_btn = QPushButton("Select/Deselect all")
         self.select_all_btn.setToolTip(
@@ -361,7 +361,7 @@ class ThreatDiagramWidget(QWidget):
         text = "\n".join(_event_copy_text(card.event) for card in selected)
         QApplication.clipboard().setText(text)
 
-    def add_event(self, event: ThreatEvent) -> None:
+    def add_event(self, event: PatternEvent) -> None:
         card = _EventCard(event)
         self._inner_layout.insertWidget(0, card)
         self._count += 1
@@ -381,10 +381,10 @@ def _default_eshop_url(state: AppState) -> str:
     return f"https://{host}/"
 
 
-class ExploitsPage(QWidget):
-    # Emitted (with an exploit label) whenever an exploit is run from this page,
+class PatternsPage(QWidget):
+    # Emitted (with a pattern label) whenever a pattern is run from this page,
     # so the Workload Telemetry page can drop a time-aligned marker on its graphs.
-    exploit_ran = pyqtSignal(str)
+    pattern_ran = pyqtSignal(str)
     # Shown -> MainWindow asks the StatusPoller for an immediate poll.
     refresh_requested = pyqtSignal()
 
@@ -395,7 +395,7 @@ class ExploitsPage(QWidget):
         # clobbering an in-flight "Unpoison host IP" reverse_proxy
         # restart (which can take over a minute -- see _unpoison_host_ip's
         # own comment) if the user switches away from this page and back
-        # while it's still running: showEvent calling _start_threat_log()
+        # while it's still running: showEvent calling _start_pattern_log()
         # would call LogPanel.run(), which kills whatever process is
         # currently attached first -- including a restart still in
         # progress, not just the harmless log tail it's meant to refresh.
@@ -409,56 +409,56 @@ class ExploitsPage(QWidget):
         self.reset_btn.setToolTip(
             "Clears this browser's cookies. The reverse proxy recognises the same "
             "browser by its passive fingerprint and gives it back its session, as it "
-            "would an attacker clearing cookies; use \"Unpoison host IP\" to really "
+            "would a user clearing cookies; use \"Unpoison host IP\" to really "
             "start from a fresh session."
         )
         self.reset_btn.clicked.connect(self._reset_local_score)
         toolbar.addWidget(self.reset_btn)
 
-        self.exploit_combo = QComboBox()
-        _populate_preset_combo(self.exploit_combo)
-        # Test-category filters for the exploit list (built below, next to it).
+        self.pattern_combo = QComboBox()
+        _populate_preset_combo(self.pattern_combo)
+        # Test-category filters for the pattern list (built below, next to it).
         self.kind_filter = self._category_filter(
             "Type", KINDS, "Generic attacks are classes and tools (XSS, SQL injection, "
-            "wordlist scans, scanner user agents); CVE exploits are one published vulnerability.")
+            "wordlist scans, scanner user agents); CVE patterns are one published vulnerability.")
         self.component_filter = self._category_filter(
             "Target", COMPONENTS, "WordPress core, or a plugin / theme.")
         self.surface_filter = self._category_filter(
             "Surface", SURFACES, "Frontend: what visitors see (XSS, defacement). Backend: "
             "admin, configuration, authentication and data (wp-config, SQL injection).")
-        self.exploit_combo.setMinimumWidth(340)
-        toolbar.addWidget(labeled("Exploit:", self.exploit_combo))
+        self.pattern_combo.setMinimumWidth(340)
+        toolbar.addWidget(labeled("Pattern:", self.pattern_combo))
         self.explain_btn = QPushButton("What is this?")
         self.explain_btn.setToolTip(
-            "How the selected exploit works, its OWASP Top 10 / MITRE ATT&CK "
+            "How the selected pattern works, its OWASP Top 10 / MITRE ATT&CK "
             "category, and how to defend against it.")
-        self.explain_btn.clicked.connect(self._explain_selected_exploit)
+        self.explain_btn.clicked.connect(self._explain_selected_pattern)
         toolbar.addWidget(self.explain_btn)
-        # Two separate buttons, not one "Run exploit" that did both --
-        # confirmed live this was the actual cause of threat-analyzer
+        # Two separate buttons, not one "Run pattern" that did both --
+        # confirmed live this was the actual cause of pattern-analyzer
         # scores that looked internally inconsistent ("math doesn't add
         # up"): the old single button ran the preset via curl (its real
         # headers/body -- the CVE-specific payload) AND THEN navigated the
-        # embedded browser to the same path with a PLAIN GET (no exploit
+        # embedded browser to the same path with a PLAIN GET (no pattern
         # headers at all). That's two genuinely different requests with
         # two genuinely different signal profiles, a couple seconds apart
         # -- e.g. curl scoring 100 (CVE header + automation UA + URI
         # pattern) immediately followed by the browser's bare GET scoring
         # only 25 (URI pattern alone), both landing on HONEYPOT because
         # the SESSION was already sticky-bound from the first -- which
-        # reads as "two wildly different scores for the same exploit" if
+        # reads as "two wildly different scores for the same pattern" if
         # you don't already know two separate requests were involved.
         # Splitting into two buttons means exactly one request goes out
         # per click, sent exactly the way that button says it will be.
-        self.run_curl_btn = QPushButton("Run exploit (curl)")
+        self.run_curl_btn = QPushButton("Run pattern (curl)")
         self.run_curl_btn.setToolTip(
             "Sends the preset's real request (method/headers/body) via curl -- "
             "stateless, no browser cookies involved. This is what actually "
-            "carries the exploit payload (e.g. the CVE-specific header)."
+            "carries the pattern payload (e.g. the CVE-specific header)."
         )
-        self.run_curl_btn.clicked.connect(self._run_selected_exploit_curl)
+        self.run_curl_btn.clicked.connect(self._run_selected_pattern_curl)
         toolbar.addWidget(self.run_curl_btn)
-        self.run_browser_btn = QPushButton("Run exploit (browser)")
+        self.run_browser_btn = QPushButton("Run pattern (browser)")
         self.run_browser_btn.setToolTip(
             "Navigates the embedded browser to the preset's URL as a plain GET, "
             "using whatever session cookie the browser already holds -- the "
@@ -467,20 +467,20 @@ class ExploitsPage(QWidget):
             "what a real visitor would see at this URL, or to confirm a session "
             "that curl already bound to a honeypot pool routes consistently."
         )
-        self.run_browser_btn.clicked.connect(self._run_selected_exploit_browser)
+        self.run_browser_btn.clicked.connect(self._run_selected_pattern_browser)
         toolbar.addWidget(self.run_browser_btn)
-        # Runs every exploit the test-category selector currently lists, one
-        # after another, each exactly like "Run exploit (curl)". Click again
-        # while it runs to stop after the current exploit.
+        # Runs every pattern the test-category selector currently lists, one
+        # after another, each exactly like "Run pattern (curl)". Click again
+        # while it runs to stop after the current pattern.
         self.multi_run_btn = QPushButton("Multi-run (curl)")
         self.multi_run_btn.setToolTip(
-            "Runs every exploit matching the Type / Target / Surface selection "
-            "below, one after another, each sent via curl like \"Run exploit "
+            "Runs every pattern matching the Type / Target / Surface selection "
+            "below, one after another, each sent via curl like \"Run pattern "
             "(curl)\". No threat-state reset between them, so the score builds "
-            "up as it would for a real attacker. Click again to stop.")
+            "up as it would for a real user. Click again to stop.")
         self.multi_run_btn.clicked.connect(self._toggle_multi_run)
         toolbar.addWidget(self.multi_run_btn)
-        self._multi_queue: list[ExploitPreset] = []
+        self._multi_queue: list[PatternPreset] = []
         self._multi_total = 0
         # Bumped on every start, so a pending step of a stopped run that is
         # restarted within the gap doesn't fire into the new run.
@@ -491,8 +491,8 @@ class ExploitsPage(QWidget):
             "Clears threat_ips/session/pool-assignment entries in Redis for "
             "this machine's own shared IP, and restarts reverse_proxy (needed "
             "to also flush its in-memory copy of that same data) -- so the "
-            "next exploit run always starts from a fresh, production-routed "
-            "session. Server-side: affects curl-run exploits too, not just "
+            "next pattern run always starts from a fresh, production-routed "
+            "session. Server-side: affects curl-run patterns too, not just "
             "the embedded browser. Can take up to a couple minutes -- "
             "confirmed live reverse_proxy's own graceful shutdown often "
             "waits out in-flight keepalive connections (keepalive_timeout "
@@ -504,11 +504,11 @@ class ExploitsPage(QWidget):
 
         self.export_btn = QPushButton("Export report (PDF)")
         self.export_btn.setToolTip(
-            "Runs a fixed battery of exploit test scenarios against the live "
+            "Runs a fixed battery of pattern test scenarios against the live "
             "reverse_proxy and saves a PDF report: every preset run once from a "
             "freshly reset threat state (score/route/signals + a browser "
             "screenshot each), then a threat-increase scenario (two semi-random "
-            "exploits x3 rounds, no reset, showing the score climb), then a "
+            "patterns x3 rounds, no reset, showing the score climb), then a "
             "threat-decay scenario (no reset -- samples the score decaying over "
             "~2 min against the router's own decay model). Takes a few minutes; "
             "shows progress and can be cancelled."
@@ -545,7 +545,7 @@ class ExploitsPage(QWidget):
         self._report_out_path: str = ""
 
         # In-page progress row for report export, kept OUT of the embedded
-        # browser's area on purpose: the PDF's per-exploit screenshots are
+        # browser's area on purpose: the PDF's per-pattern screenshots are
         # grabs of that browser, so a modal QProgressDialog floating over the
         # window used to land in the screenshots. A sibling widget above the
         # splitter never overlaps the browser, so nothing has to be hidden
@@ -566,12 +566,12 @@ class ExploitsPage(QWidget):
         # Same red banner pattern as the Kibana/Backups/Pool State Store pages -- the
         # embedded browser's own error page just says something generic
         # like "can't reach this page" with no way to tell "is the eshop
-        # actually down, or something else" (a threat_analyzer/router.lua
-        # bug, a bad exploit request, ...). production_eshop/reverse_proxy
+        # actually down, or something else" (a pattern_analyzer/router.lua
+        # bug, a bad pattern request, ...). production_eshop/reverse_proxy
         # not running means nothing works at all; a honeypot_eshop_N pool
         # being down means some fraction of traffic (whichever gets routed
         # to it) would silently fail while production traffic looks fine --
-        # worth surfacing either way before assuming an exploit itself is
+        # worth surfacing either way before assuming a pattern itself is
         # what's broken.
         self.error_banner = ErrorBanner()
         layout.addWidget(self.error_banner)
@@ -584,9 +584,9 @@ class ExploitsPage(QWidget):
         status_row.addWidget(self.result_label)
         status_row.addStretch()
 
-        # Live threat score, colored to match router.lua's own
+        # Live risk score, colored to match router.lua's own
         # honeypot_threshold bands (see _score_badge_color()). Updated from
-        # the "[LOCATION / HEADER] route_decision=... threat_score=..."
+        # the "[LOCATION / HEADER] route_decision=... risk_score=..."
         # line, which nginx.conf emits exactly once per request regardless
         # of outcome -- the single most reliable per-request summary line
         # to drive this from.
@@ -620,10 +620,10 @@ class ExploitsPage(QWidget):
         self.splitter.addWidget(self.browser)
 
         tabs = QTabWidget()
-        self.threat_log = LogPanel(show_stop_button=False)
-        tabs.addTab(self.threat_log, "Threat analyzer log")
-        self.diagram = ThreatDiagramWidget()
-        tabs.addTab(self.diagram, "Threat analyzer")
+        self.pattern_log = LogPanel(show_stop_button=False)
+        tabs.addTab(self.pattern_log, "Pattern analyzer log")
+        self.diagram = PatternDiagramWidget()
+        tabs.addTab(self.diagram, "Pattern analyzer")
         self.manual_tab = _ManualRequestTab(state)
         tabs.addTab(self.manual_tab, "Manual request (curl)")
         self.tabs = tabs
@@ -632,12 +632,12 @@ class ExploitsPage(QWidget):
         self.splitter.setSizes([700, 500])
 
         self._line_buffer = LineBuffer()
-        self.threat_log.line_received.connect(self._on_threat_log_output)
+        self.pattern_log.line_received.connect(self._on_pattern_log_output)
 
-        self._start_threat_log()
+        self._start_pattern_log()
 
     def showEvent(self, event) -> None:
-        """Restarts the threat-analyzer log tail every time this page
+        """Restarts the pattern-analyzer log tail every time this page
         becomes visible again (switching to it from the sidebar/Ctrl+N,
         or un-minimizing the window while it's the current page) -- a
         fresh `docker compose logs --tail=200 -f` rather than whatever
@@ -647,7 +647,7 @@ class ExploitsPage(QWidget):
         restart is in flight -- see _unpoison_restarting's comment."""
         super().showEvent(event)
         if not self._unpoison_restarting:
-            self._start_threat_log()
+            self._start_pattern_log()
         # Fresh status via the background poller (MainWindow wires this to
         # StatusPoller.poll_now()); a synchronous ps() here froze the UI.
         self.refresh_requested.emit()
@@ -668,16 +668,16 @@ class ExploitsPage(QWidget):
         return (self.kind_filter.currentData(), self.component_filter.currentData(),
                 self.surface_filter.currentData())
 
-    def _selected_presets(self) -> list[ExploitPreset]:
+    def _selected_presets(self) -> list[PatternPreset]:
         """Every preset the selector lists that can run in the current layer
         (the greyed, non-DB-isolatable ones are left out)."""
-        return [p for p in filter_presets(EXPLOIT_PRESETS, *self._selection())
+        return [p for p in filter_presets(PATTERN_PRESETS, *self._selection())
                 if p.db_isolated or not honeypot_layer.is_database()]
 
     def _apply_category_filters(self) -> None:
-        """Narrow the exploit list to the selected test categories."""
+        """Narrow the pattern list to the selected test categories."""
         kind, component, surface = self._selection()
-        _populate_preset_combo(self.exploit_combo, kind=kind, component=component,
+        _populate_preset_combo(self.pattern_combo, kind=kind, component=component,
                                surface=surface)
         count = len(self._selected_presets())
         if not self._multi_queue:
@@ -734,7 +734,7 @@ class ExploitsPage(QWidget):
 
         if down:
             self.error_banner.setText(
-                "⚠ Not reachable: " + ", ".join(down) + " -- exploits/browsing here may "
+                "⚠ Not reachable: " + ", ".join(down) + " -- patterns/browsing here may "
                 "fail or behave unexpectedly until it's back up. Start it from the "
                 "Workloads page."
             )
@@ -744,25 +744,25 @@ class ExploitsPage(QWidget):
 
     # ---- threat log tail -> parsed events (score badge + diagram tab) ----
 
-    def _start_threat_log(self, tail: int = 200) -> None:
+    def _start_pattern_log(self, tail: int = 200) -> None:
         self._line_buffer = LineBuffer()
         self._pending_final_score_event = None
         self._pending_final_score_generation = 0
-        # --timestamps: lets threat_log_parser.parse_line() attach each
-        # event's real log timestamp (ThreatEvent.timestamp) -- used by the
-        # Threat analyzer tab's "Copy selected" (see ThreatDiagramWidget).
+        # --timestamps: lets pattern_log_parser.parse_line() attach each
+        # event's real log timestamp (PatternEvent.timestamp) -- used by the
+        # Pattern analyzer tab's "Copy selected" (see PatternDiagramWidget).
         argv, cwd = self._target().build("logs", "--timestamps", f"--tail={tail}", "-f", "reverse_proxy")
-        self.threat_log.run(argv, cwd)
+        self.pattern_log.run(argv, cwd)
 
-    def _on_threat_log_output(self, chunk: str) -> None:
+    def _on_pattern_log_output(self, chunk: str) -> None:
         for line in self._line_buffer.feed(chunk):
             event = parse_line(line)
             if event is None:
                 continue
-            self._handle_threat_event(event)
+            self._handle_pattern_event(event)
 
-    def _handle_threat_event(self, event: ThreatEvent) -> None:
-        # threat_analyzer.lua's own "Final score: N/80 (verdict)" line is
+    def _handle_pattern_event(self, event: PatternEvent) -> None:
+        # pattern_analyzer.lua's own "Final score: N/80 (verdict)" line is
         # logged for EVERY request, including ones on an already
         # honeypot_bound session -- there, the routing decision comes from
         # the EXISTING sticky binding (router.lua Stage 2), not from this
@@ -800,7 +800,7 @@ class ExploitsPage(QWidget):
         else:
             self._flush_pending_final_score()
 
-        self._add_threat_event(event)
+        self._add_pattern_event(event)
 
     def _flush_pending_final_score_if_gen(self, gen: int) -> None:
         if self._pending_final_score_generation == gen:
@@ -808,10 +808,10 @@ class ExploitsPage(QWidget):
 
     def _flush_pending_final_score(self) -> None:
         if self._pending_final_score_event is not None:
-            self._add_threat_event(self._pending_final_score_event)
+            self._add_pattern_event(self._pending_final_score_event)
             self._pending_final_score_event = None
 
-    def _add_threat_event(self, event: ThreatEvent) -> None:
+    def _add_pattern_event(self, event: PatternEvent) -> None:
         self.diagram.add_event(event)
         if event.kind == "outcome":
             if event.score is not None:
@@ -831,7 +831,7 @@ class ExploitsPage(QWidget):
             "border-radius: 4px; font-weight: bold; }"
         )
 
-    def _update_route_label(self, event: ThreatEvent) -> None:
+    def _update_route_label(self, event: PatternEvent) -> None:
         is_honeypot = "HONEYPOT" in event.label.upper()
         text = "Routed to HONEYPOT" if is_honeypot else "Routed to PROD"
         color = COLOR_MED if is_honeypot else COLOR_LOW
@@ -851,38 +851,38 @@ class ExploitsPage(QWidget):
             "fingerprint. Use \"Unpoison host IP\" for a fresh session.")
         self.result_label.setStyleSheet("color: #5cb85c;")
 
-    def _explain_selected_exploit(self) -> None:
-        preset: ExploitPreset = self.exploit_combo.currentData()
+    def _explain_selected_pattern(self) -> None:
+        preset: PatternPreset = self.pattern_combo.currentData()
         if preset is None:
             return
         box = QMessageBox(self)
         box.setWindowTitle(f"About {preset.cve}")
         box.setTextFormat(Qt.TextFormat.RichText)
-        box.setText(exploit_lesson_html(preset))
+        box.setText(pattern_lesson_html(preset))
         box.exec()
 
-    def _run_selected_exploit_curl(self) -> None:
+    def _run_selected_pattern_curl(self) -> None:
         """Sends the preset's real request (its own method/headers/body --
-        the actual exploit payload) via curl. Stateless: no browser
+        the actual pattern payload) via curl. Stateless: no browser
         cookies read or written. This is the ONLY button that carries the
-        preset's headers/body -- Run exploit (browser) below sends a
+        preset's headers/body -- Run pattern (browser) below sends a
         plain GET instead, since a browser navigation has no way to carry
         those."""
-        preset: ExploitPreset = self.exploit_combo.currentData()
+        preset: PatternPreset = self.pattern_combo.currentData()
         if preset is None or not self._runnable(preset):
             return
         self._send_curl(preset)
 
-    def _send_curl(self, preset: ExploitPreset, prefix: str = "") -> None:
+    def _send_curl(self, preset: PatternPreset, prefix: str = "") -> None:
         """One curl run of `preset` (shared by the single and multi-run
         buttons); `prefix` goes in front of the result line."""
-        self.exploit_ran.emit(f"{preset.cve} — {preset.name} (curl)")
+        self.pattern_ran.emit(f"{preset.cve} — {preset.name} (curl)")
         base_url = self._base_url()
         argv = build_curl_argv(preset, base_url)
         # Also present the internal test secret so production_eshop's
         # honeypot-db-backend-header mu-plugin reports which database container
         # actually served this request (X-DB-* headers) -- surfaced in the
-        # Threat analyzer GUI below. No-op if the secret can't be read.
+        # Pattern analyzer GUI below. No-op if the secret can't be read.
         secret = self._internal_secret() if honeypot_layer.is_database() else ""
         if secret:
             argv = [*argv, "-H", f"X-Internal-Test-Auth: {secret}"]
@@ -903,7 +903,7 @@ class ExploitsPage(QWidget):
         self.result_label.setStyleSheet("color: #5cb85c;")
         self._show_db_backend(result.stdout)
 
-    # Pause between multi-run exploits, so each one's threat-analyzer lines
+    # Pause between multi-run patterns, so each one's pattern-analyzer lines
     # and Resources-page marker stay apart and the UI repaints in between.
     _MULTI_RUN_GAP_MS = 1500
 
@@ -936,7 +936,7 @@ class ExploitsPage(QWidget):
             QTimer.singleShot(self._MULTI_RUN_GAP_MS, lambda: self._multi_run_next(gen))
         else:
             self._finish_multi_run(
-                f"Multi-run done: {self._multi_total} exploit(s) "
+                f"Multi-run done: {self._multi_total} pattern(s) "
                 f"({selection_label(*self._selection())}). Last: {self.result_label.text()}")
 
     def _finish_multi_run(self, message: str) -> None:
@@ -946,21 +946,21 @@ class ExploitsPage(QWidget):
         self._apply_category_filters()  # restores the button's label/count
         self.result_label.setText(message)
 
-    def _run_selected_exploit_browser(self) -> None:
+    def _run_selected_pattern_browser(self) -> None:
         """Navigates the embedded browser to the preset's URL as a plain
         GET, using whatever session cookie the browser already holds --
         the visitor's-eye view of that path. Does NOT send the preset's
-        headers/body (Run exploit (curl) above is the one that does)."""
-        preset: ExploitPreset = self.exploit_combo.currentData()
+        headers/body (Run pattern (curl) above is the one that does)."""
+        preset: PatternPreset = self.pattern_combo.currentData()
         if preset is None or not self._runnable(preset):
             return
-        self.exploit_ran.emit(f"{preset.cve} — {preset.name} (browser)")
+        self.pattern_ran.emit(f"{preset.cve} — {preset.name} (browser)")
         base_url = self._base_url()
         self.result_label.setText(f"Navigating to {preset.path} (browser)...")
         self.result_label.setStyleSheet("color: #888888;")
         self.browser.navigate(base_url + preset.path)
 
-    def _runnable(self, preset: ExploitPreset) -> bool:
+    def _runnable(self, preset: PatternPreset) -> bool:
         """Guard: the greyed-out (db_isolated=False) presets aren't selectable
         in the combo, but if one is ever current, refuse to run it here and
         explain why (this honeypot can't contain it)."""
@@ -969,7 +969,7 @@ class ExploitsPage(QWidget):
         QMessageBox.information(
             self, "Not applicable to this honeypot",
             f"{preset.cve} -- {preset.name}\n\nThis database-proxy honeypot "
-            f"cannot isolate this exploit:\n\n{preset.coverage_note}",
+            f"cannot isolate this pattern:\n\n{preset.coverage_note}",
         )
         return False
 
@@ -991,7 +991,7 @@ class ExploitsPage(QWidget):
     def _show_db_backend(self, response_text: str) -> None:
         """Parse the X-DB-* response headers emitted by production_eshop's
         honeypot-db-backend-header mu-plugin and add a "database container
-        response" card to the Threat analyzer GUI, exposing which database
+        response" card to the Pattern analyzer GUI, exposing which database
         (production vs honeypot) actually served the request -- proven by the
         real SELECTs the mu-plugin ran against the resolved $wpdb. Silently does
         nothing if the headers aren't present (secret missing, or a request that
@@ -1015,7 +1015,7 @@ class ExploitsPage(QWidget):
         server = fields.get("x-db-server")
         if server and server not in detail:
             detail = f"served by {server} | {detail}" if detail else f"served by {server}"
-        self.diagram.add_event(ThreatEvent("database", label, detail, color))
+        self.diagram.add_event(PatternEvent("database", label, detail, color))
 
     def _unpoison_host_ip(self) -> None:
         target = self._target()
@@ -1030,8 +1030,8 @@ class ExploitsPage(QWidget):
             self.result_label.setStyleSheet("color: #d9534f;")
             return
 
-        # Clearing Redis alone isn't enough: threat_analyzer.lua's hot-path
-        # IP-reputation check (check_ip_reputation(), threat_analyzer.lua)
+        # Clearing Redis alone isn't enough: pattern_analyzer.lua's hot-path
+        # IP-reputation check (check_ip_reputation(), pattern_analyzer.lua)
         # reads ngx.shared.threat_intel -- an in-memory dict living INSIDE
         # the reverse_proxy worker process, not Redis -- "it never touches
         # Redis directly, for latency" (see init_worker.lua's own comment
@@ -1046,7 +1046,7 @@ class ExploitsPage(QWidget):
         # process's Lua shared-memory zone from outside, so this is the
         # only real fix.
         #
-        # Run through the same LogPanel that tails threat-analyzer logs
+        # Run through the same LogPanel that tails pattern-analyzer logs
         # (QProcess, non-blocking) rather than a synchronous
         # subprocess.run() -- confirmed live this restart specifically can
         # take over a minute (nginx's graceful shutdown waits out
@@ -1061,7 +1061,7 @@ class ExploitsPage(QWidget):
         self._unpoison_summary = summary
         self.result_label.setText(
             "Redis cleared -- restarting reverse_proxy to flush its in-memory "
-            "copy too (can take a while -- see the Threat analyzer log tab)..."
+            "copy too (can take a while -- see the Pattern analyzer log tab)..."
         )
         argv, cwd = target.build("restart", "reverse_proxy")
         # Connect AFTER run(), not before: run() calls stop() internally
@@ -1071,11 +1071,11 @@ class ExploitsPage(QWidget):
         # (confirmed live: exit code 9/SIGKILL, instantly) instead of this
         # restart command's actual completion.
         self._unpoison_restarting = True
-        self.threat_log.run(argv, cwd)
-        self.threat_log.finished.connect(self._on_unpoison_restart_finished)
+        self.pattern_log.run(argv, cwd)
+        self.pattern_log.finished.connect(self._on_unpoison_restart_finished)
 
     def _on_unpoison_restart_finished(self, exit_code: int) -> None:
-        self.threat_log.finished.disconnect(self._on_unpoison_restart_finished)
+        self.pattern_log.finished.disconnect(self._on_unpoison_restart_finished)
         self._unpoison_restarting = False
         summary = getattr(self, "_unpoison_summary", {})
 
@@ -1100,7 +1100,7 @@ class ExploitsPage(QWidget):
             self.result_label.setStyleSheet("color: #5cb85c;")
 
         # tail=0: only show what happens from now on, not the pre-restart history.
-        self._start_threat_log(tail=0)  # resume live tailing on the fresh container
+        self._start_pattern_log(tail=0)  # resume live tailing on the fresh container
         if exit_code == 0:
             # Drop the browser's old session cookie and load the home page: the
             # clean request it makes is what puts "score 0 / PROD" into the threat
@@ -1114,18 +1114,18 @@ class ExploitsPage(QWidget):
     def _export_report(self) -> None:
         if self._report_worker is not None:
             return  # already running
-        # The report covers the exploits the test-category selector lists, and
+        # The report covers the patterns the test-category selector lists, and
         # its header names the selection. Unlike Multi-run it keeps the
         # non-DB-isolatable ones in the database layer: the report's bypass
         # section is where those are shown.
-        presets = filter_presets(EXPLOIT_PRESETS, *self._selection())
+        presets = filter_presets(PATTERN_PRESETS, *self._selection())
         if not presets:
             QMessageBox.information(self, "Nothing to export",
-                                    "No exploit matches the current selection.")
+                                    "No pattern matches the current selection.")
             return
-        default_name = "exploit_report.pdf"
+        default_name = "pattern_report.pdf"
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save exploit report", default_name, "PDF files (*.pdf)")
+            self, "Save pattern report", default_name, "PDF files (*.pdf)")
         if not path:
             return
         if not path.lower().endswith(".pdf"):
@@ -1133,16 +1133,16 @@ class ExploitsPage(QWidget):
         self._report_out_path = path
 
         # Per-run temp dir for the browser screenshots the PDF embeds.
-        self._report_tmpdir = tempfile.mkdtemp(prefix="exploit_report_")
+        self._report_tmpdir = tempfile.mkdtemp(prefix="pattern_report_")
 
         # Result state for the single teardown point (_on_report_thread_finished).
         self._report_render_error = ""
         self._report_worker_error = ""
 
-        # Start the threat analyzer from empty so it shows only this run, live:
+        # Start the pattern analyzer from empty so it shows only this run, live:
         # the report's requests stream into it as they happen, next to the browser
-        # that loads each exploit page.
-        self._clear_threat_analyzer()
+        # that loads each pattern page.
+        self._clear_pattern_analyzer()
         self._saved_zoom = self.browser.view.zoomFactor()
 
         worker = ReportWorker(self._target(), self._base_url(), presets=presets,
@@ -1216,8 +1216,8 @@ class ExploitsPage(QWidget):
         except Exception:  # noqa: BLE001 -- the report just goes without it
             _done("")
 
-    def _clear_threat_analyzer(self) -> None:
-        """Empty the threat analyzer tab and reset the score/route badges."""
+    def _clear_pattern_analyzer(self) -> None:
+        """Empty the pattern analyzer tab and reset the score/route badges."""
         self.diagram.clear()
         self._pending_final_score_event = None
         self._pending_final_score_generation = getattr(self, "_pending_final_score_generation", 0) + 1
@@ -1232,7 +1232,7 @@ class ExploitsPage(QWidget):
     def _capture_browser(self, url: str, key: str) -> str:
         """Load `url` in the embedded browser and grab it. The browser pane is
         widened just for this (more native pixels, sharper once the PDF
-        downscales it) and put back right after, so the threat analyzer stays
+        downscales it) and put back right after, so the pattern analyzer stays
         visible for the rest of the run."""
         sizes = self.splitter.sizes()
         total_w = sum(sizes) or self.splitter.width()
@@ -1357,7 +1357,7 @@ class ExploitsPage(QWidget):
         # Fires before QThread.finished. Render the PDF here (GUI thread --
         # QtGui/print machinery); the teardown below reads _report_render_error.
         try:
-            exploit_report_pdf.render_pdf(data, self._report_out_path)
+            pattern_report_pdf.render_pdf(data, self._report_out_path)
         except Exception as e:  # noqa: BLE001 -- report any render failure to the user
             self._report_render_error = str(e)
 
@@ -1402,21 +1402,21 @@ class ExploitsPage(QWidget):
         self.result_label.setStyleSheet("color: #5cb85c;")
         if QMessageBox.question(
             self, "Report saved",
-            f"Saved exploit report to:\n{out_path}\n\nOpen it now?",
+            f"Saved pattern report to:\n{out_path}\n\nOpen it now?",
         ) == QMessageBox.StandardButton.Yes:
             QDesktopServices.openUrl(QUrl.fromLocalFile(out_path))
 
     def rebuild_targets(self) -> None:
         """Call when remote settings change (Connectors & Config page) -- the next
-        exploit run / log tail picks up the new target automatically since
+        pattern run / log tail picks up the new target automatically since
         _target()/_base_url() are computed fresh each time; this just
         restarts the log tail against the (possibly new) target."""
-        self._start_threat_log()
+        self._start_pattern_log()
 
 
 class _ManualRequestTab(QWidget):
     """Postman-style manual request builder: method/URL/headers/body,
-    loadable from the same exploit presets (editable afterward), sent via
+    loadable from the same pattern presets (editable afterward), sent via
     curl with the raw response (status + headers + body, from curl's own
     -i output) shown below."""
 
@@ -1484,7 +1484,7 @@ class _ManualRequestTab(QWidget):
             self.headers_table.removeRow(row)
 
     def _load_preset(self) -> None:
-        preset: ExploitPreset | None = self.preset_combo.currentData()
+        preset: PatternPreset | None = self.preset_combo.currentData()
         if preset is None:
             return
         base = _default_eshop_url(self.state).rstrip("/")
@@ -1505,7 +1505,7 @@ class _ManualRequestTab(QWidget):
         method = self.method_combo.currentText()
         body = self.body_edit.toPlainText()
 
-        # -g/--globoff: see core/exploits.py's build_curl_argv -- the same
+        # -g/--globoff: see core/patterns.py's build_curl_argv -- the same
         # "[" range-globbing surprise applies here for anything a user
         # types or loads with literal brackets in it.
         argv = ["curl", "-sk", "-g", "-i", "-X", method, url]

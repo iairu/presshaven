@@ -1,8 +1,8 @@
 """Data and verdict for the Segmentation Validation page's PDF report (no Qt, so it is unit
 tested on its own; the rendering is core/pool_test_report_pdf.py).
 
-The property under test: by default there is ONE malicious session per
-honeypot pool. The pools scale with the number of attacker sessions: a session
+The property under test: by default there is ONE flagged session per
+honeypot pool. The pools scale with the number of user sessions: a session
 that finds no free pool borrows one round-robin until pool_manager has built its
 own, then moves there. Two sessions only keep sharing a pool once growth is
 capped (the pools' resource budget or POOL_MAX is reached, or the host is low on
@@ -16,17 +16,17 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-# Exploits the report runs, chosen from a live probe of every GET preset (fresh
+# Patterns the report runs, chosen from a live probe of every GET preset (fresh
 # session each, up to three attempts): these divert to a honeypot on the FIRST
-# request. Per window (A, B, C): a primary exploit and a second, different one;
+# request. Per window (A, B, C): a primary pattern and a second, different one;
 # FALLBACK are the ones that divert on the 2nd-3rd request, tried only when a
-# window's chosen exploit does not divert within MAX_ATTEMPTS. Presets that never
+# window's chosen pattern does not divert within MAX_ATTEMPTS. Presets that never
 # divert in three attempts (time-based blind SQLi, wordlist scans, IDOR walks)
 # are deliberately absent. test_pool_test_report checks every CVE exists.
-EXPLOIT_PLAN = [("CVE-2024-2387", "CVE-2024-1071"),     # A: SQL injection
+PATTERN_PLAN = [("CVE-2024-2387", "CVE-2024-1071"),     # A: SQL injection
                 ("CVE-2025-47577", "CVE-2025-4403"),    # B: file-upload RCE
                 ("GENERIC-WP-003", "GENERIC-WP-002")]   # C: user enumeration / installer
-FALLBACK_EXPLOITS = ["CVE-2024-27956", "CVE-2022-0739", "CVE-2024-2879", "CVE-2023-2986",
+FALLBACK_PATTERNS = ["CVE-2024-27956", "CVE-2022-0739", "CVE-2024-2879", "CVE-2023-2986",
                      "CVE-2025-2266", "GENERIC-SQLI-001", "GENERIC-XSS-001", "GENERIC-XSS-002",
                      "GENERIC-WP-001"]
 MAX_ATTEMPTS = 3
@@ -82,15 +82,15 @@ def browse_action(labels: list[str]) -> str:
 
 
 def window_plan(windows: int) -> list[tuple[str, str]]:
-    """(first, second) exploit per window. Windows A-C use EXPLOIT_PLAN; further
-    windows open with a fallback exploit (a different one each while they last)
-    and run one of A-C's second exploits afterwards -- separate sessions, so a
+    """(first, second) pattern per window. Windows A-C use PATTERN_PLAN; further
+    windows open with a fallback pattern (a different one each while they last)
+    and run one of A-C's second patterns afterwards -- separate sessions, so a
     repeat across windows does not matter there."""
-    plan = list(EXPLOIT_PLAN[:windows])
+    plan = list(PATTERN_PLAN[:windows])
     for w in range(len(plan), windows):
-        k = w - len(EXPLOIT_PLAN)
-        plan.append((FALLBACK_EXPLOITS[k % len(FALLBACK_EXPLOITS)],
-                     EXPLOIT_PLAN[k % len(EXPLOIT_PLAN)][1]))
+        k = w - len(PATTERN_PLAN)
+        plan.append((FALLBACK_PATTERNS[k % len(FALLBACK_PATTERNS)],
+                     PATTERN_PLAN[k % len(PATTERN_PLAN)][1]))
     return plan
 
 EXCLUSIVE = "exclusive"
@@ -152,7 +152,7 @@ def parse_decision(session_id: str, session_json: str, pool_text: str,
     pool = int(pool_text) if pool_text.strip().isdigit() else None
     if not isinstance(rec, dict):
         rec = {}
-    score = rec.get("threat_score")
+    score = rec.get("risk_score")
     bound = bool(rec.get("honeypot_bound")) or pool is not None
     return Decision(
         session_id=session_id,
@@ -397,8 +397,8 @@ def sticky_violations(steps: list[StepResult], resets: set[tuple[int, int]] | No
 
 
 @dataclass
-class ExploitRun:
-    """One exploit a window ran: how many attempts it took to be diverted."""
+class PatternRun:
+    """One pattern a window ran: how many attempts it took to be diverted."""
     window: str
     cve: str
     name: str
@@ -453,11 +453,11 @@ class PoolTestData:
     generated_at: str
     target_label: str
     base_url: str
-    exploit: str
+    pattern: str
     frames: list[FrameResult]
     pool_state: dict = field(default_factory=dict)   # redis_inspect.pool_state()
     steps: list[StepResult] = field(default_factory=list)
-    runs: list[ExploitRun] = field(default_factory=list)
+    runs: list[PatternRun] = field(default_factory=list)
     evidence: list[Any] = field(default_factory=list)   # pool_evidence.ContainerEvidence
     since: str = ""
     # Scaling / latency (all times in seconds since the run started).
@@ -822,7 +822,7 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
             seen[f.session_id] = f.label
     if merged:
         return Verdict(MERGED, "Frames were merged into one session", [
-            f"{pair} hold the same session id, so they are one attacker, not two."
+            f"{pair} hold the same session id, so they are one user, not two."
             for pair in merged
         ] + ["Each frame needs its own cookie jar and browser fingerprint "
              "(User-Agent / Accept-Language); check that the frames were reset with "
@@ -870,9 +870,9 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
     if not shared:
         pools = ", ".join(f"{f.label} → pool {f.pool}" for f in frames)
         if unstable:
-            return Verdict(UNSTABLE, "Pools are exclusive but an attacker changed pool",
+            return Verdict(UNSTABLE, "Pools are exclusive but a user changed pool",
                            [pools + "."] + moved, by_pool)
-        return Verdict(EXCLUSIVE, "Every attacker has a honeypot pool of their own",
+        return Verdict(EXCLUSIVE, "Every user has a honeypot pool of their own",
                        [pools + "."] + moved, by_pool)
 
     findings = [f"Pool {n} is shared by {', '.join(labels)}"
@@ -880,13 +880,13 @@ def analyze(frames: list[FrameResult], state: dict, steps: list[StepResult] | No
                 for n, labels in sorted(shared.items())]
     if sharing_justified(state):
         if state.get("capped"):
-            reason = (f"pool growth is capped ({state.get('capped')}), so further attackers "
+            reason = (f"pool growth is capped ({state.get('capped')}), so further users "
                       "were assigned to the ready pools round-robin")
         elif state.get("waiting"):
             reason = (f"{state.get('waiting')} session(s) were still waiting for the pool "
                       "pool_manager was building for them when the run ended")
         else:
-            reason = ("no free pool was left, so new attackers were assigned to the "
+            reason = ("no free pool was left, so new users were assigned to the "
                       "ready pools round-robin")
         return Verdict(SHARED_EXPECTED, "Pools are shared, as expected under resource pressure",
                        findings + [f"This is the designed fallback: {reason}."] + moved + cart_issues, by_pool)

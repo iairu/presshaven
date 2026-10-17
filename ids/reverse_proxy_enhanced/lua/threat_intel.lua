@@ -12,7 +12,7 @@
 --      got userdata" on a fresh/flushed Redis. load() handles it once.
 --   2. threat_ips[ip] must be defaulted to a clean entry before it's bumped.
 --   3. The mutated table has to be written back to Redis AND mirrored into
---      the ngx.shared.threat_intel dict that threat_analyzer.lua reads on
+--      the ngx.shared.threat_intel dict that pattern_analyzer.lua reads on
 --      the hot path (it never touches Redis directly, for latency) -- miss
 --      the mirror and the detection updates durable storage but has zero
 --      effect on live routing until something else refreshes the dict.
@@ -70,7 +70,7 @@ function _M.ensure(threats, ip, extra_defaults)
 end
 
 --- Persist the whole threats table to Redis AND mirror it into the
---- shared-memory dict threat_analyzer.lua reads on the hot path. Returns
+--- shared-memory dict pattern_analyzer.lua reads on the hot path. Returns
 --- the encoded JSON (handy for logging). `red` may be nil -- the
 --- shared-dict mirror still happens, matching admin_handler's original
 --- "update shared memory even if Redis is down" behaviour.

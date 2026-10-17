@@ -98,7 +98,7 @@ class _MetricChart(QWidget):
         self._unit = y_title                       # "%", "MiB" or "KiB"
         self._labels: dict[str, str] = {}          # service -> full container name
         self._marker_series: dict[int, QLineSeries] = {}   # marker id -> vertical line
-        self._marker_labels: dict = {}             # series -> exploit name (for hover)
+        self._marker_labels: dict = {}             # series -> pattern name (for hover)
         self._chart = QChart()
         self._chart.legend().setVisible(True)
         self._chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)
@@ -155,13 +155,13 @@ class _MetricChart(QWidget):
     def _on_hovered(self, point, state: bool) -> None:
         """Tooltip with the full container name + value when the cursor is on a
         line; also thicken that line so it's obvious which one you're reading.
-        Exploit-marker lines show the exploit name instead."""
+        Pattern-marker lines show the pattern name instead."""
         series = self.sender()
         if series is None:
             return
         if series in self._marker_labels:
             if state:
-                QToolTip.showText(QCursor.pos(), "Exploit: " + self._marker_labels[series])
+                QToolTip.showText(QCursor.pos(), "Pattern: " + self._marker_labels[series])
             else:
                 QToolTip.hideText()
             return
@@ -182,8 +182,8 @@ class _MetricChart(QWidget):
             QToolTip.hideText()
 
     def _draw_markers(self, markers: list, now: float, y_top: float) -> None:
-        """Draw a vertical dashed line for each exploit run (markers = list of
-        (id, t, name)) at its time position; hovering shows the exploit name."""
+        """Draw a vertical dashed line for each pattern run (markers = list of
+        (id, t, name)) at its time position; hovering shows the pattern name."""
         seen = set()
         for mid, t, name in markers:
             x = -(now - t)
@@ -193,7 +193,7 @@ class _MetricChart(QWidget):
             s = self._marker_series.get(mid)
             if s is None:
                 s = QLineSeries()
-                s.setName("exploit")
+                s.setName("pattern")
                 pen = QPen(QColor("#c0392b"))
                 pen.setWidth(2)
                 pen.setStyle(Qt.PenStyle.DashLine)
@@ -202,7 +202,7 @@ class _MetricChart(QWidget):
                 self._chart.addSeries(s)
                 s.attachAxis(self._axis_x)
                 s.attachAxis(self._axis_y)
-                # Keep exploit markers out of the (already busy) legend.
+                # Keep pattern markers out of the (already busy) legend.
                 for m in self._chart.legend().markers(s):
                     m.setVisible(False)
                 self._marker_series[mid] = s
@@ -249,8 +249,8 @@ class ResourcesPage(QWidget):
         self._avg: dict[str, deque] = {m[0]: deque(maxlen=HISTORY_POINTS) for m in _METRICS}
         self._color_map: dict[str, QColor] = {}
         self._name_map: dict[str, str] = {}      # service -> full container name
-        # Exploit-run markers drawn as vertical lines on every graph:
-        # each entry is [id, monotonic_time, exploit_name].
+        # Pattern-run markers drawn as vertical lines on every graph:
+        # each entry is [id, monotonic_time, pattern_name].
         self._markers: list = []
         self._marker_counter = 0
         self._row_for_service: dict[str, int] = {}
@@ -480,10 +480,10 @@ class ResourcesPage(QWidget):
             self._hist[key], self._avg[key], now, self._color_map,
             self._name_map, self._markers)
 
-    def add_exploit_marker(self, name: str) -> None:
-        """Called (via MainWindow) when an exploit is run from the Exploits
+    def add_pattern_marker(self, name: str) -> None:
+        """Called (via MainWindow) when a pattern is run from the Patterns
         page: drop a vertical marker at the current time onto every graph,
-        labelled with the exploit name. Markers persist until they scroll out
+        labelled with the pattern name. Markers persist until they scroll out
         of the ~5-minute window."""
         now = time.monotonic()
         self._marker_counter += 1

@@ -15,13 +15,13 @@
  * wp-content/db.php (a "drop-in") before almost anything else and lets it
  * define the global $wpdb, which is exactly the seam needed to swap databases
  * transparently -- no WordPress core/plugin/theme code is aware of it, so an
- * attacker sees one ordinary WordPress site whether they land on production
+ * user sees one ordinary WordPress site whether they land on production
  * or the honeypot database.
  *
  * TRUST MODEL (important):
  *   The choice comes from the request header X-Honeypot-Backend, which the
  *   reverse proxy (reverse_proxy_enhanced/nginx.conf) sets AUTHORITATIVELY
- *   from its Lua threat-analysis routing decision and ALWAYS overwrites
+ *   from its Lua pattern-analysis routing decision and ALWAYS overwrites
  *   (proxy_set_header) so a client-supplied copy can never survive.
  *   production_eshop publishes no host port -- the only path to this PHP is
  *   through that proxy -- so a client cannot reach PHP with a forged header.
@@ -85,7 +85,7 @@ if ( $honeypot_db_active ) {
 	$db_host = ( $hp_host !== false && $hp_host !== '' ) ? $hp_host : DB_HOST;
 
 	/*
-	 * Honeypot database POOL: the proxy gives every attacker IP its own honeypot
+	 * Honeypot database POOL: the proxy gives every user IP its own honeypot
 	 * database and names it in X-Honeypot-DB (a pool number). Pool 1 is the
 	 * original HONEYPOT_DB_HOST; pool N > 1 is the container honeypot_database_N,
 	 * created by the pool_manager service. Same trust model as above: the proxy

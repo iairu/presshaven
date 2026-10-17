@@ -34,7 +34,7 @@ echo "-- XML-RPC --"
 # production_eshop directly (WP-layer defense), not through reverse_proxy's
 # full routing pipeline. Repeatedly running this script from one IP is
 # itself exactly the kind of rapid, repeated, scripted traffic
-# threat_analyzer.lua's automation detection is designed to flag -- after
+# pattern_analyzer.lua's automation detection is designed to flag -- after
 # enough runs the test IP legitimately accumulates enough score to get
 # pool-routed to honeypot even with a "clean" User-Agent, which would make
 # this check fail without the production-layer defense actually being

@@ -1,10 +1,10 @@
-"""Kibana request timeline for the exploit report: one small, wide Kibana
-panel per exploit showing every request the reverse proxy logged from
-RESOURCE_PRE_SECONDS before the exploit to RESOURCE_CAPTURE_SECONDS after
+"""Kibana request timeline for the pattern report: one small, wide Kibana
+panel per pattern showing every request the reverse proxy logged from
+RESOURCE_PRE_SECONDS before the pattern to RESOURCE_CAPTURE_SECONDS after
 it, stacked by route (production / honeypot).
 
 The panel lives on its own saved objects (a visualization and a one-panel
-dashboard, both with fixed "exploit-report-*" ids) so it never collides with
+dashboard, both with fixed "pattern-report-*" ids) so it never collides with
 the Honeypot dashboards that siem/kibana/build_dashboards.py owns. The
 dashboard app imports them itself through the logged-in SIEM Analytics page right
 before the first capture (ui/kibana_timeline_capture.py), so nothing has to
@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 
 # The data view siem/kibana/build_dashboards.py creates (honeypot-*).
 DATA_VIEW_ID = "honeypot-data-view"
-VIZ_ID = "exploit-report-request-timeline"
-DASHBOARD_ID = "exploit-report-request-timeline-dashboard"
+VIZ_ID = "pattern-report-request-timeline"
+DASHBOARD_ID = "pattern-report-request-timeline-dashboard"
 # Bars this wide; 17 s / 0.5 s = 34 bars, well under Kibana's histogram:maxBars.
 BUCKET = "500ms"
 # reverse proxy request lines (nginx log_format security, parsed by Vector).
@@ -62,11 +62,11 @@ def _viz_body() -> dict:
         "thresholdLine": {"show": False, "value": 0, "width": 1, "style": "dashed",
                           "color": "#E7664C"},
     }
-    title = "Exploit report: requests around the exploit by route"
+    title = "Pattern report: requests around the pattern by route"
     return {
         "attributes": {
             "title": title,
-            "description": "Captured by the dashboard's exploit report, one per exploit.",
+            "description": "Captured by the dashboard's pattern report, one per pattern.",
             "visState": json.dumps({"title": title, "type": "histogram",
                                     "params": params, "aggs": aggs}),
             "uiStateJSON": json.dumps({"vis": {"colors": {"production": "#54B399",
@@ -86,8 +86,8 @@ def _dashboard_body() -> dict:
              "panelIndex": "1", "embeddableConfig": {}, "panelRefName": "panel_1"}
     return {
         "attributes": {
-            "title": "Exploit report: request timeline",
-            "description": "One panel the exploit report screenshots for each exploit "
+            "title": "Pattern report: request timeline",
+            "description": "One panel the pattern report screenshots for each pattern "
                            "(time range set by the report).",
             "panelsJSON": json.dumps([panel]),
             "optionsJSON": json.dumps({"useMargins": True, "syncColors": False,

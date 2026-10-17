@@ -19,7 +19,7 @@ services:
   #   directories for backward compatibility.  Pools 2 and 3 use new sibling
   #   directories (honeypot_eshop_files_2/3, honeypot_database_data_2/3).
   #   All three pools start from an identical copy of the production data; they
-  #   diverge as individual attackers interact with their assigned instance.
+  #   diverge as individual users interact with their assigned instance.
   # ---------------------------------------------------------------------------
   init_setup:
     logging: *default-logging
@@ -68,7 +68,7 @@ services:
       # (attacker-uploaded webshells under wp-content/uploads, other
       # honeypot-side forensic artifacts left by a real session) is
       # deliberately left untouched -- syncing new production files must
-      # never destroy evidence of what an attacker did to a pool.
+      # never destroy evidence of what a user did to a pool.
       # -----------------------------------------------------------------------
       sync_files() {
         SRC=\$$1; DST=\$$2; LABEL=\$$3
@@ -110,7 +110,7 @@ services:
       # After syncing, remove production-hardening.php from every honeypot
       # destination.  That mu-plugin disables XML-RPC, strips version strings,
       # and closes other attack vectors on the production instance.  Honeypot
-      # instances MUST NOT have it: attackers need to see realistic fingerprints
+      # instances MUST NOT have it: users need to see realistic fingerprints
       # and reach the intentionally vulnerable endpoints (including xmlrpc.php).
       # Since sync_files() re-copies from source every run, this rm -f must
       # also run every time (a prior run's removal doesn't stick otherwise).
@@ -137,7 +137,7 @@ services:
       # -----------------------------------------------------------------------
       # Copy database data directory for each pool instance, ONCE (see
       # copy_files above). Each pool gets its own isolated MySQL data
-      # directory so that attacker writes to one pool's database do not
+      # directory so that user writes to one pool's database do not
       # affect the others. Also copy to production_mysql_data (named volume)
       # so that the production MySQL container can own it – vmhgfs bind
       # mounts reject chown at runtime.
@@ -381,7 +381,7 @@ services:
   # after its one-time initial seed (init_setup/honeypot_db_migration above).
   # Strict allow-list of content tables only -- never touches wp_users or any
   # WooCommerce order/customer/payment table; see the script's header comment
-  # for the full non-destructive apply strategy and the exploit-gating
+  # for the full non-destructive apply strategy and the pattern-gating
   # coordination with pool_router.lua's is_pool_healthy().
   #
   # Built from mysql:5.7 purely for its mysql/mysqldump client tools (same
@@ -442,18 +442,18 @@ services:
       - session_network
 
   # ---------------------------------------------------------------------------
-  # Honeypot pool manager (one attacker per pool, spare pool always ready)
+  # Honeypot pool manager (one user per pool, spare pool always ready)
   # ---------------------------------------------------------------------------
-  # pool_router.lua gives each new attacker IP a free ready pool exclusively and
+  # pool_router.lua gives each new user IP a free ready pool exclusively and
   # queues a wake-up on Redis; this service then builds an additional
   # honeypot_eshop_N + honeypot_database_N pair (N > 3) through the Docker API,
-  # so one is waiting for the next attacker. Pools 1-3 above are only adopted.
+  # so one is waiting for the next user. Pools 1-3 above are only adopted.
   # Containers it creates carry no compose labels, so `up --remove-orphans`
   # leaves them alone (they are found by their `honeypot.pool` label).
   #
   # SECURITY: mounts the Docker socket, which is root-equivalent on the host.
   # It publishes no ports and joins only session_network (Redis); it never
-  # handles attacker traffic. Remove this service to run a fixed 3-pool setup
+  # handles user traffic. Remove this service to run a fixed 3-pool setup
   # (the router then reuses the 3 pools round-robin).
   # ---------------------------------------------------------------------------
   pool_manager:
@@ -487,7 +487,7 @@ services:
       - POOL_SPARES=${POOL_SPARES:-1}
       - POOL_MAX=${POOL_MAX:-10}
       # Resource budget for all pools together (by their containers' limits);
-      # pools are built per attacker session until it is reached, then new
+      # pools are built per user session until it is reached, then new
       # sessions share the ready pools round-robin. 0 = no budget.
       - POOL_MAX_MEMORY_MB=${POOL_MAX_MEMORY_MB:-12288}
       - POOL_MAX_CPUS=${POOL_MAX_CPUS:-12}
@@ -827,7 +827,7 @@ services:
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
       # Deliberately identical to production_db_seed's WP_SITE_URL, not a
       # pool-specific one -- pool_router.lua's whole premise is that an
-      # attacker transparently lands on the same public fingerprint
+      # user transparently lands on the same public fingerprint
       # (theme/plugins/site identity) regardless of which pool they're
       # routed to, so this must match production exactly.
       - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
@@ -983,7 +983,7 @@ services:
   # / MYSQL_PASSWORD_POOL_3): all honeypot_eshop_N containers share one flat
   # honeypot_network and can reach every honeypot_database_N over TCP, so
   # without distinct credentials a compromised pool could authenticate
-  # directly into another attacker's pool database. See
+  # directly into another user's pool database. See
   # ids/testing/test_pool_isolation.sh.
   # ---------------------------------------------------------------------------
 
@@ -1143,7 +1143,7 @@ services:
   # ---------------------------------------------------------------------------
   # Each pool runs a full WordPress+WooCommerce stack with the vulnerable plugins
   # installed.  They are intentionally identical at startup; divergence happens
-  # as attackers interact with their assigned instance.
+  # as users interact with their assigned instance.
   #
   # IMPORTANT: honeypot_db_migration must complete before any eshop starts so
   # that dummy data is in place and no real customer data is ever served.
@@ -1231,7 +1231,7 @@ services:
     # timing out -- cgroup memory pressure thrashing, not an application
     # bug. Matches production_eshop's own newly-added ceiling (see that
     # service's comment) so honeypot pools aren't now the *more*
-    # resource-starved side, which would undermine realism (an attacker
+    # resource-starved side, which would undermine realism (a user
     # who fingerprints response latency shouldn't see the honeypot
     # struggling under routine load that production handles fine).
     mem_limit: 1024m
@@ -1317,7 +1317,7 @@ services:
     # timing out -- cgroup memory pressure thrashing, not an application
     # bug. Matches production_eshop's own newly-added ceiling (see that
     # service's comment) so honeypot pools aren't now the *more*
-    # resource-starved side, which would undermine realism (an attacker
+    # resource-starved side, which would undermine realism (a user
     # who fingerprints response latency shouldn't see the honeypot
     # struggling under routine load that production handles fine).
     mem_limit: 1024m
@@ -1403,7 +1403,7 @@ services:
     # timing out -- cgroup memory pressure thrashing, not an application
     # bug. Matches production_eshop's own newly-added ceiling (see that
     # service's comment) so honeypot pools aren't now the *more*
-    # resource-starved side, which would undermine realism (an attacker
+    # resource-starved side, which would undermine realism (a user
     # who fingerprints response latency shouldn't see the honeypot
     # struggling under routine load that production handles fine).
     mem_limit: 1024m

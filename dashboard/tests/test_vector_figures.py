@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
 @unittest.skipIf(vf is None, "PyQt6 not installed")
 class RoutingDecisionDiagramTests(unittest.TestCase):
-    """The routing-decision figure in the exploit report PDF."""
+    """The routing-decision figure in the pattern report PDF."""
 
     @classmethod
     def setUpClass(cls):
@@ -111,7 +111,7 @@ class RoutingDecisionDiagramTests(unittest.TestCase):
         # stage there should get one here too.
         router = (Path(__file__).resolve().parents[2]
                   / "ids/reverse_proxy_enhanced/lua/router.lua").read_text()
-        reasons = {"high_threat_score", "cve_pattern_match", "vulnerable_plugin_access",
+        reasons = {"high_risk_score", "cve_pattern_match", "vulnerable_plugin_access",
                    "bad_ip_reputation", "multiple_admin_attempts",
                    "accumulated_suspicious_activities", "rapid_automation_detected",
                    "suspicious_file_upload"}

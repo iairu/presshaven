@@ -9,14 +9,14 @@
 --     1. Bulk blacklist feed  – fetch_blacklist(), called periodically from
 --        init_worker.lua (worker 0 only).  Pulls the /blacklist endpoint and
 --        merges high-confidence IPs into the threat_intel shared dict that
---        threat_analyzer.check_ip_reputation() already reads.
+--        pattern_analyzer.check_ip_reputation() already reads.
 --     2. On-demand reputation – check_ip_async(ip), called from
---        threat_analyzer.check_ip_reputation() the first time an unrecognised
+--        pattern_analyzer.check_ip_reputation() the first time an unrecognised
 --        IP is seen.  Never blocks the current request: the HTTP round-trip
 --        runs in a zero-delay ngx.timer so the result is only available for
 --        *subsequent* requests from that IP, keeping the hot path latency
 --        budget intact.
---     3. Confirmed-attacker report-back – report_ip_async(ip, reason), called
+--     3. Confirmed-abuse report-back – report_ip_async(ip, reason), called
 --        from router.lua's assign_honeypot_pool() for high-confidence routing
 --        reasons only (CVE match, vulnerable-plugin access, brute-force,
 --        confirmed automation, suspicious upload).  Also fire-and-forget via
@@ -354,15 +354,15 @@ _M.is_reportable_reason = abuseipdb_rules.is_reportable_reason
 -- ---------------------------------------------------------------------------
 -- report_ip_async(ip, reason, details)
 --
--- Schedules a zero-delay background timer that reports a confirmed attacker
+-- Schedules a zero-delay background timer that reports a confirmed flagged user
 -- IP to AbuseIPDB via POST /report. Only called by router.lua for reasons
--- present in REASON_CATEGORIES (deterministic exploit/brute-force/upload
+-- present in REASON_CATEGORIES (deterministic pattern/brute-force/upload
 -- signals) to keep report quality high and avoid polluting the public feed
 -- with soft heuristic matches.
 --
 -- De-duplicates per IP for 24h.
 --
--- @param ip       string  Attacker IP address.
+-- @param ip       string  Client IP address.
 -- @param reason    string  router.lua honeypot_reason (must be reportable).
 -- @param details   table|nil  Optional extra context folded into the comment.
 -- ---------------------------------------------------------------------------

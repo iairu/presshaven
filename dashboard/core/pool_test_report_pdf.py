@@ -1,9 +1,9 @@
 """Renders a core.pool_test_report.PoolTestData to a PDF: which honeypot pool
 each test window's session landed in, and whether that matches the rule of
-one malicious session per pool (shared only when pools run out).
+one flagged session per pool (shared only when pools run out).
 
 GUI-thread only, same print machinery and Baskerville styling as
-core/exploit_report_pdf.py."""
+core/pattern_report_pdf.py."""
 from __future__ import annotations
 
 from PyQt6.QtCore import QMarginsF, QPointF, QRectF, QSizeF, Qt, QUrl
@@ -13,7 +13,7 @@ from PyQt6.QtGui import QColor, QTextDocument
 
 from core import diagrams, pool_evidence, vector_figures
 from core.diagrams import _arrow, _box, _new
-from core.exploit_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
+from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
                                      _pool_state_html, _report_font_family)
 from core.pool_test_report import (BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
@@ -174,7 +174,7 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
     if not data.steps:
         return ""
     out = ['<h2 style="color:#222;">Step by step</h2>',
-           '<p style="color:#555;">All windows move in every step. An attacker\'s pool '
+           '<p style="color:#555;">All windows move in every step. A user\'s pool '
            'must appear in their own step, differ from the earlier ones, and never change '
            'afterwards &ndash; except once, from a pool it only borrowed while its own was '
            'being built to that new pool.</p>']
@@ -273,12 +273,12 @@ def _runs_html(data: PoolTestData) -> str:
         rows.append(f'<tr><td><b>{_esc(r.window)}</b></td><td>{_esc(r.cve)}{note}</td>'
                     f'<td>{_esc(r.name)}</td><td>{result}</td>'
                     f'<td>{_esc("pool " + str(r.pool) if r.pool is not None else "none")}</td></tr>')
-    return ('<h2 style="color:#222;">Exploits run per window</h2>'
-            '<p style="color:#555;">Each window runs a different exploit, picked from the ones '
-            'a live probe showed divert within three attempts. If a chosen exploit still did '
+    return ('<h2 style="color:#222;">Patterns run per window</h2>'
+            '<p style="color:#555;">Each window runs a different pattern, picked from the ones '
+            'a live probe showed divert within three attempts. If a chosen pattern still did '
             'not divert in three attempts, the next candidate is used instead.</p>'
             '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Exploit</th>'
+            'style="border-collapse:collapse; color:#333;"><tr><th>Window</th><th>Pattern</th>'
             '<th>Name</th><th>Routing</th><th>Pool</th></tr>' + "".join(rows) + '</table>')
 
 
@@ -316,15 +316,15 @@ def _evidence_html(data: PoolTestData) -> str:
     out = ['<h2 style="color:#222;">What each honeypot container saw and changed</h2>',
            '<p style="color:#555;">Read from each pool\'s own eshop and database containers '
            f'since the run started ({_esc(data.since or "unknown")}). Requests are matched to '
-           'windows by their User-Agent tag, so a pool should show its owner\'s exploits and '
+           'windows by their User-Agent tag, so a pool should show its owner\'s patterns and '
            'nobody else\'s. A pool no window owns is shown for contrast.</p>']
     total, four, examples = pool_evidence.response_realism(data.evidence)
     if total and four / total >= 0.25:
         out.append('<p style="color:#b35900;"><b>Deception note:</b> the honeypot answered '
                    f'{four} of {total} non-asset requests with a 4xx status (e.g. '
-                   + _esc("; ".join(examples)) + '). A 404/400 on an exploit\'s own endpoint '
-                   'tells the attacker the targeted plugin is not installed, so these exploits '
-                   'neither wrote a file nor produced attacker interaction to record. To make '
+                   + _esc("; ".join(examples)) + '). A 404/400 on a pattern\'s own endpoint '
+                   'tells the user the targeted plugin is not installed, so these patterns '
+                   'neither wrote a file nor produced user interaction to record. To make '
                    'the pools look vulnerable, install the targeted plugins or add decoy '
                    'endpoints; check first whether production answers the same, since an '
                    'identical response there is not itself a tell.</p>')
@@ -390,7 +390,7 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              '<table width="100%" style="color:#555;"><tr><td>'
              f'Generated: {_esc(data.generated_at)}<br/>'
              f'Target: {_esc(data.target_label)} &nbsp; ({_esc(data.base_url)})<br/>'
-             f'Exploits: {_esc(data.exploit)}<br/>'
+             f'Patterns: {_esc(data.pattern)}<br/>'
              f'Windows: {len(data.frames)}<br/>'
              'Browser data cleared: ' + (f'{len(data.cleared)} time(s), in random windows'
                                          if data.clear_seed is not None else 'off')
@@ -400,16 +400,16 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              f'&nbsp;<b>{_esc(verdict.headline)}</b></p>',
              '<ul>' + "".join(f"<li>{_esc(x)}</li>" for x in verdict.findings) + '</ul>',
              '<h2 style="color:#222;">What is being tested</h2>',
-             '<p style="color:#555;">Attackers are told apart by session, not by address. '
+             '<p style="color:#555;">Users are told apart by session, not by address. '
              'Each test window has its own cookie jar and its own User-Agent and language, so '
-             f'the proxy sees {len(data.frames)} separate attackers. By default every malicious '
+             f'the proxy sees {len(data.frames)} separate users. By default every flagged '
              'session is given a honeypot pool <b>of its own</b> (an eshop container with its own '
-             'seeded database): the router hands a new attacker a free ready pool no other '
-             'session owns, and the pools scale with the attacker sessions &ndash; a session '
+             'seeded database): the router hands a new user a free ready pool no other '
+             'session owns, and the pools scale with the user sessions &ndash; a session '
              'that finds no free pool borrows one round-robin while pool_manager builds one for '
              'it, then moves there. Scaling stops at the configured resource limit '
              '(POOL_MAX_MEMORY_MB / POOL_MAX_CPUS / POOL_MAX) or when the host is short of '
-             'memory, CPU or disk; from then on further attackers share the ready pools in '
+             'memory, CPU or disk; from then on further users share the ready pools in '
              'strict round-robin order.</p>']
     parts.append(diagrams.figure_html(
         doc, routing_figure(data, verdict, family), "pool-routing", 1,
@@ -1007,7 +1007,7 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     res = summ.reserve
     out = ['<h2 style="color:#222;">Scaling and latency</h2>',
            '<p style="color:#555;">pool_manager adds one honeypot pool (an eshop container plus '
-           'its own database seeded from production) for every attacker session that finds no '
+           'its own database seeded from production) for every user session that finds no '
            'free pool, up to the resource limit. These figures come from pool_manager\'s own '
            'event log (build phases, hand-overs with their wait time, resource-limit changes) '
            'and from the windows themselves (routing read after every step and every 2 s while '
@@ -1076,7 +1076,7 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                         f"pools took {int((res['requested'] + parallel - 1) // parallel)} wave(s). "
                         "Raise <b>POOL_PARALLEL_BUILDS</b> to build them in one wave (the host here "
                         f"has spare cores for it).")
-        tips.append("Keeping more warm spares (<b>POOL_SPARES</b>) means attackers more often find "
+        tips.append("Keeping more warm spares (<b>POOL_SPARES</b>) means users more often find "
                     "a pool already built, at the cost of idle resources.")
         out.append('<p style="color:#555;">' + "<br/>".join(tips) + '</p>')
 
@@ -1210,8 +1210,8 @@ def _scaledown_html(data: PoolTestData) -> str:
                 "(only on request, as below).")
     else:
         rule = (f"pool_manager scales down a pool once no request has reached it for "
-                f"POOL_IDLE_TIMEOUT_SECONDS = {timeout:g} s ({_mmss(timeout)}): its attackers' "
-                "assignments are dropped (a returning attacker is assigned afresh) and pools above "
+                f"POOL_IDLE_TIMEOUT_SECONDS = {timeout:g} s ({_mmss(timeout)}): its users' "
+                "assignments are dropped (a returning user is assigned afresh) and pools above "
                 f"the spare count ({sd.get('spares', status.get('spares', '?'))}) are removed with "
                 "their volumes, "
                 "freeing what they reserved. Compose-declared pools are only freed, never removed.")

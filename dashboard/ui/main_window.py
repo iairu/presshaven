@@ -27,7 +27,7 @@ from ui.error_monitor import ErrorLogMonitor
 from core.container_status import classify
 from ui.page_backups import BackupsPage
 from ui.page_certs import CertsPage
-from ui.page_exploits import ExploitsPage
+from ui.page_patterns import PatternsPage
 from ui.page_extras import ExtrasPage
 from ui.page_health import HealthPage
 from ui.page_kibana import KibanaPage
@@ -60,7 +60,7 @@ _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
     "services", "health", "resources", "certificates", "redis", "backups",
-    "kibana", "exploits", "pool_test", "log_search", "extras", "settings", "learn",
+    "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "services": "Workloads",
@@ -70,7 +70,7 @@ PAGE_LABELS = {
     "redis": "Pool State Store",
     "backups": "Backup & Recovery",
     "kibana": "SIEM Analytics",
-    "exploits": "Attack Simulation",
+    "patterns": "Attack Simulation",
     "pool_test": "Segmentation Validation",
     "log_search": "Forensics Analysis",
     "extras": "Reporting",
@@ -83,7 +83,7 @@ PAGE_LABELS = {
 # the View menu follow, so the shortcuts match what the rail shows.
 NAV_GROUPS = [
     ("Monitor", ["health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["exploits", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
@@ -185,10 +185,10 @@ class MainWindow(QMainWindow):
         self.redis_page = RedisPage(state)
         self.backups_page = BackupsPage(state)
         self.kibana_page = KibanaPage(state)
-        self.exploits_page = ExploitsPage(state)
-        # Every exploit run drops a time-aligned marker onto the Resources
+        self.patterns_page = PatternsPage(state)
+        # Every pattern run drops a time-aligned marker onto the Resources
         # graphs so its resource impact is visible.
-        self.exploits_page.exploit_ran.connect(self.resources_page.add_exploit_marker)
+        self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
         self.pool_test_page = PoolTestPage(state)
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
             ("redis", self.redis_page),
             ("backups", self.backups_page),
             ("kibana", self.kibana_page),
-            ("exploits", self.exploits_page),
+            ("patterns", self.patterns_page),
             ("pool_test", self.pool_test_page),
             ("log_search", self.log_search_page),
             ("extras", self.extras_page),
@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
         # Pages that want fresh status when opened ask the poller thread
         # instead of running `docker compose ps` on the GUI thread.
         self.health_page.refresh_requested.connect(self.poller.poll_now)
-        self.exploits_page.refresh_requested.connect(self.poller.poll_now)
+        self.patterns_page.refresh_requested.connect(self.poller.poll_now)
         self.poller.start()
 
         # Previous poll's classified status per (target_key, service), used
@@ -425,7 +425,7 @@ class MainWindow(QMainWindow):
         # tick (it always calls _get_targets() fresh in apply_status()).
         self.redis_page.rebuild_targets()
         self.backups_page.rebuild_targets()
-        self.exploits_page.rebuild_targets()
+        self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
         self.resources_page.rebuild_targets()
         self.security_feed.start(self._edge_target())
@@ -435,7 +435,7 @@ class MainWindow(QMainWindow):
         every page's targets (their compose file and labels changed), let the
         Attack Simulation page re-grey its presets, and re-poll right away."""
         self._on_remote_settings_changed()
-        self.exploits_page.set_honeypot_layer()
+        self.patterns_page.set_honeypot_layer()
         self.poller.poll_now()
 
     def set_poll_interval(self, interval_ms: int) -> None:
@@ -446,7 +446,7 @@ class MainWindow(QMainWindow):
     def _on_status_results(self, results: dict) -> None:
         self.services_page.apply_status(results)
         self.health_page.apply_status(results)
-        self.exploits_page.apply_status(results)
+        self.patterns_page.apply_status(results)
         self._notify_new_problems(results)
 
     # ---- system tray ----
@@ -583,8 +583,8 @@ class MainWindow(QMainWindow):
         page = self.current_page()
         if page == "kibana":
             self.kibana_page.browser.view.reload()
-        elif page == "exploits":
-            self.exploits_page.browser.view.reload()
+        elif page == "patterns":
+            self.patterns_page.browser.view.reload()
         elif page == "log_search":
             self.log_search_page.run_search()
         elif page == "redis":
@@ -610,7 +610,7 @@ class MainWindow(QMainWindow):
         self.services_page.rebuild_panels()
         self.redis_page.rebuild_targets()
         self.backups_page.rebuild_targets()
-        self.exploits_page.rebuild_targets()
+        self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
         self.resources_page.rebuild_targets()
         self.security_feed.start(self._edge_target())

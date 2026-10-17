@@ -1,6 +1,6 @@
 #!/usr/bin/env lua
 -- test_no_tarpit.lua -- the proxy must never hold a request back.
--- A per-route delay (the old apply_botnet_slowdown tarpit) lets an attacker
+-- A per-route delay (the old apply_botnet_slowdown tarpit) lets a user
 -- tell the honeypot from production by latency, so no code on the request
 -- path may sleep. Only health_check.lua and init_worker.lua sleep, and they
 -- run in background worker timers, never inside a request.
@@ -40,8 +40,8 @@ local LUA_FILES = {
     "honeytoken_rules.lua", "init.lua", "ip_rules.lua", "lua_pattern_utils.lua",
     "pool_router.lua", "pool_router_rules.lua", "prompt_injection_filter.lua",
     "router.lua", "router_rules.lua", "session_handler.lua", "session_rules.lua",
-    "sophistication_analyzer.lua", "suricata_rules.lua", "threat_analyzer.lua",
-    "threat_intel.lua", "threat_rules.lua", "upload_handler.lua", "upload_rules.lua",
+    "sophistication_analyzer.lua", "suricata_rules.lua", "pattern_analyzer.lua",
+    "threat_intel.lua", "pattern_rules.lua", "upload_handler.lua", "upload_rules.lua",
     "vulnerability_handler.lua", "vulnerability_rules.lua", "wp_install_state.lua",
 }
 

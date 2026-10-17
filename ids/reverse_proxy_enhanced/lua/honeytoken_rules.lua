@@ -1,7 +1,7 @@
 -- honeytoken_rules.lua - Pure token-matching core used by
 -- honeytoken_handler.lua
 --
--- Same split rationale as threat_rules.lua/router_rules.lua: no ngx.*
+-- Same split rationale as pattern_rules.lua/router_rules.lua: no ngx.*
 -- dependency, no reliance on _G.config/_G.utils, plain-`lua`-interpreter
 -- testable (see tests/test_honeytoken_rules.lua). honeytoken_handler.lua
 -- is the adapter -- it builds the token catalogue (derived from a

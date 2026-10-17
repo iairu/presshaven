@@ -1,4 +1,4 @@
--- threat_analyzer.lua - Threat analysis module for Nginx Lua
+-- pattern_analyzer.lua - Pattern analysis module for Nginx Lua
 --
 -- PURPOSE:
 --   Scores every inbound HTTP request using a weighted rule set that maps to
@@ -13,9 +13,9 @@
 --   request context out of ngx.var/ngx.req, does all I/O (ngx.log, Redis /
 --   shared-dict reads, log_security_event), and orchestrates the stages
 --   below in sequence. The actual pattern-matching/scoring decisions are
---   pure functions in threat_rules.lua (no ngx.* dependency, unit-testable
---   with a plain `lua` interpreter -- see tests/test_threat_rules.lua).
---   Splitting it this way is what let threat_rules.lua get real unit test
+--   pure functions in pattern_rules.lua (no ngx.* dependency, unit-testable
+--   with a plain `lua` interpreter -- see tests/test_pattern_rules.lua).
+--   Splitting it this way is what let pattern_rules.lua get real unit test
 --   coverage without needing OpenResty running.
 --
 -- OWASP WSTG CATEGORY COVERAGE:
@@ -31,7 +31,7 @@
 --   Static asset requests          →   0 (always skipped)
 --   Matching a suspicious pattern  → +15 base, +5..+30 for specific checks
 --   Matching a CVE pattern         → +40 per CVE matched
---   Malicious user-agent string    → +50
+--   Flagged user-agent string    → +50
 --   Bad IP reputation              → +variable (from threat_intel dict)
 --   High per-IP request rate       → +20 (rate_limit shared dict, >10 req/s)
 --   Missing user-agent             → +10
@@ -42,14 +42,14 @@
 --
 -- DEPENDENCIES:
 --   cjson                    – JSON encoding for security event logging
---   threat_rules             – pure scoring rules (see above)
+--   pattern_rules             – pure scoring rules (see above)
 --   abuseipdb_client         – on-demand IP reputation lookups (Stage 4)
 --   prompt_injection_filter  – forward-looking LLM-abuse pattern probe (Stage 7)
 --   _G.config    – global config table initialised in init.lua
 --   _G.utils     – global utility functions initialised in init.lua
 
 local cjson = require "cjson"
-local threat_rules = require "threat_rules"
+local pattern_rules = require "pattern_rules"
 local suricata_rules = require "suricata_rules"
 local wp_install_state = require "wp_install_state"
 local shared_ip_rules = require "shared_ip_rules"
@@ -61,14 +61,14 @@ local _M = {}
 --
 -- Entry point called once per non-static request from nginx.conf
 -- access_by_lua_block.  Runs every sub-analyser in sequence, accumulates
--- their scores into a single threat_result table, and sets the .suspicious
+-- their scores into a single pattern_result table, and sets the .suspicious
 -- flag when the total reaches or exceeds honeypot_threshold.
 --
 -- @param uri        string   Raw request URI including query string.
 -- @param headers    table    Request headers table from ngx.req.get_headers().
 -- @param remote_ip  string   Client IP address (ngx.var.remote_addr).
--- @return           table    threat_result with fields:
---                              .score           – integer threat score (0..100)
+-- @return           table    pattern_result with fields:
+--                              .score           – integer risk score (0..100)
 --                              .suspicious      – boolean threshold exceeded
 --                              .patterns_matched – list of matched pattern names
 --                              .cve_matched      – list of matched CVE IDs
@@ -81,7 +81,7 @@ local _M = {}
 --                              .details          – list of human-readable notes
 -- ---------------------------------------------------------------------------
 function _M.analyze_request(uri, headers, remote_ip)
-    local threat_result = {
+    local pattern_result = {
         score = 0,
         suspicious = false,
         patterns_matched = {},
@@ -91,12 +91,12 @@ function _M.analyze_request(uri, headers, remote_ip)
         details = {}
     }
 
-    ngx.log(ngx.INFO, "[THREAT ANALYZER] Starting analysis for: ", uri or "unknown", " | IP: ", remote_ip)
+    ngx.log(ngx.INFO, "[PATTERN ANALYZER] Starting analysis for: ", uri or "unknown", " | IP: ", remote_ip)
 
     -- Static assets (CSS, JS, images, fonts) carry no attack surface.
     if _M.is_static_asset(uri) then
-        ngx.log(ngx.INFO, "[THREAT ANALYZER] ✅ Static asset - threat analysis skipped")
-        return threat_result
+        ngx.log(ngx.INFO, "[PATTERN ANALYZER] ✅ Static asset - pattern analysis skipped")
+        return pattern_result
     end
 
     -- WordPress installer fast path: install.php is only ever this
@@ -106,9 +106,9 @@ function _M.analyze_request(uri, headers, remote_ip)
     -- wizard, hitting it IS the legitimate flow -- see wp_install_state.lua's
     -- header comment for how "not installed yet" is determined and why
     -- checking production's state alone is sufficient for honeypot pools too.
-    if threat_rules.is_install_wizard_uri(uri) and not wp_install_state.is_installed("production_backend") then
-        ngx.log(ngx.INFO, "[THREAT ANALYZER] ✅ WordPress not yet installed - install.php allowed, analysis skipped")
-        return threat_result
+    if pattern_rules.is_install_wizard_uri(uri) and not wp_install_state.is_installed("production_backend") then
+        ngx.log(ngx.INFO, "[PATTERN ANALYZER] ✅ WordPress not yet installed - install.php allowed, analysis skipped")
+        return pattern_result
     end
 
     -- Stage 1: URI pattern analysis (WSTG-INPV, WSTG-CONF, WSTG-INFO)
@@ -130,42 +130,42 @@ function _M.analyze_request(uri, headers, remote_ip)
         uri_for_pattern_scan = "/" .. (ngx.var.args or "")
     end
     local uri_score = _M.analyze_uri_patterns(uri_for_pattern_scan)
-    threat_result.score = threat_result.score + uri_score.score
+    pattern_result.score = pattern_result.score + uri_score.score
 
     if uri_score.score > 0 then
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🔍 URI patterns matched (+", uri_score.score, ") | Patterns: ",
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🔍 URI patterns matched (+", uri_score.score, ") | Patterns: ",
                 table.concat(uri_score.patterns or {}, ", "))
     end
 
     if uri_score.patterns then
         for _, pattern in ipairs(uri_score.patterns) do
-            table.insert(threat_result.patterns_matched, pattern)
+            table.insert(pattern_result.patterns_matched, pattern)
         end
     end
 
     -- Stage 2: Header analysis (WSTG-ATHN, WSTG-AUTHZ, CVE-specific headers)
     local header_score = _M.analyze_headers(headers)
-    threat_result.score = threat_result.score + header_score.score
+    pattern_result.score = pattern_result.score + header_score.score
 
     if header_score.suspicious_headers then
         for _, header in ipairs(header_score.suspicious_headers) do
-            table.insert(threat_result.details, "suspicious_header: " .. header)
+            table.insert(pattern_result.details, "suspicious_header: " .. header)
         end
         if header_score.score > 0 then
-            ngx.log(ngx.WARN, "[THREAT ANALYZER] 🔍 Suspicious headers (+", header_score.score, ") | Details: ",
+            ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🔍 Suspicious headers (+", header_score.score, ") | Details: ",
                     table.concat(header_score.suspicious_headers, ", "))
         end
     end
 
     -- Stage 3: CVE pattern matching (WSTG-AUTHZ, WSTG-INPV)
     local cve_score = _M.analyze_cve_patterns(uri, headers)
-    threat_result.score = threat_result.score + cve_score.score
+    pattern_result.score = pattern_result.score + cve_score.score
 
     if cve_score.cves then
         for _, cve in ipairs(cve_score.cves) do
-            table.insert(threat_result.cve_matched, cve)
+            table.insert(pattern_result.cve_matched, cve)
             -- Logging is I/O, so it stays here rather than in the pure
-            -- threat_rules.analyze_cve_patterns().
+            -- pattern_rules.analyze_cve_patterns().
             _G.utils.log_security_event("cve_pattern_detected", {
                 cve = cve,
                 uri = uri,
@@ -173,7 +173,7 @@ function _M.analyze_request(uri, headers, remote_ip)
             })
         end
         if #cve_score.cves > 0 then
-            ngx.log(ngx.WARN, "[THREAT ANALYZER] 🎯 CVE PATTERNS DETECTED (+", cve_score.score, ") | CVEs: ",
+            ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🎯 CVE PATTERNS DETECTED (+", cve_score.score, ") | CVEs: ",
                     table.concat(cve_score.cves, ", "))
         end
     end
@@ -185,41 +185,41 @@ function _M.analyze_request(uri, headers, remote_ip)
     -- address's own reputation is limited on shared (NAT) addresses.
     local actor = ngx.ctx.session_id or remote_ip
     local ip_rep = _M.check_ip_reputation(remote_ip, actor)
-    threat_result.ip_reputation = ip_rep.score
-    threat_result.ip_reputation_reason = ip_rep.reason
-    threat_result.ip_shared = ip_rep.shared
-    threat_result.score = threat_result.score + ip_rep.score
+    pattern_result.ip_reputation = ip_rep.score
+    pattern_result.ip_reputation_reason = ip_rep.reason
+    pattern_result.ip_shared = ip_rep.shared
+    pattern_result.score = pattern_result.score + ip_rep.score
 
     if _M.session_request_rate_high(actor) then
-        threat_result.score = threat_result.score + 20
-        table.insert(threat_result.patterns_matched, "high_request_rate")
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🔍 High request rate for this session (+20)")
+        pattern_result.score = pattern_result.score + 20
+        table.insert(pattern_result.patterns_matched, "high_request_rate")
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🔍 High request rate for this session (+20)")
     end
 
     if ip_rep.reason then
-        table.insert(threat_result.details, "ip_reputation: " .. ip_rep.reason)
+        table.insert(pattern_result.details, "ip_reputation: " .. ip_rep.reason)
         if ip_rep.score > 0 then
-            ngx.log(ngx.WARN, "[THREAT ANALYZER] 🚫 Bad IP reputation (+", ip_rep.score, ") | Reason: ", ip_rep.reason)
+            ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🚫 Bad IP reputation (+", ip_rep.score, ") | Reason: ", ip_rep.reason)
         elseif ip_rep.score < 0 then
-            ngx.log(ngx.INFO, "[THREAT ANALYZER] ✅ Whitelisted IP (", ip_rep.score, ") | Reason: ", ip_rep.reason)
+            ngx.log(ngx.INFO, "[PATTERN ANALYZER] ✅ Whitelisted IP (", ip_rep.score, ") | Reason: ", ip_rep.reason)
         end
     end
 
     -- Stage 5: Request method analysis (WSTG-INPV)
     local method_score = _M.analyze_request_method()
-    threat_result.score = threat_result.score + method_score.score
+    pattern_result.score = pattern_result.score + method_score.score
 
     if method_score.score > 0 then
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🔍 Suspicious request method (+", method_score.score, ")")
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🔍 Suspicious request method (+", method_score.score, ")")
     end
 
     -- Stage 6: Automation detection (WSTG-INFO, WSTG-ATHN)
     local automation_score = _M.detect_automation(headers, uri)
-    threat_result.score = threat_result.score + automation_score.score
+    pattern_result.score = pattern_result.score + automation_score.score
 
     if automation_score.detected then
-        table.insert(threat_result.details, "automation_detected: " .. automation_score.tool)
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🤖 Automation detected (+", automation_score.score, ") | Tool: ",
+        table.insert(pattern_result.details, "automation_detected: " .. automation_score.tool)
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🤖 Automation detected (+", automation_score.score, ") | Tool: ",
                 automation_score.tool or "unknown")
     end
 
@@ -237,11 +237,11 @@ function _M.analyze_request(uri, headers, remote_ip)
     if ngx.var.request_method == "POST" and uri and uri:find("admin%-ajax%.php") then
         local upload_handler = require "upload_handler"
         local upload_analysis = upload_handler.analyze_upload(headers, ngx.var.args)
-        threat_result.score = threat_result.score + upload_analysis.threat_score
+        pattern_result.score = pattern_result.score + upload_analysis.risk_score
 
-        if upload_analysis.threat_score > 0 then
-            table.insert(threat_result.details, "upload_analysis: " .. table.concat(upload_analysis.risk_factors, ","))
-            ngx.log(ngx.WARN, "[THREAT ANALYZER] 📤 Upload analysis (+", upload_analysis.threat_score,
+        if upload_analysis.risk_score > 0 then
+            table.insert(pattern_result.details, "upload_analysis: " .. table.concat(upload_analysis.risk_factors, ","))
+            ngx.log(ngx.WARN, "[PATTERN ANALYZER] 📤 Upload analysis (+", upload_analysis.risk_score,
                     ") | Factors: ", table.concat(upload_analysis.risk_factors, ", "))
         end
     end
@@ -252,12 +252,12 @@ function _M.analyze_request(uri, headers, remote_ip)
     local injection_result = prompt_injection_filter.detect(_G.utils.url_decode(uri))
     if injection_result.risk_score > 0 then
         local injection_score = math.floor(injection_result.risk_score / 2)
-        threat_result.score = threat_result.score + injection_score
-        table.insert(threat_result.details, "prompt_injection_probe: risk_score=" .. injection_result.risk_score)
+        pattern_result.score = pattern_result.score + injection_score
+        table.insert(pattern_result.details, "prompt_injection_probe: risk_score=" .. injection_result.risk_score)
         for _, m in ipairs(injection_result.matched) do
-            table.insert(threat_result.patterns_matched, "prompt_injection:" .. m.category)
+            table.insert(pattern_result.patterns_matched, "prompt_injection:" .. m.category)
         end
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🧪 Prompt-injection pattern detected (+", injection_score,
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🧪 Prompt-injection pattern detected (+", injection_score,
                 ") | Filter risk_score: ", injection_result.risk_score, " | URI: ", uri)
     end
 
@@ -275,64 +275,64 @@ function _M.analyze_request(uri, headers, remote_ip)
     -- integer -- not a 15-decimal-place fraction with no real meaning at
     -- that precision, and not a score that reads as "120/80" when the
     -- scale is supposed to top out at 100.
-    threat_result.score = math.min(math.floor(threat_result.score + 0.5), _G.config.threat.max_threat_score)
+    pattern_result.score = math.min(math.floor(pattern_result.score + 0.5), _G.config.threat.max_risk_score)
 
     -- Final determination: flag as suspicious when accumulated score meets
     -- or exceeds the threshold defined in _G.config.threat.honeypot_threshold.
-    threat_result.suspicious = threat_result.score >= _G.config.threat.honeypot_threshold
+    pattern_result.suspicious = pattern_result.score >= _G.config.threat.honeypot_threshold
 
-    if threat_result.score >= _G.config.threat.honeypot_threshold then
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] 🚨 FINAL SCORE: ", threat_result.score,
+    if pattern_result.score >= _G.config.threat.honeypot_threshold then
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🚨 FINAL SCORE: ", pattern_result.score,
                 "/", _G.config.threat.honeypot_threshold, " (SUSPICIOUS) | IP: ", remote_ip,
-                " | Patterns: ", #threat_result.patterns_matched, " | CVEs: ", #threat_result.cve_matched)
-    elseif threat_result.score > 20 then
-        ngx.log(ngx.WARN, "[THREAT ANALYZER] ⚠️  FINAL SCORE: ", threat_result.score,
+                " | Patterns: ", #pattern_result.patterns_matched, " | CVEs: ", #pattern_result.cve_matched)
+    elseif pattern_result.score > 20 then
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] ⚠️  FINAL SCORE: ", pattern_result.score,
                 "/", _G.config.threat.honeypot_threshold, " (elevated but below threshold) | IP: ", remote_ip)
     else
-        ngx.log(ngx.INFO, "[THREAT ANALYZER] ✅ FINAL SCORE: ", threat_result.score,
+        ngx.log(ngx.INFO, "[PATTERN ANALYZER] ✅ FINAL SCORE: ", pattern_result.score,
                 "/", _G.config.threat.honeypot_threshold, " (clean) | IP: ", remote_ip)
     end
 
-    if threat_result.score > 70 then
-        _G.utils.log_security_event("high_threat_request", {
+    if pattern_result.score > 70 then
+        _G.utils.log_security_event("high_risk_request", {
             ip = remote_ip,
             uri = uri,
-            score = threat_result.score,
-            patterns = threat_result.patterns_matched,
-            cves = threat_result.cve_matched
+            score = pattern_result.score,
+            patterns = pattern_result.patterns_matched,
+            cves = pattern_result.cve_matched
         })
     end
 
-    return threat_result
+    return pattern_result
 end
 
 -- Thin delegating wrappers: pull the relevant slice of _G.config / ngx.var
--- and hand off to the pure rules in threat_rules.lua. Kept on _M (rather
+-- and hand off to the pure rules in pattern_rules.lua. Kept on _M (rather
 -- than inlined into analyze_request) since nothing else in the codebase
 -- calls them directly, but the public shape is preserved in case that
 -- changes, and it keeps analyze_request's stage list readable.
 
 function _M.analyze_uri_patterns(uri)
-    return threat_rules.analyze_uri_patterns(
-        uri, _G.config.threat.suspicious_patterns, _G.config.threat.max_threat_score)
+    return pattern_rules.analyze_uri_patterns(
+        uri, _G.config.threat.suspicious_patterns, _G.config.threat.max_risk_score)
 end
 
 function _M.analyze_headers(headers)
-    return threat_rules.analyze_headers(headers, ngx.var.request_method)
+    return pattern_rules.analyze_headers(headers, ngx.var.request_method)
 end
 
 function _M.analyze_cve_patterns(uri, headers)
-    return threat_rules.analyze_cve_patterns(
+    return pattern_rules.analyze_cve_patterns(
         uri, headers, ngx.var.args, _G.config.vulnerability.cve_patterns,
-        _G.config.threat.max_threat_score)
+        _G.config.threat.max_risk_score)
 end
 
 function _M.analyze_request_method()
-    return threat_rules.analyze_request_method(ngx.var.request_method, ngx.var.http_x_http_method_override)
+    return pattern_rules.analyze_request_method(ngx.var.request_method, ngx.var.http_x_http_method_override)
 end
 
 function _M.is_static_asset(uri)
-    return threat_rules.is_static_asset(uri, _G.config.threat.static_asset_patterns)
+    return pattern_rules.is_static_asset(uri, _G.config.threat.static_asset_patterns)
 end
 
 -- ---------------------------------------------------------------------------
@@ -368,7 +368,7 @@ function _M.check_ip_reputation(ip, actor)
         result.score = -20
         result.raw_score = -20
         result.reason = "whitelisted"
-        ngx.log(ngx.INFO, "[THREAT ANALYZER] ✅ IP is whitelisted: ", ip)
+        ngx.log(ngx.INFO, "[PATTERN ANALYZER] ✅ IP is whitelisted: ", ip)
         return result
     end
 
@@ -406,7 +406,7 @@ function _M.check_ip_reputation(ip, actor)
             elseif limited == "capped" then
                 result.reason = result.reason .. " (capped at " .. cfg.ip_reputation_cap .. ")"
             end
-            ngx.log(ngx.WARN, "[THREAT ANALYZER] 🚨 Known threat IP detected: ", ip, " | Reason: ", result.reason,
+            ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🚨 Known threat IP detected: ", ip, " | Reason: ", result.reason,
                     " | Stored raw_score: ", threat_ips[ip].raw_score or 0, " | Decayed: ",
                     string.format("%.1f", raw), " | Counted: ", string.format("%.1f", score),
                     " | Active sessions on address: ", active_sessions)
@@ -476,7 +476,7 @@ end
 -- Increments (or starts) the current 60s request-count window for `actor`
 -- (the session id; the address only when there is no session) in
 -- the rate_limit shared dict and returns the resulting window data. I/O
--- (shared dict read+write), so it stays here rather than in threat_rules.lua.
+-- (shared dict read+write), so it stays here rather than in pattern_rules.lua.
 -- ---------------------------------------------------------------------------
 function _M.update_rate_limit(actor)
     local rate_limit_dict = ngx.shared.rate_limit
@@ -517,13 +517,13 @@ end
 -- ---------------------------------------------------------------------------
 -- detect_automation(headers, uri)
 --
--- User-Agent fingerprint matching is pure (threat_rules.score_automation_user_agent);
+-- User-Agent fingerprint matching is pure (pattern_rules.score_automation_user_agent);
 -- the rapid-request timing check needs the `sessions` shared dict, so it
 -- stays here as I/O and its result is merged with the pure score.
 -- ---------------------------------------------------------------------------
 function _M.detect_automation(headers, uri)
     local user_agent = headers["User-Agent"] or headers["user-agent"] or ""
-    local result = threat_rules.score_automation_user_agent(user_agent)
+    local result = pattern_rules.score_automation_user_agent(user_agent)
 
     -- Check for automation patterns in request timing.
     --

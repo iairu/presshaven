@@ -92,8 +92,8 @@ class ThreatIntelTests(unittest.TestCase):
     """The Threat Intelligence dashboard is built on fields only the enrich
     transform's threat-intelligence block in vector.yaml creates."""
 
-    FIELDS = ("attacker_ip", "sensor", "attacker_tool", "attacker_tool_class",
-              "threat_verdict", "attack_technique", "attack_tactic", "threat.stage",
+    FIELDS = ("client_ip", "sensor", "client_tool", "client_tool_class",
+              "risk_verdict", "attack_technique", "attack_tactic", "threat.stage",
               "threat.technique.id", "vulnerability.id")
 
     @classmethod
@@ -112,7 +112,7 @@ class ThreatIntelTests(unittest.TestCase):
     def test_panels_only_use_fields_vector_sets(self):
         # Every *.keyword / numeric field a TI panel aggregates on must be one
         # vector.yaml writes, or one an existing parse already provides.
-        known = set(self.FIELDS) | {"timestamp", "threat_score", "session_id"}
+        known = set(self.FIELDS) | {"timestamp", "risk_score", "session_id"}
         for vid, body in self.bd.VISUALIZATIONS:
             if not vid.startswith("viz-ti-"):
                 continue
@@ -122,15 +122,15 @@ class ThreatIntelTests(unittest.TestCase):
                     with self.subTest(viz=vid, field=field):
                         self.assertIn(field.removesuffix(".keyword"), known)
 
-    def test_ioc_list_is_one_row_per_attacker(self):
+    def test_ioc_list_is_one_row_per_client(self):
         body = dict(self.bd.VISUALIZATIONS)["viz-ti-indicators"]
         buckets = [a for a in json.loads(body["attributes"]["visState"])["aggs"]
                    if a["schema"] == "bucket"]
-        self.assertEqual([a["params"]["field"] for a in buckets], ["attacker_ip.keyword"])
+        self.assertEqual([a["params"]["field"] for a in buckets], ["client_ip.keyword"])
 
     def test_vector_unit_tests_cover_the_block(self):
         tests = (REPO_ROOT / "siem/vector/tests/threat_intel.yaml").read_text(encoding="utf-8")
-        for field in ("attacker_tool", "threat.technique.id", "vulnerability.id", "threat_verdict"):
+        for field in ("client_tool", "threat.technique.id", "vulnerability.id", "risk_verdict"):
             with self.subTest(field=field):
                 self.assertIn(f".{field}", tests)
 

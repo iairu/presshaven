@@ -5,12 +5,12 @@
  *              (production vs honeypot) in the single-eshop / two-database
  *              topology, by running a real SELECT against the resolved $wpdb
  *              and reporting the result in response headers. The dashboard's
- *              Exploits page reads these to show a "database container response"
- *              card in the Threat analyzer GUI, exposing the actual per-request
+ *              Patterns page reads these to show a "database container response"
+ *              card in the Pattern analyzer GUI, exposing the actual per-request
  *              database resolution rather than just the proxy's routing intent.
  *
  * SECURITY: gated behind the same INTERNAL_TEST_SECRET the reverse proxy uses
- * for its X-Route-Target / X-Threat-Score debug headers. A real attacker never
+ * for its X-Route-Target / X-Risk-Score debug headers. A real user never
  * sees these headers (that would reveal they are in a honeypot); they are only
  * emitted when the caller presents the shared secret in X-Internal-Test-Auth.
  * The secret is compared in constant time and the whole thing is a no-op when

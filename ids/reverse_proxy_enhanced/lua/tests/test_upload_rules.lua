@@ -133,21 +133,21 @@ end
 
 print("== should_block_upload() ==")
 do
-    local high_score = rules.should_block_upload({ threat_score = 80, risk_factors = {} })
-    check("high threat score blocks", (rules.should_block_upload({ threat_score = 80, risk_factors = {} })) == true)
+    local high_score = rules.should_block_upload({ risk_score = 80, risk_factors = {} })
+    check("high risk score blocks", (rules.should_block_upload({ risk_score = 80, risk_factors = {} })) == true)
 
-    local low_score = rules.should_block_upload({ threat_score = 5, risk_factors = {} })
-    check("low threat score with no factors allowed", low_score == false)
+    local low_score = rules.should_block_upload({ risk_score = 5, risk_factors = {} })
+    check("low risk score with no factors allowed", low_score == false)
 
     local critical, reason = rules.should_block_upload({
-        threat_score = 20,
+        risk_score = 20,
         risk_factors = { "php_extension", "metasploit_framework" }
     })
     check("multiple critical factors blocks", critical == true)
     check("reason is multiple_critical_factors", reason == "multiple_critical_factors")
 
     local combo = rules.should_block_upload({
-        threat_score = 20,
+        risk_score = 20,
         risk_factors = { "php_extension", "double_extension_bypass" }
     })
     check("executable + bypass combination blocks", combo == true)

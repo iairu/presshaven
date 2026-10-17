@@ -25,7 +25,7 @@ class LogPanel(QWidget):
     # Raw stdout chunks, emitted independent of pause state -- unlike
     # append()/_emit(), this never buffers or holds anything back, so a
     # consumer that wants to react to output as it happens (e.g.
-    # page_exploits.py's threat-event parser) isn't at the mercy of the
+    # page_patterns.py's pattern-event parser) isn't at the mercy of the
     # log tail's own Pause button.
     line_received = pyqtSignal(str)
 

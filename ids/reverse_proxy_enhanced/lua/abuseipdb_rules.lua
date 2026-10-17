@@ -1,7 +1,7 @@
 -- abuseipdb_rules.lua - Pure report-eligibility logic used by
 -- abuseipdb_client.lua
 --
--- Same split rationale as threat_rules.lua/router_rules.lua: no ngx.*
+-- Same split rationale as pattern_rules.lua/router_rules.lua: no ngx.*
 -- dependency, no reliance on _G.config/_G.utils, plain-`lua`-interpreter
 -- testable (see tests/test_abuseipdb_rules.lua). abuseipdb_client.lua is
 -- the adapter -- it does all the HTTP/timer/shared-dict I/O.
@@ -31,7 +31,7 @@ _M.REASON_CATEGORIES = {
     -- deterministic a signal as cve_pattern_match/vulnerable_plugin_access
     -- above, so it's reportable too. Previously "bad_ip_reputation" (the
     -- reason string used for every IP-reputation hit regardless of source)
-    -- was never in this whitelist, so Suricata-confirmed attackers were
+    -- was never in this whitelist, so Suricata-confirmed users were
     -- never actually reported to AbuseIPDB despite Suricata correctly
     -- detecting them.
     suricata_confirmed_alert        = { 15, 21 },

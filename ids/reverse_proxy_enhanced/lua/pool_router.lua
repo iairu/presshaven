@@ -1,11 +1,11 @@
 -- pool_router.lua - Honeypot Pool Routing and Assignment Module
 --
 -- PURPOSE:
---   Implements the honeynet pooling architecture: each attacker SESSION (not
+--   Implements the honeynet pooling architecture: each user SESSION (not
 --   IP address -- see session_handler.lua for how a session is kept and
 --   recovered) is permanently assigned to a specific honeypot pool instance (honeypot_eshop_N +
---   honeypot_database_N). This gives every attacker their own isolated WordPress
---   environment so their actions cannot cross-contaminate other attacker sessions.
+--   honeypot_database_N). This gives every user their own isolated WordPress
+--   environment so their actions cannot cross-contaminate other user sessions.
 --
 -- ARCHITECTURE:
 --   - Honeypot pools are numbered 1..N. Pools 1-3 are declared in
@@ -13,13 +13,13 @@
 --     pool_manager container (ids/pool_manager/) and registered in Redis once
 --     healthy (honeypot_pool:ready). The set of usable pools is therefore read
 --     from Redis, not hard-coded.
---   - EXCLUSIVE assignment: a new attacker session is handed a free ready pool
+--   - EXCLUSIVE assignment: a new user session is handed a free ready pool
 --     that no other session owns (atomic Redis EVAL, see pool_router_rules.ASSIGN_SCRIPT,
---     so concurrent nginx workers cannot give one pool to two attackers).
+--     so concurrent nginx workers cannot give one pool to two users).
 --   - SPARE provisioning: every assignment also queues a wake-up on
 --     honeypot_pool:provision; pool_manager then builds an additional
 --     honeypot_eshop_N + honeypot_database_N pair so one is ready for the next
---     attacker.
+--     user.
 --   - SCALE-UP: if no pool is free but pool_manager may still grow (below its
 --     resource budget), the session borrows a ready pool round-robin for the
 --     moment and joins honeypot_pool:waiting; pool_manager builds pools for
@@ -30,9 +30,9 @@
 --     (resource budget / POOL_MAX reached, or the host is low on memory/CPU/
 --     disk), a new session is assigned to an existing ready pool in strict
 --     round-robin order and shares it for good. That is the only case in
---     which two attackers end up sharing a pool.
+--     which two users end up sharing a pool.
 --   - Once assigned, the session->pool mapping lives in Redis with a 24-hour TTL so
---     the same attacker always hits the same fake environment across sessions.
+--     the same user always hits the same fake environment across sessions.
 --   - A fast per-request local cache (ngx.shared.honeypot_routes) avoids Redis
 --     lookups on every request from a known session.
 --   - If a pool instance is found to be unhealthy (tracked via health_check.lua),
@@ -154,7 +154,7 @@ end
 -- scripts/replicate_content_to_honeypot.sh is applying its sync to this
 -- pool's database, the pool is treated exactly like a temporarily unhealthy
 -- backend -- NOT because it's actually down, but so that find_healthy_pool()
--- transparently steers both new attacker assignments and existing
+-- transparently steers both new user assignments and existing
 -- session lookups to a different, ready pool for the few seconds the sync
 -- takes, then automatically resumes on this pool once its flag clears. This
 -- reuses the existing failover mechanism rather than adding new blocking
@@ -197,7 +197,7 @@ local function find_healthy_pool(preferred_pool)
             "falling back to pool ", candidate, " (temporary, assignment unchanged)")
     elseif candidate == preferred_pool and not is_pool_healthy(preferred_pool) then
         -- All pools report unhealthy – route to the assigned pool and let nginx
-        -- return the appropriate error to the attacker.
+        -- return the appropriate error to the user.
         ngx.log(ngx.ERR,
             "[POOL] All ", #ids, " honeypot pools appear unhealthy; ",
             "routing to assigned pool ", preferred_pool, " anyway")

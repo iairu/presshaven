@@ -1,27 +1,27 @@
-"""Parses reverse_proxy log lines into structured threat-analyzer events,
-for ui/page_exploits.py's colored score badge and diagram tab.
+"""Parses reverse_proxy log lines into structured pattern-analyzer events,
+for ui/page_patterns.py's colored score badge and diagram tab.
 
 Regex-based against the actual ngx.log() message formats in
-threat_analyzer.lua, router.lua, and nginx.conf's header_filter_by_lua
+pattern_analyzer.lua, router.lua, and nginx.conf's header_filter_by_lua
 blocks -- if one of those message strings changes, the corresponding
 pattern here needs updating to match (there's no shared source of truth,
-same tradeoff as core/exploits.py's presets vs. init.lua's cve_patterns).
+same tradeoff as core/patterns.py's presets vs. init.lua's cve_patterns).
 
 Recognized line shapes (roughly highest-value/most-specific first, since
 parse_line() checks in this order and returns on the first match):
-  - "[LOCATION / HEADER] route_decision='X' threat_score='N'" -- nginx.conf,
+  - "[LOCATION / HEADER] route_decision='X' risk_score='N'" -- nginx.conf,
     fired on EVERY request exactly once, most reliable per-request outcome
     summary. Drives the score badge.
   - "[FINAL DECISION] (emoji) ROUTING TO (HONEYPOT|PRODUCTION) | Score: N
     [| Reason: ...]" -- nginx.conf, router.lua's own outcome record.
-  - "[THREAT ANALYZER] (emoji) FINAL SCORE: N/M (verdict)" -- threat_analyzer.lua.
+  - "[PATTERN ANALYZER] (emoji) FINAL SCORE: N/M (verdict)" -- pattern_analyzer.lua.
   - "[ROUTING] (emoji) <reason text> (HONEYPOT|PRODUCTION) ..." -- router.lua's
     per-stage routing decisions (Stage 3-10).
-  - "[THREAT ANALYZER] ... Known threat IP detected: IP | Reason: X" --
+  - "[PATTERN ANALYZER] ... Known threat IP detected: IP | Reason: X" --
     informational context for the "Bad IP reputation" signal that follows.
-  - "[THREAT ANALYZER] (emoji) <label> (+N) [| detail]" -- individual
+  - "[PATTERN ANALYZER] (emoji) <label> (+N) [| detail]" -- individual
     scoring signals (URI patterns, headers, CVE match, automation, etc.).
-Anything else returns None (not every log line is threat-analyzer-relevant
+Anything else returns None (not every log line is pattern-analyzer-relevant
 -- SESSION DEBUG, HEALTH, docker_logs source noise, etc. are deliberately
 not shown in the diagram).
 """
@@ -39,7 +39,7 @@ COLOR_MED = ORANGE   # elevated / medium score delta
 COLOR_HIGH = RED     # honeypot / suspicious / large score delta
 COLOR_INFO = BLUE    # informational context, not a score itself
 
-# The threat score's actual maximum (init.lua's max_threat_score). The proxy's
+# The risk score's actual maximum (init.lua's max_risk_score). The proxy's
 # log lines print the score against the honeypot_threshold (e.g. "Score: 100/80"),
 # which reads as if 80 were the ceiling -- but scores go up to 100. Displayed
 # fractions are normalized to this max so the denominator is the real maximum,
@@ -56,7 +56,7 @@ def _normalize_score_max(text: str) -> str:
 
 
 @dataclass(frozen=True)
-class ThreatEvent:
+class PatternEvent:
     kind: str  # "outcome" | "final_score" | "routing" | "signal" | "info"
     label: str
     detail: str
@@ -64,7 +64,7 @@ class ThreatEvent:
     score: int | None = None  # populated for "outcome"/"final_score" events
     # Original log timestamp (RFC3339, e.g. "2026-08-07T10:32:37.684747138Z"),
     # populated only when the tailing command was run with `docker compose
-    # logs --timestamps` (ui/page_exploits.py's threat_log tail; NOT
+    # logs --timestamps` (ui/page_patterns.py's pattern_log tail; NOT
     # ui/security_feed.py's, which doesn't need per-event timestamps for its
     # own purposes) -- None otherwise. See _DOCKER_TIMESTAMP_RE below.
     timestamp: str | None = None
@@ -86,18 +86,23 @@ class ThreatEvent:
 # of the timestamp itself: "...reverse_proxy-1  | \x1b[0m2026-08-09T...".
 # Without skipping that reset code here, the regex never matched at all --
 # every single event's timestamp came back None, not just some -- which is
-# why "Copy selected" on the Threat analyzer tab always showed "unknown
+# why "Copy selected" on the Pattern analyzer tab always showed "unknown
 # time" instead of the real log timestamp.
 _DOCKER_TIMESTAMP_RE = re.compile(
     r"^\S+\s*\|\s*(?:\x1b\[[0-9;]*m)*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s*"
 )
 
-_HEADER_SUMMARY_RE = re.compile(r"\[LOCATION / HEADER\] route_decision='(\w+)' threat_score='(-?\d+)'")
+# The proxy logged "[THREAT ANALYZER]" and "threat_score='N'" before the
+# rename to pattern analyzer / risk score; both spellings still parse so
+# older log tails and exported logs keep working.
+_ANALYZER_TAG = r"\[(?:PATTERN|THREAT) ANALYZER\]"
+
+_HEADER_SUMMARY_RE = re.compile(r"\[LOCATION / HEADER\] route_decision='(\w+)' (?:risk|threat)_score='(-?\d+)'")
 # Score:\s*(-?\d+)/(\d+) -- both the score AND the honeypot_threshold it's
 # being compared against (nginx.conf now logs "Score: N/80" on both
 # branches, matching every other score line in this pipeline). Requiring
 # the "/(\d+)" here is also what keeps this regex from ever mis-parsing a
-# score again the way it silently did before threat_analyzer.lua/router.lua
+# score again the way it silently did before pattern_analyzer.lua/router.lua
 # started rounding+capping every score to a clean integer: a raw float like
 # "84.484160391042" left the old (-?\d+)-only pattern matching just "84"
 # and dumping the leftover ".484160391042" into the "rest" group, which
@@ -106,10 +111,10 @@ _HEADER_SUMMARY_RE = re.compile(r"\[LOCATION / HEADER\] route_decision='(\w+)' t
 _FINAL_DECISION_RE = re.compile(
     r"\[FINAL DECISION\].*ROUTING TO (HONEYPOT|PRODUCTION)\s*\|\s*Score:\s*(-?\d+)/(\d+)(.*)$"
 )
-_FINAL_SCORE_RE = re.compile(r"\[THREAT ANALYZER\].*FINAL SCORE:\s*(-?\d+)/(\d+)\s*\(([^)]+)\)")
+_FINAL_SCORE_RE = re.compile(_ANALYZER_TAG + r".*FINAL SCORE:\s*(-?\d+)/(\d+)\s*\(([^)]+)\)")
 _ROUTING_RE = re.compile(r"\[ROUTING\]\s*(.+?)\s*(HONEYPOT|PRODUCTION)\b(.*)$")
-_KNOWN_THREAT_RE = re.compile(r"\[THREAT ANALYZER\].*Known threat IP detected:\s*(\S+)\s*\|\s*Reason:\s*(.+)$")
-_SIGNAL_RE = re.compile(r"\[THREAT ANALYZER\]\s*(?:[^\x00-\x7f]+\s*)?(.+?)\s*\(\+(\d+)\)(.*)$")
+_KNOWN_THREAT_RE = re.compile(_ANALYZER_TAG + r".*Known threat IP detected:\s*(\S+)\s*\|\s*Reason:\s*(.+)$")
+_SIGNAL_RE = re.compile(_ANALYZER_TAG + r"\s*(?:[^\x00-\x7f]+\s*)?(.+?)\s*\(\+(\d+)\)(.*)$")
 
 _EMOJI_PREFIX_RE = re.compile(r"^[^\x00-\x7f\s]+\s*")
 
@@ -130,7 +135,7 @@ def _signal_color(delta: int) -> str:
     return COLOR_LOW
 
 
-def parse_line(line: str) -> ThreatEvent | None:
+def parse_line(line: str) -> PatternEvent | None:
     line = line.strip()
     if not line:
         return None
@@ -147,7 +152,7 @@ def parse_line(line: str) -> ThreatEvent | None:
     return replace(event, timestamp=timestamp) if timestamp else event
 
 
-def _parse_line_body(line: str) -> ThreatEvent | None:
+def _parse_line_body(line: str) -> PatternEvent | None:
     # nginx appends ", client: <ip>, server: ..., request: ...\" ..." to
     # EVERY log line (its own context, not part of the Lua message) --
     # strip it before matching so extracted "detail" text doesn't carry it.
@@ -161,7 +166,7 @@ def _parse_line_body(line: str) -> ThreatEvent | None:
         except ValueError:
             score = 0
         color = COLOR_HIGH if decision == "honeypot" else COLOR_LOW
-        return ThreatEvent("outcome", f"Routed to {decision.upper()}", f"Score: {score}", color, score)
+        return PatternEvent("outcome", f"Routed to {decision.upper()}", f"Score: {score}", color, score)
 
     m = _FINAL_DECISION_RE.search(line)
     if m:
@@ -175,7 +180,7 @@ def _parse_line_body(line: str) -> ThreatEvent | None:
         rest_clean = _normalize_score_max(_strip_seps(rest))
         if rest_clean:
             detail += f" | {rest_clean}"
-        return ThreatEvent("outcome", f"Final decision: {target}", detail, color, score)
+        return PatternEvent("outcome", f"Final decision: {target}", detail, color, score)
 
     m = _FINAL_SCORE_RE.search(line)
     if m:
@@ -191,25 +196,25 @@ def _parse_line_body(line: str) -> ThreatEvent | None:
             color = COLOR_MED
         else:
             color = COLOR_LOW
-        return ThreatEvent("final_score", f"Final score: {score}/{SCORE_MAX}", verdict, color, score)
+        return PatternEvent("final_score", f"Final score: {score}/{SCORE_MAX}", verdict, color, score)
 
     m = _ROUTING_RE.search(line)
     if m:
         label, target, rest = m.group(1), m.group(2), m.group(3)
         color = COLOR_HIGH if target == "HONEYPOT" else COLOR_LOW
-        return ThreatEvent("routing", _strip_seps(_strip_emoji(label)),
+        return PatternEvent("routing", _strip_seps(_strip_emoji(label)),
                            _normalize_score_max(_strip_seps(rest)), color)
 
     m = _KNOWN_THREAT_RE.search(line)
     if m:
         ip, reason = m.group(1), m.group(2)
-        return ThreatEvent("info", f"Known threat IP: {ip}", reason.strip(), COLOR_INFO)
+        return PatternEvent("info", f"Known threat IP: {ip}", reason.strip(), COLOR_INFO)
 
     m = _SIGNAL_RE.search(line)
     if m:
         label, delta_str, rest = m.group(1), m.group(2), m.group(3)
         delta = int(delta_str)
         clean_label = _strip_seps(_strip_emoji(label))
-        return ThreatEvent("signal", f"{clean_label} (+{delta})", _strip_seps(rest), _signal_color(delta))
+        return PatternEvent("signal", f"{clean_label} (+{delta})", _strip_seps(rest), _signal_color(delta))
 
     return None

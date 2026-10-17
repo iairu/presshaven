@@ -19,7 +19,7 @@ from datetime import datetime
 from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QFont, QImage, QTextDocument
 
-from core.exploit_report_pdf import _FONT_CSS_STACK, _report_font_family
+from core.pattern_report_pdf import _FONT_CSS_STACK, _report_font_family
 from core.thesis_export import _finish_pdf
 
 # What each SIEM Analytics page button shows, keyed by its path relative to the
@@ -36,7 +36,7 @@ PAGE_NOTES: dict[str, str] = {
         "<b>Requests Over Time by Route</b> and <b>Production vs Honeypot Routing</b> show "
         "volume and the share diverted to the decoy shop; <b>Top URIs</b> lists the most "
         "requested URIs, each marked <i>attack_pattern</i> (it matched an attack pattern or "
-        "CVE signature) or <i>safe</i>, with its peak threat score; <b>Attack-Pattern vs Safe "
+        "CVE signature) or <i>safe</i>, with its peak risk score; <b>Attack-Pattern vs Safe "
         "Requests</b>, <b>HTTP Status Codes</b>, <b>HTTP Methods</b> and <b>Top User-Agents</b> "
         "round out the picture of the traffic."
     ),
@@ -66,7 +66,7 @@ PAGE_NOTES: dict[str, str] = {
         "population; <b>Requests &amp; Duration per Session</b> and <b>Most Hostile "
         "Sessions</b> single out the busiest and most hostile sessions (peak score after "
         "accumulation and decay, offenses, distinct attack patterns); the sophistication "
-        "panels show how attackers were classified and with what confidence over time."
+        "panels show how users were classified and with what confidence over time."
     ),
     "/app/dashboards#/view/dashboard-attack-patterns": (
         "What the attacks were. <b>Matched Attack Patterns</b> is a cloud of the attack "
@@ -78,15 +78,15 @@ PAGE_NOTES: dict[str, str] = {
     ),
     "/app/dashboards#/view/dashboard-threat-intel": (
         "The same events turned into threat intelligence. Every proxy request, proxy "
-        "security event and Suricata alert carries the attacker's IP, the tool its "
+        "security event and Suricata alert carries the user's IP, the tool its "
         "User-Agent gives away and the MITRE ATT&amp;CK techniques it stands for. "
-        "<b>Attacker Indicators</b> is the IOC list: one row per IP with first and last "
+        "<b>User Indicators</b> is the IOC list: one row per IP with first and last "
         "seen, how many sensors saw it and the furthest ATT&amp;CK stage it reached; "
-        "<b>Kill Chain</b> and <b>How Far Each Attacker Got</b> place that activity on the "
+        "<b>Kill Chain</b> and <b>How Far Each User Got</b> place that activity on the "
         "ATT&amp;CK tactics in order; <b>MITRE ATT&amp;CK Techniques Observed</b>, <b>Attack "
         "Tools Fingerprinted</b> and <b>CVEs Targeted</b> say what was used against the shop; "
         "<b>Verdict per Sensor</b> compares the proxy's and Suricata's judgement, and the "
-        "<b>Malicious Event Feed</b> lists the events behind it all, exportable from Discover "
+        "<b>Flagged Event Feed</b> lists the events behind it all, exportable from Discover "
         "as CSV."
     ),
     "/app/discover": (

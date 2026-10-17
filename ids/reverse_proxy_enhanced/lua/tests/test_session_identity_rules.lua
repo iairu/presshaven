@@ -60,12 +60,12 @@ do
     id, status = rules.verify("", mac)
     check("empty cookie -> missing", id == nil and status == "missing")
 
-    -- Attacker swaps in another session id but keeps the MAC.
+    -- User swaps in another session id but keeps the MAC.
     local forged = ID2 .. cookie:sub(#ID + 1)
     id, status = rules.verify(forged, mac)
     check("edited id is rejected", id == nil and status == "bad_signature")
 
-    -- Attacker edits one character of the MAC.
+    -- User edits one character of the MAC.
     local last = cookie:sub(-1)
     local flipped = cookie:sub(1, -2) .. (last == "0" and "1" or "0")
     id, status = rules.verify(flipped, mac)

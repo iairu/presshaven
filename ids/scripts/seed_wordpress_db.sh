@@ -44,7 +44,7 @@
 #   dashboard's Backups page "Reset demo store" button, or
 #   manage_backups.sh) to wipe every WordPress table and rebuild from
 #   scratch -- useful to restore a clean, known-good storefront between
-#   exploit test runs, since exploits are expected to modify/corrupt
+#   pattern test runs, since patterns are expected to modify/corrupt
 #   this database.
 #
 # IMPORT_SAMPLE_CONTENT (default "1"):

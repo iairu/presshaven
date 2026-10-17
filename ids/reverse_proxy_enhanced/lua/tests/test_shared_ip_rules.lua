@@ -3,7 +3,7 @@
 -- Runs under a plain `lua` interpreter. Covers shared_ip_rules.lua (how much
 -- an address's reputation counts on a shared / carrier-grade NAT address) and
 -- checks that the proxy keeps a client's own behaviour on its session, not
--- its address, so one attacker can't raise the score of users sharing it.
+-- its address, so one user can't raise the score of users sharing it.
 --
 -- Usage:
 --   cd ids/reverse_proxy_enhanced/lua/tests
@@ -26,9 +26,9 @@ end
 
 print("== track: distinct sessions per address ==")
 do
-    local state, n = rules.track(nil, "attacker", 1000, 3600)
+    local state, n = rules.track(nil, "user", 1000, 3600)
     check("first session on an address -> 1", n == 1)
-    state, n = rules.track(state, "attacker", 1010, 3600)
+    state, n = rules.track(state, "user", 1010, 3600)
     check("same session again -> still 1", n == 1)
     state, n = rules.track(state, "neighbour", 1020, 3600)
     check("second session -> 2", n == 2)
@@ -61,15 +61,15 @@ end
 
 print("== CGNAT scenario ==")
 do
-    -- Attacker and a customer share 198.51.100.1. Suricata flagged the
-    -- address (decayed score 90) because of the attacker's exploit traffic.
+    -- User and a customer share 198.51.100.1. Suricata flagged the
+    -- address (decayed score 90) because of the user's pattern traffic.
     local cap, min_sessions, window = 10, 2, 3600
-    local state = rules.track(nil, "attacker", 100, window)
+    local state = rules.track(nil, "user", 100, window)
     local _, n = rules.track(state, "customer", 160, window)
     local customer_score = rules.contribution(90, rules.is_shared(n, min_sessions), cap)
-    check("customer gets nothing from the attacker's alerts", customer_score == 0)
+    check("customer gets nothing from the user's alerts", customer_score == 0)
 
-    -- The customer arrives after the attacker's session went idle: the
+    -- The customer arrives after the user's session went idle: the
     -- address looks unshared, but the cap keeps it below router.lua's
     -- "new signal" bar (> 10), so it can't divert or accumulate.
     local _, alone = rules.track(nil, "customer", 100 + window + 10, window)
@@ -104,8 +104,8 @@ for _, dir in ipairs({ "../..", "../../../db_proxy/reverse_proxy_enhanced" }) do
     if conf then
         local code = code_only(conf)
         local sess = code:find("ngx.ctx.session_id = session_id", 1, true)
-        local analyze = code:find("threat_analyzer.analyze_request(", 1, true)
-        check(dir .. ": session is resolved before threat analysis", sess and analyze and sess < analyze)
+        local analyze = code:find("pattern_analyzer.analyze_request(", 1, true)
+        check(dir .. ": session is resolved before pattern analysis", sess and analyze and sess < analyze)
         check(dir .. ": admin attempts are counted per session",
               code:find("ngx.var.remote_addr, admin_uri, ngx.ctx.session_id)", 1, true) ~= nil)
         check(dir .. ": rate limit is keyed per session (address fallback)",
@@ -115,16 +115,16 @@ for _, dir in ipairs({ "../..", "../../../db_proxy/reverse_proxy_enhanced" }) do
 end
 
 do
-    local ta = code_only(read("../threat_analyzer.lua") or "")
-    check("threat_analyzer: rate window keyed per actor", ta:find('"actor:" .. actor', 1, true) ~= nil)
-    check("threat_analyzer: timing streak keyed per session",
+    local ta = code_only(read("../pattern_analyzer.lua") or "")
+    check("pattern_analyzer: rate window keyed per actor", ta:find('"actor:" .. actor', 1, true) ~= nil)
+    check("pattern_analyzer: timing streak keyed per session",
           ta:find('"timing:" .. (ngx.ctx.session_id', 1, true) ~= nil)
-    check("threat_analyzer: address reputation goes through shared_ip_rules",
+    check("pattern_analyzer: address reputation goes through shared_ip_rules",
           ta:find("shared_ip_rules.contribution(", 1, true) ~= nil)
 
     local admin = code_only(read("../admin_handler.lua") or "")
     check("admin_handler: no longer writes the address's reputation",
-          admin:find("increment_threat_score", 1, true) == nil
+          admin:find("increment_risk_score", 1, true) == nil
           and admin:find("red:set('threat_ips'", 1, true) == nil)
     check("admin_handler: brute force tracked per actor",
           admin:find("check_brute_force_attempts(actor)", 1, true) ~= nil)

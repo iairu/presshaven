@@ -151,7 +151,7 @@ do
     local now = 1000000
     local HALF_LIFE = 300
 
-    local fresh = { threat_score = 90, last_threat_time = now }
+    local fresh = { risk_score = 90, last_threat_time = now }
     check("no time elapsed -> no decay", rules.decayed_score(fresh, now, HALF_LIFE) == 90)
 
     -- The specific bug this function exists to fix: a session flagged
@@ -167,10 +167,10 @@ do
     local two_half_lives = rules.decayed_score(fresh, now + 2 * HALF_LIFE, HALF_LIFE)
     check("two half-lives elapsed -> below the 30 release threshold", two_half_lives < 30)
 
-    local zero_score = rules.decayed_score({ threat_score = 0, last_threat_time = now }, now + 10000, HALF_LIFE)
+    local zero_score = rules.decayed_score({ risk_score = 0, last_threat_time = now }, now + 10000, HALF_LIFE)
     check("zero stored score stays zero", zero_score == 0)
 
-    local no_anchor = rules.decayed_score({ threat_score = 90 }, now + 10000, HALF_LIFE)
+    local no_anchor = rules.decayed_score({ risk_score = 90 }, now + 10000, HALF_LIFE)
     check("missing last_threat_time -> no decay (treated as still-fresh)", no_anchor == 90)
 
     check("nil session_data returns zero", rules.decayed_score(nil, now, HALF_LIFE) == 0)
@@ -181,7 +181,7 @@ end
 print()
 print("== decision_trace() ==")
 do
-    local t = rules.decision_trace(30.4, 12.6, { threat_score = 50, offenses = 2 },
+    local t = rules.decision_trace(30.4, 12.6, { risk_score = 50, offenses = 2 },
         { patterns_matched = { "union select", "directory_traversal", "union select" },
           cve_matched = { "CVE-2023-28121" } }, 300, { permaflag_score = 100, permaflag_offenses = 5 })
     check("request score is this request's own, rounded", t.request_score == "30")
@@ -197,13 +197,13 @@ do
     check("no prior score means nothing to decay", clean.decay_state == "none")
 
     check("peak at permaflag_score is permaflagged",
-          rules.decision_trace(0, 100, { threat_score = 100 }, {}, 300, { permaflag_score = 100 }).decay_state
+          rules.decision_trace(0, 100, { risk_score = 100 }, {}, 300, { permaflag_score = 100 }).decay_state
               == "permaflagged")
     check("enough offenses is permaflagged",
-          rules.decision_trace(0, 40, { threat_score = 40, offenses = 5 }, {}, 300, { permaflag_offenses = 5 }).decay_state
+          rules.decision_trace(0, 40, { risk_score = 40, offenses = 5 }, {}, 300, { permaflag_offenses = 5 }).decay_state
               == "permaflagged")
     check("half-life 0 means decay is off",
-          rules.decision_trace(0, 40, { threat_score = 40 }, {}, 0, {}).decay_state == "off")
+          rules.decision_trace(0, 40, { risk_score = 40 }, {}, 0, {}).decay_state == "off")
     check("quotes cannot break the log format",
           rules.decision_trace(0, 0, {}, { patterns_matched = { 'a"b\\c' } }, 300, {}).patterns == "a_b_c")
     check("nil inputs are tolerated", rules.decision_trace(nil, nil, nil, nil, nil, nil).uri_class == "safe")

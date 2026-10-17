@@ -1,10 +1,10 @@
--- upload_rules.lua - Pure file-upload threat analysis used by upload_handler.lua
+-- upload_rules.lua - Pure file-upload pattern analysis used by upload_handler.lua
 --
--- Same split rationale as threat_rules.lua/router_rules.lua/vulnerability_rules.lua:
+-- Same split rationale as pattern_rules.lua/router_rules.lua/vulnerability_rules.lua:
 -- no ngx.* dependency, plain-`lua`-interpreter testable (see
 -- tests/test_upload_rules.lua). upload_handler.lua is the thin adapter --
 -- it does the ngx.log calls and Redis I/O (suspicious-upload storage, IP
--- threat-score updates) and is wired live from nginx.conf's
+-- risk-score updates) and is wired live from nginx.conf's
 -- /wp-admin/admin-ajax.php upload-handling location block.
 --
 -- Unlike the other _rules.lua modules, almost everything in the original
@@ -311,7 +311,7 @@ function _M.analyze_upload_bypass_techniques(content_type, args)
 
             if string.find(boundary_match, "%.%.") or string.find(boundary_match, "%%00") then
                 analysis.score = analysis.score + 25
-                table.insert(analysis.risk_factors, "malicious_boundary_pattern")
+                table.insert(analysis.risk_factors, "flagged_boundary_pattern")
             end
         end
     end
@@ -354,13 +354,13 @@ end
 -- ---------------------------------------------------------------------------
 -- should_block_upload(analysis)
 --
--- @param analysis  table  { threat_score, risk_factors[] } (e.g. the merged
+-- @param analysis  table  { risk_score, risk_factors[] } (e.g. the merged
 --                          result upload_handler.analyze_upload() builds).
 -- @return boolean, string  should_block, reason
 -- ---------------------------------------------------------------------------
 function _M.should_block_upload(analysis)
-    if analysis.threat_score >= 70 then
-        return true, "high_threat_score"
+    if analysis.risk_score >= 70 then
+        return true, "high_risk_score"
     end
 
     local critical_factors = {

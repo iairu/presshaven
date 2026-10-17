@@ -227,17 +227,17 @@ _WEB_Q = 'log_type:"nginx_security"'
 # that predates them simply don't match.
 _DECISION_Q = f'{_WEB_Q} and decay_state:*'
 
-# session_id-bearing nginx_security requests -- the per-request threat-scored
-# traffic each attacker session is made of (§3.5/§6). attacker_sophistication_
+# session_id-bearing nginx_security requests -- the per-request risk-scored
+# traffic each user session is made of (§3.5/§6). client_sophistication_
 # classified events (nginx_error, parsed by the enrich transform's
 # log_security_event() JSON parsing -- see vector.yaml) carry the same
 # session_id, hoisted to the top level specifically so these two dashboards
 # can correlate on one field name.
 _SESSION_Q = 'log_type:"nginx_security" and session_id:*'
-_SOPHISTICATION_Q = 'log_type:"nginx_error" and security_event_type:"attacker_sophistication_classified"'
+_SOPHISTICATION_Q = 'log_type:"nginx_error" and security_event_type:"client_sophistication_classified"'
 
 # All log_security_event()-sourced events (honeytoken hits, session
-# compromise, CVE pattern matches, high-threat requests, honeypot routing
+# compromise, CVE pattern matches, high-risk requests, honeypot routing
 # decisions, sophistication classification) -- see init.lua's
 # _G.utils.log_security_event() and the enrich transform's nginx_error
 # parsing block in vector.yaml.
@@ -250,12 +250,12 @@ HONEYPOT_THRESHOLD = 80
 
 # Threat-intelligence fields, added by the enrich transform's THREAT
 # INTELLIGENCE block in siem/vector/vector.yaml to every proxy-scored
-# request, proxy security event and Suricata alert: attacker_ip, sensor,
-# attacker_tool(_class), threat_verdict, threat.technique.*/threat.tactic.*
+# request, proxy security event and Suricata alert: client_ip, sensor,
+# client_tool(_class), risk_verdict, threat.technique.*/threat.tactic.*
 # (MITRE ATT&CK, ECS names), attack_technique/attack_tactic (id+name and
 # stage+tactic in one value each), threat.stage, vulnerability.id (CVEs).
-_TI_Q = 'attacker_ip:*'
-_TI_MAL_Q = 'threat_verdict:"malicious"'
+_TI_Q = 'client_ip:*'
+_TI_MAL_Q = 'risk_verdict:"flagged"'
 _TI_TECH_Q = 'attack_technique:*'
 
 # Each dashboard answers a different question and uses different panel
@@ -273,17 +273,17 @@ _TI_TECH_Q = 'attack_technique:*'
 #   Attack Patterns   -- what the attacks were: matched patterns, CVEs,
 #                        honeytokens, security events over time
 #   Threat            -- the same events turned into intelligence: one
-#     Intelligence       indicator list per attacker IP across both sensors,
+#     Intelligence       indicator list per user IP across both sensors,
 #                        MITRE ATT&CK techniques and kill-chain stage reached,
 #                        tools fingerprinted, CVEs targeted, and an exportable
-#                        malicious-event feed
+#                        flagged-event feed
 VISUALIZATIONS = [
     # -- IDS Alerts (Suricata) --------------------------------------------
     _markdown("viz-ids-guide", "About: IDS Alerts",
               "**Network-level view.** Suricata inspects raw traffic before the reverse proxy "
               "scores it, so these alerts are an independent second opinion. Severity 1 is the "
               "most serious. Alerts also raise the source IP's reputation, which the proxy "
-              "folds into its threat score."),
+              "folds into its risk score."),
     _viz("viz-ids-total-alerts", "Total Alerts", "metric",
          [_count_metric_agg("Suricata alerts")], query=_IDS_Q),
     _viz("viz-ids-alerts-over-time", "Alerts Over Time by Severity", "histogram",
@@ -336,7 +336,7 @@ VISUALIZATIONS = [
          query=_WEB_Q,
          params_extra=_xy_params("histogram", [("1", "Requests")], mode="stacked", y_title="Requests")),
     _viz("viz-web-top-uris", "Top URIs (attack pattern or safe)", "table",
-         [_count_metric_agg("Requests"), _metric_agg("max", "threat_score", "4", "Peak threat score"),
+         [_count_metric_agg("Requests"), _metric_agg("max", "risk_score", "4", "Peak risk score"),
           _terms_agg("uri.keyword", agg_id="2", size=15, schema="bucket", label="URI"),
           _terms_agg("uri_class.keyword", agg_id="3", size=2, schema="bucket", label="Attack pattern or safe")],
          query=_DECISION_Q, params_extra=_TABLE),
@@ -358,21 +358,21 @@ VISUALIZATIONS = [
     _viz("viz-decision-honeypot-count", "Requests Diverted to Honeypot", "metric",
          [_count_metric_agg("Diverted requests")], query=f'{_WEB_Q} and route:"honeypot"'),
     _viz("viz-decision-score-composition", "Effective Score = Own + Carried (avg)", "line",
-         [_metric_agg("avg", "threat_score", "1", "Effective score"),
+         [_metric_agg("avg", "risk_score", "1", "Effective score"),
           _metric_agg("avg", "request_score", "3", "This request's own score"),
           _metric_agg("avg", "carried_score", "4", "Carried over from history"),
           _date_histogram_agg()],
          query=_DECISION_Q,
          params_extra=_xy_params("line", [("1", "Effective score"), ("3", "This request's own score"),
                                           ("4", "Carried over from history")],
-                                 y_title="Threat score", threshold=HONEYPOT_THRESHOLD)),
+                                 y_title="Risk score", threshold=HONEYPOT_THRESHOLD)),
     _viz("viz-decision-peak-score", "Peak Effective Score vs Threshold", "line",
-         [_metric_agg("max", "threat_score", "1", "Peak effective score"),
+         [_metric_agg("max", "risk_score", "1", "Peak effective score"),
           _metric_agg("max", "decayed_score", "3", "Peak decayed carry-over"),
           _date_histogram_agg()],
          query=_DECISION_Q,
          params_extra=_xy_params("line", [("1", "Peak effective score"), ("3", "Peak decayed carry-over")],
-                                 y_title="Threat score", threshold=HONEYPOT_THRESHOLD)),
+                                 y_title="Risk score", threshold=HONEYPOT_THRESHOLD)),
     _viz("viz-decision-decay-states", "Decay State of Requests", "pie",
          [_count_metric_agg(), _terms_agg("decay_state.keyword", size=4, label="Decay state")],
          query=_DECISION_Q, params_extra=_PIE),
@@ -389,7 +389,7 @@ VISUALIZATIONS = [
          [_count_metric_agg("Requests"),
           _metric_agg("avg", "request_score", "3", "Avg own score"),
           _metric_agg("avg", "carried_score", "4", "Avg carried score"),
-          _metric_agg("avg", "threat_score", "5", "Avg effective score"),
+          _metric_agg("avg", "risk_score", "5", "Avg effective score"),
           _metric_agg("max", "offenses", "6", "Max offenses"),
           _terms_agg("route.keyword", agg_id="2", size=2, schema="bucket", label="Route"),
           _terms_agg("decay_state.keyword", agg_id="7", size=4, schema="bucket", label="Decay state")],
@@ -415,7 +415,7 @@ VISUALIZATIONS = [
           _terms_agg("session_id.keyword", agg_id="4", size=15, schema="bucket", order_by="1", label="Session")],
          query=_SESSION_Q, params_extra=_TABLE),
     _viz("viz-session-top-threat", "Most Hostile Sessions", "table",
-         [_metric_agg("max", "threat_score", "1", "Peak effective score"),
+         [_metric_agg("max", "risk_score", "1", "Peak effective score"),
           _metric_agg("max", "offenses", "3", "Offenses"),
           _metric_agg("cardinality", "patterns.keyword", "4", "Distinct attack patterns"),
           _terms_agg("session_id.keyword", agg_id="2", size=15, schema="bucket", order_by="1", label="Session")],
@@ -433,7 +433,7 @@ VISUALIZATIONS = [
               "**What the attacks were.** The cloud shows which attack patterns and CVE signatures "
               "requests matched; the table lists the URIs that matched them. The lower panels come "
               "from security events the proxy logs explicitly (CVE matches, honeytoken reuse, "
-              "high-threat requests)."),
+              "high-risk requests)."),
     _viz("viz-attack-total-events", "Total Security Events", "metric",
          [_count_metric_agg("Security events")], query=_ATTACK_Q),
     _viz("viz-attack-pattern-cloud", "Matched Attack Patterns", "tagcloud",
@@ -466,46 +466,46 @@ VISUALIZATIONS = [
     # -- Threat Intelligence --------------------------------------------------
     _markdown("viz-ti-guide", "About: Threat Intelligence",
               "**Who attacked, with what, and how far they got.** Every proxy request, proxy "
-              "security event and Suricata alert is tagged with the attacker's IP, the tool its "
+              "security event and Suricata alert is tagged with the user's IP, the tool its "
               "User-Agent gives away, and the **MITRE ATT&CK** techniques its patterns or "
-              "signature stand for. **Attacker Indicators** is the IOC list: one row per IP, "
+              "signature stand for. **User Indicators** is the IOC list: one row per IP, "
               "first/last seen, how many *sensors* (proxy, Suricata) saw it, and the furthest "
               "ATT&CK stage it reached (1 Reconnaissance, 3 Initial Access, 4 Execution, "
               "5 Persistence, 7 Defense Evasion, 8 Credential Access, 11 Collection). "
-              "**Malicious Event Feed** opens in Discover, where *Share > CSV* exports it."),
+              "**Flagged Event Feed** opens in Discover, where *Share > CSV* exports it."),
     _viz("viz-ti-headline", "Threat Intelligence Summary", "metric",
-         [_metric_agg("cardinality", "attacker_ip.keyword", "1", "Malicious IPs"),
+         [_metric_agg("cardinality", "client_ip.keyword", "1", "Flagged IPs"),
           _metric_agg("cardinality", "attack_technique.keyword", "2", "ATT&CK techniques"),
           _metric_agg("cardinality", "vulnerability.id.keyword", "3", "CVEs targeted"),
-          _metric_agg("cardinality", "attacker_tool.keyword", "4", "Tool fingerprints")],
+          _metric_agg("cardinality", "client_tool.keyword", "4", "Tool fingerprints")],
          query=_TI_MAL_Q),
-    _viz("viz-ti-indicators", "Attacker Indicators (IOC list)", "table",
-         [_count_metric_agg("Malicious events"),
+    _viz("viz-ti-indicators", "User Indicators (IOC list)", "table",
+         [_count_metric_agg("Flagged events"),
           _metric_agg("min", "timestamp", "3", "First seen"),
           _metric_agg("max", "timestamp", "4", "Last seen"),
           _metric_agg("cardinality", "sensor.keyword", "5", "Sensors"),
           _metric_agg("max", "threat.stage", "6", "Furthest ATT&CK stage"),
           _metric_agg("cardinality", "attack_technique.keyword", "7", "Techniques"),
-          _metric_agg("max", "threat_score", "8", "Peak threat score"),
+          _metric_agg("max", "risk_score", "8", "Peak risk score"),
           _metric_agg("cardinality", "session_id.keyword", "9", "Sessions"),
-          _terms_agg("attacker_ip.keyword", agg_id="2", size=25, schema="bucket", label="Attacker IP")],
+          _terms_agg("client_ip.keyword", agg_id="2", size=25, schema="bucket", label="Client IP")],
          query=_TI_MAL_Q, params_extra=_TABLE),
-    _viz("viz-ti-kill-chain", "Kill Chain: Attackers per ATT&CK Tactic", "horizontal_bar",
-         [_metric_agg("cardinality", "attacker_ip.keyword", "1", "Attackers"),
+    _viz("viz-ti-kill-chain", "Kill Chain: Users per ATT&CK Tactic", "horizontal_bar",
+         [_metric_agg("cardinality", "client_ip.keyword", "1", "Users"),
           _terms_agg("attack_tactic.keyword", size=14, order_by="_key", order="asc", label="Tactic"),
           _terms_agg("sensor.keyword", agg_id="3", size=2, schema="group", label="Sensor")],
          query=_TI_TECH_Q,
-         params_extra=_xy_params("horizontal_bar", [("1", "Attackers")], horizontal=True)),
-    _viz("viz-ti-attacker-progression", "How Far Each Attacker Got (events per tactic)", "horizontal_bar",
+         params_extra=_xy_params("horizontal_bar", [("1", "Users")], horizontal=True)),
+    _viz("viz-ti-client-progression", "How Far Each User Got (events per tactic)", "horizontal_bar",
          [_count_metric_agg(),
-          _terms_agg("attacker_ip.keyword", size=10, label="Attacker IP"),
+          _terms_agg("client_ip.keyword", size=10, label="Client IP"),
           _terms_agg("attack_tactic.keyword", agg_id="3", size=14, schema="group",
                      order_by="_key", order="asc", label="Tactic")],
          query=_TI_TECH_Q,
          params_extra=_xy_params("horizontal_bar", [("1", "Events")], horizontal=True)),
     _viz("viz-ti-techniques", "MITRE ATT&CK Techniques Observed", "table",
          [_count_metric_agg("Events"),
-          _metric_agg("cardinality", "attacker_ip.keyword", "3", "Attackers"),
+          _metric_agg("cardinality", "client_ip.keyword", "3", "Users"),
           _metric_agg("cardinality", "sensor.keyword", "4", "Sensors"),
           _metric_agg("min", "timestamp", "5", "First seen"),
           _metric_agg("max", "timestamp", "6", "Last seen"),
@@ -519,40 +519,40 @@ VISUALIZATIONS = [
          params_extra=_xy_params("area", [("1", "Events")], mode="stacked", y_title="Events")),
     _viz("viz-ti-tools", "Attack Tools Fingerprinted (User-Agent)", "pie",
          [_count_metric_agg(),
-          _terms_agg("attacker_tool_class.keyword", size=5, label="Tool class"),
-          _terms_agg("attacker_tool.keyword", agg_id="3", size=10, label="Tool")],
+          _terms_agg("client_tool_class.keyword", size=5, label="Tool class"),
+          _terms_agg("client_tool.keyword", agg_id="3", size=10, label="Tool")],
          # "unknown" = the event didn't record a User-Agent (most Suricata
          # alerts, the proxy's own security events), not a tool.
-         query=f'{_TI_Q} and not threat_verdict:"benign" and not attacker_tool:"unknown"',
+         query=f'{_TI_Q} and not risk_verdict:"benign" and not client_tool:"unknown"',
          params_extra=_PIE),
     _viz("viz-ti-cves", "CVEs Targeted (all sensors)", "table",
          [_count_metric_agg("Events"),
-          _metric_agg("cardinality", "attacker_ip.keyword", "3", "Attackers"),
+          _metric_agg("cardinality", "client_ip.keyword", "3", "Users"),
           _metric_agg("cardinality", "sensor.keyword", "4", "Sensors"),
           _metric_agg("max", "timestamp", "5", "Last seen"),
           _terms_agg("vulnerability.id.keyword", agg_id="2", size=15, schema="bucket", label="CVE")],
          query=f'{_TI_Q} and vulnerability.id:*', params_extra=_TABLE),
     _viz("viz-ti-verdicts", "Verdict per Sensor", "histogram",
          [_count_metric_agg(), _terms_agg("sensor.keyword", size=2, label="Sensor"),
-          _terms_agg("threat_verdict.keyword", agg_id="3", size=3, schema="group", label="Verdict")],
+          _terms_agg("risk_verdict.keyword", agg_id="3", size=3, schema="group", label="Verdict")],
          query=_TI_Q,
          params_extra=_xy_params("histogram", [("1", "Events")], mode="stacked", y_title="Events")),
 ]
 
 # Discover saved searches: event lists with the indicator columns already
-# picked, for drilling into one attacker or exporting a feed as CSV.
+# picked, for drilling into one user or exporting a feed as CSV.
 SEARCHES = [
-    _search("search-ti-malicious-feed", "Threat Intel: Malicious Event Feed",
-            ["attacker_ip", "sensor", "attacker_tool", "attack_technique", "vulnerability.id",
-             "uri", "alert.signature", "route", "threat_score"],
+    _search("search-ti-flagged-feed", "Threat Intel: Flagged Event Feed",
+            ["client_ip", "sensor", "client_tool", "attack_technique", "vulnerability.id",
+             "uri", "alert.signature", "route", "risk_score"],
             _TI_MAL_Q,
-            "Every event judged malicious by either sensor, newest first, with its indicators. "
+            "Every event judged flagged by either sensor, newest first, with its indicators. "
             "Share > CSV in Discover exports it as an IOC feed."),
     _search("search-ti-credential-abuse", "Threat Intel: Credential & Session Abuse",
-            ["attacker_ip", "security_event_type", "security_event.token_type",
+            ["client_ip", "security_event_type", "security_event.token_type",
              "security_event.session_id", "request_line", "attack_technique"],
             'security_event_type:("honeytoken_used" or "session_compromised")',
-            "Planted honeytokens being reused and hijacked sessions: proof an attacker took "
+            "Planted honeytokens being reused and hijacked sessions: proof a user took "
             "something from the honeypot and tried to use it."),
 ]
 
@@ -645,7 +645,7 @@ DASHBOARDS = [
     ),
     _dashboard(
         "dashboard-session-analysis", "Honeypot: Session Analysis",
-        "Per-session request volume and duration, peak threat, offenses and attacker-sophistication classification.",
+        "Per-session request volume and duration, peak threat, offenses and user-sophistication classification.",
         [
             ("viz-session-guide", 0, 0, 16, 8),
             ("viz-session-total-sessions", 16, 0, 8, 8),
@@ -672,19 +672,19 @@ DASHBOARDS = [
     ),
     _dashboard(
         "dashboard-threat-intel", "Honeypot: Threat Intelligence",
-        "Attacker indicators across the proxy and Suricata: IOC list per IP, MITRE ATT&CK techniques and kill-chain stage reached, attack tools, CVEs targeted, and an exportable malicious-event feed.",
+        "User indicators across the proxy and Suricata: IOC list per IP, MITRE ATT&CK techniques and kill-chain stage reached, attack tools, CVEs targeted, and an exportable flagged-event feed.",
         [
             ("viz-ti-guide", 0, 0, 24, 9),
             ("viz-ti-headline", 24, 0, 24, 9),
             ("viz-ti-indicators", 0, 9, 48, 16),
             ("viz-ti-kill-chain", 0, 25, 20, 15),
-            ("viz-ti-attacker-progression", 20, 25, 28, 15),
+            ("viz-ti-client-progression", 20, 25, 28, 15),
             ("viz-ti-techniques", 0, 40, 30, 16),
             ("viz-ti-tools", 30, 40, 18, 16),
             ("viz-ti-tactics-over-time", 0, 56, 30, 13),
             ("viz-ti-verdicts", 30, 56, 18, 13),
             ("viz-ti-cves", 0, 69, 20, 14),
-            ("search-ti-malicious-feed", 20, 69, 28, 14),
+            ("search-ti-flagged-feed", 20, 69, 28, 14),
         ],
     ),
 ]

@@ -3,59 +3,59 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from core.exploits import (COMPONENTS, DETECT_REPEATS, EXPLOIT_PRESETS, KINDS, SURFACES,  # noqa: E402
+from core.patterns import (COMPONENTS, DETECT_REPEATS, PATTERN_PRESETS, KINDS, SURFACES,  # noqa: E402
                            filter_presets)
 
 
 class Categories(unittest.TestCase):
     def test_every_preset_is_fully_categorized(self):
-        for p in EXPLOIT_PRESETS:
+        for p in PATTERN_PRESETS:
             self.assertIn(p.kind, KINDS, p.cve)
             self.assertIn(p.component, COMPONENTS, p.cve)
             self.assertIn(p.surface, SURFACES, p.cve)
 
     def test_plugin_presets_name_their_plugin(self):
-        for p in EXPLOIT_PRESETS:
+        for p in PATTERN_PRESETS:
             if p.kind == "cve" and p.component == "plugin":
                 self.assertTrue(p.plugin, p.cve)
 
     def test_every_axis_value_is_covered(self):
         for axis, values in (("kind", KINDS), ("component", COMPONENTS), ("surface", SURFACES)):
             for v in values:
-                self.assertTrue(any(getattr(p, axis) == v for p in EXPLOIT_PRESETS), f"{axis}={v}")
+                self.assertTrue(any(getattr(p, axis) == v for p in PATTERN_PRESETS), f"{axis}={v}")
 
     def test_the_requested_generic_classes_exist(self):
-        ids = {p.cve for p in EXPLOIT_PRESETS}
+        ids = {p.cve for p in PATTERN_PRESETS}
         for prefix in ("GENERIC-XSS", "GENERIC-SQLI", "GENERIC-ENUM", "GENERIC-IDOR", "GENERIC-TOOL"):
             self.assertTrue(any(i.startswith(prefix) for i in ids), prefix)
-        tools = " ".join(p.headers.get("User-Agent", "") for p in EXPLOIT_PRESETS).lower()
+        tools = " ".join(p.headers.get("User-Agent", "") for p in PATTERN_PRESETS).lower()
         for tool in ("sqlmap", "nikto", "metasploit"):
             self.assertIn(tool, tools)
 
     def test_ids_are_unique(self):
-        ids = [p.cve for p in EXPLOIT_PRESETS]
+        ids = [p.cve for p in PATTERN_PRESETS]
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_filter(self):
-        generic = filter_presets(EXPLOIT_PRESETS, kind="generic")
+        generic = filter_presets(PATTERN_PRESETS, kind="generic")
         self.assertTrue(generic and all(p.kind == "generic" for p in generic))
-        front = filter_presets(EXPLOIT_PRESETS, surface="frontend")
+        front = filter_presets(PATTERN_PRESETS, surface="frontend")
         self.assertTrue(front and all(p.surface == "frontend" for p in front))
-        both = filter_presets(EXPLOIT_PRESETS, kind="generic", surface="frontend")
+        both = filter_presets(PATTERN_PRESETS, kind="generic", surface="frontend")
         ids = lambda ps: {p.cve for p in ps}  # noqa: E731 -- presets hold a dict, so aren't hashable
         self.assertTrue(both and ids(both) <= ids(generic) & ids(front))
-        self.assertEqual(filter_presets(EXPLOIT_PRESETS), list(EXPLOIT_PRESETS))
+        self.assertEqual(filter_presets(PATTERN_PRESETS), list(PATTERN_PRESETS))
 
 
 class RequestSeries(unittest.TestCase):
     def test_sequence_presets_walk_their_list(self):
-        p = next(x for x in EXPLOIT_PRESETS if x.cve == "GENERIC-ENUM-001")
+        p = next(x for x in PATTERN_PRESETS if x.cve == "GENERIC-ENUM-001")
         self.assertEqual(p.requests()[0], p.path)
         self.assertEqual(p.requests()[1:], list(p.sequence))
         self.assertGreater(len(p.requests()), DETECT_REPEATS)
 
     def test_plain_presets_are_repeated(self):
-        p = next(x for x in EXPLOIT_PRESETS if x.cve == "CVE-2024-2387")
+        p = next(x for x in PATTERN_PRESETS if x.cve == "CVE-2024-2387")
         self.assertEqual(p.requests(), [p.path] * DETECT_REPEATS)
 
 
@@ -65,28 +65,28 @@ if __name__ == "__main__":
 
 class Grouping(unittest.TestCase):
     def test_groups_cover_the_selection_in_order(self):
-        from core.exploits import group_presets
-        groups = group_presets(EXPLOIT_PRESETS)
+        from core.patterns import group_presets
+        groups = group_presets(PATTERN_PRESETS)
         flat = [p.cve for _, ps in groups for p in ps]
-        self.assertEqual(sorted(flat), sorted(p.cve for p in EXPLOIT_PRESETS))
+        self.assertEqual(sorted(flat), sorted(p.cve for p in PATTERN_PRESETS))
         self.assertTrue(all(h.count(" · ") == 2 for h, _ in groups))
         self.assertEqual(groups[0][0].split(" · ")[0], KINDS["cve"])
 
     def test_heading_drops_the_chosen_categories(self):
-        from core.exploits import group_presets
-        groups = group_presets(EXPLOIT_PRESETS, kind="generic", component="core")
+        from core.patterns import group_presets
+        groups = group_presets(PATTERN_PRESETS, kind="generic", component="core")
         self.assertTrue(groups)
         self.assertTrue(all(h in SURFACES.values() for h, _ in groups))
         for _, ps in groups:
             self.assertTrue(all(p.kind == "generic" and p.component == "core" for p in ps))
 
     def test_full_selection_has_one_unheaded_group(self):
-        from core.exploits import group_presets
-        groups = group_presets(EXPLOIT_PRESETS, "generic", "core", "backend")
+        from core.patterns import group_presets
+        groups = group_presets(PATTERN_PRESETS, "generic", "core", "backend")
         self.assertEqual([h for h, _ in groups], [""])
 
     def test_selection_label(self):
-        from core.exploits import selection_label
+        from core.patterns import selection_label
         self.assertEqual(selection_label(), "Type: all · Target: all · Surface: all")
         self.assertEqual(selection_label("cve", "", "backend"),
-                         "Type: CVE exploit · Target: all · Surface: Backend")
+                         "Type: CVE pattern · Target: all · Surface: Backend")

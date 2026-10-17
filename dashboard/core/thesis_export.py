@@ -5,9 +5,9 @@ from the live source tree, condenses each one (drops comments, docstrings,
 debug logging and blank runs so only the algorithmic essence remains), and
 renders them -- with a short prose description each -- into a single PDF laid
 out like a thesis implementation chapter. The Baskerville family already
-bundled for the exploit report is reused for the prose so both documents match.
+bundled for the pattern report is reused for the prose so both documents match.
 
-GUI-thread only (QtGui/QtPrintSupport), same as exploit_report_pdf. The manifest
+GUI-thread only (QtGui/QtPrintSupport), same as pattern_report_pdf. The manifest
 (HIGHLIGHTS) intentionally lists more entries than any one branch has: an entry
 whose file or symbol is missing is silently skipped, so the same manifest works
 on every branch and only renders what actually exists there.
@@ -26,8 +26,8 @@ from PyQt6.QtPrintSupport import QPrinter
 
 from core import honeypot_layer
 from core.paths import REPO_ROOT, EDGE_COMPOSE_FILE, SIEM_COMPOSE_FILE
-# Reuse the exact Baskerville registration/selection the exploit report uses.
-from core.exploit_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc
+# Reuse the exact Baskerville registration/selection the pattern report uses.
+from core.pattern_report_pdf import _report_font_family, _FONT_CSS_STACK, _esc
 from core import diagrams, vector_figures
 
 
@@ -49,12 +49,12 @@ class Highlight:
 
 # The curated chapter. Grouped by `section`, rendered in list order.
 HIGHLIGHTS: list[Highlight] = [
-    # --- Threat scoring & decay (reverse-proxy Lua) ---
+    # --- Risk scoring & decay (reverse-proxy Lua) ---
     Highlight(
-        section="Threat scoring and decay",
+        section="Risk scoring and decay",
         title="Escalation-aware score decay",
         description=(
-            "A flat exponential half-life lets a confirmed attacker earn back a clean "
+            "A flat exponential half-life lets a confirmed flagged user earn back a clean "
             "score at the same rate as a single stray probe. The decay policy instead "
             "scales the half-life by how much abuse a source has actually committed: "
             "each recorded offense stretches the half-life, and once a source crosses an "
@@ -67,7 +67,7 @@ HIGHLIGHTS: list[Highlight] = [
         symbols=["_M.half_life_multiplier", "_M.is_permaflagged", "_M.decay"],
     ),
     Highlight(
-        section="Threat scoring and decay",
+        section="Risk scoring and decay",
         title="Per-session suspicion decay (read-time)",
         description=(
             "A session's suspicion score is stored as a monotonic peak that only ever "
@@ -80,7 +80,7 @@ HIGHLIGHTS: list[Highlight] = [
         symbols=["_M.decayed_score"],
     ),
     Highlight(
-        section="Threat scoring and decay",
+        section="Risk scoring and decay",
         title="IP-reputation decay",
         description=(
             "The IP-reputation counterpart to the session decay above: the same read-time "
@@ -91,42 +91,42 @@ HIGHLIGHTS: list[Highlight] = [
         lang="lua",
         symbols=["_M.decayed_score"],
     ),
-    # --- Exploit-report measurement (dashboard) ---
+    # --- Pattern-report measurement (dashboard) ---
     Highlight(
-        section="Exploit-report measurement",
-        title="Bracketed resource capture around an exploit",
+        section="Pattern-report measurement",
+        title="Bracketed resource capture around a pattern",
         description=(
-            "To show an exploit's resource footprint against its own baseline, the capture "
-            "brackets the moment the exploit fires: a short pre-window of fast CPU/memory "
-            "samples, the exploit at t=0, then a longer post-window that additionally sweeps "
+            "To show a pattern's resource footprint against its own baseline, the capture "
+            "brackets the moment the pattern fires: a short pre-window of fast CPU/memory "
+            "samples, the pattern at t=0, then a longer post-window that additionally sweeps "
             "log-file sizes (throttled, since that sweep is heavy). Every sample is "
             "timestamped at the start of its own collection -- collection itself takes ~2s, "
             "so timestamping afterwards would collapse the whole pre-window onto t=0 -- and "
             "the pre-window's log sizes are back-filled from the first post reading, since "
             "log volume barely moves in two seconds."),
-        path="dashboard/core/exploit_report.py",
+        path="dashboard/core/pattern_report.py",
         lang="py",
         symbols=["ReportWorker._capture_around"],
     ),
     Highlight(
-        section="Exploit-report measurement",
-        title="Observing threat-score decay",
+        section="Pattern-report measurement",
+        title="Observing risk-score decay",
         description=(
             "Decay is observed, not simulated: benign homepage requests are issued across a "
             "bounded window and the effective score is read straight off each response's "
             "header. A clean request does not move the session's last-signal anchor, so this "
             "watches the real fade rather than resetting it."),
-        path="dashboard/core/exploit_report.py",
+        path="dashboard/core/pattern_report.py",
         lang="py",
         symbols=["ReportWorker._sample_decay"],
     ),
     Highlight(
-        section="Exploit-report measurement",
+        section="Pattern-report measurement",
         title="Live per-container resource sampling",
         description=(
             "A single pass over the running containers turning `docker stats` output into a "
             "per-service view of CPU, memory and (merged in separately) log-file size, used "
-            "both by the live Workload Telemetry page and by the exploit report's graphs."),
+            "both by the live Workload Telemetry page and by the pattern report's graphs."),
         path="dashboard/core/resource_stats.py",
         lang="py",
         symbols=["collect_live"],
@@ -140,7 +140,7 @@ HIGHLIGHTS: list[Highlight] = [
             "clump into indistinguishable neighbours. Stepping the hue by the golden-ratio "
             "conjugate instead keeps every newly added series maximally far from the ones "
             "already drawn."),
-        path="dashboard/core/exploit_report_pdf.py",
+        path="dashboard/core/pattern_report_pdf.py",
         lang="py",
         symbols=["_resource_series_color"],
     ),
@@ -149,11 +149,11 @@ HIGHLIGHTS: list[Highlight] = [
         title="Time-series chart rendering",
         description=(
             "The resource graphs are painted directly rather than via a chart library: the "
-            "sample times (which run negative before the exploit) and values are mapped onto "
+            "sample times (which run negative before the pattern) and values are mapped onto "
             "the plot rectangle, one thin line is drawn per container plus a bold average, "
-            "and a dashed marker is placed at t=0 to separate the pre-exploit baseline from "
+            "and a dashed marker is placed at t=0 to separate the pre-pattern baseline from "
             "the spike."),
-        path="dashboard/core/exploit_report_pdf.py",
+        path="dashboard/core/pattern_report_pdf.py",
         lang="py",
         symbols=["_resource_chart"],
     ),
@@ -184,7 +184,7 @@ SERVICE_DESCRIPTIONS: dict[str, str] = {
     "init_setup": "One-shot bootstrap: prepares shared volumes, permissions and "
                   "generated config the other containers expect before they start.",
     "reverse_proxy": "OpenResty/nginx front door. Its Lua modules classify every request "
-                     "(threat scoring, CVE/pattern matching, session and IP reputation) and "
+                     "(risk scoring, CVE/pattern matching, session and IP reputation) and "
                      "route it to production or a honeypot, and it emits the score/route "
                      "headers the dashboard reads.",
     "production_eshop": "The real WooCommerce/WordPress storefront that legitimate traffic "
@@ -193,7 +193,7 @@ SERVICE_DESCRIPTIONS: dict[str, str] = {
     "production_db_seed": "One-shot WP-CLI job that seeds the production database with the "
                           "demo shop's content on first run.",
     "honeypot_eshop": "Honeypot copy of the WordPress storefront that suspicious traffic is "
-                      "diverted to, isolating attackers from the real shop (one per pool).",
+                      "diverted to, isolating users from the real shop (one per pool).",
     "honeypot_database": "MySQL database backing a honeypot eshop, kept separate from "
                          "production so an intruder only ever touches decoy data.",
     "honeypot_db_seed": "One-shot WP-CLI job that seeds a honeypot database with demo "
@@ -616,7 +616,7 @@ def _installed_plugins_section_html() -> str:
     plugins = _installed_plugins()
     parts = [f'<p style="color:#555;">The storefront ships with {len(plugins)} plugins in '
              'wp-content/plugins/ (WooCommerce and its payment/marketing ecosystem, plus the '
-             'vulnerable plugins the exploit presets target):</p>']
+             'vulnerable plugins the pattern presets target):</p>']
     if not plugins:
         return "".join(parts) + '<p style="color:#666;">None found.</p>'
     parts.append('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
@@ -633,19 +633,19 @@ def _installed_plugins_section_html() -> str:
 
 
 def _cve_curl_section_html() -> str:
-    """Every exploit preset as a copy-pasteable curl command (the exact request
+    """Every pattern preset as a copy-pasteable curl command (the exact request
     the dashboard fires), to attempt each CVE against a production URL."""
     import shlex
-    from core.exploits import EXPLOIT_PRESETS, build_curl_argv
+    from core.patterns import PATTERN_PRESETS, build_curl_argv
 
     base = "https://PRODUCTION_HOST"
-    parts = ['<p style="color:#555;">Each exploit preset below is shown as the exact curl '
+    parts = ['<p style="color:#555;">Each pattern preset below is shown as the exact curl '
              'command the dashboard fires &ndash; run it against a production URL (replace '
              f'<span style="font-family:monospace;">{_esc(base)}</span>) to attempt that '
              'CVE. Add <span style="font-family:monospace;">-H "X-Internal-Test-Auth: '
-             '&lt;secret&gt;"</span> to also read the X-Threat-Score / X-Route-Target debug '
+             '&lt;secret&gt;"</span> to also read the X-Risk-Score / X-Route-Target debug '
              'headers.</p>']
-    for p in EXPLOIT_PRESETS:
+    for p in PATTERN_PRESETS:
         try:
             cmd = " ".join(shlex.quote(a) for a in build_curl_argv(p, base))
         except Exception:  # noqa: BLE001
@@ -677,7 +677,7 @@ def render_thesis_pdf(out_path: str, health_screenshot: str = "") -> int:
                  'tree. This chapter summarises the services and the WordPress customisations '
                  '(must-use plugins) that make up the system, lists the installed plugins, '
                  'collects the more interesting algorithms in the honeypot IDS and reverse '
-                 'proxy, and ends with a runnable curl reference for every exploit. Code '
+                 'proxy, and ends with a runnable curl reference for every pattern. Code '
                  'excerpts are taken verbatim from the source and then condensed &ndash; '
                  'comments, docstrings, debug logging and blank runs removed &ndash; so only '
                  'the algorithmic essence is shown; the full listing is at the cited path.'
@@ -703,7 +703,7 @@ def render_thesis_pdf(out_path: str, health_screenshot: str = "") -> int:
         "Figure 3."))
     parts.append(diagrams.figure_html(
         doc, diagrams.scoring_pipeline_diagram(family), "impl-score", 3,
-        "The threat-scoring pipeline that produces the score the routing in Figure 2 acts on."))
+        "The risk-scoring pipeline that produces the score the routing in Figure 2 acts on."))
 
     # Section: must-use plugin customisations.
     section += 1
@@ -732,9 +732,9 @@ def render_thesis_pdf(out_path: str, health_screenshot: str = "") -> int:
             src = f'{_esc(hl.path)}' + (f' &middot; {lang}' if lang else '')
             parts.append(f'<p style="color:#888; font-size:9pt;">Source: {src}</p>')
 
-    # Section: exploit / CVE curl reference.
+    # Section: pattern / CVE curl reference.
     section += 1
-    parts.append(f'<h2 style="color:#222;">{section}. Exploit / CVE curl reference</h2>')
+    parts.append(f'<h2 style="color:#222;">{section}. Pattern / CVE curl reference</h2>')
     parts.append(_cve_curl_section_html())
 
     parts.append('</div>')
@@ -744,7 +744,7 @@ def render_thesis_pdf(out_path: str, health_screenshot: str = "") -> int:
 
 
 def _finish_pdf(doc: QTextDocument, out_path: str) -> None:
-    """Shared A4 PDF print setup (see exploit_report_pdf for the DPI rationale)."""
+    """Shared A4 PDF print setup (see pattern_report_pdf for the DPI rationale)."""
     from PyQt6.QtGui import QPageSize, QPageLayout
     printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
@@ -764,31 +764,31 @@ def _new_doc() -> tuple[QTextDocument, str, list[str]]:
 
 
 def render_cve_matrix_pdf(out_path: str) -> int:
-    """A reference table of every exploit preset the dashboard can fire: CVE,
+    """A reference table of every pattern preset the dashboard can fire: CVE,
     severity, HTTP method/path, and (on the db-proxy branch) whether the
     single-eshop topology can isolate it. Returns the number of rows."""
-    from core.exploits import EXPLOIT_PRESETS
+    from core.patterns import PATTERN_PRESETS
 
     doc, family, parts = _new_doc()
-    parts.append('<h1 style="color:#222;">Exploit / CVE coverage</h1>')
+    parts.append('<h1 style="color:#222;">Pattern / CVE coverage</h1>')
     parts.append('<p style="color:#555;">Generated '
-                 f'{_esc(datetime.now().strftime("%Y-%m-%d %H:%M"))}. Every exploit the '
+                 f'{_esc(datetime.now().strftime("%Y-%m-%d %H:%M"))}. Every pattern the '
                  'Attack Simulation page and its PDF report can fire, each kept in step with a '
                  "detection pattern in the reverse proxy's cve_patterns table so “run this "
-                 'exploit” and “the honeypot detects it” are the same list. Firing any of them '
+                 'pattern” and “the honeypot detects it” are the same list. Firing any of them '
                  'is scored through the pipeline in <b>Figure 2</b> and routed as in '
                  '<b>Figure 1</b> &ndash; a CVE match diverts to the honeypot on its own.</p>')
     parts.append(diagrams.figure_html(
         doc, diagrams.request_flow_diagram(family), "cve-flow", 1,
-        "Where these exploits land: a CVE match (Figure 2) diverts the request to the honeypot."))
+        "Where these patterns land: a CVE match (Figure 2) diverts the request to the honeypot."))
     parts.append(diagrams.figure_html(
         doc, diagrams.scoring_pipeline_diagram(family), "cve-score", 2,
-        "How each exploit below is scored; a CVE pattern match adds +40 and, on its own, routes "
+        "How each pattern below is scored; a CVE pattern match adds +40 and, on its own, routes "
         "to the honeypot per Figure 1."))
     parts.append('<hr/>')
 
     # Detect whether presets carry the branch-only db_isolated flag.
-    has_iso = any(hasattr(p, "db_isolated") for p in EXPLOIT_PRESETS)
+    has_iso = any(hasattr(p, "db_isolated") for p in PATTERN_PRESETS)
     header_iso = '<th align="left">DB-isolatable</th>' if has_iso else ''
     parts.append('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
                  'style="border-collapse:collapse; color:#333;">'
@@ -797,7 +797,7 @@ def render_cve_matrix_pdf(out_path: str) -> int:
                  '<th align="left">Severity</th><th align="left">Request</th>'
                  f'{header_iso}</tr>')
     sev_color = {"CRITICAL": "#c62828", "HIGH": "#e08a00", "MEDIUM": "#2e7d32", "LOW": "#666666"}
-    for p in EXPLOIT_PRESETS:
+    for p in PATTERN_PRESETS:
         sev = (p.severity or "").upper()
         col = sev_color.get(sev, "#333333")
         iso_cell = ''
@@ -812,13 +812,13 @@ def render_cve_matrix_pdf(out_path: str) -> int:
             f'<td style="font-family:monospace; font-size:8pt;">{_esc(p.method)} {_esc(p.path)}</td>'
             f'{iso_cell}</tr>')
     parts.append('</table>')
-    parts.append(f'<p style="color:#888; font-size:9pt;">{len(EXPLOIT_PRESETS)} presets. '
-                 'Source: dashboard/core/exploits.py &middot; '
+    parts.append(f'<p style="color:#888; font-size:9pt;">{len(PATTERN_PRESETS)} presets. '
+                 'Source: dashboard/core/patterns.py &middot; '
                  'ids/reverse_proxy_enhanced/lua/init.lua (cve_patterns).</p>')
     parts.append('</div>')
     doc.setHtml("<body>" + "".join(parts) + "</body>")
     _finish_pdf(doc, out_path)
-    return len(EXPLOIT_PRESETS)
+    return len(PATTERN_PRESETS)
 
 
 def render_architecture_pdf(out_path: str, health_screenshot: str = "") -> int:

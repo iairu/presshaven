@@ -1,7 +1,7 @@
-"""pool_manager: scales the honeypot pools with the number of attacker sessions.
+"""pool_manager: scales the honeypot pools with the number of user sessions.
 
 A pool is a honeypot_eshop_N (WordPress) + honeypot_database_N (MySQL) pair,
-each database seeded from production. pool_router.lua gives each new attacker
+each database seeded from production. pool_router.lua gives each new user
 session a free ready pool exclusively. When none is free, the session borrows a
 ready pool round-robin and joins honeypot_pool:waiting; this service then
 builds one pool per waiting session (POOL_PARALLEL_BUILDS at a time), plus
@@ -26,7 +26,7 @@ them alone; they are found again by the `honeypot.pool` label.
 
 SECURITY: this container mounts the Docker socket (root-equivalent on the
 host). It publishes no ports, joins only session_network (Redis), and runs no
-attacker-reachable code. Do not put it on honeynet-facing networks.
+user-reachable code. Do not put it on honeynet-facing networks.
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ STATUS_KEY = "honeypot_pool:status"
 EVENTS_KEY = "honeypot_pool:events"
 EVENTS_MAX = 500
 # Scale-down. pool_router stamps LAST_SEEN_KEY (pool -> epoch) whenever it routes
-# a request to a pool. DIRTY_KEY holds pools an attacker has used. A client may
+# a request to a pool. DIRTY_KEY holds pools a user has used. A client may
 # ask for an immediate scale-down: RELEASE_KEY lists session ids whose pools to
 # give up now, SCALEDOWN_KEY (flag, TTL) removes unowned runtime pools down to
 # the spare count without waiting for the idle timeout. The manager deletes
@@ -102,7 +102,7 @@ POOL_CPUS = float(os.environ.get("POOL_RESERVE_CPUS", "") or POOL_CPUS)
 # A waiting session counts as active (gets the next pool, counts as demand for
 # builds) only while its client sent a request this recently. A client that
 # cleared its cookies leaves its old session in the queue; without this the
-# next pool went to that abandoned session while a live attacker kept waiting.
+# next pool went to that abandoned session while a live user kept waiting.
 WAITING_ACTIVE_S = float(os.environ.get("POOL_WAITING_ACTIVE_SECONDS", "60") or 60)
 # Runtime pools clone the already-configured production database, so their
 # WordPress storefront config (permalinks, shipping, enabled gateways) is
@@ -128,8 +128,8 @@ MIN_FREE_MEM_MB = float(os.environ.get(
     "POOL_MIN_FREE_MEM_MB", "2560" if MODE == "wordpress" else "1024"))
 MAX_LOAD_PER_CPU = float(os.environ.get("POOL_MAX_LOAD_PER_CPU", "1.5"))
 MIN_FREE_DISK_GB = float(os.environ.get("POOL_MIN_FREE_DISK_GB", "5"))
-# Rebuild a clean pool when an attacker's assignment expires (if the host has
-# room); 0 = always hand the used pool to the next attacker as it is.
+# Rebuild a clean pool when a user's assignment expires (if the host has
+# room); 0 = always hand the used pool to the next user as it is.
 RECYCLE_IDLE = os.environ.get("POOL_RECYCLE_IDLE", "1") != "0"
 
 MYSQL_IMAGE = "mysql:5.7"
@@ -423,11 +423,11 @@ class Manager:
             action = pl.idle_action(
                 n > STATIC_COUNT and RECYCLE_IDLE, self.can_grow()[0], ready >= MAX_POOLS)
             if action == "recycle":
-                log(f"pool {n}: all attackers gone, recycling")
+                log(f"pool {n}: all users gone, recycling")
                 self.destroy(n)   # the spare logic rebuilds a clean one
             else:
                 sid = self.hand_off_or_free(n)
-                log(f"pool {n}: all attackers gone, reusing as it is"
+                log(f"pool {n}: all users gone, reusing as it is"
                     + (f" (handed to waiting session {sid[:8]}...)" if sid else ""))
 
     # ---- provisioning ----------------------------------------------------
@@ -855,7 +855,7 @@ class Manager:
                 f"building {start} more ({in_flight} already building, room for {room})")
         # Builds started now are credited to waiting sessions unless a free pool
         # or a build ALREADY started for a waiter covers them; an in-flight
-        # spare doesn't (it was meant for the next attacker, and crediting it
+        # spare doesn't (it was meant for the next user, and crediting it
         # to the waiter labelled a build for a waiting session as a "spare").
         waiter_builds = sum(1 for r in self.build_reasons.values() if r == "waiting session")
         for_waiting = max(0, waiting - free - waiter_builds)

@@ -1,6 +1,6 @@
 -- admin_rules.lua - Pure admin-access decision logic used by admin_handler.lua
 --
--- Same split rationale as threat_rules.lua/router_rules.lua: no ngx.*
+-- Same split rationale as pattern_rules.lua/router_rules.lua: no ngx.*
 -- dependency, no reliance on _G.config/_G.utils, plain-`lua`-interpreter
 -- testable (see tests/test_admin_rules.lua). admin_handler.lua is the
 -- adapter -- it does all the Redis/shared-dict I/O, request-body reading,

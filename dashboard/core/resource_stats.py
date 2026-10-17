@@ -340,7 +340,7 @@ class FastSampler:
         or a dashboard running inside its own PID namespace (a container,
         toolbox, flatpak). The PID then names some unrelated host process --
         or none -- so its cgroup counters move with whatever that process does,
-        not with the container: graphs with no peak at the exploit or at
+        not with the container: graphs with no peak at the pattern or at
         startup. Give up on cgroup sampling for every service rather than mix
         real and bogus series, and let the caller fall back to docker stats."""
         self.foreign = True

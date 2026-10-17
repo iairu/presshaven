@@ -23,7 +23,7 @@
 #   - The MySQL password is read from the environment variable MYSQL_PASSWORD;
 #     it is never passed on the command line (which would expose it via /proc).
 #   - The backup container has no capabilities (cap_drop: ALL) and no access to
-#     honeypot networks, so a compromise of this container cannot reach attacker
+#     honeypot networks, so a compromise of this container cannot reach user
 #     data or escalate privileges.
 #   - Backup files are owned by the container's UID (root inside, but the host
 #     bind-mount directory should have appropriate host-side permissions).

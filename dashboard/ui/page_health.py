@@ -303,7 +303,7 @@ class HealthPage(QWidget):
         fetched -- that poller keeps running regardless of which page is
         open, but at up to a 300s interval (Settings), so without this the
         diagram could be showing up-to-5-minutes-stale data for as long as
-        it takes the next tick to land. Same pattern as ExploitsPage's own
+        it takes the next tick to land. Same pattern as PatternsPage's own
         showEvent()-driven reachability check. Selection/log-tail/restart-
         progress state is untouched -- apply_status() only ever rebuilds
         the diagram and refreshes the (still-selected) detail panel.

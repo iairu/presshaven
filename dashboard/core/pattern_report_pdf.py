@@ -1,4 +1,4 @@
-"""Renders a core.exploit_report.ReportData to a PDF.
+"""Renders a core.pattern_report.ReportData to a PDF.
 
 GUI-thread only (uses QtGui/QtPrintSupport image + print machinery). Kept
 separate from the worker so the worker stays pure orchestration/measurement.
@@ -21,12 +21,12 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtPrintSupport import QPrinter
 
-from core.exploit_report import (RESOURCE_CAPTURE_SECONDS, RESOURCE_PRE_SECONDS, ExploitOutcome,
+from core.pattern_report import (RESOURCE_CAPTURE_SECONDS, RESOURCE_PRE_SECONDS, PatternOutcome,
                                  ReportData)
-from core.threat_log_parser import SCORE_MAX
+from core.pattern_log_parser import SCORE_MAX
 from core import diagrams, honeypot_layer, vector_figures
 from core.vector_figures import VectorFigure
-from core.exploits import COMPONENTS, KINDS, SURFACES
+from core.patterns import COMPONENTS, KINDS, SURFACES
 from core import report_stats as st
 
 # Bundled with the app (dashboard/resources/fonts/) so the report always
@@ -59,7 +59,7 @@ def _report_font_family() -> str:
     return "Serif"
 
 # Same threshold-band colors the Attack Simulation page badge uses (kept in sync with
-# ui/page_exploits._SCORE_MED_AT / _SCORE_HIGH_AT).
+# ui/page_patterns._SCORE_MED_AT / _SCORE_HIGH_AT).
 _MED_AT = 30
 _HIGH_AT = 80
 _GREEN = "#2e7d32"
@@ -118,7 +118,7 @@ _ROUTE_COLORS = {"production": "#2e7d32", "honeypot": "#c62828"}
 
 
 def _background_kind(what: str) -> str:
-    """Short graph label for one ExploitOutcome.background entry."""
+    """Short graph label for one PatternOutcome.background entry."""
     if what == "Docker health check":
         return "health check"
     target = what.split(" ", 1)[-1]
@@ -131,7 +131,7 @@ def _background_kind(what: str) -> str:
     return "other request"
 
 
-def _arrival_times(o: ExploitOutcome) -> list[float]:
+def _arrival_times(o: PatternOutcome) -> list[float]:
     """When each request of ``o``'s series reached the eshop, in seconds after
     t=0: its send time plus any hold the reverse proxy logged for it, which
     is when the eshop starts working on it and its CPU spike begins. The
@@ -142,7 +142,7 @@ def _arrival_times(o: ExploitOutcome) -> list[float]:
     return [t + (holds[i] if i < len(holds) else 0.0) for i, t in enumerate(times)]
 
 
-def _request_markers(o: ExploitOutcome) -> list[tuple[float, str, str]]:
+def _request_markers(o: PatternOutcome) -> list[tuple[float, str, str]]:
     """(seconds after t=0, label, route) for each request of ``o``'s series,
     placed where the request reached the eshop (_arrival_times)."""
     routes = [d.get("route", "") for d in o.request_details] or o.route_sequence or [o.route]
@@ -152,7 +152,7 @@ def _request_markers(o: ExploitOutcome) -> list[tuple[float, str, str]]:
         route = (routes[n - 1] if n <= len(routes) else "").lower()
         if route == "?":
             route = "not routed"
-        name = "exploit" if n == 1 else f"request {n}"
+        name = "pattern" if n == 1 else f"request {n}"
         label = f"{name} \u2192 {route}" if route else name
         hold = holds[n - 1] if n <= len(holds) else 0.0
         if hold:
@@ -166,14 +166,14 @@ def _resource_chart(samples: list, kind: str, color_map: dict, family: str = "Se
                     background: list | None = None,
                     served_by: list | None = None) -> VectorFigure:
     """One resource metric over the capture window (~2s before to ~15s after the
-    exploit): a thin coloured line per container plus a bold black average line.
-    A dashed red vertical line marks each request of the exploit's series
+    pattern): a thin coloured line per container plus a bold black average line.
+    A dashed red vertical line marks each request of the pattern's series
     (``requests``: ``(seconds after t=0, label, route)``, see _request_markers),
     and a grey dotted one each moment the stack's own timed work (health
     checks, proxy probes, WordPress cron) spiked a container (``background``:
     ``(seconds after t=0, label)``). Every marker is labelled in a band above
     the plot, on its own row when labels would overlap, so all stay readable.
-    The containers that served the exploit (``served_by``) are drawn bold and
+    The containers that served the pattern (``served_by``) are drawn bold and
     last, on top; the others thin and faded."""
     y_label, extract = _RES_METRICS[kind]
     font = QFont(family, 9)
@@ -191,7 +191,7 @@ def _resource_chart(samples: list, kind: str, color_map: dict, family: str = "Se
     def X(t):
         return ml + ((t - t_min) / span) * plot_w
 
-    # Markers: the exploit's requests first (they get the top rows), then the
+    # Markers: the pattern's requests first (they get the top rows), then the
     # stack's timed work, one per cluster (health checks of containers started
     # together run within a second of each other).
     markers = []  # (x, label, line colour, text colour, dashed)
@@ -321,18 +321,18 @@ def _resource_chart(samples: list, kind: str, color_map: dict, family: str = "Se
     return img
 
 
-def _served_labels(o: ExploitOutcome) -> dict[str, str]:
+def _served_labels(o: PatternOutcome) -> dict[str, str]:
     """Legend note per eshop container that served part of ``o``'s series,
-    e.g. "served requests 1-2" or "served the exploit"."""
+    e.g. "served requests 1-2" or "served the pattern"."""
     per = o.served_per_request
     if not per:
-        return {svc: "served the exploit" for svc in o.served_by}
+        return {svc: "served the pattern" for svc in o.served_by}
     routes = [d.get("route", "").lower() for d in o.request_details]
     out: dict[str, str] = {}
     for svc in dict.fromkeys(s for s in per if s):
         nums = [i + 1 for i, s in enumerate(per) if s == svc]
         if len(per) == 1:
-            note = "served the exploit"
+            note = "served the pattern"
         elif len(nums) == 1:
             note = f"served request {nums[0]}"
         elif nums == list(range(nums[0], nums[-1] + 1)):
@@ -360,21 +360,21 @@ def _resource_legend_html(color_map: dict, served: dict | None = None) -> str:
     return " &nbsp; ".join(items)
 
 
-# Samples this close to a background event (see ExploitOutcome.background)
+# Samples this close to a background event (see PatternOutcome.background)
 # are left out of the resource statistics: from 0.5 s before it (the event
 # time is when it was logged, not when it started) to 2 s after (WordPress
 # cron and the second half of a render can trail it).
 _BG_MASK_BEFORE_S = 0.5
 _BG_MASK_AFTER_S = 2.0
-# ...unless they are this close after one of the exploit's own requests: the
-# exploit is always measured, even when background work overlaps it.
+# ...unless they are this close after one of the pattern's own requests: the
+# pattern is always measured, even when background work overlaps it.
 _OWN_REQUEST_S = 2.5
 
 
-def _without_background(o: ExploitOutcome) -> tuple[list, int]:
+def _without_background(o: PatternOutcome) -> tuple[list, int]:
     """``o.resource_samples`` minus the ones next to background work, and how
     many were dropped. A single Docker health check costs about as much CPU as
-    an exploit request (a full homepage render), all eshops run theirs at the
+    a pattern request (a full homepage render), all eshops run theirs at the
     same moment, and proxy probes and WordPress cron land alongside, so left in
     they'd dominate the before/after numbers."""
     bg = [t for t, *_rest in o.background]
@@ -412,16 +412,16 @@ def _resource_stats_html(samples: list, dropped: int = 0) -> str:
             continue
         name = "CPU" if kind == "cpu" else "Memory"
         rows.append((f"{name}, container average, before",
-                     st.fmt_mean_ci(sb, unit), f"{sb.n} samples before the exploit"))
+                     st.fmt_mean_ci(sb, unit), f"{sb.n} samples before the pattern"))
         rows.append((f"{name}, container average, after",
-                     st.fmt_mean_ci(sa, unit), f"{sa.n} samples after the exploit"))
+                     st.fmt_mean_ci(sa, unit), f"{sa.n} samples after the pattern"))
         if cmp_ is not None:
-            rows.append((f"{name} change after the exploit",
+            rows.append((f"{name} change after the pattern",
                          f"{cmp_.diff:+.1f}{unit}, {st.fmt_p(cmp_.p)}",
                          "mean after vs mean before; " + st.p_meaning(cmp_.p)))
         if sb.sd > 0:
             z = (sa.max - sb.mean) / sb.sd
-            rows.append((f"{name} peak after the exploit",
+            rows.append((f"{name} peak after the pattern",
                          f"{sa.max:.1f}{unit}, {z:.1f} SD above the baseline",
                          "a short spike can be real even when the means don't differ "
                          "significantly; more than ~3 SD is rarely normal fluctuation"))
@@ -430,13 +430,13 @@ def _resource_stats_html(samples: list, dropped: int = 0) -> str:
                      f"{dropped}",
                      "taken next to the stack's own timed work (the grey lines on the CPU "
                      "graph: health checks, proxy probes, WordPress cron), so the figures "
-                     "above measure the exploit, not those timers"))
-    return st.stats_table_html(rows, "Probability metrics: did the exploit move resource usage?")
+                     "above measure the pattern, not those timers"))
+    return st.stats_table_html(rows, "Probability metrics: did the pattern move resource usage?")
 
 
-def _kibana_timeline_html(o: ExploitOutcome, doc: QTextDocument, shot_key: str) -> str:
+def _kibana_timeline_html(o: PatternOutcome, doc: QTextDocument, shot_key: str) -> str:
     """The Kibana screenshot of the requests the reverse proxy logged around
-    the exploit (core/kibana_timeline.py), or "" when there is none."""
+    the pattern (core/kibana_timeline.py), or "" when there is none."""
     if not o.kibana_timeline_path:
         return ""
     img = QImage(o.kibana_timeline_path)
@@ -446,54 +446,54 @@ def _kibana_timeline_html(o: ExploitOutcome, doc: QTextDocument, shot_key: str) 
     doc.addResource(QTextDocument.ResourceType.ImageResource, QUrl(url), img)
     pre, post = int(RESOURCE_PRE_SECONDS), int(RESOURCE_CAPTURE_SECONDS)
     return ('<br/><b>Kibana &ndash; requests through the reverse proxy, '
-            f'{pre}&nbsp;s before to {post}&nbsp;s after the exploit</b><br/>'
+            f'{pre}&nbsp;s before to {post}&nbsp;s after the pattern</b><br/>'
             f'<img src="{url}" width="520"/><br/>'
             '<span style="color:#666666; font-size:10px;">Screenshot of the SIEM\'s own view '
             '(Kibana, from the reverse proxy\'s request log): requests per half second, '
-            f'stacked by the route the proxy gave them. The exploit was sent {pre}&nbsp;s '
+            f'stacked by the route the proxy gave them. The pattern was sent {pre}&nbsp;s '
             'into the window. Kibana places each request at the moment the SIEM indexed '
             'its log line, usually 1&ndash;3&nbsp;s after the request itself (the proxy '
             'logs whole seconds only), so its bars sit slightly right of the resource '
             'graphs\' request markers.</span><br/>')
 
 
-def _resource_section(o: ExploitOutcome, doc: QTextDocument, shot_key: str, family: str) -> str:
-    """The 3 post-exploit resource graphs (CPU / memory / logs) with a shared
+def _resource_section(o: PatternOutcome, doc: QTextDocument, shot_key: str, family: str) -> str:
+    """The 3 post-pattern resource graphs (CPU / memory / logs) with a shared
     legend and an explanation. Empty string when no samples were captured."""
     if not o.resource_samples:
         return ""
     cmap = _resource_color_map(o.resource_samples)
     parts = ['<tr><td>']
-    parts.append('<b>Resource usage &ndash; ~2&nbsp;s before to ~15&nbsp;s after the exploit</b><br/>')
+    parts.append('<b>Resource usage &ndash; ~2&nbsp;s before to ~15&nbsp;s after the pattern</b><br/>')
     parts.append(
         '<span style="color:#666666;">Per-container CPU %, memory (MiB) and '
-        'log-file size (KiB), sampled from ~2&nbsp;seconds before this exploit '
+        'log-file size (KiB), sampled from ~2&nbsp;seconds before this pattern '
         'fired to ~15&nbsp;seconds after. Each thin coloured line is one container '
         '(see the legend below); the bold black line is the average across all '
-        'containers. Time runs left&rarr;right from the moment the exploit was sent '
+        'containers. Time runs left&rarr;right from the moment the pattern was sent '
         '(<b>0&nbsp;s</b>). The dashed red line marks when the request reached the '
         'eshop. The reverse proxy forwards every request at once, whichever route '
         'it takes, so the line sits at the send time (an older proxy with a tarpit '
         'shows the hold in the label, \u201cheld 1 s\u201d). The readings left of the line are the '
-        'baseline and the spike just to its right is the footprint the exploit and '
+        'baseline and the spike just to its right is the footprint the pattern and '
         'the honeypot\'s handling of it left on the stack. The thick coloured lines are the eshop containers that served the '
-        'exploit\'s requests, and the legend says which request each one served: '
-        'production while the proxy let the attacker through, the honeypot pool '
+        'pattern\'s requests, and the legend says which request each one served: '
+        'production while the proxy let the user through, the honeypot pool '
         'once it diverted them (so a series diverted on, say, request 3 shows '
         'production spikes for requests 1&ndash;2 and a honeypot spike for '
-        'request 3). Every other container is drawn thin and faded. Each exploit '
+        'request 3). Every other container is drawn thin and faded. Each pattern '
         'is sent at a moment when no health check or proxy probe is due for the '
         'next few seconds, so its own spike is not hidden under theirs. When the '
-        'exploit was sent more than once, a lighter dashed line marks each later '
+        'pattern was sent more than once, a lighter dashed line marks each later '
         'request, labelled with the route the proxy gave it. On the CPU graph, '
         'grey dotted lines mark work the stack does on its own timers, unrelated '
-        'to the exploit, labelled with what it was: <i>health check</i> (Docker '
+        'to the pattern, labelled with what it was: <i>health check</i> (Docker '
         'health checks: each eshop fetches its whole homepage every 30&nbsp;s, the '
         'databases are pinged every 10&nbsp;s), <i>proxy probe</i> (the reverse '
         'proxy checking its backends) and <i>WP cron</i> (WordPress cron, which '
         'those requests trigger). Those spikes are often as large as the '
-        'exploit\'s, so a peak several seconds after <b>0&nbsp;s</b> under a grey '
-        'line comes from that work, not from the exploit.</span><br/>')
+        'pattern\'s, so a peak several seconds after <b>0&nbsp;s</b> under a grey '
+        'line comes from that work, not from the pattern.</span><br/>')
     if o.resource_source:
         parts.append('<span style="color:#666666;">CPU and memory were '
                      + _html.escape(o.resource_source) + '.</span><br/>')
@@ -524,29 +524,29 @@ def _is_db_layer(data: ReportData) -> bool:
     return data.honeypot_layer == honeypot_layer.DATABASE.id
 
 
-def _bypasses(o: ExploitOutcome, db_layer: bool) -> bool:
-    """True when this exploit gets past the honeypot: only on the database
+def _bypasses(o: PatternOutcome, db_layer: bool) -> bool:
+    """True when this pattern gets past the honeypot: only on the database
     proxy layer, for CVEs whose effect is outside the switched database. The
     reverse proxy layer's separate honeypot eshops contain every preset."""
     return db_layer and not getattr(o, "db_isolated", True)
 
 
-def _bypass_note(o: ExploitOutcome) -> str:
+def _bypass_note(o: PatternOutcome) -> str:
     return _esc(o.coverage_note) if o.coverage_note else _DEFAULT_BYPASS_NOTE
 
 
 def _verdict_text(d: dict) -> str:
-    """The threat analyzer's verdict on one request, said as what it is: that
+    """The pattern analyzer's verdict on one request, said as what it is: that
     request's own score, not the accumulated score the route follows."""
     own = f'{_esc(d["analyzer_score"])} ' if d.get("analyzer_score") else ""
     return f'analyzer: {own}for this request alone ({_esc(d["verdict"])})'
 
 
 _VERDICT_NOTE = ("The analyzer score is each request's own; the route follows the "
-                 "attacker's accumulated score and the routing rules.")
+                 "user's accumulated score and the routing rules.")
 
 
-def _series_routes_html(o: ExploitOutcome) -> str:
+def _series_routes_html(o: PatternOutcome) -> str:
     """Score, route and verdict of every request of a multi-request series,
     then the route the series ended on, so a series diverted on a later
     request doesn't read as "production" from request 1's numbers."""
@@ -588,9 +588,9 @@ def _series_routes_html(o: ExploitOutcome) -> str:
     if o.detected_at is not None:
         d = o.request_details[o.detected_at - 1]
         reason = (d.get("reason") or "").lower()
-        if reason and reason != "high_threat_score":
+        if reason and reason != "high_risk_score":
             rows.append(f'<span style="color:#8a6d00;">Request {o.detected_at} was diverted by '
-                        f'rule "{_esc(d["reason"])}" &ndash; a CVE/exploit match (or IP '
+                        f'rule "{_esc(d["reason"])}" &ndash; a CVE/pattern match (or IP '
                         f'reputation) diverts regardless of the numeric score.</span>')
     if any(d.get("verdict") for d in o.request_details):
         rows.append(f'<span style="color:#666;">{_VERDICT_NOTE}</span>')
@@ -599,7 +599,7 @@ def _series_routes_html(o: ExploitOutcome) -> str:
     return "<br/>".join(rows)
 
 
-def _outcome_block(o: ExploitOutcome, doc: QTextDocument, shot_key: str, family: str = "Serif",
+def _outcome_block(o: PatternOutcome, doc: QTextDocument, shot_key: str, family: str = "Serif",
                    db_layer: bool = False) -> str:
     parts = ['<table width="100%" cellspacing="0" cellpadding="4" '
              'style="border:1px solid #cccccc;"><tr><td>']
@@ -626,7 +626,7 @@ def _outcome_block(o: ExploitOutcome, doc: QTextDocument, shot_key: str, family:
     else:
         parts.append('<br/>')
         # Score is shown out of the 0..SCORE_MAX scale. No routing threshold is
-        # shown: routing is not a simple score gate -- a CVE/exploit pattern
+        # shown: routing is not a simple score gate -- a CVE/pattern match
         # match (or IP reputation, or a sticky honeypot binding) diverts on its
         # own regardless of the numeric score, so a threshold number would be
         # misleading (e.g. a CVE that scores 45 still lands on the honeypot).
@@ -642,11 +642,11 @@ def _outcome_block(o: ExploitOutcome, doc: QTextDocument, shot_key: str, family:
             # which is what most CVE matches look like (a modest numeric score that
             # nonetheless diverts).
             rule_route = (o.route.lower() == "honeypot" and o.reason
-                          and o.reason.lower() != "high_threat_score")
+                          and o.reason.lower() != "high_risk_score")
             if rule_route:
                 parts.append(
                     f'<br/><span style="color:#8a6d00;">Diverted to honeypot by rule '
-                    f'"{_esc(o.reason)}" &ndash; a CVE/exploit match (or IP reputation) '
+                    f'"{_esc(o.reason)}" &ndash; a CVE/pattern match (or IP reputation) '
                     f'diverts regardless of the numeric score.</span>')
             if o.verdict:
                 parts.append('<br/><span style="color:#666;">'
@@ -683,7 +683,7 @@ def _decay_chart(data: ReportData, family: str = "Serif") -> VectorFigure:
 
     samples = data.decay_samples
     peak = max([data.decay_peak] + [s.score for s in samples] + [1])
-    y_max = 100  # scores are capped at 100 (max_threat_score)
+    y_max = 100  # scores are capped at 100 (max_risk_score)
     window = max([data.decay_window_s] + [s.elapsed_s for s in samples] + [1])
 
     plot_w = W - ml - mr
@@ -761,72 +761,72 @@ def _decay_chart(data: ReportData, family: str = "Serif") -> VectorFigure:
     return img
 
 
-def _diverted(o: ExploitOutcome) -> bool:
+def _diverted(o: PatternOutcome) -> bool:
     """True when any request of ``o``'s series went to the honeypot."""
     return o.detected_at is not None or (o.route or "").lower() == "honeypot"
 
 
-def _exploit_summary_html(outcomes: list[ExploitOutcome], db_layer: bool = False) -> str:
-    """Rates and score statistics across the isolated per-exploit runs."""
+def _pattern_summary_html(outcomes: list[PatternOutcome], db_layer: bool = False) -> str:
+    """Rates and score statistics across the isolated per-pattern runs."""
     ran = [o for o in outcomes if not o.error]
     scored = [o.score for o in ran if o.score is not None]
     rows = []
     rows.append(("Requests that got a response",
                  st.fmt_rate(st.wilson(len(ran), len(outcomes))),
-                 "share of exploits the proxy answered (the rest failed to send)"))
+                 "share of patterns the proxy answered (the rest failed to send)"))
     first_n = sum(1 for o in ran if (o.route or "").lower() == "honeypot")
     rows.append(("Diverted on the first request", st.fmt_rate(st.wilson(first_n, len(ran))),
-                 "estimated chance that an exploit like these is caught straight away; the "
-                 "CI shows how sure that is with this many exploits"))
+                 "estimated chance that a pattern like these is caught straight away; the "
+                 "CI shows how sure that is with this many patterns"))
     caught = [o for o in ran if _diverted(o)]
     rows.append(("Diverted within the series (detection rate)",
                  st.fmt_rate(st.wilson(len(caught), len(ran))),
-                 "caught on any request of the exploit's series (it is repeated when the "
+                 "caught on any request of the pattern's series (it is repeated when the "
                  "first request gets through), see section 4"))
     if db_layer:
         contained = st.wilson(
             sum(1 for o in caught if not _bypasses(o, db_layer)), len(ran))
         rows.append(("Contained by the honeypot", st.fmt_rate(contained),
-                     "diverted AND database-isolatable: an exploit that is caught but "
+                     "diverted AND database-isolatable: a pattern that is caught but "
                      "bypasses the database proxy honeypot (Figure 4) still reaches the "
                      "shared WordPress instance, so it doesn't count here"))
     s = st.summarize(scored)
     if s is not None:
-        rows.append(("Mean threat score", st.fmt_mean_ci(s, digits=1),
+        rows.append(("Mean risk score", st.fmt_mean_ci(s, digits=1),
                      f"typical isolated score out of {SCORE_MAX}; the CI is where the "
-                     "average of many such exploits would likely land"))
+                     "average of many such patterns would likely land"))
         rows.append(("Spread of scores",
                      f"SD {s.sd:.1f}, median {s.median:.0f}, range {s.min:.0f}&ndash;{s.max:.0f}",
-                     "how much the scores differ from one exploit to the next"))
+                     "how much the scores differ from one pattern to the next"))
         rows.append((f"Score in the high band (&ge;{_HIGH_AT})",
                      st.fmt_rate(st.wilson(sum(1 for v in scored if v >= _HIGH_AT), len(scored))),
-                     "estimated chance an exploit like these scores in the red band on the Attack Simulation page"))
-    return st.stats_table_html(rows, "Probability metrics: all individual exploits")
+                     "estimated chance a pattern like these scores in the red band on the Attack Simulation page"))
+    return st.stats_table_html(rows, "Probability metrics: all individual patterns")
 
 
 def _bypass_section_html(data: ReportData, doc: QTextDocument, family: str) -> str:
-    """Which exploits get past the honeypot on this layer, and why."""
+    """Which patterns get past the honeypot on this layer, and why."""
     if not _is_db_layer(data):
         return ('<p style="color:#555;"><b>Honeypot bypasses:</b> none. This report ran on the '
                 'WordPress proxy level, where a diverted request is served by a separate '
                 'honeypot eshop (its own WordPress files, PHP runtime and database), so every '
-                'exploit below is contained once it is routed to the honeypot.</p>')
-    bypassed = [o for o in data.per_exploit if _bypasses(o, True)]
-    parts = ['<h2 style="color:#222;">Exploits that bypass the database proxy honeypot</h2>',
+                'pattern below is contained once it is routed to the honeypot.</p>')
+    bypassed = [o for o in data.per_pattern if _bypasses(o, True)]
+    parts = ['<h2 style="color:#222;">Patterns that bypass the database proxy honeypot</h2>',
              '<p style="color:#555;">This report ran on the <b>database proxy level</b>: one '
              'shared WordPress eshop serves every request and only its database connection '
-             'is switched to the honeypot database for flagged requests. The exploits below '
+             'is switched to the honeypot database for flagged requests. The patterns below '
              'are still detected and routed by the reverse proxy, but their effect lands in '
              'the shared WordPress instance (its files or PHP runtime), above the level where '
              'the honeypot split happens, so the honeypot cannot contain them. They are '
              'greyed out on the Attack Simulation page for this layer.</p>']
     parts.append(diagrams.figure_html(
         doc, diagrams.db_proxy_bypass_diagram(family), "exp-bypass", 4,
-        "Why these exploits bypass the database proxy honeypot: the problem sits between "
+        "Why these patterns bypass the database proxy honeypot: the problem sits between "
         "the reverse proxy and the WordPress instance, while the honeypot works one level "
         "lower, at the database."))
     if not bypassed:
-        parts.append('<p style="color:#555;">No exploit in this run bypassed the honeypot.</p>')
+        parts.append('<p style="color:#555;">No pattern in this run bypassed the honeypot.</p>')
         return "".join(parts)
     rows = []
     for o in bypassed:
@@ -847,17 +847,17 @@ def _bypass_section_html(data: ReportData, doc: QTextDocument, family: str) -> s
     parts.append(
         '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
         'style="border-collapse:collapse; font-size:9pt;">'
-        '<tr style="background-color:#fdecea;"><th align="left">Exploit</th>'
+        '<tr style="background-color:#fdecea;"><th align="left">Pattern</th>'
         '<th align="left">Measured route</th><th align="left">Why it bypasses the honeypot</th></tr>'
         + "".join(rows) + '</table>')
-    parts.append(f'<p style="color:#555;">{len(bypassed)} of {len(data.per_exploit)} exploits '
+    parts.append(f'<p style="color:#555;">{len(bypassed)} of {len(data.per_pattern)} patterns '
                  'bypass the honeypot on this layer. A <b>HONEYPOT</b> route above means the '
-                 'reverse proxy caught the exploit; it is still a bypass, because the part of '
+                 'reverse proxy caught the pattern; it is still a bypass, because the part of '
                  'the stack it attacks is shared with production.</p>')
     return "".join(parts)
 
 
-def _increase_stats_html(steps: list[ExploitOutcome]) -> str:
+def _increase_stats_html(steps: list[PatternOutcome]) -> str:
     pts = [(i + 1, o.score) for i, o in enumerate(steps) if o.score is not None]
     rows = []
     tr = st.trend([x for x, _ in pts], [y for _, y in pts])
@@ -917,9 +917,9 @@ def _decay_stats_html(data: ReportData) -> str:
     return st.stats_table_html(rows, "Probability metrics: threat decay")
 
 
-def _resource_peaks(o: ExploitOutcome) -> tuple[float, float] | None:
+def _resource_peaks(o: PatternOutcome) -> tuple[float, float] | None:
     """(peak container-average CPU %, peak container-average memory MiB) over the
-    samples taken from the exploit onwards, background work left out
+    samples taken from the pattern onwards, background work left out
     (_without_background); None when nothing was sampled."""
     cpu, mem = [], []
     for e, snap in _without_background(o)[0]:
@@ -932,7 +932,7 @@ def _resource_peaks(o: ExploitOutcome) -> tuple[float, float] | None:
     return max(cpu), max(mem)
 
 
-def _category_row(label: str, group: list[ExploitOutcome]) -> str:
+def _category_row(label: str, group: list[PatternOutcome]) -> str:
     """One row of the categorization table for the outcomes in `group`."""
     n = len(group)
     diverted = [o for o in group if o.detected_at is not None]
@@ -953,7 +953,7 @@ def _category_row(label: str, group: list[ExploitOutcome]) -> str:
 
 
 def _category_table(title: str, axis: dict[str, str], attr: str,
-                    outcomes: list[ExploitOutcome]) -> str:
+                    outcomes: list[PatternOutcome]) -> str:
     rows = []
     for key, label in axis.items():
         group = [o for o in outcomes if getattr(o, attr) == key]
@@ -971,7 +971,7 @@ def _category_table(title: str, axis: dict[str, str], attr: str,
             + head + "".join(rows) + '</table>')
 
 
-def _detection_table(outcomes: list[ExploitOutcome]) -> str:
+def _detection_table(outcomes: list[PatternOutcome]) -> str:
     rows = []
     for o in outcomes:
         seq = " &rarr; ".join(
@@ -999,35 +999,35 @@ def _pool_state_html(state: dict) -> str:
     capped = state.get("capped", "")
     waiting = state.get("waiting", 0)
     if capped:
-        mode = (f'<b style="color:#c62828;">Growth capped</b> &ndash; {_esc(capped)}. New attackers '
+        mode = (f'<b style="color:#c62828;">Growth capped</b> &ndash; {_esc(capped)}. New users '
                 'reuse the existing pools round-robin instead of getting a new one.')
     elif waiting:
-        mode = (f'<b style="color:#e08a00;">Scaling up</b> &ndash; {waiting} attacker session(s) '
+        mode = (f'<b style="color:#e08a00;">Scaling up</b> &ndash; {waiting} user session(s) '
                 'borrow a pool until the one being built for them is ready.')
     else:
         mode = ('<b style="color:#2e7d32;">Growing normally</b> &ndash; below the resource limit, so '
-                'every new attacker gets a pool of their own, built on demand, plus a ready spare.')
+                'every new user gets a pool of their own, built on demand, plus a ready spare.')
     return ('<p style="color:#555;">' + mode + '<br/>'
             f'Ready pools: {len(ready)} ({_esc(", ".join(map(str, ready)) or "none")}). '
-            f'Free (unowned) spares: {len(free)}. Attackers per pool: {_esc(owned)}. '
+            f'Free (unowned) spares: {len(free)}. Users per pool: {_esc(owned)}. '
             f'Round-robin reuse assignments so far: {state.get("reused_assignments", 0)}.</p>')
 
 
 def _categorization_html(data: ReportData) -> str:
     """Section 4: the same results regrouped by test category, so strengths and
     gaps show up per kind of attack instead of per preset."""
-    outcomes = [o for o in data.per_exploit if not o.error]
+    outcomes = [o for o in data.per_pattern if not o.error]
     if not outcomes:
         return ""
     parts = ['<h2 style="color:#222;"><a name="sec4"></a>4. Test categorization</h2>',
              '<p style="color:#555;">The individual tests regrouped. <b>Diverted</b> means the '
-             'attacker was routed to the honeypot on some request of the test; <b>On request 1</b> '
+             'user was routed to the honeypot on some request of the test; <b>On request 1</b> '
              'counts tests caught immediately. Tests without their own request series are sent '
              'up to three times, so a later detection shows whether repetition tips the score. '
              'Peak CPU and memory are the container average after the first request, '
              'leaving out samples next to health checks, proxy probes and WordPress '
              'cron.</p>']
-    parts.append(_category_table("Generic attack vs CVE exploit", KINDS, "kind", outcomes))
+    parts.append(_category_table("Generic attack vs CVE pattern", KINDS, "kind", outcomes))
     parts.append(_category_table("WordPress core vs plugin / theme", COMPONENTS, "component", outcomes))
     parts.append(_category_table("Frontend vs backend", SURFACES, "surface", outcomes))
     parts.append('<h3 style="color:#222;">On which request is each test detected?</h3>')
@@ -1041,16 +1041,16 @@ def _categorization_html(data: ReportData) -> str:
 
 
 def _toc_html(data: ReportData) -> str:
-    """Table of contents: the report sections, with every exploit listed under
+    """Table of contents: the report sections, with every pattern listed under
     section 1 (internal links; the anchors are emitted by _outcome_block)."""
-    items = ['<li><b><a href="#sec1">1. Individual exploits</a></b><ol type="a">']
-    for i, o in enumerate(data.per_exploit):
+    items = ['<li><b><a href="#sec1">1. Individual patterns</a></b><ol type="a">']
+    for i, o in enumerate(data.per_pattern):
         cve = f' <span style="color:#666;">({_esc(o.cve)})</span>' if o.cve else ''
-        items.append(f'<li><a href="#exploit{i}">{_esc(o.label)}</a>{cve}</li>')
+        items.append(f'<li><a href="#pattern{i}">{_esc(o.label)}</a>{cve}</li>')
     items.append('</ol></li>')
-    items.append('<li><b><a href="#sec2">2. Threat increase &ndash; repeated exploits</a></b></li>')
+    items.append('<li><b><a href="#sec2">2. Threat increase &ndash; repeated patterns</a></b></li>')
     items.append('<li><b><a href="#sec3">3. Threat decay</a></b></li>')
-    if data.per_exploit:
+    if data.per_pattern:
         items.append('<li><b><a href="#sec4">4. Test categorization</a></b></li>')
     return '<h2 style="color:#222;">Contents</h2><ul style="list-style-type:none;">' + "".join(items) + '</ul>'
 
@@ -1059,9 +1059,9 @@ def _selection_line(data: ReportData) -> str:
     """Header line naming the Attack Simulation page selection the report ran for."""
     if not data.selection:
         return ""
-    count = (f' ({data.selected_count} of {data.total_count} exploits)'
+    count = (f' ({data.selected_count} of {data.total_count} patterns)'
              if data.total_count else '')
-    return f'Exploit selection: {_esc(data.selection)}{count}<br/>'
+    return f'Pattern selection: {_esc(data.selection)}{count}<br/>'
 
 
 def render_pdf(data: ReportData, out_path: str) -> None:
@@ -1073,7 +1073,7 @@ def render_pdf(data: ReportData, out_path: str) -> None:
     # Wrap everything in the Baskerville font stack so it applies even to
     # elements QTextDocument styles from the HTML rather than the base font.
     parts.append(f'<div style="font-family: {_FONT_CSS_STACK};">')
-    parts.append('<h1 style="color:#222;">Honeypot IDS &ndash; Exploit test-scenario report</h1>')
+    parts.append('<h1 style="color:#222;">Honeypot IDS &ndash; Pattern test-scenario report</h1>')
     decay_line = (f'Score decay half-life: {data.half_life_s}s' if data.decay_enabled
                   else 'Threat decay: <b>off</b> (THREAT_DECAY_ENABLED=false) &ndash; '
                        'scores persist indefinitely')
@@ -1086,10 +1086,10 @@ def render_pdf(data: ReportData, out_path: str) -> None:
                  f'{_selection_line(data)}'
                  f'{decay_line}'
                  '</td></tr></table><hr/>')
-    parts.append('<p style="color:#555;">Each exploit below is run from a freshly reset '
+    parts.append('<p style="color:#555;">Each pattern below is run from a freshly reset '
                  'threat state (Redis flushed + reverse_proxy shared dicts flushed) so its '
                  'score is that CVE\'s own isolated value. The score/route are read from '
-                 'reverse_proxy\'s X-Threat-Score / X-Route-Target headers; the screenshot '
+                 'reverse_proxy\'s X-Risk-Score / X-Route-Target headers; the screenshot '
                  'is the embedded browser at that URL. Every request is scored through the '
                  'pipeline in <b>Figure 2</b> and routed as in <b>Figure 1</b> &ndash; so a '
                  'score below reflects Figure 2, and its production/honeypot route reflects '
@@ -1102,7 +1102,7 @@ def render_pdf(data: ReportData, out_path: str) -> None:
         "honeypot on any trigger (Figure 2), otherwise to production."))
     parts.append(diagrams.figure_html(
         doc, diagrams.scoring_pipeline_diagram(family), "exp-score", 2,
-        "Threat-scoring pipeline: the signals whose sum is the score shown for each exploit "
+        "Risk-scoring pipeline: the signals whose sum is the score shown for each pattern "
         "below; it accumulates onto the session peak and decays over time."))
     parts.append(diagrams.figure_html(
         doc, diagrams.routing_decision_diagram(family), "exp-decision", 3,
@@ -1111,16 +1111,16 @@ def render_pdf(data: ReportData, out_path: str) -> None:
         "session's honeypot pool, in the order they are checked."))
     parts.append(_bypass_section_html(data, doc, family))
 
-    # 1. per-exploit
-    parts.append('<h2 style="color:#222;"><a name="sec1"></a>1. Individual exploits</h2>')
-    for i, o in enumerate(data.per_exploit):
-        parts.append(_outcome_block(o, doc, f"exploit{i}", family, db_layer))
-    parts.append(_exploit_summary_html(data.per_exploit, db_layer))
+    # 1. per-pattern
+    parts.append('<h2 style="color:#222;"><a name="sec1"></a>1. Individual patterns</h2>')
+    for i, o in enumerate(data.per_pattern):
+        parts.append(_outcome_block(o, doc, f"pattern{i}", family, db_layer))
+    parts.append(_pattern_summary_html(data.per_pattern, db_layer))
 
     # 2. threat increase
-    parts.append('<h2 style="color:#222;"><a name="sec2"></a>2. Threat increase &ndash; repeated exploits</h2>')
+    parts.append('<h2 style="color:#222;"><a name="sec2"></a>2. Threat increase &ndash; repeated patterns</h2>')
     parts.append('<p style="color:#555;">Threat state is reset once, then these two '
-                 'semi-randomly chosen exploits are run alternately for three rounds with '
+                 'semi-randomly chosen patterns are run alternately for three rounds with '
                  '<b>no reset between them</b>. The score ratchets up as the host IP\'s '
                  'reputation accumulates:</p>')
     parts.append('<ul>' + "".join(f'<li>{_esc(c)}</li>' for c in data.increase_cves) + '</ul>')
@@ -1135,10 +1135,10 @@ def render_pdf(data: ReportData, out_path: str) -> None:
 
     # 3. threat decay
     parts.append('<h2 style="color:#222;"><a name="sec3"></a>3. Threat decay</h2>')
-    seed = (f' The peak was seeded with a single moderate exploit '
+    seed = (f' The peak was seeded with a single moderate pattern '
             f'(<b>{_esc(data.decay_seed_cve)}</b>).' if data.decay_seed_cve else '')
     parts.append('<p style="color:#555;">This scenario is <b>measured on a clean host IP, '
-                 'before the exploit scenarios above are run</b> (it is presented last only for '
+                 'before the pattern scenarios above are run</b> (it is presented last only for '
                  'readability). That matters: the effective score a request sees folds in the '
                  'IP\'s reputation, which the IDS continuously re-imports from Suricata\'s alert '
                  'log &ndash; so once the IP has been hammered by the other scenarios, every '

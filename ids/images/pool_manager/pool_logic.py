@@ -52,7 +52,7 @@ def budget_room(total_pools: int, mem_per_pool: float, cpus_per_pool: float,
 def pools_to_start(free: int, in_flight: int, waiting: int, spares_wanted: int,
                    room: int, parallel: int) -> int:
     """Pools to start now so every session waiting for a pool of its own gets
-    one, plus `spares_wanted` unowned pools for the next attackers. Pools being
+    one, plus `spares_wanted` unowned pools for the next users. Pools being
     built already count; never more than `room` (resource budget) and never
     more than `parallel` builds at once."""
     want = waiting + spares_wanted - free - in_flight
@@ -83,10 +83,10 @@ def host_pressure(mem_available_mb: float, load1: float, cpus: int, disk_free_gb
 
 
 def idle_action(is_runtime_pool: bool, can_grow: bool, at_max: bool) -> str:
-    """What to do with a pool whose attackers have all gone (assignments
+    """What to do with a pool whose users have all gone (assignments
     expired): "recycle" (destroy it; a clean spare is rebuilt) only when the
     host has room for a replacement, otherwise "reuse" (hand it to the next
-    attacker as it is, which costs no resources). Pools declared in the compose
+    user as it is, which costs no resources). Pools declared in the compose
     file are never destroyed here."""
     if is_runtime_pool and can_grow and not at_max:
         return "recycle"
@@ -97,7 +97,7 @@ def scaledown_plan(pools: dict[int, dict], static_count: int, spares: int, now: 
                    idle_timeout: float, forced: bool = False) -> tuple[list[int], list[int]]:
     """Which ready pools to scale down. `pools` maps pool number ->
     {"owned": bool, "last_seen": epoch of the last request routed to it,
-    "dirty": bool (an attacker used it)}.
+    "dirty": bool (a user used it)}.
 
     Returns (release, destroy):
       release  owned pools nobody has used for `idle_timeout` seconds: their

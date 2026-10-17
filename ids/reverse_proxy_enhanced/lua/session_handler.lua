@@ -85,7 +85,7 @@ end
 --
 -- A session cookie is trivial for a client to discard (clear cookies,
 -- private window, localStorage wipe) -- without a server-side fallback,
--- that alone would be enough to walk away from an elevated threat_score
+-- that alone would be enough to walk away from an elevated risk_score
 -- or a honeypot_bound=true session and come back in as a brand-new,
 -- zero-score visitor. Every session creation and update refreshes an
 -- "fp_session:<fingerprint>" Redis pointer at the session's own TTL, where
@@ -228,7 +228,7 @@ function _M.create_session(ip_address, user_agent, initial_route, provided_sessi
         ip_address = ip_address,
         user_agent = user_agent or "",
         route_preference = initial_route or "production",
-        threat_score = 0,
+        risk_score = 0,
         suspicious_activities = {},
         request_count = 0,
         compromised = false,
@@ -256,7 +256,7 @@ function _M.create_session(ip_address, user_agent, initial_route, provided_sessi
         sessions_dict:set("session:" .. session_id, session_json, 300)
 
         -- So a later cookie-clear by this same client can recover this
-        -- exact session instead of starting over at threat_score=0 -- see
+        -- exact session instead of starting over at risk_score=0 -- see
         -- the "Passive fingerprint -> session_id binding" comment above.
         _M.bind_fingerprint_to_session(session_id)
 
@@ -273,7 +273,7 @@ end
 --
 -- Delegates to router_rules.is_static_asset() rather than maintaining its
 -- own copy. This used to be a THIRD independent implementation of the same
--- check (router_rules.lua and threat_rules.lua already document having had
+-- check (router_rules.lua and pattern_rules.lua already document having had
 -- two that disagreed on whether to strip the query string before matching,
 -- and were reconciled) -- this one was never reconciled and still didn't
 -- strip it, so e.g. "image.png?v=123" wasn't recognized as static here even
@@ -332,7 +332,7 @@ function _M.update_session(session_id, updates)
 
         ngx.log(ngx.INFO, "[SESSION] ✅ Session updated successfully | ID: ", session_id,
                 " | Request Count: ", session_data.request_count or 0, 
-                " | Threat Score: ", session_data.threat_score or 0,
+                " | Risk Score: ", session_data.risk_score or 0,
                 " | Route: ", session_data.route_preference or "production")
         
         return true
@@ -430,7 +430,7 @@ end
 
 -- Analyze session for anomalies.
 -- Thin adapter over session_rules.analyze_session_anomalies() -- fetches
--- the current IP/UA, decodes the malicious-agents list from the shared
+-- the current IP/UA, decodes the flagged-agents list from the shared
 -- dict, and delegates the actual detection; then re-derives the same
 -- per-anomaly detail (old IP, which agent matched, request-rate figures)
 -- from data already in scope to keep the original log messages intact,
@@ -444,14 +444,14 @@ function _M.analyze_session_anomalies(session_data)
     local current_ua = ngx.var.http_user_agent or ""
     local current_time = ngx.time()
 
-    local malicious_agents = nil
-    local malicious_agents_json = ngx.shared.threat_intel:get("malicious_agents")
-    if malicious_agents_json then
-        malicious_agents = cjson.decode(malicious_agents_json)
+    local flagged_agents = nil
+    local flagged_agents_json = ngx.shared.threat_intel:get("flagged_agents")
+    if flagged_agents_json then
+        flagged_agents = cjson.decode(flagged_agents_json)
     end
 
     local anomalies = session_rules.analyze_session_anomalies(
-        session_data, current_ip, current_ua, malicious_agents, current_time)
+        session_data, current_ip, current_ua, flagged_agents, current_time)
 
     for _, anomaly in ipairs(anomalies) do
         if anomaly == "ip_change" then
@@ -459,16 +459,16 @@ function _M.analyze_session_anomalies(session_data)
                     " | Old: ", session_data.ip_address, " | New: ", current_ip)
         elseif anomaly == "user_agent_change" then
             ngx.log(ngx.WARN, "[SESSION] ⚠️  User-Agent changed | Session: ", session_data.id or "unknown")
-        elseif anomaly == "malicious_user_agent" then
+        elseif anomaly == "flagged_user_agent" then
             local ua_lower = string.lower(current_ua)
             local matched_agent = "unknown"
-            for _, agent in ipairs(malicious_agents or {}) do
+            for _, agent in ipairs(flagged_agents or {}) do
                 if string.find(ua_lower, string.lower(agent)) then
                     matched_agent = agent
                     break
                 end
             end
-            ngx.log(ngx.ERR, "[SESSION] 🚨 Malicious User-Agent detected | Agent: ", matched_agent,
+            ngx.log(ngx.ERR, "[SESSION] 🚨 Flagged User-Agent detected | Agent: ", matched_agent,
                     " | Session: ", session_data.id or "unknown")
         elseif anomaly == "rapid_requests" then
             local time_diff = current_time - (session_data.last_activity or current_time)

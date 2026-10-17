@@ -57,7 +57,7 @@ BASE_URL="https://${TARGET_HOST}:${TARGET_PORT}"
 
 source "$(dirname "$0")/lib/scenario_common.sh"
 
-# Shared secret gating the X-Route-Target/X-Threat-Score response headers
+# Shared secret gating the X-Route-Target/X-Risk-Score response headers
 # this script depends on (see reverse_proxy_enhanced/nginx.conf and
 # BLIND_PENTEST_PROTOCOL.md §8.2). Export it in the shell before running:
 #   export INTERNAL_TEST_SECRET=<value from .env>

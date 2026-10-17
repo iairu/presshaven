@@ -1,6 +1,6 @@
-"""Tests for the exploit report's resource capture (core/exploit_report.py's
+"""Tests for the pattern report's resource capture (core/pattern_report.py's
 ReportWorker._capture_around): CPU/memory sampling must keep running while the
-exploit is being sent, so the spike lands at the exploit's time on the graph.
+pattern is being sent, so the spike lands at the pattern's time on the graph.
 
     cd dashboard && python3 -m unittest discover -s tests -v
 
@@ -18,7 +18,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
-    from core import exploit_report as er  # noqa: E402
+    from core import pattern_report as er  # noqa: E402
 except ImportError:  # PyQt6 missing
     er = None
 
@@ -37,7 +37,7 @@ class _FakeSampler:
 
 @unittest.skipIf(er is None, "PyQt6 not installed")
 class CaptureAroundTests(unittest.TestCase):
-    def test_samples_continue_while_the_exploit_runs(self):
+    def test_samples_continue_while_the_pattern_runs(self):
         busy = {"on": False}
 
         def run_fn():
@@ -47,7 +47,7 @@ class CaptureAroundTests(unittest.TestCase):
             time.sleep(1.5)
             busy["on"] = False
             time.sleep(1.5)
-            o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+            o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
             o.request_times = [time.time() - 3.0]
             return o
 
@@ -65,7 +65,7 @@ class CaptureAroundTests(unittest.TestCase):
             outcome, samples = worker._capture_around(run_fn)
 
         times = [t for t, _ in samples]
-        self.assertTrue(any(t < 0 for t in times), "no baseline before the exploit")
+        self.assertTrue(any(t < 0 for t in times), "no baseline before the pattern")
         # No hole after t=0: consecutive samples stay close together.
         gaps = [b - a for a, b in zip(times, times[1:])]
         self.assertLess(max(gaps), 1.0, f"sampling stalled: gaps {gaps}")
@@ -74,31 +74,31 @@ class CaptureAroundTests(unittest.TestCase):
         self.assertTrue(spike, "spike missing")
         self.assertGreaterEqual(min(spike), -0.3)
         self.assertLessEqual(max(spike), 1.8)
-        # Request times come back relative to the exploit.
+        # Request times come back relative to the pattern.
         self.assertAlmostEqual(outcome.request_times[0], 0.0, delta=0.3)
 
-    def test_background_events_skip_the_exploit_and_quiet_work(self):
+    def test_background_events_skip_the_pattern_and_quiet_work(self):
         samples = [(t / 4, {"eshop": (60.0 if 20 <= t <= 24 else 1.0, 0, 0),
                             "db": (2.0, 0, 0)}) for t in range(-8, 61)]
         got = er._background_events(
             health_checks=[(1005.0, "eshop"), (1003.0, "db")],
             eshop_requests=[(1000.1, "eshop", "GET /?s=%3Cscript%3E"),
                             (1005.2, "eshop", "HEAD /robots.txt")],
-            exploit_paths=["/?s=<script>"], exploit_t=1000.0, samples=samples)
-        # The exploit's own request and the db ping that left no spike are out.
+            pattern_paths=["/?s=<script>"], pattern_t=1000.0, samples=samples)
+        # The pattern's own request and the db ping that left no spike are out.
         self.assertEqual(got, [(5.0, "eshop", "Docker health check"),
                                (5.2, "eshop", "HEAD /robots.txt")])
 
-    def test_stats_leave_out_background_but_keep_the_exploit(self):
-        from core import exploit_report_pdf as ep
-        o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+    def test_stats_leave_out_background_but_keep_the_pattern(self):
+        from core import pattern_report_pdf as ep
+        o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
         o.resource_samples = [(t / 4, {"eshop": (1.0, 0, 0)}) for t in range(-8, 61)]
         o.request_times = [0.0]
-        # One background event overlapping the exploit, one well after it.
+        # One background event overlapping the pattern, one well after it.
         o.background = [(0.5, "eshop", "Docker health check"), (8.0, "eshop", "GET /")]
         kept, dropped = ep._without_background(o)
         kept_t = [t for t, _ in kept]
-        self.assertIn(0.5, kept_t)       # the exploit's own window stays
+        self.assertIn(0.5, kept_t)       # the pattern's own window stays
         self.assertNotIn(8.0, kept_t)    # 7.5 .. 10.0 is left out
         self.assertNotIn(10.0, kept_t)
         self.assertIn(10.25, kept_t)
@@ -107,7 +107,7 @@ class CaptureAroundTests(unittest.TestCase):
     def test_quiet_delay_skips_past_due_background(self):
         # A health check every 30 s, last at t=100; a probe every 15 s, last at 95.
         periodic = [(100.0, 30.0), (95.0, 15.0)]
-        # At now=105 the exploit would fire at 107 and a probe is due at 110:
+        # At now=105 the pattern would fire at 107 and a probe is due at 110:
         # wait until the window [t0-2.5, t0+4] clears 110, i.e. t0 >= 112.75.
         wait = er._quiet_delay(105.0, periodic, pre=2.0, after=4.0, max_wait=20.0)
         self.assertAlmostEqual(wait, 5.75)
@@ -139,8 +139,8 @@ class CaptureAroundTests(unittest.TestCase):
                          ["", "production_eshop"])
 
     def test_served_labels_name_each_request(self):
-        from core import exploit_report_pdf as ep
-        o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+        from core import pattern_report_pdf as ep
+        o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
         o.served_per_request = ["production_eshop", "production_eshop", "honeypot_eshop_1"]
         o.request_details = [{"route": "production"}, {"route": "production"},
                              {"route": "honeypot"}]
@@ -152,16 +152,16 @@ class CaptureAroundTests(unittest.TestCase):
                          "served requests 1\u20133, on the honeypot database for request 3")
         o.served_per_request = ["honeypot_eshop_2"]
         o.request_details = [{"route": "honeypot"}]
-        self.assertEqual(ep._served_labels(o), {"honeypot_eshop_2": "served the exploit"})
+        self.assertEqual(ep._served_labels(o), {"honeypot_eshop_2": "served the pattern"})
 
     def test_markers_carry_each_requests_route(self):
-        from core import exploit_report_pdf as ep
-        o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+        from core import pattern_report_pdf as ep
+        o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
         o.request_times = [0.0, 1.5, 3.0]
         o.request_details = [{"route": "production"}, {"route": "production"},
                              {"route": "honeypot"}]
         self.assertEqual([m[1] for m in ep._request_markers(o)],
-                         ["exploit \u2192 production", "request 2 \u2192 production",
+                         ["pattern \u2192 production", "request 2 \u2192 production",
                           "request 3 \u2192 honeypot"])
         self.assertEqual(ep._background_kind("Docker health check"), "health check")
         self.assertEqual(ep._background_kind("HEAD /robots.txt"), "proxy probe")
@@ -171,26 +171,26 @@ class CaptureAroundTests(unittest.TestCase):
         import os
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PyQt6.QtWidgets import QApplication
-        from core import exploit_report_pdf as ep
+        from core import pattern_report_pdf as ep
         type(self)._app = QApplication.instance() or QApplication([])
         samples = [(t / 4, {"eshop": (1.0, 0, 0)}) for t in range(-8, 61)]
         cmap = ep._resource_color_map(samples)
-        one = ep._resource_chart(samples, "cpu", cmap, requests=[(0.0, "exploit", "")])
+        one = ep._resource_chart(samples, "cpu", cmap, requests=[(0.0, "pattern", "")])
         many = ep._resource_chart(samples, "cpu", cmap,
-                                  requests=[(0.0, "exploit \u2192 production", "production"),
+                                  requests=[(0.0, "pattern \u2192 production", "production"),
                                             (0.3, "request 2 \u2192 honeypot", "honeypot")],
                                   background=[(0.5, "health check")])
         # Three labels within half a second need three rows above the plot.
         self.assertGreater(many.height, one.height + 20)
 
     def test_markers_sit_where_the_tarpit_released_the_request(self):
-        from core import exploit_report_pdf as ep
-        o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+        from core import pattern_report_pdf as ep
+        o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
         o.request_times = [0.0, 2.0]
         o.request_details = [{"route": "production", "tarpit_s": 0.0},
                              {"route": "honeypot", "tarpit_s": 1.0}]
         self.assertEqual([(t, label) for t, label, _r in ep._request_markers(o)],
-                         [(0.0, "exploit \u2192 production"),
+                         [(0.0, "pattern \u2192 production"),
                           (3.0, "request 2 \u2192 honeypot (held 1 s)")])
 
     def test_tarpit_is_read_from_the_requests_own_connection(self):
@@ -201,11 +201,11 @@ class CaptureAroundTests(unittest.TestCase):
             "2026/10/03 09:56:03 [info] 9#9: *1795 [lua] router.lua:787: apply_botnet_slowdown(): "
             "[SLOWDOWN] Applying tarpit delay of 3s | IP: 1.2.3.4",
             "2026/10/03 09:56:06 [warn] 9#9: *1798 [lua] access_by_lua(nginx.conf:532):202: "
-            "[FINAL DECISION] ROUTING TO HONEYPOT | Score: 100/80 | Reason: high_threat_score",
+            "[FINAL DECISION] ROUTING TO HONEYPOT | Score: 100/80 | Reason: high_risk_score",
             "2026/10/03 09:56:06 [info] 9#9: *1798 [lua] router.lua:787: apply_botnet_slowdown(): "
             "[SLOWDOWN] Applying tarpit delay of 1.5s | IP: 1.2.3.4",
         ])
-        o = er.ExploitOutcome(label="x", cve="X", severity="", method="GET", path="/")
+        o = er.PatternOutcome(label="x", cve="X", severity="", method="GET", path="/")
         with mock.patch.object(er.subprocess, "run",
                                return_value=mock.Mock(stdout=logs, returncode=0)):
             worker._fill_from_logs(o, time.time())

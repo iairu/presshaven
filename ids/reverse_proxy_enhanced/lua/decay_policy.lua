@@ -1,14 +1,14 @@
 -- decay_policy.lua
 --
--- Escalation policy shared by the two threat-score decay paths:
+-- Escalation policy shared by the two risk-score decay paths:
 --   * router_rules.decayed_score()   -- per-SESSION suspicion decay (the
 --     "can this session earn its way back to production" re-check).
 --   * suricata_rules.decayed_score() -- per-IP reputation (threat_ips) decay.
 --
 -- Both used to be a flat exponential: score = peak * 0.5^(elapsed/half_life),
--- with ONE fixed half-life for everyone. That let a confirmed attacker who
--- had already landed real exploits fade back to a clean score at exactly the
--- same rate as a single stray probe -- so alternating "run exploit" / "wait"
+-- with ONE fixed half-life for everyone. That let a confirmed flagged user who
+-- had already matched real patterns fade back to a clean score at exactly the
+-- same rate as a single stray probe -- so alternating "run pattern" / "wait"
 -- could keep re-earning production access indefinitely.
 --
 -- This module scales the decay by how much abuse the source has actually
@@ -19,10 +19,10 @@
 --   * Each offense multiplies the half-life by (1 + decay_offense_slowdown),
 --     so a repeat offender's score fades progressively more slowly.
 --   * Past permaflag_offenses offenses, OR once the stored peak has ever
---     reached permaflag_score (a single high-threat exploit that maxes the
+--     reached permaflag_score (a single high-risk pattern that maxes the
 --     score), decay stops entirely: the source is treated as a confirmed
---     attacker and stays flagged (a "permaflag"). This is the ceiling the
---     "high threat exploit = max decay" requirement asks for.
+--     user and stays flagged (a "permaflag"). This is the ceiling the
+--     "high risk pattern = max decay" requirement asks for.
 --
 -- Pure: no ngx / _G access, all knobs passed in, so it is unit-testable and
 -- both callers feed it the same config from _G.config.threat.
@@ -43,7 +43,7 @@ function _M.half_life_multiplier(offenses, slowdown)
     return 1 + slowdown * offenses
 end
 
---- Whether a source should never decay (confirmed attacker / permaflag).
+--- Whether a source should never decay (confirmed flagged user / permaflag).
 --- @param peak              number|nil  the stored peak score (0..100)
 --- @param offenses          number|nil
 --- @param permaflag_score   number|nil  peak at/above this => permaflag (nil disables)

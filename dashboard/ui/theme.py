@@ -88,7 +88,7 @@ CONSOLE = {
 # Named hex colors per theme, for custom-stylesheet widgets that need a
 # specific value directly rather than going through QPalette (ui/
 # ansi_render.py's terminal-style panel, ui/health_diagram.py's canvas, ui/
-# page_exploits.py's threat-event cards, ...). Every theme defines the same
+# page_patterns.py's pattern-event cards, ...). Every theme defines the same
 # role names so callers never need their own per-theme branching:
 #   bg        - main background
 #   fg        - main text, full contrast against bg

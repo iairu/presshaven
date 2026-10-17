@@ -4,12 +4,12 @@
  * Description: Hardens the production WordPress/WooCommerce instance by disabling
  *              XML-RPC, stripping version fingerprints from HTML output, REST API
  *              responses and HTTP headers, and removing information-disclosure
- *              artefacts that attackers commonly probe before launching exploits.
+ *              artefacts that users commonly probe before sending attack patterns.
  *
  *              This file lives in mu-plugins/ so it is always loaded and cannot
  *              be deactivated through the WordPress admin panel.  It is ONLY
  *              applied to the production instance.  The honeypot instances
- *              intentionally keep these fingerprints visible so that attackers
+ *              intentionally keep these fingerprints visible so that users
  *              believe they are interacting with a real, unpatched installation.
  *
  * Version:     1.0.0
@@ -45,7 +45,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // with the database chosen per request by wp-content/db.php (the db drop-in,
 // which runs before mu-plugins and defines HONEYPOT_ACTIVE_DB_BACKEND). When
 // the reverse proxy diverted this request to the honeypot, hardening MUST NOT
-// run -- the whole point of the honeypot is to show attackers a realistic,
+// run -- the whole point of the honeypot is to show users a realistic,
 // UNHARDENED, fingerprintable install with XML-RPC and the vulnerable plugin
 // surface reachable. Hardening only applies to production-routed requests.
 //
@@ -58,7 +58,7 @@ if ( defined( 'HONEYPOT_ACTIVE_DB_BACKEND' ) && HONEYPOT_ACTIVE_DB_BACKEND === '
 
 // ============================================================================
 // 1. XML-RPC – completely disabled on production.
-//    Attackers routinely probe /xmlrpc.php for:
+//    Users routinely probe /xmlrpc.php for:
 //      * Credential brute-force via system.multicall
 //      * DDoS amplification via pingback.extensions.getPingbacks
 //      * Remote code execution chains (CVE-2019-17671, etc.)

@@ -51,17 +51,17 @@ end
 
 -- Process admin access requests
 -- Scores an admin-area request and returns (score, reason) for the caller
--- to add to THIS request's threat_result, which the router then accumulates
+-- to add to THIS request's pattern_result, which the router then accumulates
 -- onto the session. Attempt counters are kept per `actor` (the session id).
 --
 -- Both used to be per IP: brute-force counters were keyed on the address and
 -- the score was written into the IP's reputation (threat_ips), so one
--- attacker behind a carrier-grade NAT raised the score of every other user
--- sharing that address. Now an attacker's admin probing only counts against
+-- flagged user behind a carrier-grade NAT raised the score of every other user
+-- sharing that address. Now a user's admin probing only counts against
 -- their own session.
 --
 -- @return number  Score to add (0 when nothing suspicious).
--- @return string|nil  Pattern name for threat_result.patterns_matched.
+-- @return string|nil  Pattern name for pattern_result.patterns_matched.
 function _M.process_admin_request(remote_ip, uri, actor)
     actor = actor or remote_ip
     local admin_info = {
@@ -303,7 +303,7 @@ function _M.generate_admin_report(ip)
     }
 end
 
--- Block admin access based on threat score
+-- Block admin access based on risk score
 function _M.should_block_admin_access(ip)
     local red, err = _G.redis_pool.get_connection()
     if not red then
@@ -314,7 +314,7 @@ function _M.should_block_admin_access(ip)
     -- not Lua nil -- "or '{}'" alone doesn't catch that since ngx.null is
     -- truthy, so cjson.decode() would crash with "string expected, got
     -- userdata" on a key that's never been set (e.g. right after a fresh
-    -- deploy or a Redis flush). See threat_analyzer.lua/router.lua etc. for
+    -- deploy or a Redis flush). See pattern_analyzer.lua/router.lua etc. for
     -- the established `x and x ~= ngx.null` idiom used elsewhere in this
     -- codebase; fixed here to match.
     local threat_data = red:get('threat_ips')

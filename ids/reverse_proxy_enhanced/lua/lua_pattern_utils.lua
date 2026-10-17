@@ -1,11 +1,11 @@
 -- lua_pattern_utils.lua - Shared pure string/pattern helpers
 --
 -- Small, stable helpers used by every *_rules.lua pure module
--- (threat_rules.lua, router_rules.lua, vulnerability_rules.lua,
+-- (pattern_rules.lua, router_rules.lua, vulnerability_rules.lua,
 -- upload_rules.lua). Previously each of those modules kept its own
 -- verbatim copy of url_decode() and/or escape_pattern() -- both were
 -- explicitly flagged at the time as "promote to a shared module if this
--- ever grows" (see threat_rules.lua's original comment); this is that
+-- ever grows" (see pattern_rules.lua's original comment); this is that
 -- promotion, done once the duplication reached three independent copies of
 -- escape_pattern() rather than speculatively up front.
 --
@@ -57,12 +57,12 @@ end
 -- is_install_wizard_uri(uri)
 --
 -- True only for WordPress's actual installer endpoint, /wp-admin/install.php
--- (query string ignored, e.g. "?step=1"). Shared by threat_rules.lua (skips
+-- (query string ignored, e.g. "?step=1"). Shared by pattern_rules.lua (skips
 -- scoring) and router_rules.lua (skips honeypot diversion) so a WordPress
 -- instance that hasn't been installed yet can still be set up through the
 -- browser -- see wp_install_state.lua for how "not installed yet" itself is
 -- determined. Deliberately an exact path match, not a substring match like
--- threat_rules.lua's "install%.php" scoring pattern: that broader pattern is
+-- pattern_rules.lua's "install%.php" scoring pattern: that broader pattern is
 -- meant to catch things like "wp-config-install.php.bak" probes, which this
 -- helper must NOT bypass.
 -- ---------------------------------------------------------------------------

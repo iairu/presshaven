@@ -11,7 +11,7 @@ DASHBOARD_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, DASHBOARD_DIR)
 
 from core import learning  # noqa: E402
-from core.exploits import EXPLOIT_PRESETS  # noqa: E402
+from core.patterns import PATTERN_PRESETS  # noqa: E402
 
 
 def _sidebar_pages() -> list[str]:
@@ -22,17 +22,17 @@ def _sidebar_pages() -> list[str]:
     return re.findall(r'"(\w+)"', block)
 
 
-class ExploitLessonTests(unittest.TestCase):
+class PatternLessonTests(unittest.TestCase):
     def test_every_preset_has_a_lesson(self):
-        missing = [p.cve for p in EXPLOIT_PRESETS if learning.lesson_for(p.cve) is None]
-        self.assertEqual(missing, [], "add an EXPLOIT_LESSONS entry for each new preset")
+        missing = [p.cve for p in PATTERN_PRESETS if learning.lesson_for(p.cve) is None]
+        self.assertEqual(missing, [], "add a PATTERN_LESSONS entry for each new preset")
 
     def test_no_orphan_lessons(self):
-        cves = {p.cve for p in EXPLOIT_PRESETS}
-        self.assertEqual(set(learning.EXPLOIT_LESSONS) - cves, set())
+        cves = {p.cve for p in PATTERN_PRESETS}
+        self.assertEqual(set(learning.PATTERN_LESSONS) - cves, set())
 
     def test_lessons_name_owasp_and_attack_ids(self):
-        for cve, lesson in learning.EXPLOIT_LESSONS.items():
+        for cve, lesson in learning.PATTERN_LESSONS.items():
             self.assertRegex(lesson.owasp, r"^A\d\d ", cve)
             self.assertRegex(lesson.attack, r"^T\d{4}(\.\d{3})? ", cve)
 
@@ -59,7 +59,7 @@ class LabTests(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_lab_steps_reference_real_presets(self):
-        cves = {p.cve for p in EXPLOIT_PRESETS}
+        cves = {p.cve for p in PATTERN_PRESETS}
         for lab in learning.LABS:
             for step in lab.steps:
                 for cve in re.findall(r"(?:CVE-\d{4}-\d+|GENERIC-WP-\d+)", step.text):
@@ -90,7 +90,7 @@ class GlossaryTests(unittest.TestCase):
 
 class ExplainEventTests(unittest.TestCase):
     def test_labels_from_the_log_parser(self):
-        # Labels as core/threat_log_parser builds them from real proxy lines.
+        # Labels as core/pattern_log_parser builds them from real proxy lines.
         for label in [
             "CVE PATTERNS DETECTED (+50)",
             "URI patterns matched (+25)",

@@ -27,7 +27,7 @@ ngx = {
 _G.config = {
     threat = {
         honeypot_threshold = 80,
-        max_threat_score = 100,
+        max_risk_score = 100,
         score_decay_half_life_seconds = 0, -- off: scores below are exact
         static_asset_patterns = { "%.css$", "%.js$", "%.png$", "%.jpg$" },
     },
@@ -103,7 +103,7 @@ end
 local IP = "203.0.113.7"
 
 -- Runs decide_route for one request. `req` sets ngx.var fields, `threat`
--- overrides the default clean threat_result, `session` is the stored session
+-- overrides the default clean pattern_result, `session` is the stored session
 -- (pass false for "no session yet").
 local function route(req, threat, session)
     ngx.var = {
@@ -153,7 +153,7 @@ end
 
 print("Stage 2: sticky honeypot binding")
 do
-    local bound = { id = "s1", honeypot_bound = true, honeypot_pool = 3, threat_score = 90,
+    local bound = { id = "s1", honeypot_bound = true, honeypot_pool = 3, risk_score = 90,
                     last_threat_time = NOW, honeypot_reason = "cve_pattern_match" }
     assignments.s1 = 3
     local d = route({ uri = "/shop/" }, nil, bound)
@@ -169,37 +169,37 @@ do
           d.update_session and d.session_data.honeypot_pool == 5)
     assignments.s1 = nil
 
-    local unpooled = { id = "s1", honeypot_bound = true, threat_score = 90, last_threat_time = NOW }
+    local unpooled = { id = "s1", honeypot_bound = true, risk_score = 90, last_threat_time = NOW }
     d = route({ uri = "/shop/" }, nil, unpooled)
     check("bound session without pool gets one assigned", d.upstream == "honeypot_backend_2"
           and d.session_data.honeypot_pool == 2)
 
-    local cooled = { id = "s1", honeypot_bound = true, honeypot_pool = 1, threat_score = 20, last_threat_time = NOW }
+    local cooled = { id = "s1", honeypot_bound = true, honeypot_pool = 1, risk_score = 20, last_threat_time = NOW }
     d = route({ uri = "/shop/" }, nil, cooled)
     check("bound session whose score fell under 30 is released to production", d.target == "production")
 
     d = route({ uri = "/shop/" }, { score = 15 }, { id = "s1", honeypot_bound = true, honeypot_pool = 1,
-                                                    threat_score = 50, last_threat_time = NOW, offenses = 2 })
-    check("new signal on bound session accumulates score", d.session_data.threat_score == 65)
+                                                    risk_score = 50, last_threat_time = NOW, offenses = 2 })
+    check("new signal on bound session accumulates score", d.session_data.risk_score == 65)
     check("new signal on bound session counts an offense", d.session_data.offenses == 3)
 end
 
 print("Stage 3: threat threshold")
 do
     local d = route({ uri = "/?id=1'--" }, { score = 80, patterns_matched = { "sqli" } })
-    check("score at threshold -> honeypot", d.target == "honeypot" and reason(d) == "high_threat_score")
+    check("score at threshold -> honeypot", d.target == "honeypot" and reason(d) == "high_risk_score")
     check("honeypot session is bound to the assigned pool",
           d.session_data.honeypot_bound == true and d.session_data.honeypot_pool == 2)
-    check("diversion is reported to AbuseIPDB", #abuse_reports == 1 and abuse_reports[1].reason == "high_threat_score")
+    check("diversion is reported to AbuseIPDB", #abuse_reports == 1 and abuse_reports[1].reason == "high_risk_score")
     check("diversion logs a security event", #security_events == 1 and security_events[1].kind == "routing_to_honeypot")
 
     d = route({ uri = "/" }, { score = 79 })
     check("score just under threshold -> production", d.target == "production")
 
-    d = route({ uri = "/" }, { score = 50 }, { id = "s1", threat_score = 40, last_threat_time = NOW })
+    d = route({ uri = "/" }, { score = 50 }, { id = "s1", risk_score = 40, last_threat_time = NOW })
     check("fresh signal adds to stored score and crosses threshold", d.target == "honeypot")
 
-    d = route({ uri = "/" }, { score = 5 }, { id = "s1", threat_score = 85, last_threat_time = NOW })
+    d = route({ uri = "/" }, { score = 5 }, { id = "s1", risk_score = 85, last_threat_time = NOW })
     check("stored score alone (no fresh signal) still diverts", d.target == "honeypot")
 end
 
@@ -220,7 +220,7 @@ do
     local d = route({ uri = "/wp-content/plugins/woocommerce-payments/readme.txt" })
     check("hyphenated vulnerable plugin path -> honeypot",
           d.target == "honeypot" and reason(d) == "vulnerable_plugin_access")
-    check("plugin access floors score at 60", d.session_data.threat_score == 60)
+    check("plugin access floors score at 60", d.session_data.risk_score == 60)
     d = route({ uri = "/wp-content/plugins/woocommerce-payments/assets/app.js" })
     check("static asset inside a vulnerable plugin -> production", d.target == "production")
 end
@@ -259,7 +259,7 @@ do
     d = route({ uri = "/?q=<b>" }, { score = 20, suspicious = true, patterns_matched = { "xss" } }, s)
     check("suspicious request under threshold stays on production", d.target == "production")
     check("suspicious request is appended to the session log",
-          #d.session_data.suspicious_activities == 1 and d.session_data.suspicious_activities[1].threat_score == 20)
+          #d.session_data.suspicious_activities == 1 and d.session_data.suspicious_activities[1].risk_score == 20)
 end
 
 print("Stage 9: rapid automation")
@@ -283,7 +283,7 @@ print("Stage ordering")
 do
     local d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
                     { score = 90, cve_matched = { "CVE-2023-28121" }, ip_reputation = 80 })
-    check("threshold beats CVE, plugin and reputation", reason(d) == "high_threat_score")
+    check("threshold beats CVE, plugin and reputation", reason(d) == "high_risk_score")
     d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
               { score = 10, cve_matched = { "CVE-2023-28121" }, ip_reputation = 80 })
     check("CVE beats plugin path and reputation", reason(d) == "cve_pattern_match")
@@ -301,7 +301,7 @@ print()
 print("Decision trace for the access log")
 do
     local d = route({ uri = "/?id=1" }, { score = 30, patterns_matched = { "union select" } },
-        { id = "s1", created_at = NOW - 60, request_count = 3, threat_score = 20, offenses = 1,
+        { id = "s1", created_at = NOW - 60, request_count = 3, risk_score = 20, offenses = 1,
           last_threat_time = NOW - 10 })
     check("trace is attached to the decision", type(d.trace) == "table")
     check("trace keeps this request's own score", d.trace.request_score == "30")

@@ -1,4 +1,4 @@
--- shared_ip_rules.lua - Keep one attacker's IP reputation off their NAT neighbours
+-- shared_ip_rules.lua - Keep one user's IP reputation off their NAT neighbours
 --
 -- PURPOSE:
 --   Many users can share one public address (carrier-grade NAT on mobile
@@ -15,8 +15,8 @@
 --      weight to a session's own signals.
 --   2. When the address is visibly shared -- at least shared_ip_sessions
 --      distinct sessions active on it within shared_ip_window seconds -- it
---      contributes nothing. One attacker behind a CGNAT then cannot push
---      anyone else's score up; the attacker is still caught by their own
+--      contributes nothing. One user behind a CGNAT then cannot push
+--      anyone else's score up; the user is still caught by their own
 --      session's signals (CVE patterns, scanners, brute force, ...).
 --
 --   A negative contribution (the operator's IP whitelist) passes through

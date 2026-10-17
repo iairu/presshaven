@@ -1,4 +1,4 @@
-"""Tests for core/kibana_timeline.py: the exploit report's Kibana request
+"""Tests for core/kibana_timeline.py: the pattern report's Kibana request
 timeline objects and URL.
 
     cd dashboard && python3 -m unittest discover -s tests -v
@@ -22,7 +22,7 @@ class KibanaTimelineTests(unittest.TestCase):
                          [("visualization", kt.VIZ_ID), ("dashboard", kt.DASHBOARD_ID)])
         # Never the Honeypot dashboards' ids (siem/kibana/build_dashboards.py).
         for o in objs:
-            self.assertTrue(o["id"].startswith("exploit-report-"))
+            self.assertTrue(o["id"].startswith("pattern-report-"))
         vis = json.loads(objs[0]["attributes"]["visState"])
         hist = next(a for a in vis["aggs"] if a["type"] == "date_histogram")
         self.assertEqual(hist["params"]["interval"], kt.BUCKET)

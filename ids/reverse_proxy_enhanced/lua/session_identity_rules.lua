@@ -1,10 +1,10 @@
--- session_identity_rules.lua - Pure logic for who an attacker is
+-- session_identity_rules.lua - Pure logic for who a user is
 --
 -- PURPOSE:
---   Attackers are told apart by their SESSION, not by their IP address: two
---   attackers behind one NAT address are two sessions (two honeypot pools),
---   and an attacker keeps their session when their address changes. That
---   only holds if the attacker can neither edit their session nor shed it.
+--   Users are told apart by their SESSION, not by their IP address: two
+--   users behind one NAT address are two sessions (two honeypot pools),
+--   and a user keeps their session when their address changes. That
+--   only holds if the user can neither edit their session nor shed it.
 --   Two mechanisms, used together:
 --
 --   1. Signed session cookie (can't be edited or forged).
@@ -24,22 +24,22 @@
 --      none of these, so the same client lands back in its own session. The
 --      client IP is one more input by default (recovery_uses_ip): without it,
 --      every visitor running the same browser build would collapse into one
---      session, sending real customers into an attacker's honeypot. IP is
+--      session, sending real customers into a user's honeypot. IP is
 --      only ever part of this recovery key -- two clients with different
 --      fingerprints behind one IP are still separate sessions.
 --
 --   Shared addresses (carrier-grade NAT): two users on one public address who
 --   run the identical browser build with the same languages produce the same
---   recovery key. To keep a neighbour from being merged into an attacker's
+--   recovery key. To keep a neighbour from being merged into a user's
 --   session, the key also carries the low-entropy client hints Chromium sends
 --   on every HTTPS request (Sec-CH-UA brand list, platform, mobile), and the
 --   fingerprint -> session binding only lives recovery_window seconds after
 --   the session's last request (session_handler.bind_fingerprint_to_session).
---   An attacker who clears cookies mid-attack is still recovered; a
+--   A user who clears cookies mid-attack is still recovered; a
 --   neighbour with an identical browser is only merged if they arrive while
 --   that session is active.
 --
---   What this cannot do: an attacker who clears storage AND changes client
+--   What this cannot do: a user who clears storage AND changes client
 --   (another browser or tool, a different TLS stack or headers) presents a
 --   new fingerprint and starts a new session. No server-side mechanism can
 --   link two clients that share nothing.
@@ -167,7 +167,7 @@ end
 --- consecutive connections. Left in, the recovery key changed with every new
 --- connection, so a client that cleared its cookies (clearing site data also
 --- closes its connections) was only recovered when it happened to reuse one,
---- and a diverted attacker could walk back to production.
+--- and a diverted user could walk back to production.
 function _M.strip_grease(list)
     if type(list) ~= "string" or list == "" then
         return list

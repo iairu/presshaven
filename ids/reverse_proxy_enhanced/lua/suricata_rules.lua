@@ -3,11 +3,11 @@
 --
 -- PURPOSE:
 --   Suricata alerts feed threat_intel.threat_ips (read by
---   threat_analyzer.check_ip_reputation, gating router.lua's Stage 6 "IP
+--   pattern_analyzer.check_ip_reputation, gating router.lua's Stage 6 "IP
 --   reputation" honeypot diversion). This module holds the pure, testable
 --   pieces of that pipeline: parsing one eve.json line into an alert record
 --   (or nil for the non-alert event types eve.json interleaves -- flow,
---   netflow, http, dns, tls, ...), and turning an alert into a threat-score
+--   netflow, http, dns, tls, ...), and turning an alert into a risk-score
 --   delta and a human-readable reason string.
 --
 -- WHY eve.json, NOT fast.log:
@@ -20,8 +20,8 @@
 --   received the classification TEXT (e.g. "Attempted Denial of Service"),
 --   never a real IP address. Confirmed live against a real fast.log line
 --   before this fix: threat_ips ended up keyed by that string, not the
---   attacker's IP, so Suricata alerts never actually reached the IP
---   reputation gate for the real attacker. eve.json is structured JSON --
+--   user's IP, so Suricata alerts never actually reached the IP
+--   reputation gate for the real user. eve.json is structured JSON --
 --   src_ip, alert.signature, alert.severity, alert.category are named
 --   fields, not positionally inferred, so this entire bug class can't
 --   recur.
@@ -38,7 +38,7 @@
 --   The two never correlate in this same-host test setup, so a
 --   Suricata-flagged score currently accumulates against an address
 --   router.lua's remote_ip never actually sees, and Stage 6 never fires
---   from it locally. For genuine external attacker traffic (the real
+--   from it locally. For genuine external user traffic (the real
 --   target use case -- see ARCHITECTURE.md's two-host deployment) this is
 --   expected to work correctly: Docker's DNAT-based port publishing
 --   preserves the source IP on the client->host leg, so Suricata should
@@ -104,7 +104,7 @@ local SEVERITY_SCORE = {
 }
 local DEFAULT_SEVERITY_SCORE = 10
 
--- Ceiling matching threat_analyzer.check_ip_reputation's known_threat scale
+-- Ceiling matching pattern_analyzer.check_ip_reputation's known_threat scale
 -- (0-100) -- a single severity-1 alert plus one prior alert of any severity
 -- is already enough to cross Stage 6's >50 gate, by design.
 local MAX_SCORE = 100
@@ -218,7 +218,7 @@ end
 ---
 --- Added after confirming live that a stale/false-positive Suricata alert
 --- permanently poisoned an IP's reputation contribution: check_ip_
---- reputation() (threat_analyzer.lua) used the raw stored score forever,
+--- reputation() (pattern_analyzer.lua) used the raw stored score forever,
 --- with no way for an IP to "age out" of a bad reputation short of
 --- manually clearing Redis. That's the same class of bug already fixed
 --- for session-level scoring (router_rules.decayed_score()) -- this is
@@ -233,7 +233,7 @@ end
 --- (capped at MAX_SCORE) and is what's actually stored in Redis/
 --- threat_intel, while the decayed number returned here -- not raw_score
 --- itself -- is what check_ip_reputation() actually adds into a request's
---- threat_result.score. Reading Redis's threat_ips directly (e.g. via the
+--- pattern_result.score. Reading Redis's threat_ips directly (e.g. via the
 --- dashboard's Redis page) shows raw_score, so seeing a bigger number
 --- there than in a request's logged score contribution is expected, not a
 --- bug -- this is the difference.

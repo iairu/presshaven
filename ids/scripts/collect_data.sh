@@ -12,7 +12,7 @@
 #
 # DATA SOURCES COLLECTED:
 #   1. Redis session store
-#      - All active and recently-expired attacker sessions (honeypot_bound=true)
+#      - All active and recently-expired user sessions (honeypot_bound=true)
 #      - Honeynet pool assignments (honeypot_pool_session:* keys)
 #      - Suricata alert feed (suricata_alerts list)
 #      - Honeytoken usage records (honeytoken:* keys)
@@ -24,10 +24,10 @@
 #
 #   3. Nginx security log
 #      - All log lines from security.log (custom format with route_decision,
-#        threat_score, session_id, and suspicious fields)
+#        risk_score, session_id, and suspicious fields)
 #
 #   4. Honeypot MySQL pool-tracking tables
-#      - honeypot_ip_assignments: attacker IP → pool mappings + request counts
+#      - honeypot_ip_assignments: user IP → pool mappings + request counts
 #      - honeypot_pool_events: fine-grained routing event timeline
 #      - Exported as CSV and NDJSON
 #
@@ -38,7 +38,7 @@
 #   ./research_export/YYYY-MM-DD_HH-MM-SS/
 #     metadata.json              - Collection metadata (timestamps, versions, counts)
 #     sessions/
-#       attacker_sessions.ndjson - One JSON object per honeypot-bound session
+#       client_sessions.ndjson - One JSON object per honeypot-bound session
 #     pool/
 #       assignments.ndjson       - IP → pool assignments from Redis
 #       assignments.csv          - Same data in CSV format
@@ -47,7 +47,7 @@
 #       suricata_summary.json    - Alert counts grouped by CVE/signature
 #     nginx/
 #       security_events.ndjson   - Parsed Nginx security.log entries
-#       routing_summary.json     - Counts: production vs honeypot, by threat score
+#       routing_summary.json     - Counts: production vs honeypot, by risk score
 #     database/
 #       ip_assignments.csv       - honeypot_ip_assignments table dump
 #       pool_events.csv          - honeypot_pool_events table dump
@@ -249,14 +249,14 @@ maybe_compress() {
 }
 
 # ===========================================================================
-# 1. Redis: attacker sessions
+# 1. Redis: user sessions
 # ===========================================================================
-header "Collecting Redis: attacker sessions"
+header "Collecting Redis: user sessions"
 
 if [ "$SKIP_REDIS" -eq 1 ] || [ "$HAVE_DOCKER" -eq 0 ]; then
     warn "Skipping Redis session export"
 else
-    SESSION_FILE="${OUTDIR}/sessions/attacker_sessions.ndjson"
+    SESSION_FILE="${OUTDIR}/sessions/client_sessions.ndjson"
     : > "$SESSION_FILE"
 
     # Retrieve all session keys from Redis.
@@ -292,7 +292,7 @@ else
     done
 
     SESSIONS_EXPORTED=$SESSION_COUNT
-    ok "Exported ${SESSION_COUNT} honeypot-bound sessions → sessions/attacker_sessions.ndjson"
+    ok "Exported ${SESSION_COUNT} honeypot-bound sessions → sessions/client_sessions.ndjson"
     maybe_compress "$SESSION_FILE"
 fi
 
@@ -508,7 +508,7 @@ if [ -n "$NGINX_LOG" ] && [ -f "$NGINX_LOG" ]; then
     #   $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
     #   "$http_referer" "$http_user_agent" "$http_x_forwarded_for"
     #   session_id="$cookie_PHPSESSID" route="$route_decision"
-    #   threat_score="$threat_score" suspicious="$suspicious_activity"
+    #   risk_score="$risk_score" suspicious="$suspicious_activity"
     NGINX_COUNT=0
 
     awk '
@@ -521,16 +521,17 @@ if [ -n "$NGINX_LOG" ] && [ -f "$NGINX_LOG" ]; then
         status=$(NF-5)  # fragile fallback; override with regex
         match($0, / ([0-9]{3}) /, st)
         match($0, /route="([^"]+)"/, rt)
-        match($0, /threat_score="([^"]+)"/, thr)
+        # threat_score= in lines logged before the rename to risk_score.
+        match($0, /(risk|threat)_score="([^"]+)"/, thr)
         match($0, /suspicious="([^"]+)"/, sus)
 
         ip_clean=ip
         route=rt[1]
-        score=thr[1]
+        score=thr[2]
         susp=sus[1]
 
         if (route == "honeypot" || susp == "true") {
-            printf "{\"ip\":\"%s\",\"route\":\"%s\",\"threat_score\":\"%s\",\"suspicious\":\"%s\",\"raw_line\":\"%s\"}\n",
+            printf "{\"ip\":\"%s\",\"route\":\"%s\",\"risk_score\":\"%s\",\"suspicious\":\"%s\",\"raw_line\":\"%s\"}\n",
                 ip_clean, route, score, susp, gensub(/"/, "\\\\\"", "g", $0)
         }
     }
@@ -540,20 +541,20 @@ if [ -n "$NGINX_LOG" ] && [ -f "$NGINX_LOG" ]; then
     NGINX_EVENTS_EXPORTED=$NGINX_COUNT
     ok "Exported ${NGINX_COUNT} honeypot-routed Nginx events → nginx/security_events.ndjson"
 
-    # Routing summary: count production vs honeypot, distribution of threat scores.
+    # Routing summary: count production vs honeypot, distribution of risk scores.
     if [ "$HAVE_JQ" -eq 1 ] && [ -s "$NGINX_NDJSON" ]; then
         jq -s '
             {
                 total:           length,
                 honeypot_routed: (map(select(.route == "honeypot")) | length),
                 production_routed: (map(select(.route == "production")) | length),
-                avg_threat_score: (map(.threat_score | tonumber? // 0) | add / length),
+                avg_risk_score: (map(.risk_score | tonumber? // 0) | add / length),
                 score_buckets: {
-                    "0":     (map(select((.threat_score | tonumber? // 0) == 0)) | length),
-                    "1-30":  (map(select((.threat_score | tonumber? // 0) >= 1  and (.threat_score | tonumber? // 0) <= 30)) | length),
-                    "31-60": (map(select((.threat_score | tonumber? // 0) >= 31 and (.threat_score | tonumber? // 0) <= 60)) | length),
-                    "61-79": (map(select((.threat_score | tonumber? // 0) >= 61 and (.threat_score | tonumber? // 0) <= 79)) | length),
-                    "80+":   (map(select((.threat_score | tonumber? // 0) >= 80)) | length)
+                    "0":     (map(select((.risk_score | tonumber? // 0) == 0)) | length),
+                    "1-30":  (map(select((.risk_score | tonumber? // 0) >= 1  and (.risk_score | tonumber? // 0) <= 30)) | length),
+                    "31-60": (map(select((.risk_score | tonumber? // 0) >= 31 and (.risk_score | tonumber? // 0) <= 60)) | length),
+                    "61-79": (map(select((.risk_score | tonumber? // 0) >= 61 and (.risk_score | tonumber? // 0) <= 79)) | length),
+                    "80+":   (map(select((.risk_score | tonumber? // 0) >= 80)) | length)
                 }
             }
         ' "$NGINX_NDJSON" > "${OUTDIR}/nginx/routing_summary.json" 2>/dev/null \
@@ -653,7 +654,7 @@ TIMELINE="${OUTDIR}/combined/attack_timeline.ndjson"
 if [ "$HAVE_JQ" -eq 1 ]; then
     # Tag and combine all available NDJSON files.
     for f in \
-        "${OUTDIR}/sessions/attacker_sessions.ndjson" \
+        "${OUTDIR}/sessions/client_sessions.ndjson" \
         "${OUTDIR}/alerts/suricata_alerts.ndjson" \
         "${OUTDIR}/alerts/redis_alert_feed.ndjson" \
         "${OUTDIR}/nginx/security_events.ndjson" \
@@ -692,7 +693,7 @@ cat > "${OUTDIR}/metadata.json" <<EOF
     "honeytokens":        ${TOKENS_EXPORTED}
   },
   "output_files": {
-    "sessions":           "sessions/attacker_sessions.ndjson",
+    "sessions":           "sessions/client_sessions.ndjson",
     "pool_assignments":   "pool/assignments.ndjson",
     "pool_assignments_csv": "pool/assignments.csv",
     "suricata_alerts":    "alerts/suricata_alerts.ndjson",
@@ -723,6 +724,6 @@ printf "  DB rows          : %d\n" "${DB_ROWS_EXPORTED}"
 printf "  Honeytokens used : %d\n" "${TOKENS_EXPORTED}"
 printf "\nTo open in Python:\n"
 printf "  import pandas as pd, json\n"
-printf "  sessions = pd.read_json('%s/sessions/attacker_sessions.ndjson', lines=True)\n" "${OUTDIR}"
+printf "  sessions = pd.read_json('%s/sessions/client_sessions.ndjson', lines=True)\n" "${OUTDIR}"
 printf "  alerts   = pd.read_json('%s/alerts/suricata_alerts.ndjson', lines=True)\n" "${OUTDIR}"
 printf "  timeline = pd.read_json('%s/combined/attack_timeline.ndjson', lines=True)\n\n" "${OUTDIR}"

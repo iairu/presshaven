@@ -33,13 +33,13 @@ class ExtrasPage(QWidget):
 
         intro = QLabel(
             "Auto-generated PDF exports, all rendered in the same Baskerville face as the "
-            "exploit report:<br/>"
+            "pattern report:<br/>"
             "&bull; <b>Implementation chapter</b> &ndash; the project's more interesting "
             "algorithms, pulled from the source and condensed (comments, docstrings, debug "
             "logging and blank runs removed), plus a services overview and a Global Visualization shot.<br/>"
             "&bull; <b>Architecture &amp; services</b> &ndash; every service on this branch with "
             "its role, plus the live Global Visualization page.<br/>"
-            "&bull; <b>Exploit / CVE matrix</b> &ndash; a reference table of every exploit "
+            "&bull; <b>Pattern / CVE matrix</b> &ndash; a reference table of every pattern "
             "preset the dashboard can fire.")
         intro.setWordWrap(True)
         intro.setStyleSheet("color: #aaaaaa;")
@@ -61,10 +61,10 @@ class ExtrasPage(QWidget):
             needs_health=True))
         toolbar.addWidget(self.arch_btn)
 
-        self.cve_btn = QPushButton("Exploit / CVE matrix (PDF)")
-        self.cve_btn.setToolTip("Reference table of every exploit preset the dashboard can fire.")
+        self.cve_btn = QPushButton("Pattern / CVE matrix (PDF)")
+        self.cve_btn.setToolTip("Reference table of every pattern preset the dashboard can fire.")
         self.cve_btn.clicked.connect(lambda: self._run_export(
-            "exploit / CVE matrix", "cve_coverage.pdf",
+            "pattern / CVE matrix", "cve_coverage.pdf",
             lambda path, hs: thesis_export.render_cve_matrix_pdf(path),
             needs_health=False))
         toolbar.addWidget(self.cve_btn)

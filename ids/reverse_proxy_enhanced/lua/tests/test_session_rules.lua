@@ -40,25 +40,25 @@ do
 
     anomalies = rules.analyze_session_anomalies(
         base, "1.2.3.4", "sqlmap/1.0", { "sqlmap", "nikto" }, 1000)
-    local found_malicious = false
+    local found_flagged = false
     for _, a in ipairs(anomalies) do
-        if a == "malicious_user_agent" then found_malicious = true end
+        if a == "flagged_user_agent" then found_flagged = true end
     end
-    check("malicious UA match is case-insensitive substring", found_malicious)
+    check("flagged UA match is case-insensitive substring", found_flagged)
     -- sqlmap UA also differs from base's "curl/8.0" -> both anomalies fire
-    check("UA change AND malicious UA both fire", #anomalies == 2)
+    check("UA change AND flagged UA both fire", #anomalies == 2)
 
     anomalies = rules.analyze_session_anomalies(
         base, "1.2.3.4", "clean-browser/1.0", { "sqlmap" }, 1000)
-    found_malicious = false
+    found_flagged = false
     for _, a in ipairs(anomalies) do
-        if a == "malicious_user_agent" then found_malicious = true end
+        if a == "flagged_user_agent" then found_flagged = true end
     end
-    check("clean UA against malicious list does not false-positive", not found_malicious)
+    check("clean UA against flagged list does not false-positive", not found_flagged)
 
     local rapid = { request_count = 6, last_activity = 1000 }
     anomalies = rules.analyze_session_anomalies(rapid, nil, nil, nil, 1000)
-    found_malicious = false
+    found_flagged = false
     local found_rapid = false
     for _, a in ipairs(anomalies) do
         if a == "rapid_requests" then found_rapid = true end
@@ -88,48 +88,48 @@ do
           rules.should_route_to_honeypot(nil, 80, false, 1000) == false)
 
     check("already honeypot_bound short-circuits true",
-          rules.should_route_to_honeypot({ honeypot_bound = true, threat_score = 0 }, 80, false, 1000) == true)
+          rules.should_route_to_honeypot({ honeypot_bound = true, risk_score = 0 }, 80, false, 1000) == true)
 
-    check("threat_score >= threshold returns true",
-          rules.should_route_to_honeypot({ threat_score = 80 }, 80, false, 1000) == true)
+    check("risk_score >= threshold returns true",
+          rules.should_route_to_honeypot({ risk_score = 80 }, 80, false, 1000) == true)
 
-    check("threat_score just below threshold returns false",
-          rules.should_route_to_honeypot({ threat_score = 79 }, 80, false, 1000) == false)
+    check("risk_score just below threshold returns false",
+          rules.should_route_to_honeypot({ risk_score = 79 }, 80, false, 1000) == false)
 
     -- Matches original session_handler.lua behavior exactly: the whitelist
-    -- check sits AFTER the threat_score check, so it only exempts the
+    -- check sits AFTER the risk_score check, so it only exempts the
     -- softer heuristics below it (suspicious_activities count, rapid
-    -- requests) -- it does NOT override an already-crossed threat_score
+    -- requests) -- it does NOT override an already-crossed risk_score
     -- threshold. Confirmed against the pre-extraction source before writing
     -- this test.
-    check("threat_score >= threshold still wins even when whitelisted",
-          rules.should_route_to_honeypot({ threat_score = 100 }, 80, true, 1000) == true)
+    check("risk_score >= threshold still wins even when whitelisted",
+          rules.should_route_to_honeypot({ risk_score = 100 }, 80, true, 1000) == true)
 
     check("whitelisting DOES exempt the suspicious_activities heuristic",
           rules.should_route_to_honeypot(
-              { threat_score = 0, suspicious_activities = { "a", "b", "c" } }, 80, true, 1000) == false)
+              { risk_score = 0, suspicious_activities = { "a", "b", "c" } }, 80, true, 1000) == false)
 
     check(">= 3 suspicious activities returns true",
           rules.should_route_to_honeypot(
-              { threat_score = 0, suspicious_activities = { "a", "b", "c" } }, 80, false, 1000) == true)
+              { risk_score = 0, suspicious_activities = { "a", "b", "c" } }, 80, false, 1000) == true)
 
     check("2 suspicious activities does not trip",
           rules.should_route_to_honeypot(
-              { threat_score = 0, suspicious_activities = { "a", "b" } }, 80, false, 1000) == false)
+              { risk_score = 0, suspicious_activities = { "a", "b" } }, 80, false, 1000) == false)
 
     -- 21 req/s over a 10s session (created_at=990, now=1000) exceeds the
     -- 20 req/s threshold.
     check("sustained >20 req/s returns true",
           rules.should_route_to_honeypot(
-              { threat_score = 0, request_count = 210, created_at = 990 }, 80, false, 1000) == true)
+              { risk_score = 0, request_count = 210, created_at = 990 }, 80, false, 1000) == true)
 
     check("exactly 20 req/s does not trip (> not >=)",
           rules.should_route_to_honeypot(
-              { threat_score = 0, request_count = 200, created_at = 990 }, 80, false, 1000) == false)
+              { risk_score = 0, request_count = 200, created_at = 990 }, 80, false, 1000) == false)
 
     check("zero session_duration guarded against divide-by-zero",
           rules.should_route_to_honeypot(
-              { threat_score = 0, request_count = 5, created_at = 1000 }, 80, false, 1000) == false)
+              { risk_score = 0, request_count = 5, created_at = 1000 }, 80, false, 1000) == false)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

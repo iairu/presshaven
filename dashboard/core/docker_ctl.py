@@ -297,7 +297,7 @@ def remote_for(project: str, state: AppState) -> RemoteConfig | None:
 def target_for(project: str, state: AppState) -> Target:
     """The ONE target a single-target feature should talk to for `project`:
     its remote host when one is configured, otherwise local. Used by pages
-    that don't offer a local/remote choice (Exploits, Kibana, the
+    that don't offer a local/remote choice (Patterns, Kibana, the
     security feed)."""
     return Target(project=project, remote=remote_for(project, state))
 

@@ -41,7 +41,7 @@ transforms:
       # .message for nginx_access/nginx_security is a raw combined-log-format
       # line (see ids/reverse_proxy_enhanced/nginx.conf's
       # log_format main/security) -- previously shipped as one opaque text
-      # blob, meaning none of it (status code, route decision, threat score)
+      # blob, meaning none of it (status code, route decision, risk score)
       # was actually queryable/aggregatable in Kibana. Added this session
       # specifically so real dashboards (threat overview, session analysis)
       # have real fields to build on instead of just Suricata's already-
@@ -63,11 +63,13 @@ transforms:
       }
 
       if .log_type == "nginx_security" {
+        # threat_score= is the field's name in lines logged before the
+        # rename to risk_score; both land in .risk_score.
         sec, sec_err = parse_regex(.message,
-          r'session_id="(?P<session_id>[^"]*)" route="(?P<route>[^"]*)" threat_score="(?P<threat_score>[^"]*)" suspicious="(?P<suspicious>[^"]*)"')
+          r'session_id="(?P<session_id>[^"]*)" route="(?P<route>[^"]*)" (?:risk|threat)_score="(?P<risk_score>[^"]*)" suspicious="(?P<suspicious>[^"]*)"')
         if sec_err == null {
           . = merge(., sec)
-          .threat_score = to_int(.threat_score) ?? 0
+          .risk_score = to_int(.risk_score) ?? 0
           .suspicious = to_bool(.suspicious) ?? false
           # nginx's "-" placeholder for an unset PHPSESSID cookie isn't a
           # real session id -- normalize it to actually-absent rather than
@@ -91,9 +93,9 @@ transforms:
           .request_score = to_int(.request_score) ?? 0
           .decayed_score = to_int(.decayed_score) ?? 0
           .offenses = to_int(.offenses) ?? 0
-          # Points the effective threat_score gained from history rather
+          # Points the effective risk_score gained from history rather
           # than from this request -- how much decay still has to wear off.
-          carried = (to_int(.threat_score) ?? 0) - .request_score
+          carried = (to_int(.risk_score) ?? 0) - .request_score
           if carried < 0 { carried = 0 }
           .carried_score = carried
           if .patterns == "-" {
@@ -112,8 +114,8 @@ transforms:
       ##############################################################
 
       # init.lua's _G.utils.log_security_event() (honeytoken hits, session
-      # compromise, CVE pattern matches, high-threat requests, honeypot
-      # routing decisions, attacker-sophistication classification) writes a
+      # compromise, CVE pattern matches, high-risk requests, honeypot
+      # routing decisions, user-sophistication classification) writes a
       # JSON blob via ngx.log(), which lands in nginx's error log with
       # nginx's own request-context suffix appended after it, e.g.:
       #   ... [lua] init.lua:523: log_security_event(): SECURITY_EVENT:
@@ -121,7 +123,7 @@ transforms:
       #   server: localhost, request: "GET /x HTTP/2.0", host: "localhost"
       # This was previously shipped as nginx_error's opaque `message` text
       # like nginx_access/nginx_security used to be (see above) -- meaning
-      # none of session_id/classification/threat scores/CVEs was queryable,
+      # none of session_id/classification/risk scores/CVEs was queryable,
       # which is exactly the session-level and attack-pattern data the
       # "session analysis" and "attack patterns" Kibana dashboards need
       # (README §6/§8 listed both as blocked on this). Fixed by parsing the
@@ -151,7 +153,7 @@ transforms:
                 .session_id = .security_event.session_id
               }
               # Some events log an empty array for these when nothing
-              # matched (e.g. high_threat_request's cves when the score
+              # matched (e.g. high_risk_request's cves when the score
               # came from patterns alone) -- confirmed live that whichever
               # doc reaches ES FIRST for a given day's index locks that
               # field's mapping from its own shape, and an empty array []
@@ -178,30 +180,30 @@ transforms:
       }
 
       ###########################################################
-      ###### THREAT INTELLIGENCE: ATTACKER, TOOL, ATT&CK, CVE ######
+      ###### THREAT INTELLIGENCE: USER, TOOL, ATT&CK, CVE ######
       ###########################################################
 
-      # Gives every attacker-facing event (proxy-scored requests, the
+      # Gives every user-facing event (proxy-scored requests, the
       # proxy's own security events, Suricata alerts) the same indicator
       # fields, so the "Threat Intelligence" Kibana dashboard can pivot on
-      # one attacker across both sensors and say WHAT they did in MITRE
+      # one user across both sensors and say WHAT they did in MITRE
       # ATT&CK terms rather than in this project's internal pattern names:
-      #   attacker_ip            the client (nginx remote_addr / Suricata src_ip)
+      #   client_ip            the client (nginx remote_addr / Suricata src_ip)
       #   sensor                 reverse_proxy | suricata
-      #   attacker_tool          tool fingerprinted from the User-Agent
-      #   attacker_tool_class    offensive_scanner | scripted_client |
+      #   client_tool          tool fingerprinted from the User-Agent
+      #   client_tool_class    offensive_scanner | scripted_client |
       #                          search_crawler | browser | unknown
-      #   threat_verdict         malicious | suspicious | benign
+      #   risk_verdict         flagged | suspicious | benign
       #   threat.technique.id/.name, threat.tactic.name   (ECS field names)
       #   attack_technique       "T1190 Exploit Public-Facing Application"
       #   attack_tactic          "03 Initial Access" (sorts in kill-chain order)
       #   threat.stage           furthest ATT&CK tactic as its column number
       #                          in the Enterprise matrix (1 Reconnaissance ..
-      #                          14 Impact), so max() per attacker says how
+      #                          14 Impact), so max() per user says how
       #                          far along the kill chain they got
       #   vulnerability.id       CVE ids named by any sensor
       # Only the request-level events are mapped to techniques: the proxy's
-      # cve_pattern_detected / high_threat_request / routing_to_honeypot
+      # cve_pattern_detected / high_risk_request / routing_to_honeypot
       # events restate a request nginx_security already logged, so mapping
       # them too would count each technique twice. honeytoken_used and
       # session_compromised add something the request log can't show.
@@ -242,7 +244,7 @@ transforms:
       }
 
       if ti_ip != "" {
-        .attacker_ip = ti_ip
+        .client_ip = ti_ip
         ti_ind = downcase(ti_ind)
         ua = downcase(ti_ua)
 
@@ -281,11 +283,11 @@ transforms:
         } else if match(ua, r'bot|crawler|spider|scanner') { tool = "other bot"; tool_class = "scripted_client"
         } else if match(ua, r'^mozilla/') { tool = "browser"; tool_class = "browser"
         } else { tool = "other"; tool_class = "scripted_client" }
-        .attacker_tool = tool
-        .attacker_tool_class = tool_class
+        .client_tool = tool
+        .client_tool_class = tool_class
 
         # -- MITRE ATT&CK techniques -------------------------------------
-        # Matched against this project's pattern names (threat_rules.lua),
+        # Matched against this project's pattern names (pattern_rules.lua),
         # the proxy's security event types and Suricata signature text
         # (ids/suricata_rules/local.rules). "id|name|tactic|stage".
         techs = []
@@ -380,15 +382,15 @@ transforms:
 
         # -- Verdict --------------------------------------------------------
         if .sensor == "suricata" {
-          .threat_verdict = if (to_int(.alert.severity) ?? 3) <= 2 { "malicious" } else { "suspicious" }
+          .risk_verdict = if (to_int(.alert.severity) ?? 3) <= 2 { "flagged" } else { "suspicious" }
         } else if .log_type == "nginx_error" {
-          .threat_verdict = "malicious"
+          .risk_verdict = "flagged"
         } else if .route == "honeypot" || .uri_class == "attack_pattern" || length(techs) > 0 || tool_class == "offensive_scanner" {
-          .threat_verdict = "malicious"
-        } else if (to_int(.threat_score) ?? 0) > 0 {
-          .threat_verdict = "suspicious"
+          .risk_verdict = "flagged"
+        } else if (to_int(.risk_score) ?? 0) > 0 {
+          .risk_verdict = "suspicious"
         } else {
-          .threat_verdict = "benign"
+          .risk_verdict = "benign"
         }
       }
 

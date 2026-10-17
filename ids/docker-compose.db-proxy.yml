@@ -159,7 +159,7 @@ services:
 
       # Clone production -> honeypot ONLY if the honeypot has no WordPress
       # schema yet (fresh volume). This never clobbers a honeypot that already
-      # holds its own attacker-diverged state on a warm restart.
+      # holds its own user-diverged state on a warm restart.
       HAS_SCHEMA=\$$(mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$$MYSQL_DATABASE' AND table_name='wp_options'\" 2>/dev/null || echo 0)
       if [ \"\$$HAS_SCHEMA\" = '0' ]; then
         echo 'Cloning production database into the honeypot database...'
@@ -183,7 +183,7 @@ services:
       # frontend visibly renders 'Demo Honeypot eShop' whenever the DB proxy
       # (wp-content/db.php) routes a request to the honeypot database, vs
       # 'Fernhill Coffee Roasters' from production -- a simple, at-a-glance demo on the
-      # Exploits dashboard page that the same frontend is switching databases
+      # Patterns dashboard page that the same frontend is switching databases
       # correctly. Applied on every run (idempotent) and NOT overwritten by
       # honeypot_content_sync (which only mirrors content tables, never
       # wp_options). Only the blogname differs; everything else stays a faithful
@@ -206,7 +206,7 @@ services:
   # after its one-time initial seed (init_setup/honeypot_db_migration above).
   # Strict allow-list of content tables only -- never touches wp_users or any
   # WooCommerce order/customer/payment table; see the script's header comment
-  # for the full non-destructive apply strategy and the exploit-gating
+  # for the full non-destructive apply strategy and the pattern-gating
   # coordination with pool_router.lua's is_pool_healthy().
   #
   # Built from mysql:5.7 purely for its mysql/mysqldump client tools (same
@@ -249,7 +249,7 @@ services:
   # ---------------------------------------------------------------------------
   # Honeypot database pool manager
   # ---------------------------------------------------------------------------
-  # One honeypot database per attacker: pool_router.lua gives each new attacker
+  # One honeypot database per user: pool_router.lua gives each new user
   # IP a free ready database exclusively (the proxy names it in X-Honeypot-DB,
   # wp-content/db.php connects to it) and queues a wake-up on Redis; this service
   # then clones another database (honeypot_database_N, N > 1) from production so a
@@ -286,7 +286,7 @@ services:
       - POOL_SPARES=${POOL_SPARES:-1}
       - POOL_MAX=${POOL_MAX:-10}
       # Resource budget for all pools together (by their containers' limits);
-      # pools are built per attacker session until it is reached, then new
+      # pools are built per user session until it is reached, then new
       # sessions share the ready pools round-robin. 0 = no budget.
       - POOL_MAX_MEMORY_MB=${POOL_MAX_MEMORY_MB:-12288}
       - POOL_MAX_CPUS=${POOL_MAX_CPUS:-12}
@@ -409,7 +409,7 @@ services:
       # X-DB-Backend/X-DB-Host/X-DB-Probe response headers (which prove, via a
       # real SELECT, which database container served the request). Same secret
       # the reverse proxy uses for its own debug headers; never emitted without
-      # it, so a real attacker never learns which database they hit.
+      # it, so a real user never learns which database they hit.
       - INTERNAL_TEST_SECRET=${INTERNAL_TEST_SECRET:-}
       # Turns on wp-content/db.php and the honeypot-db-backend-header
       # mu-plugin. Both are shared files that stay inert without this, so the

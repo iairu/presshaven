@@ -10,7 +10,7 @@
 -- GLOBALS EXPORTED:
 --   _G.config       – Nested table with all tunable parameters (see below).
 --   _G.utils        – Stateless utility functions (IP whitelist check, UUID
---                     generation, threat-score calculation, event logging).
+--                     generation, risk-score calculation, event logging).
 --   _G.redis_pool   – get_connection() / close_connection() wrappers that
 --                     maintain a per-worker keepalive pool to the Redis
 --                     session_store service.
@@ -18,7 +18,7 @@
 -- SHARED DICTIONARIES (declared in nginx.conf lua_shared_dict directives):
 --   sessions        – Worker-local cache of session JSON blobs (10 MB).
 --                     Reduces Redis round-trips on hot paths.
---   threat_intel    – Threat-intelligence data: malicious IPs, malicious
+--   threat_intel    – Threat-intelligence data: flagged IPs, flagged
 --                     user-agents, and backend health-check results (10 MB).
 --   rate_limit      – Per-IP request-rate counters for botnet detection (10 MB).
 --   honeypot_routes – Per-IP pool assignments cached locally for 5 min (1 MB).
@@ -132,7 +132,7 @@ _G.config = {
     --                        Without it, all visitors with the same browser
     --                        build would share one session. The IP never tells
     --                        two sessions apart on its own.
-    --   tamper_score       – Threat score added to a request whose session
+    --   tamper_score       – Risk score added to a request whose session
     --                        cookie was edited or forged.
     -- -----------------------------------------------------------------------
     session = {
@@ -149,14 +149,14 @@ _G.config = {
     },
 
     -- -----------------------------------------------------------------------
-    -- threat: Threat-scoring and routing parameters.
+    -- threat: Risk-scoring and routing parameters.
     --
     --   ip_whitelist       – CIDR ranges or exact IPs that receive a negative
     --                        reputation score (−20) and are never diverted to
     --                        the honeypot.  Should include the operator's admin
     --                        IP, Tailscale tunnel range, and the university/lab
     --                        network used for testing.
-    --   max_threat_score   – Hard cap on the accumulated score (100).  Prevents
+    --   max_risk_score   – Hard cap on the accumulated score (100).  Prevents
     --                        a single extremely high-scoring request from
     --                        distorting per-session rolling averages.
     --   honeypot_threshold – Minimum total score that triggers honeypot routing.
@@ -164,7 +164,7 @@ _G.config = {
     --                        false-positives on aggressive but legitimate REST
     --                        API clients (WooCommerce mobile app, Stripe webhooks).
     --   score_decay_half_life_seconds – How long a honeypot-bound session's
-    --                        stored peak threat_score takes to decay to half
+    --                        stored peak risk_score takes to decay to half
     --                        its value once no new suspicious signal has
     --                        occurred (router.lua Stage 2's "allow production
     --                        again" re-check, router_rules.decayed_score()).
@@ -173,8 +173,8 @@ _G.config = {
     --                        own score -- a single clean request (e.g. just
     --                        loading "/") fully reset a session that had JUST
     --                        triggered a CVE match moments earlier, letting an
-    --                        attacker freely alternate "run exploit" / "visit
-    --                        homepage" to re-run every exploit against
+    --                        user freely alternate "run pattern" / "visit
+    --                        homepage" to re-run every pattern against
     --                        production from a clean slate every time. 300s (5
     --                        min) means a session can't be un-stuck by one
     --                        click, but a genuinely-reformed/false-positived
@@ -188,7 +188,7 @@ _G.config = {
             "fd7a:115c:a1e0::/48", -- Tailscale IPv6
             "10.0.0.0/8",       -- Private networks
         },
-        max_threat_score = 100,
+        max_risk_score = 100,
         honeypot_threshold = 80,  -- Raised from 50 to prevent false positives
         -- Per-address reputation (Suricata alerts, AbuseIPDB) on shared
         -- addresses -- see lua/shared_ip_rules.lua. Everything a client does
@@ -203,7 +203,7 @@ _G.config = {
         -- THREAT_DECAY_ENABLED=false turns threat decay OFF entirely: a
         -- half-life of 0 makes every decay path (router_rules/suricata_rules
         -- decayed_score, decay_policy.decay) return the stored peak unchanged,
-        -- so a session's / IP's threat score persists indefinitely once earned.
+        -- so a session's / IP's risk score persists indefinitely once earned.
         -- Default true, using SCORE_DECAY_HALF_LIFE_SECONDS (or 300).
         score_decay_half_life_seconds = (function()
             local enabled = (os.getenv("THREAT_DECAY_ENABLED") or "true"):lower()
@@ -215,17 +215,17 @@ _G.config = {
         -- Escalation of the decay above (see lua/decay_policy.lua): decay is
         -- slowed based on how much abuse a source has actually committed,
         -- tracked as an uncapped `offenses` count (bumped once per recorded
-        -- attack -- CVE/exploit/admin/upload signals on the session, and each
+        -- attack -- CVE/pattern/admin/upload signals on the session, and each
         -- threat_ips write on the IP -- so it keeps climbing after the 0-100
         -- score has already pinned at 100).
         --   decay_offense_slowdown: each offense multiplies the half-life by
         --     (1 + this), e.g. 0.75 -> 1 offense = 1.75x slower, 4 = 4x.
         --   permaflag_offenses: at/above this many offenses the score stops
-        --     decaying entirely -- a repeat attacker stays flagged forever.
+        --     decaying entirely -- a repeat user stays flagged forever.
         --   permaflag_score: a single request whose score reaches this (i.e. a
-        --     high-threat exploit that maxes it out) also permaflags on its
+        --     high-risk pattern that maxes it out) also permaflags on its
         --     own, without waiting for the offense count. Default == the max
-        --     score, so "landed a real exploit" == "permanently flagged".
+        --     score, so "matched a real pattern" == "permanently flagged".
         decay_offense_slowdown = tonumber(os.getenv("DECAY_OFFENSE_SLOWDOWN")) or 0.75,
         permaflag_offenses = tonumber(os.getenv("PERMAFLAG_OFFENSES")) or 5,
         permaflag_score = tonumber(os.getenv("PERMAFLAG_SCORE")) or 100,
@@ -266,8 +266,8 @@ _G.config = {
         },
         -- suspicious_patterns: Generic OWASP WSTG-INPV attack signatures.
         -- Each pattern is a Lua string pattern (not PCRE) tested against the
-        -- lower-cased request URI.  A match adds +15 to the threat score.
-        -- More specific checks with individual scores live in threat_analyzer.lua.
+        -- lower-cased request URI.  A match adds +15 to the risk score.
+        -- More specific checks with individual scores live in pattern_analyzer.lua.
         suspicious_patterns = {
             -- WSTG-INPV-01: Directory traversal
             "%.%.%/",                    -- ../ traversal
@@ -387,9 +387,9 @@ _G.config = {
     --                  intentionally installed in the honeypot instances but
     --                  absent from the production instance.  Any PHP file access
     --                  inside one of these directories triggers Stage 5 honeypot
-    --                  routing in router.lua regardless of the threat score.
+    --                  routing in router.lua regardless of the risk score.
     --
-    --   cve_patterns – Map of CVE ID → Lua string pattern.  threat_analyzer.lua
+    --   cve_patterns – Map of CVE ID → Lua string pattern.  pattern_analyzer.lua
     --                  checks these against the URI, query string, and request
     --                  headers.  A single match scores +40 (Stage 3 routing).
     --                  Patterns use Lua magic-character escaping (%- for literal
@@ -435,11 +435,11 @@ _G.config = {
     },
 
     -- internal_test_secret: shared secret gating the X-Route-Target /
-    -- X-Threat-Score response headers (see nginx.conf's two
+    -- X-Risk-Score response headers (see nginx.conf's two
     -- header_filter_by_lua_block sites). Those headers exist so the
     -- testing/scenario_*.sh scripts can externally verify routing
     -- decisions, but shipping them on every response to every client
-    -- hands a real attacker (or a blind pentest) the routing/threat-score
+    -- hands a real user (or a blind pentest) the routing/risk-score
     -- oracle for free -- see BLIND_PENTEST_PROTOCOL.md §8.2. When this is
     -- set, the headers are only emitted for requests carrying a matching
     -- X-Internal-Test-Auth header; when unset/empty, the headers are never
@@ -499,7 +499,7 @@ _G.config = {
             ["CVE-2024-50508"] = "file%[path%]",
 
             -- CVE-2024-25600: Bricks Builder unauthenticated RCE via the
-            -- render_element REST endpoint (eval of attacker PHP).
+            -- render_element REST endpoint (eval of user PHP).
             ["CVE-2024-25600"] = "bricks/v1/render_element",
 
             -- CVE-2024-27956: WP Automatic SQL injection through csv.php.
@@ -537,7 +537,7 @@ function _G.utils.is_ip_whitelisted(ip)
 end
 
 --- URL-decode a string (percent-encoding and "+" as space).
---- Shared by threat_analyzer.lua (URI pattern matching) and the
+--- Shared by pattern_analyzer.lua (URI pattern matching) and the
 --- prompt-injection probe stage so both operate on decoded text instead of
 --- each maintaining their own copy of this logic.
 ---
@@ -567,22 +567,22 @@ function _G.utils.generate_uuid()
     end)
 end
 
---- Compute a combined threat score from individual sub-scores.
---- Used by threat_analyzer.lua as a final normalisation step.
+--- Compute a combined risk score from individual sub-scores.
+--- Used by pattern_analyzer.lua as a final normalisation step.
 ---
 --- Scoring weights:
 ---   patterns_matched  × 10 per pattern   (URI/header pattern hits)
 ---   cve_matched       × 25 per CVE        (CVE-specific pattern hits)
 ---   ip_reputation     raw value            (from threat_intel shared dict)
 ---
---- The result is clamped to max_threat_score (100) to prevent runaway values.
+--- The result is clamped to max_risk_score (100) to prevent runaway values.
 ---
 --- @param patterns_matched  integer  Number of generic patterns matched.
 --- @param cve_matched       integer  Number of CVE-specific patterns matched.
 --- @param ip_reputation     integer  IP reputation score (can be negative for
 ---                                   whitelisted IPs).
---- @return integer  Normalised threat score in [0..max_threat_score].
-function _G.utils.calculate_threat_score(patterns_matched, cve_matched, ip_reputation)
+--- @return integer  Normalised risk score in [0..max_risk_score].
+function _G.utils.calculate_risk_score(patterns_matched, cve_matched, ip_reputation)
     local base_score = 0
     
     -- Pattern matching score
@@ -594,7 +594,7 @@ function _G.utils.calculate_threat_score(patterns_matched, cve_matched, ip_reput
     -- IP reputation score
     base_score = base_score + (ip_reputation or 0)
     
-    return math.min(base_score, _G.config.threat.max_threat_score)
+    return math.min(base_score, _G.config.threat.max_risk_score)
 end
 
 --- Append a structured security event to the Nginx error log.
@@ -609,7 +609,7 @@ function _G.utils.log_security_event(event_type, details)
     -- encoding it as `{}`. Confirmed live: this locks Elasticsearch's
     -- mapping for that field as `object` from whichever event reaches it
     -- first, silently dropping every later event whose same field (e.g.
-    -- high_threat_request's/routing_to_honeypot's `cves`, or `patterns`/
+    -- high_risk_request's/routing_to_honeypot's `cves`, or `patterns`/
     -- `signals`) actually has real array contents -- the same class of
     -- mapping-conflict bug the SIEM's vector.yaml already works around for
     -- Docker labels. Every field this function is ever called with is
@@ -733,17 +733,17 @@ local honeypot_routes = ngx.shared.honeypot_routes -- Pool assignment cache
 --   - init_worker.lua: parse_suricata_logs() every 30 s
 --   - pool_router.lua: health check results every 10 s
 if threat_intel then
-    -- Placeholder malicious IPs (real IPs accumulate from Suricata alerts).
+    -- Placeholder flagged IPs (real IPs accumulate from Suricata alerts).
     -- Replace or augment with a real threat-feed import for production use.
-    threat_intel:set("malicious_ips", cjson.encode({
+    threat_intel:set("flagged_ips", cjson.encode({
         ["1.2.3.4"] = { score = 90, reason = "known_botnet" },
         ["5.6.7.8"] = { score = 75, reason = "scanning_activity" }
     }))
     
-    -- Malicious user-agent substrings checked in session_handler.lua and
-    -- threat_analyzer.lua.  Adding a string here is sufficient to make it
+    -- Flagged user-agent substrings checked in session_handler.lua and
+    -- pattern_analyzer.lua.  Adding a string here is sufficient to make it
     -- detectable system-wide without any other code change.
-    threat_intel:set("malicious_agents", cjson.encode({
+    threat_intel:set("flagged_agents", cjson.encode({
         "sqlmap",    -- SQL injection automation
         "nmap",      -- Network scanner
         "masscan",   -- Mass port scanner

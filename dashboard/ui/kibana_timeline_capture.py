@@ -1,10 +1,10 @@
-"""Screenshots of the exploit report's Kibana request timeline
-(core/kibana_timeline.py), one per exploit.
+"""Screenshots of the pattern report's Kibana request timeline
+(core/kibana_timeline.py), one per pattern.
 
 A never-shown QWebEngineView on its own profile logs in to Kibana once (same
 autologin script as the SIEM Analytics page), imports the timeline's saved objects
 through Kibana's own API with that session, then for each capture loads the
-one-panel dashboard in embed mode for the exploit's time window, waits until
+one-panel dashboard in embed mode for the pattern's time window, waits until
 Kibana reports the panel rendered, and grabs just the panel.
 
 Everything is asynchronous on the GUI thread; capture() calls ``done(path)``
@@ -68,7 +68,7 @@ class KibanaTimelineCapture(QObject):
         super().__init__(parent)
         self._base = base_url.rstrip("/")
         self._autologin_js = autologin_js
-        self._profile = QWebEngineProfile("exploit_report_kibana", self)
+        self._profile = QWebEngineProfile("pattern_report_kibana", self)
         self._page = QWebEnginePage(self._profile, self)
         self._page.certificateError.connect(self._on_cert_error)
         self._view = QWebEngineView()

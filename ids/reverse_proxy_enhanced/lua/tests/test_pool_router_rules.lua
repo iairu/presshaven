@@ -8,7 +8,7 @@
 --   lua test_pool_router_rules.lua
 --
 -- This is the "comprehensive test that all database pools are properly
--- bound to honeypot container" and "session bind per attacker to a single
+-- bound to honeypot container" and "session bind per user to a single
 -- container" test referenced from architecture.canvas. What it covers:
 --
 --   1. Naming convention (upstream_for_pool/service_for_pool/database_for_pool)
@@ -18,7 +18,7 @@
 --   2. clamp_pool/pool_from_counter never produce a pool number outside
 --      [1..POOL_COUNT], and pool_from_counter is a true round-robin cycle
 --      (each pool gets exactly one slot per POOL_COUNT consecutive counter
---      values) -- this is the mechanism that keeps a given attacker IP
+--      values) -- this is the mechanism that keeps a given user IP
 --      permanently bound to ONE pool (pool_router.get_or_assign_pool()
 --      stores this value in Redis with a 24h TTL and never recomputes it
 --      for a known IP; see pool_router.lua's module docstring).
@@ -74,7 +74,7 @@ do
 
     -- "properly bound" requires every pool's database name to be unique --
     -- if two pool numbers ever mapped to the same database_for_pool() value,
-    -- two independent attacker pools would share one database.
+    -- two independent user pools would share one database.
     local seen = {}
     local all_unique = true
     for i = 1, POOL_COUNT do
@@ -127,9 +127,9 @@ do
     check("counter 4 wraps to pool 1", rules.pool_from_counter(4, POOL_COUNT) == 1)
     check("counter 6 wraps to pool 3", rules.pool_from_counter(6, POOL_COUNT) == 3)
 
-    -- Every attacker IP gets a counter value once (INCR) and that pool
+    -- Every user IP gets a counter value once (INCR) and that pool
     -- assignment is what's persisted in Redis for 24h -- if the mapping
-    -- ever produced a value outside [1..POOL_COUNT] a brand-new attacker
+    -- ever produced a value outside [1..POOL_COUNT] a brand-new user
     -- IP could be assigned to a pool that doesn't exist.
     local out_of_range = false
     local histogram = {}
@@ -140,7 +140,7 @@ do
     end
     check("300 consecutive counters never produce an out-of-range pool", not out_of_range)
 
-    -- A true round-robin cycle must distribute new attacker IPs evenly
+    -- A true round-robin cycle must distribute new user IPs evenly
     -- across pools (not skew all new assignments onto one pool).
     local even = true
     for pool = 1, POOL_COUNT do
@@ -167,7 +167,7 @@ do
     check("all-unhealthy degrades to the originally assigned pool (not some other one)",
           pool == 3 and is_fallback == false)
 
-    -- The fallback must never silently reassign an attacker to a
+    -- The fallback must never silently reassign a user to a
     -- permanently different pool -- session_data.honeypot_pool in Redis is
     -- untouched by find_healthy_pool; this is a per-request routing
     -- decision only.

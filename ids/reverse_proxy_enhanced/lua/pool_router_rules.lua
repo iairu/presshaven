@@ -12,7 +12,7 @@
 --   ngx.shared-backed health cache stay in pool_router.lua -- this module
 --   only holds the arithmetic/naming/search logic that sits around that I/O,
 --   which is exactly the part most likely to silently break the "every
---   attacker gets one, and only one, consistently-assigned isolated pool"
+--   user gets one, and only one, consistently-assigned isolated pool"
 --   guarantee if it regresses.
 --
 -- NAMING CONVENTION (must match docker-compose.yml exactly -- see
@@ -33,7 +33,7 @@ local _M = {}
 --   honeypot_pool:free       ZSET  ready pools with no owner yet (score = N)
 --   honeypot_pool:owner:<N>  SET   IPs currently assigned to pool N
 --   honeypot_pool:counter    INT   round-robin counter (reuse path)
---   honeypot_pool:provision  LIST  "an attacker was just assigned" wake-ups
+--   honeypot_pool:provision  LIST  "a user was just assigned" wake-ups
 --   honeypot_pool:capped     STR   set (with TTL) by pool_manager while no
 --                                  further pool may be started (resource
 --                                  budget / POOL_MAX reached, host too loaded)
@@ -51,7 +51,7 @@ _M.PROVISION_KEY = "honeypot_pool:provision"
 _M.CAPPED_KEY = "honeypot_pool:capped"
 _M.WAITING_KEY = "honeypot_pool:waiting"
 -- HASH session id -> epoch seconds of its last request while it waits: the
--- hand-off skips waiting sessions whose client has gone quiet (an attacker
+-- hand-off skips waiting sessions whose client has gone quiet (a user
 -- that cleared its cookies leaves its old session behind in the queue).
 _M.WAITING_SEEN_KEY = "honeypot_pool:waiting_seen"
 -- HASH pool number -> epoch seconds a request was last routed to it; pool_manager
@@ -71,7 +71,7 @@ _M.STATIC_POOL_COUNT = 3
 _M.MAX_POOL_NUMBER = 64
 
 --- Atomic assignment, run in Redis with EVAL so concurrent nginx workers can
---- never hand one free pool to two attackers.
+--- never hand one free pool to two users.
 ---
 --- KEYS[1] = honeypot_pool_session:<SID> ARGV[1] = session id (the pool owner)
 --- KEYS[2] = free ZSET               ARGV[2] = assignment TTL (seconds)
@@ -253,7 +253,7 @@ function _M.find_healthy_pool(preferred_pool, pool_count, is_healthy)
     -- The preferred pool is always tried first, even when it is not in `ids`
     -- yet (a pool pool_manager registered moments ago, before the shared-dict
     -- list was refreshed): falling through to ids[1] would silently put the
-    -- attacker on someone else's pool.
+    -- user on someone else's pool.
     if is_healthy(preferred_pool) then
         return preferred_pool, false
     end

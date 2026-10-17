@@ -5,7 +5,7 @@ Uses a dedicated QWebEngineProfile per widget instance rather than the
 shared default profile: every site this app points a browser at (Kibana,
 the eshop) uses a self-signed certificate, and keeping cookies/site-data
 isolated per-widget is what makes "reset local score + cookies"
-(page_exploits.py) actually mean something -- clearing cookies here can't
+(page_patterns.py) actually mean something -- clearing cookies here can't
 accidentally also log the user out of Kibana or anything else running in
 the same process.
 

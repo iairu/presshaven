@@ -3,7 +3,7 @@
 -- PURPOSE:
 --   Holds the standalone "is this request/session suspicious in way X"
 --   predicates that router.lua's decide_route() consults. Factored out with
---   the same intent as threat_rules.lua: no ngx.* dependency, no reliance on
+--   the same intent as pattern_rules.lua: no ngx.* dependency, no reliance on
 --   _G.config/_G.utils, plain-`lua`-interpreter testable (see
 --   tests/test_router_rules.lua).
 --
@@ -19,14 +19,14 @@
 --   below move here.
 --
 -- NOTE ON is_static_asset: this used to have two independently-maintained
--- copies (router.lua and threat_analyzer.lua) that disagreed on whether to
+-- copies (router.lua and pattern_analyzer.lua) that disagreed on whether to
 -- strip the query string before matching -- router.lua's stripped it,
--- threat_analyzer.lua's (now threat_rules.lua's) didn't, so a request like
+-- pattern_analyzer.lua's (now pattern_rules.lua's) didn't, so a request like
 -- "style.css?v=123" was classified as static by one and not the other.
 -- This module's version (query-string-stripping, the more correct
--- behaviour) is now the single implementation router.lua uses; threat_rules
+-- behaviour) is now the single implementation router.lua uses; pattern_rules
 -- still has its own copy since the two modules must stay independently
--- requireable, but see threat_rules.lua's is_static_asset docstring, which
+-- requireable, but see pattern_rules.lua's is_static_asset docstring, which
 -- now cross-references this one.
 
 local pattern_utils = require "lua_pattern_utils"
@@ -44,7 +44,7 @@ _M.escape_pattern = escape_pattern
 
 -- Re-exported for the same reason: decide_route()'s install.php
 -- not-yet-installed fast path needs the exact same matcher
--- threat_analyzer.lua uses, so the two can never quietly disagree (see
+-- pattern_analyzer.lua uses, so the two can never quietly disagree (see
 -- lua_pattern_utils.lua's own comment on this function, and this file's
 -- NOTE ON is_static_asset above for the exact bug class that already
 -- happened once from independently-maintained copies).
@@ -128,7 +128,7 @@ end
 -- honeypot after their third product-page view, since each page load
 -- fires its own admin-ajax.php call and Stage 7 escalates at the third
 -- occurrence within a session. admin-ajax.php gets its own dedicated,
--- appropriately-scoped analysis elsewhere (threat_analyzer.lua's Stage 6b,
+-- appropriately-scoped analysis elsewhere (pattern_analyzer.lua's Stage 6b,
 -- upload_handler.lua, the CVE action-name checks in Stage 3) -- it doesn't
 -- need (and must not get) blanket treatment as "admin area access" here.
 --
@@ -164,14 +164,14 @@ function _M.is_admin_access(uri)
 end
 
 -- ---------------------------------------------------------------------------
--- is_rapid_automation(session_data, threat_result, current_time)
+-- is_rapid_automation(session_data, pattern_result, current_time)
 --
 -- @param session_data  table|nil
--- @param threat_result table|nil
+-- @param pattern_result table|nil
 -- @param current_time  number  e.g. ngx.time()
 -- @return boolean
 -- ---------------------------------------------------------------------------
-function _M.is_rapid_automation(session_data, threat_result, current_time)
+function _M.is_rapid_automation(session_data, pattern_result, current_time)
     if not session_data then
         return false
     end
@@ -188,8 +188,8 @@ function _M.is_rapid_automation(session_data, threat_result, current_time)
     end
 
     -- Check for automation tool signatures.
-    if threat_result and threat_result.details then
-        for _, detail in ipairs(threat_result.details) do
+    if pattern_result and pattern_result.details then
+        for _, detail in ipairs(pattern_result.details) do
             if string.find(detail, "automation_detected") then
                 return true
             end
@@ -210,8 +210,8 @@ end
 -- ---------------------------------------------------------------------------
 -- decayed_score(session_data, current_time, half_life_seconds)
 --
--- A honeypot-bound session's stored peak threat_score (session_data.
--- threat_score, set via math.max() elsewhere in router.lua so it only ever
+-- A honeypot-bound session's stored peak risk_score (session_data.
+-- risk_score, set via math.max() elsewhere in router.lua so it only ever
 -- ratchets UP on a new suspicious signal), exponentially decayed based on
 -- how long it's been since the LAST suspicious signal
 -- (session_data.last_threat_time, only touched when a signal actually
@@ -236,7 +236,7 @@ function _M.decayed_score(session_data, current_time, half_life_seconds, cfg)
         return 0
     end
 
-    local peak = session_data.threat_score or 0
+    local peak = session_data.risk_score or 0
     if peak <= 0 then
         return 0
     end
@@ -254,8 +254,8 @@ function _M.decayed_score(session_data, current_time, half_life_seconds, cfg)
     -- Escalation-aware decay: a session that has fired more attack signals
     -- (session_data.offenses, bumped by router.lua each time a genuinely new
     -- signal ratchets the peak up) fades more slowly, and past the permaflag
-    -- thresholds not at all -- so an attacker can no longer alternate
-    -- "run exploit" / "wait" to keep re-earning production access. `cfg` is
+    -- thresholds not at all -- so a user can no longer alternate
+    -- "run pattern" / "wait" to keep re-earning production access. `cfg` is
     -- _G.config.threat, passed in by router.lua to keep this module pure
     -- (nil cfg = plain base-rate decay, as the unit tests use). See
     -- lua/decay_policy.lua.
@@ -378,7 +378,7 @@ function _M.analyze_behavior_patterns(session_data, current_time, request_uri)
 end
 
 -- ---------------------------------------------------------------------------
--- decision_trace(fresh_score, decayed_base, session_data, threat_result,
+-- decision_trace(fresh_score, decayed_base, session_data, pattern_result,
 --                half_life_seconds, cfg)
 --
 -- The "why" behind one routing decision, as flat strings for nginx's
@@ -394,7 +394,7 @@ end
 --   offenses       recorded attack signals on the session so far
 --   decay_state    "none"        no prior score to decay
 --                  "off"         decay disabled (half-life <= 0)
---                  "permaflagged" a confirmed attacker: never decays
+--                  "permaflagged" a confirmed flagged user: never decays
 --                  "decaying"    prior score fading toward production
 --   uri_class      "attack_pattern" if any URI/CVE pattern matched, else "safe"
 --   patterns       matched pattern/CVE names joined with "|", or "-"
@@ -410,13 +410,13 @@ local function log_safe(v)
     return v
 end
 
-function _M.decision_trace(fresh_score, decayed_base, session_data, threat_result,
+function _M.decision_trace(fresh_score, decayed_base, session_data, pattern_result,
                            half_life_seconds, cfg)
     session_data = session_data or {}
-    threat_result = threat_result or {}
+    pattern_result = pattern_result or {}
     cfg = cfg or {}
     local offenses = tonumber(session_data.offenses) or 0
-    local peak = tonumber(session_data.threat_score) or 0
+    local peak = tonumber(session_data.risk_score) or 0
 
     local decay_state
     if peak <= 0 then
@@ -430,7 +430,7 @@ function _M.decision_trace(fresh_score, decayed_base, session_data, threat_resul
     end
 
     local names, seen = {}, {}
-    for _, list in ipairs({ threat_result.patterns_matched or {}, threat_result.cve_matched or {} }) do
+    for _, list in ipairs({ pattern_result.patterns_matched or {}, pattern_result.cve_matched or {} }) do
         for _, p in ipairs(list) do
             local name = type(p) == "table" and (p.cve or p.name or p.id) or p
             name = name and log_safe(name)

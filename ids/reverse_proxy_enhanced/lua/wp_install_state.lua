@@ -3,10 +3,10 @@
 -- traffic instead of an attack until it has.
 --
 -- PURPOSE:
---   threat_analyzer.lua/router.lua score and divert /wp-admin/install.php
---   very aggressively (see threat_rules.lua's wp_install_access/install_php
+--   pattern_analyzer.lua/router.lua score and divert /wp-admin/install.php
+--   very aggressively (see pattern_rules.lua's wp_install_access/install_php
 --   checks) -- correct once a site is actually running (it's also one of
---   the dashboard's exploit presets, dashboard/core/exploits.py), but wrong
+--   the dashboard's pattern presets, dashboard/core/patterns.py), but wrong
 --   during the legitimate first-run setup wizard, which is exactly what a
 --   fresh/never-installed WordPress instance needs install.php for.
 --
@@ -32,7 +32,7 @@
 --   is_installed() defaults to true (installed) whenever state is
 --   missing/unknown/stale. That keeps today's strict scoring/routing
 --   behavior as the default -- a probe outage must never silently open up
---   an exploit path, only a CONFIRMED "not installed yet" response does.
+--   a pattern path, only a CONFIRMED "not installed yet" response does.
 
 local http = require "resty.http"
 

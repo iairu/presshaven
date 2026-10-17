@@ -1,5 +1,5 @@
-"""Segmentation Validation page: 3 to 10 embedded browsers, each its own attacker session,
-to see how the honeypot pool receives several attackers at once.
+"""Segmentation Validation page: 3 to 10 embedded browsers, each its own user session,
+to see how the honeypot pool receives several users at once.
 
 Every frame is a BrowserWidget, i.e. its own off-the-record profile and so its
 own cookie jar -- the proxy hands each one a separate signed session cookie.
@@ -11,9 +11,9 @@ frame after the first would be folded into the first frame's session. Each
 frame therefore gets its own User-Agent suffix and Accept-Language, which is
 what makes the proxy see different clients.
 
-"Attack" sends the same exploit request from the frame; once the score tips,
+"Attack" sends the same pattern request from the frame; once the score tips,
 the session is bound to a honeypot pool. The pools scale with the number of
-attacker sessions (pool_manager builds one per session until its resource
+user sessions (pool_manager builds one per session until its resource
 limit, then the rest share round-robin), so a window may borrow a pool for a
 while and then move to its own. The pool summary (from the Redis pool
 registry) shows how many pools are ready, how many sessions each owns and how
@@ -34,10 +34,10 @@ from PyQt6.QtWidgets import (
 
 from core import redis_inspect
 from core.docker_ctl import target_for
-from core.exploits import EXPLOIT_PRESETS
+from core.patterns import PATTERN_PRESETS
 from core import pool_evidence
-from core.pool_test_report import (capacity_warning, CART_PLAN, FALLBACK_EXPLOITS, MAX_ATTEMPTS, MAX_WINDOWS,
-                                    MIN_WINDOWS, CartState, ClearEvent, Decision, ExploitRun, FrameResult,
+from core.pool_test_report import (capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
+                                    MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
                                     browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
                                     window_plan)
@@ -51,16 +51,16 @@ SESSION_COOKIE = "SERVERID"
 
 # (label, Accept-Language) per frame -- what makes the fingerprints differ.
 FRAMES = [
-    ("Attacker A", "en-US,en;q=0.9"),
-    ("Attacker B", "de-DE,de;q=0.9"),
-    ("Attacker C", "fr-FR,fr;q=0.9"),
-    ("Attacker D", "es-ES,es;q=0.9"),
-    ("Attacker E", "it-IT,it;q=0.9"),
-    ("Attacker F", "nl-NL,nl;q=0.9"),
-    ("Attacker G", "pl-PL,pl;q=0.9"),
-    ("Attacker H", "sv-SE,sv;q=0.9"),
-    ("Attacker I", "cs-CZ,cs;q=0.9"),
-    ("Attacker J", "sk-SK,sk;q=0.9"),
+    ("User A", "en-US,en;q=0.9"),
+    ("User B", "de-DE,de;q=0.9"),
+    ("User C", "fr-FR,fr;q=0.9"),
+    ("User D", "es-ES,es;q=0.9"),
+    ("User E", "it-IT,it;q=0.9"),
+    ("User F", "nl-NL,nl;q=0.9"),
+    ("User G", "pl-PL,pl;q=0.9"),
+    ("User H", "sv-SE,sv;q=0.9"),
+    ("User I", "cs-CZ,cs;q=0.9"),
+    ("User J", "sk-SK,sk;q=0.9"),
 ]
 assert len(FRAMES) == MAX_WINDOWS
 
@@ -170,15 +170,15 @@ class PoolTestPage(QWidget):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
-        self._presets = [p for p in EXPLOIT_PRESETS if p.method.upper() == "GET"]
+        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"]
 
         layout = QVBoxLayout(self)
 
         intro = QLabel(
             "3 to 10 browsers, each a separate session (own cookies, own User-Agent and "
             "language, so the proxy cannot merge them). Open the shop in each, then attack "
-            "from several at once and check that every attacker lands in a honeypot pool "
-            "of their own: the pools scale with the attacker sessions until the resource "
+            "from several at once and check that every user lands in a honeypot pool "
+            "of their own: the pools scale with the user sessions until the resource "
             "limit, after which the remaining sessions share the pools round-robin.")
         intro.setWordWrap(True)
         intro.setStyleSheet("color: #aaaaaa;")
@@ -190,7 +190,7 @@ class PoolTestPage(QWidget):
         self.count_spin.setRange(MIN_WINDOWS, MAX_WINDOWS)
         self.count_spin.setValue(MIN_WINDOWS)
         self.count_spin.setToolTip(
-            "How many browser windows (separate attacker sessions) to run side by side.")
+            "How many browser windows (separate user sessions) to run side by side.")
         self.count_spin.valueChanged.connect(self.set_window_count)
         bar.addWidget(labeled("Windows:", self.count_spin))
         self.delayed_spin = QSpinBox()
@@ -208,7 +208,7 @@ class PoolTestPage(QWidget):
         for p in self._presets:
             self.preset_combo.addItem(f"{p.cve} — {p.name}")
         self.preset_combo.setMinimumWidth(320)
-        bar.addWidget(labeled("Exploit:", self.preset_combo))
+        bar.addWidget(labeled("Pattern:", self.preset_combo))
         self.open_all_btn = QPushButton("Open shop in all")
         self.open_all_btn.clicked.connect(self.open_all)
         bar.addWidget(self.open_all_btn)
@@ -230,7 +230,7 @@ class PoolTestPage(QWidget):
         self.export_btn = QPushButton("Export report (PDF)")
         self.export_btn.setToolTip(
             "Which honeypot pool each window's session landed in, and whether that matches "
-            "one attacker per pool (shared only when pools run out).")
+            "one user per pool (shared only when pools run out).")
         self.export_btn.clicked.connect(self.export_report)
         bar.addWidget(self.export_btn)
         layout.addLayout(bar)
@@ -645,11 +645,11 @@ class PoolTestPage(QWidget):
             self._marks.append((self._now(), title))
 
     def _grab(self, browser: BrowserWidget):
-        from ui.page_exploits import ExploitsPage
+        from ui.page_patterns import PatternsPage
         pixmap = browser.view.grab()
-        if pixmap.isNull() or ExploitsPage._looks_blank(pixmap):  # noqa: SLF001
-            fallback = ExploitsPage.screen_grab(browser.view)
-            if not fallback.isNull() and not ExploitsPage._looks_blank(fallback):  # noqa: SLF001
+        if pixmap.isNull() or PatternsPage._looks_blank(pixmap):  # noqa: SLF001
+            fallback = PatternsPage.screen_grab(browser.view)
+            if not fallback.isNull() and not PatternsPage._looks_blank(fallback):  # noqa: SLF001
                 pixmap = fallback
         image = pixmap.toImage()
         image.setDevicePixelRatio(1.0)
@@ -691,7 +691,7 @@ class PoolTestPage(QWidget):
             self, "Reset test sessions?",
             "The report starts from a clean slate: this machine's own sessions and honeypot "
             "pool assignments are removed first (the same reset as 'Unpoison host IP' on "
-            f"the Attack Simulation page), then the {self._count} windows each run their own exploit, "
+            f"the Attack Simulation page), then the {self._count} windows each run their own pattern, "
             "and the run waits for the honeypot pools to scale up to them (a few minutes "
             "per batch of new pools)."
             + (f" The last {self._delayed()} window(s) attack only after pools were pre-built "
@@ -752,14 +752,14 @@ class PoolTestPage(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _reset_threat_state(self) -> None:
-        """Clean slate, like the exploit report: threat state flushed in Redis AND
+        """Clean slate, like the pattern report: threat state flushed in Redis AND
         in reverse_proxy's in-process caches (/internal-threat-reset), then this
         machine's sessions and pool assignments removed."""
         import subprocess
         remote = self._remote()
         redis_inspect.flush_threat_state(remote)
         try:
-            from core.exploit_report import _load_secret_and_halflife
+            from core.pattern_report import _load_secret_and_halflife
             secret = _load_secret_and_halflife(target_for("edge", self.state))[0]
             subprocess.run(["curl", "-sk", "-o", "/dev/null", "-H",
                             f"X-Internal-Test-Auth: {secret}",
@@ -768,12 +768,12 @@ class PoolTestPage(QWidget):
             pass
         redis_inspect.clear_local_threat_state(remote)
 
-    def _exploit_queue(self, window: int) -> list:
-        """Exploits for one window: its primary and secondary choice, then the
+    def _pattern_queue(self, window: int) -> list:
+        """Patterns for one window: its primary and secondary choice, then the
         fallbacks, as presets (those that divert within MAX_ATTEMPTS only)."""
-        by_cve = {p.cve: p for p in EXPLOIT_PRESETS}
+        by_cve = {p.cve: p for p in PATTERN_PRESETS}
         plan = window_plan(self._count)[window]
-        return [by_cve[c] for c in dict.fromkeys((*plan, *FALLBACK_EXPLOITS)) if c in by_cve]
+        return [by_cve[c] for c in dict.fromkeys((*plan, *FALLBACK_PATTERNS)) if c in by_cve]
 
     def _letter(self, window: int) -> str:
         return FRAMES[window][0][-1]
@@ -835,12 +835,12 @@ class PoolTestPage(QWidget):
                                           + step.actions[e.window][1:])
 
     def _attack_step(self, n: int, total_steps: int, total: int, windows: list[int],
-                     queues: list[list], used: set[str], runs: list[ExploitRun],
+                     queues: list[list], used: set[str], runs: list[PatternRun],
                      title: str, detail: str) -> StepResult:
-        """`windows` open their exploit at the same time (up to MAX_ATTEMPTS
-        times each) while the others browse the shop. A window whose exploit
+        """`windows` open their pattern at the same time (up to MAX_ATTEMPTS
+        times each) while the others browse the shop. A window whose pattern
         never diverts moves on to the next one in its queue -- so each window
-        is guaranteed an exploit that does."""
+        is guaranteed a pattern that does."""
         self._mark(title)
         self._begin_browse()
         shop = self._base_url() + "/"
@@ -848,7 +848,7 @@ class PoolTestPage(QWidget):
         state: dict[int, list] = {}     # window -> [preset, attempts, replaced, done]
         tried: dict[int, set[str]] = {}
         for w in windows:
-            # Prefer an exploit no other window ran; with many windows they may repeat.
+            # Prefer a pattern no other window ran; with many windows they may repeat.
             preset = next((p for p in queues[w] if p.cve not in used), queues[w][0])
             state[w] = [preset, 0, preset.cve != plan[w][0], False]
             tried[w] = {preset.cve}
@@ -878,11 +878,11 @@ class PoolTestPage(QWidget):
                 d = decisions[w]
                 last[w] = (preset, attempts)
                 if d.route == "HONEYPOT":
-                    runs.append(ExploitRun(self._letter(w), preset.cve, preset.name, attempts,
+                    runs.append(PatternRun(self._letter(w), preset.cve, preset.name, attempts,
                                            True, d.pool, replaced))
                     state[w][3] = True
                 elif attempts >= MAX_ATTEMPTS:
-                    runs.append(ExploitRun(self._letter(w), preset.cve, preset.name, attempts,
+                    runs.append(PatternRun(self._letter(w), preset.cve, preset.name, attempts,
                                            False, d.pool, replaced))
                     nxt = (next((p for p in queues[w] if p.cve not in tried[w] and p.cve not in used), None)
                            or next((p for p in queues[w] if p.cve not in tried[w]), None))
@@ -1120,7 +1120,7 @@ class PoolTestPage(QWidget):
         cart_plan = CART_PLAN[:count]
         plan = window_plan(count)
         # open, fill carts, one attack per immediate window, scale-up, [pre-build,
-        # delayed attack, scale-up], second exploit, cart page
+        # delayed attack, scale-up], second pattern, cart page
         total_steps = 2 + len(now_windows) + (1 if now_windows else 0) \
             + (3 if later_windows else 0) + 2 + 1      # ... + forced scale-down
         total = total_steps + 3
@@ -1170,7 +1170,7 @@ class PoolTestPage(QWidget):
 
         shop = self._base_url() + "/"
         results: list[StepResult] = []
-        runs: list[ExploitRun] = []
+        runs: list[PatternRun] = []
         used: set[str] = set()
         step = 0
         # Clearing starts once every window has filled its cart (step 3) and can
@@ -1227,7 +1227,7 @@ class PoolTestPage(QWidget):
             # the baseline are their own background (healthchecks, cron, sync).
             self._blocking(lambda: pool_evidence.mark_idle(target, baseline))
 
-            queues = [self._exploit_queue(i) for i in range(count)]
+            queues = [self._pattern_queue(i) for i in range(count)]
             for w in now_windows:
                 n = next_step(f"{FRAMES[w][0]} attacks")
                 first = next((p for p in queues[w] if p.cve not in used), queues[w][0])
@@ -1256,27 +1256,27 @@ class PoolTestPage(QWidget):
                     "stopped the build, in which case they share the ready pools round-robin."))
                 results.append(self._wait_for_scaling(next_step("pools scale up"), total_steps, total))
 
-            # Every window runs a SECOND exploit it has not run yet, all at once.
-            next_step("all windows run a second exploit")
-            self._mark("All windows run a second exploit")
+            # Every window runs a SECOND pattern it has not run yet, all at once.
+            next_step("all windows run a second pattern")
+            self._mark("All windows run a second pattern")
             self._begin_browse()
-            by_cve = {p.cve: p for p in EXPLOIT_PRESETS}
+            by_cve = {p.cve: p for p in PATTERN_PRESETS}
             second = []
             for w in range(count):
                 own = {r.cve for r in runs if r.window == self._letter(w)}
-                second.append(next((by_cve[c] for c in (plan[w][1], *FALLBACK_EXPLOITS)
+                second.append(next((by_cve[c] for c in (plan[w][1], *FALLBACK_PATTERNS)
                                     if c in by_cve and c not in own), None))
             self._load_all([self._base_url() + p.path if p else self._browse_url(w)
-                            for w, p in enumerate(second)], "All windows run a second exploit")
+                            for w, p in enumerate(second)], "All windows run a second pattern")
             self._spin(700)
             decisions = self._settled_decisions(need_sessions=True)
             for i, d in enumerate(decisions):
                 if second[i]:
-                    runs.append(ExploitRun(self._letter(i), second[i].cve, second[i].name, 1,
+                    runs.append(PatternRun(self._letter(i), second[i].cve, second[i].name, 1,
                                            d.route == "HONEYPOT", d.pool))
             results.append(StepResult(
-                "All windows run a second exploit",
-                "Sticky binding: each second exploit must land in the pool the window already "
+                "All windows run a second pattern",
+                "Sticky binding: each second pattern must land in the pool the window already "
                 "owns, nobody changes pool, nobody is merged.",
                 [f"Opens {p.cve}" if p else self._browsed(w) for w, p in enumerate(second)], decisions,
                 [self._grab(b) for b in self.browsers], self._read_carts()))
@@ -1338,7 +1338,7 @@ class PoolTestPage(QWidget):
         return PoolTestData(
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             target_label=target.label, base_url=self._base_url(),
-            exploit="; ".join(
+            pattern="; ".join(
                 f"{w}: " + ", ".join(r.cve for r in runs if r.window == w)
                 for w in sorted({r.window for r in runs})), frames=frames,
             pool_state=pool_state, steps=results, runs=runs, evidence=evidence,

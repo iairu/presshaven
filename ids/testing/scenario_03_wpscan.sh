@@ -7,7 +7,7 @@
 #   local honeynet deployment.  Verifies that:
 #     1. All WPScan enumeration probes trigger honeypot routing (the scanner
 #        user-agent and plugin/theme probe patterns are recognised by the Lua
-#        threat analyser).
+#        pattern analyser).
 #     2. Production is never exposed to WPScan traffic.
 #     3. Suricata logs a WPScan-related alert within seconds of the scan.
 #     4. When WPScan is available in PATH the full tool output is captured and
@@ -282,8 +282,8 @@ do
 done
 
 # Static CSS assets from vulnerable plugins should NOT trigger routing on
-# a fresh session (no accumulated threat score yet).
-# NOTE: If the scanner UA already pushed threat score over threshold in this
+# a fresh session (no accumulated risk score yet).
+# NOTE: If the scanner UA already pushed risk score over threshold in this
 # session all requests will be honeypot-bound; so we use a fresh clean jar.
 JAR_STATIC="$(mktemp /tmp/wpscan_static_XXXXXX.txt)"
 check "${JAR_STATIC}" "Plugin CSS asset (fresh session, no threat UA)" "production" \

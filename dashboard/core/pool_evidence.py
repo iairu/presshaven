@@ -3,8 +3,8 @@ run: the requests that reached its eshop (from the Apache access log, told
 apart by each test window's User-Agent tag), files written inside that eshop,
 and how far its database's statement counters moved.
 
-Different windows run different exploits, so each pool's evidence should be its
-owner's exploit and nobody else's -- that is what the Pool test report shows.
+Different windows run different patterns, so each pool's evidence should be its
+owner's pattern and nobody else's -- that is what the Pool test report shows.
 The parsers are pure (unit tested); the collectors shell out through the
 project's compose Target, so they work for a remote edge host too.
 """
@@ -108,7 +108,7 @@ def without_background(delta: dict[str, int] | None, base: dict[str, int] | None
     its rate while idle (base -> idle over idle_s seconds, no window on it)
     times total_s. A pool's own healthchecks, WP cron and content sync run
     thousands of queries even when nobody visits, which swamped what the
-    attacker caused. None when the idle rate was not measured."""
+    user caused. None when the idle rate was not measured."""
     if delta is None or base is None or idle is None or idle_s < 5:
         return None
     out = {}
@@ -258,8 +258,8 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
 
 def response_realism(evidence: list[ContainerEvidence]) -> tuple[int, int, list[str]]:
     """(non-asset requests the honeypot pools answered, how many got a 4xx,
-    a few example 4xx paths). A 404/400 on an exploit's own endpoint tells the
-    attacker the targeted plugin is not installed, which weakens the decoy and
+    a few example 4xx paths). A 404/400 on a pattern's own endpoint tells the
+    user the targeted plugin is not installed, which weakens the decoy and
     yields little interaction to record -- so a high share here is a
     deception-fidelity signal, not a routing problem."""
     total = four = 0

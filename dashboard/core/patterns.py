@@ -1,18 +1,18 @@
-"""Exploit presets for the Attack Simulation page -- one entry per CVE pattern
-actually recognized by the live routing pipeline, so "run this exploit" and
-"the honeypot detects this exploit" are provably the same thing rather than
+"""Pattern presets for the Attack Simulation page -- one entry per CVE pattern
+actually recognized by the live routing pipeline, so "run this pattern" and
+"the honeypot detects this pattern" are provably the same thing rather than
 two lists that can drift apart.
 
 The pattern source of truth is reverse_proxy_enhanced/lua/init.lua's
-_G.config.vulnerability.cve_patterns table, consumed by threat_rules.lua's
-analyze_cve_patterns() (called from threat_analyzer.lua on every request,
+_G.config.vulnerability.cve_patterns table, consumed by pattern_rules.lua's
+analyze_cve_patterns() (called from pattern_analyzer.lua on every request,
 feeding router.lua's Stage 3/4 routing). That function checks the request
 URI, QUERY STRING, and headers -- confirmed live it does NOT see the POST
 body, so despite some of those patterns' own comments saying "posted"/
 "POST bodies", every preset below sends its trigger string as a query
 parameter (or header, for the one CVE that needs one) rather than a POST
 body, and confirmed live via reverse_proxy's logs that every preset here
-actually produces a CVE PATTERNS DETECTED / high-threat-score log line and
+actually produces a CVE PATTERNS DETECTED / high-risk-score log line and
 gets diverted to a honeypot pool.
 
 (There's a SECOND, narrower CVE-detection function -- vulnerability_rules.
@@ -23,7 +23,7 @@ gates routing for arbitrary request shapes like these.)
 
 Kept in sync BY HAND with init.lua -- there's no shared source of truth
 between Lua and Python here, so a new CVE added there needs a matching
-preset added here to stay "all possible exploits" rather than "most of
+preset added here to stay "all possible patterns" rather than "most of
 them".
 """
 from __future__ import annotations
@@ -47,11 +47,11 @@ DETECT_REPEATS = 3
 
 COMPONENTS = {"core": "WordPress core", "plugin": "Plugin / theme"}
 SURFACES = {"frontend": "Frontend", "backend": "Backend"}
-KINDS = {"cve": "CVE exploit", "generic": "Generic attack"}
+KINDS = {"cve": "CVE pattern", "generic": "Generic attack"}
 
 
 @dataclass(frozen=True)
-class ExploitPreset:
+class PatternPreset:
     name: str
     cve: str
     severity: str
@@ -84,7 +84,7 @@ class ExploitPreset:
     #          data and file access (wp-config attacks, SQLi, ...).
     surface: str = "backend"
     # Extra requests sent after `path`, in order (wordlist scans, ID walks).
-    # The report records on which request of the sequence the attacker was
+    # The report records on which request of the sequence the user was
     # first diverted to the honeypot. Presets without a sequence are sent up
     # to DETECT_REPEATS times to see whether repetition tips the score.
     sequence: tuple[str, ...] = ()
@@ -96,8 +96,8 @@ class ExploitPreset:
         return [self.path] * DETECT_REPEATS
 
 
-EXPLOIT_PRESETS: list[ExploitPreset] = [
-    ExploitPreset(
+PATTERN_PRESETS: list[PatternPreset] = [
+    PatternPreset(
         name="WooCommerce Payments admin bypass",
         cve="CVE-2023-28121",
         severity="HIGH",
@@ -107,7 +107,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/wp-json/wp/v2/users",
         headers={"X-WCPAY-PLATFORM-CHECKOUT-USER": "1"},
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Abandoned Cart Lite checkout token forgery",
         cve="CVE-2023-2986",
         severity="HIGH",
@@ -115,7 +115,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path="/?wcal_action=checkout_link&validate=x",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Drag & Drop file upload MIME-type bypass",
         cve="CVE-2025-4403",
         severity="CRITICAL",
@@ -128,7 +128,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
                       "WordPress filesystem, not the database -- switching the "
                       "database per request does not contain it.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="CWMP unauthenticated options update",
         cve="CVE-2025-2266",
         severity="CRITICAL",
@@ -137,7 +137,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path="/?action=cwmpUpdateOptions&option=default_role&value=administrator",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Gift Voucher file upload RCE",
         cve="CVE-2025-47577",
         severity="CRITICAL",
@@ -151,7 +151,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
                       "connect to the real database directly, bypassing the "
                       "per-request routing entirely.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Advanced Form Integration SQL injection",
         cve="CVE-2024-2387",
         severity="HIGH",
@@ -160,7 +160,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path=f"/?page=advanced-form-integration-log&integration_id={_SQLI_PAYLOAD}",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="PagSeguro Connect path traversal",
         cve="CVE-2025-10142",
         severity="HIGH",
@@ -172,7 +172,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         coverage_note="Path traversal reads the shared container filesystem "
                       "(identical for both sides), not the database.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="WP File Upload directory traversal",
         cve="CVE-2024-50508",
         severity="HIGH",
@@ -184,7 +184,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         coverage_note="Path traversal read/write hits the shared filesystem, "
                       "not the database.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="wp-config.php disclosure",
         cve="GENERIC-WP-001",
         severity="CRITICAL",
@@ -198,7 +198,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
                       "backend) -- a database switch cannot hide the file that "
                       "leaks the real credentials.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Installer file access",
         cve="GENERIC-WP-002",
         severity="HIGH",
@@ -207,7 +207,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path="/wp-admin/install.php",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="User enumeration via ?author=",
         cve="GENERIC-WP-003",
         severity="MEDIUM",
@@ -216,7 +216,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path="/?author=1",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="XML-RPC probe",
         cve="GENERIC-WP-004",
         severity="MEDIUM",
@@ -226,12 +226,12 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/xmlrpc.php",
         body="<?xml version=\"1.0\"?><methodCall><methodName>system.listMethods</methodName><params></params></methodCall>",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Bricks Builder unauthenticated RCE",
         cve="CVE-2024-25600",
         severity="CRITICAL",
         description="Unauthenticated remote code execution via the Bricks theme "
-                     "render_element REST endpoint, which eval()s attacker-supplied PHP.",
+                     "render_element REST endpoint, which eval()s user-supplied PHP.",
         method="POST",
         path="/wp-json/bricks/v1/render_element",
         body='{"postId":1,"nonce":"x","element":{"name":"code","settings":'
@@ -241,7 +241,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
                       "read the production DB credentials and connect to the real "
                       "database directly, bypassing the per-request routing.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="WP Automatic SQL injection",
         cve="CVE-2024-27956",
         severity="CRITICAL",
@@ -250,7 +250,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path=f"/wp-content/plugins/wp-automatic/inc/csv.php?q={_SQLI_PAYLOAD}",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Ultimate Member SQL injection",
         cve="CVE-2024-1071",
         severity="CRITICAL",
@@ -259,7 +259,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         method="GET",
         path=f"/wp-admin/admin-ajax.php?action=um_get_members&directory_id={_SQLI_PAYLOAD}",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="BookingPress SQL injection",
         cve="CVE-2022-0739",
         severity="CRITICAL",
@@ -269,7 +269,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path=f"/wp-admin/admin-ajax.php?action=bookingpress_front_get_category_services"
              f"&total_service={_SQLI_PAYLOAD}",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="LayerSlider SQL injection",
         cve="CVE-2024-2879",
         severity="CRITICAL",
@@ -279,7 +279,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path=f"/wp-admin/admin-ajax.php?action=ls_get_popup_markup&id={_SQLI_PAYLOAD}",
     ),
     # ---- WordPress core CVE, frontend ----
-    ExploitPreset(
+    PatternPreset(
         name="REST API content injection (defacement)",
         cve="CVE-2017-1001000",
         severity="HIGH",
@@ -293,7 +293,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         component="core", surface="frontend",
     ),
     # ---- generic attacks: less concrete, classes and tools rather than one CVE ----
-    ExploitPreset(
+    PatternPreset(
         name="Script tag in a search form",
         cve="GENERIC-XSS-001",
         severity="HIGH",
@@ -302,7 +302,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/?s=<script>alert(1)</script>",
         kind="generic", component="core", surface="frontend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Event-handler XSS",
         cve="GENERIC-XSS-002",
         severity="HIGH",
@@ -311,7 +311,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/?s=%22%3E%3Cimg%20src=x%20onerror=alert(document.cookie)%3E",
         kind="generic", component="core", surface="frontend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="SQL injection in a search form",
         cve="GENERIC-SQLI-001",
         severity="HIGH",
@@ -320,7 +320,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/?s=1'%20OR%20'1'='1",
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Time-based blind SQL injection",
         cve="GENERIC-SQLI-002",
         severity="HIGH",
@@ -329,7 +329,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         path="/?s=1'%20AND%20SLEEP(1)--%20-",
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="SQL injection in the login form (POST body)",
         cve="GENERIC-SQLI-003",
         severity="HIGH",
@@ -342,7 +342,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         body="log=admin'%20OR%201=1--%20-&pwd=x&wp-submit=Log+In",
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Wordlist scan: sensitive paths",
         cve="GENERIC-ENUM-001",
         severity="MEDIUM",
@@ -358,7 +358,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         coverage_note="Wordlist probes can reach real files on the filesystem the honeypot "
                       "shares with production.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Wordlist scan: plugin and theme discovery",
         cve="GENERIC-ENUM-002",
         severity="MEDIUM",
@@ -375,7 +375,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         db_isolated=False,
         coverage_note="Probes real plugin/theme files on the shared filesystem.",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Insecure direct object reference: user IDs",
         cve="GENERIC-IDOR-001",
         severity="MEDIUM",
@@ -386,7 +386,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         sequence=("/wp-json/wp/v2/users/2", "/wp-json/wp/v2/users/3", "/wp-json/wp/v2/users/4"),
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Insecure direct object reference: order IDs",
         cve="GENERIC-IDOR-002",
         severity="MEDIUM",
@@ -397,7 +397,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         sequence=("/wp-json/wc/v3/orders/2", "/wp-json/wc/v3/orders/3", "/wp-json/wc/v3/orders/4"),
         kind="generic", component="plugin", plugin="woocommerce", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Scanner tool: sqlmap",
         cve="GENERIC-TOOL-001",
         severity="MEDIUM",
@@ -407,7 +407,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         headers={"User-Agent": "sqlmap/1.7.2#stable (https://sqlmap.org)"},
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Scanner tool: Nikto",
         cve="GENERIC-TOOL-002",
         severity="MEDIUM",
@@ -417,7 +417,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         headers={"User-Agent": "Mozilla/5.00 (Nikto/2.1.6) (Evasions:None) (Test:Port Check)"},
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Scanner tool: Metasploit",
         cve="GENERIC-TOOL-003",
         severity="MEDIUM",
@@ -429,7 +429,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         headers={"User-Agent": "Mozilla/5.0 (compatible; Metasploit Framework; +https://www.metasploit.com)"},
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Scanner tool: Gobuster",
         cve="GENERIC-TOOL-004",
         severity="MEDIUM",
@@ -439,7 +439,7 @@ EXPLOIT_PRESETS: list[ExploitPreset] = [
         headers={"User-Agent": "gobuster/3.6"},
         kind="generic", component="core", surface="backend",
     ),
-    ExploitPreset(
+    PatternPreset(
         name="Scanner tool: WPScan",
         cve="GENERIC-TOOL-005",
         severity="MEDIUM",
@@ -472,10 +472,10 @@ _CATEGORY_OVERRIDES: dict[str, dict] = {
     "GENERIC-WP-003": {"kind": "generic", "component": "core"},
     "GENERIC-WP-004": {"kind": "generic", "component": "core"},
 }
-EXPLOIT_PRESETS = [replace(p, **_CATEGORY_OVERRIDES.get(p.cve, {})) for p in EXPLOIT_PRESETS]
+PATTERN_PRESETS = [replace(p, **_CATEGORY_OVERRIDES.get(p.cve, {})) for p in PATTERN_PRESETS]
 
 
-def filter_presets(presets, kind: str = "", component: str = "", surface: str = "") -> list[ExploitPreset]:
+def filter_presets(presets, kind: str = "", component: str = "", surface: str = "") -> list[PatternPreset]:
     """Presets matching every non-empty category ("" = any)."""
     return [p for p in presets
             if (not kind or p.kind == kind)
@@ -484,11 +484,11 @@ def filter_presets(presets, kind: str = "", component: str = "", surface: str = 
 
 
 def group_presets(presets, kind: str = "", component: str = "",
-                  surface: str = "") -> list[tuple[str, list[ExploitPreset]]]:
-    """The presets matching the selection, grouped for the exploit dropdown.
+                  surface: str = "") -> list[tuple[str, list[PatternPreset]]]:
+    """The presets matching the selection, grouped for the pattern dropdown.
 
     Each group is (heading, presets). The heading names the categories the
-    selection leaves open, e.g. "CVE exploit · Plugin / theme · Backend" with
+    selection leaves open, e.g. "CVE pattern · Plugin / theme · Backend" with
     nothing selected, or just "Backend" once Type and Target are fixed. With
     every category selected there is one group with an empty heading. Groups
     follow the KINDS / COMPONENTS / SURFACES order; presets keep their own
@@ -496,7 +496,7 @@ def group_presets(presets, kind: str = "", component: str = "",
     axes = [(name, values) for name, values, chosen in (
         ("kind", KINDS, kind), ("component", COMPONENTS, component),
         ("surface", SURFACES, surface)) if not chosen]
-    groups: dict[tuple, list[ExploitPreset]] = {}
+    groups: dict[tuple, list[PatternPreset]] = {}
     for p in filter_presets(presets, kind, component, surface):
         groups.setdefault(tuple(getattr(p, name) for name, _ in axes), []).append(p)
 
@@ -532,7 +532,7 @@ def build_request_argv(method: str, url: str, headers: dict[str, str] | None = N
     return argv
 
 
-def build_curl_argv(preset: ExploitPreset, base_url: str) -> list[str]:
+def build_curl_argv(preset: PatternPreset, base_url: str) -> list[str]:
     """build_request_argv() for a preset against base_url (e.g.
     "https://localhost")."""
     return build_request_argv(preset.method, base_url.rstrip("/") + preset.path, preset.headers, preset.body)

@@ -6,7 +6,7 @@
 -- uses, so this tests the REAL script text that pool_router.lua sends to Redis.
 --
 -- Guarantees checked:
---   1. While a free ready pool exists, every new attacker IP gets a pool that
+--   1. While a free ready pool exists, every new user IP gets a pool that
 --      no other IP owns ("exclusive"), and the same IP always keeps its pool.
 --   2. Each exclusive assignment queues a wake-up for pool_manager, which is
 --      what builds the next spare pool.
@@ -15,7 +15,7 @@
 --      ("pending"); once growth is capped (resource limit reached) new
 --      sessions reuse ready pools in strict round-robin for good ("shared").
 --   4. A pool pool_manager registers later (a new spare) is picked up by the
---      next attacker; stale/unready entries in the free set are never handed out.
+--      next user; stale/unready entries in the free set are never handed out.
 --   5. No ready pool at all -> {0, "none"} rather than a made-up pool.
 
 package.path = "../?.lua;" .. package.path
@@ -114,7 +114,7 @@ local function new_redis()
     return r
 end
 
-print("== exclusive assignment: one attacker per pool ==")
+print("== exclusive assignment: one user per pool ==")
 do
     local r = new_redis()
     for n = 1, 3 do r.add_pool(n) end
@@ -125,25 +125,25 @@ do
         if mode ~= "exclusive" or owner[pool] then ok_unique = false end
         owner[pool] = "10.0.0." .. i
     end
-    check("3 attackers -> 3 distinct pools, all exclusive", ok_unique)
+    check("3 users -> 3 distinct pools, all exclusive", ok_unique)
     check("lowest free pool is handed out first (1,2,3)",
           owner[1] == "10.0.0.1" and owner[2] == "10.0.0.2" and owner[3] == "10.0.0.3")
     local p, m = r.assign("10.0.0.2")
     check("a known IP keeps its pool", p == 2 and m == "existing")
     check("each exclusive assignment queued a pool_manager wake-up", #r.lists[rules.PROVISION_KEY] == 3)
-    check("owner set holds exactly the one attacker",
+    check("owner set holds exactly the one user",
           r.sets[rules.OWNER_PREFIX .. "1"]["10.0.0.1"] and next(r.sets[rules.OWNER_PREFIX .. "1"], "10.0.0.1") == nil)
     check("assignment TTL is applied", r.ttl["honeypot_pool_session:10.0.0.1"] == 86400)
 end
 
-print("== spare pool added after an assignment is used by the next attacker ==")
+print("== spare pool added after an assignment is used by the next user ==")
 do
     local r = new_redis()
     for n = 1, 3 do r.add_pool(n) end
     for i = 1, 3 do r.assign("10.0.1." .. i) end
     r.add_pool(4)  -- pool_manager finished building a spare
     local p, m = r.assign("10.0.1.4")
-    check("4th attacker gets the new spare exclusively", p == 4 and m == "exclusive")
+    check("4th user gets the new spare exclusively", p == 4 and m == "exclusive")
 end
 
 print("== no free pool while scaling up: borrow round-robin, wait for own pool ==")
