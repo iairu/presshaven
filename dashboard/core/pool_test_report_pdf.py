@@ -1250,7 +1250,7 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                    '<th>Built for</th><th>Started</th><th>Build time</th><th>Phases</th></tr>'
                    + "".join(
                        f'<tr><td>{b.pool}</td><td>{_esc(b.reason or "-")}</td><td>{_mmss(b.start)}</td>'
-                       f'<td>{_secs(b.seconds)}{"" if b.ok else " &ndash; failed: " + _esc(b.error[:120])}</td>'
+                       f'<td>{_secs(b.seconds)}{_build_outcome(b)}</td>'
                        f'<td>{_esc(", ".join(f"{n} {s:.0f} s" for n, s in b.phases) or "-")}</td></tr>'
                        for b in summ.builds) + '</table><br/>')
     elif not summ.builds:
@@ -1345,6 +1345,16 @@ def _pools_before_count(sd: dict) -> int:
     return len(sd.get("pools_before", [])) + len(_building_before(sd))
 
 
+def _build_outcome(b) -> str:
+    """After a build's time: nothing when it succeeded, 'still building' when
+    the report was saved before it finished (it had not failed), else the error."""
+    if b.ok:
+        return ""
+    if b.seconds is None:
+        return " &ndash; still building when the report was saved"
+    return " &ndash; failed: " + _esc(b.error[:120] or "no error given")
+
+
 def _scaledown_html(data: PoolTestData) -> str:
     """Section: how pools are scaled down when idle, and what the forced
     scale-down at the end of this run freed and how long it took."""
@@ -1408,6 +1418,21 @@ def _scaledown_html(data: PoolTestData) -> str:
                  ("Containers running", f"{before.containers} \u2192 {after.containers}")]
     else:
         rows.append(("Measured use", "no resource samples around the scale-down"))
+    late, cleanup = summ.late_builds, sd.get("cleanup") or {}
+    if late or cleanup:
+        pools = ", ".join(str(b.pool) for b in late) or ", ".join(map(str, cleanup.get("building", [])))
+        what = (f"pool_manager started building pool(s) {pools} for the sessions the reassignment check "
+                "(below) parked on a surviving pool. " if pools else "")
+        if cleanup.get("done") is not None:
+            what += (f"The test released those sessions again and removed what was built for them "
+                     f"(second scale-down), leaving {len(cleanup.get('pools_after', []))} pool(s): "
+                     f"{', '.join(map(str, cleanup.get('pools_after', []))) or '-'}.")
+        elif cleanup:
+            what += "The test released those sessions again; removing the extra pools did not finish."
+        else:
+            what += ("They were still building when the report was saved and stay until the idle "
+                     "timeout removes them.")
+        rows.append(("After the reassignment check", what))
     out.append('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
                'style="border-collapse:collapse; color:#333;">'
                + "".join(f'<tr><td width="32%"><b>{_esc(k)}</b></td><td>{_esc(v)}</td></tr>' for k, v in rows)

@@ -760,6 +760,10 @@ class ScalingSummary:
     released: list[tuple[float, int, int, str]] = field(default_factory=list)  # (t, pool, sessions, reason)
     abandoned: list[AbandonedSession] = field(default_factory=list)
     owners: dict[int, int] = field(default_factory=dict)       # pool -> first window to own it
+    # Builds pool_manager started after the scale-down request -- for the
+    # sessions the reassignment check parked on a surviving pool -- kept out
+    # of the run's builds (they were still running, or were cleaned up again).
+    late_builds: list[PoolBuild] = field(default_factory=list)
 
 
 def session_timelines(samples: list[Sample], end: float) -> dict[tuple[int, str], list]:
@@ -857,6 +861,14 @@ def scaling_summary(data: PoolTestData) -> ScalingSummary:
     for pool, e in starts.items():   # started during the run, not finished
         builds.append(PoolBuild(int(pool), float(e["at"]), None, False, e.get("reason", "")))
     builds.sort(key=lambda b: b.start)
+    cut = (data.scaledown or {}).get("requested")
+    late_builds = [b for b in builds if cut is not None and b.start >= cut]
+    builds = [b for b in builds if b not in late_builds]
+    # Pools the test's own cleanup removed after the reassignment check are
+    # not the forced scale-down's removals.
+    cleanup_at = ((data.scaledown or {}).get("cleanup") or {}).get("start")
+    if cleanup_at is not None:
+        removals = [r for r in removals if r.at < cleanup_at]
 
     samples = run_samples(data)
     tl = timelines(samples, data.duration)
@@ -938,7 +950,7 @@ def scaling_summary(data: PoolTestData) -> ScalingSummary:
                "assigned while capped" if capped_then else "assigned round-robin (no free pool)")
         limit.append(LimitCase(w, pool, first[0], sorted(earlier), how, outside, sid))
     return ScalingSummary(builds, borrow, limit, capped, dict(data.reserve), tl,
-                          removals, released, abandoned, owner_of)
+                          removals, released, abandoned, owner_of, late_builds)
 
 
 @dataclass

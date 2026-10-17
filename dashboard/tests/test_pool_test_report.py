@@ -216,6 +216,24 @@ class ScalingTests(unittest.TestCase):
         d.scaledown = {}
         self.assertEqual(len(scaling_summary(d).borrow), 1)      # without the cut it was counted
 
+    def test_builds_after_the_scale_down_are_not_the_runs(self):
+        from core.pool_test_report import scaling_summary
+        from core.pool_test_report_pdf import _build_outcome
+        H = ("HONEYPOT", 1, False)
+        d = self._data([(0, [H]), (50, [H])],
+                       [{"type": "build_start", "pool": 8, "reason": "spare", "at": 20},
+                        {"type": "build", "pool": 8, "start": 20, "seconds": 30, "ok": True, "at": 50},
+                        {"type": "build_start", "pool": 4, "reason": "waiting session", "at": 70},
+                        {"type": "scaledown", "pool": 9, "seconds": 1, "forced": True, "at": 65},
+                        {"type": "scaledown", "pool": 4, "seconds": 1, "forced": True, "at": 140}])
+        d.scaledown = {"requested": 60, "cleanup": {"start": 100}}
+        s = scaling_summary(d)
+        self.assertEqual([b.pool for b in s.builds], [8])
+        self.assertEqual([b.pool for b in s.late_builds], [4])
+        self.assertEqual([r.pool for r in s.removals], [9])     # not the clean-up's removal of pool 4
+        self.assertIn("still building", _build_outcome(s.late_builds[0]))
+        self.assertEqual(_build_outcome(s.builds[0]), "")
+
     def test_newcomer_on_a_pool_at_the_limit_is_case_b(self):
         from core.pool_test_report import scaling_summary
         P, H = ("PRODUCTION", None, False), ("HONEYPOT", 1, False)

@@ -92,6 +92,10 @@ POOL_REFRESH_MS = 5000
 LOAD_RETRY_DELAYS_MS = (800, 2000, 4000, 8000)
 LOAD_RETRIES = len(LOAD_RETRY_DELAYS_MS)
 
+# How long the clean-up after the reassignment check waits for the pool builds
+# that check started, before removing them (a build takes about a minute).
+CLEANUP_BUILD_TIMEOUT_S = 180
+
 # While the report waits for pools, every window opens its next page this often.
 BROWSE_EVERY_S = 10.0
 
@@ -1270,8 +1274,8 @@ class PoolTestPage(QWidget):
         # Every session a window held during the run, not just its current one:
         # a window that cleared its data left its old session behind, still
         # owning (or waiting for) a pool, which then outlived the scale-down.
-        sids = sorted({sid for sid in self._session_ids[:self._count] if sid}
-                      | {smp.session_id for smp in self._samples if smp.session_id})
+        sids = ({sid for sid in self._session_ids[:self._count] if sid}
+                | {smp.session_id for smp in self._samples if smp.session_id})
         try:
             before = self._blocking(lambda: redis_inspect.pool_state(remote))
         except Exception:  # noqa: BLE001
@@ -1279,24 +1283,8 @@ class PoolTestPage(QWidget):
         sampler.interval = 3.0
         self._spin(4000)                    # a resource sample just before
         requested = self._now()
-        self._blocking(lambda: redis_inspect.request_scaledown(remote, sids))
-        start, state, done = time.monotonic(), before, None
-        while True:
-            if self._cancelled:
-                raise _Cancelled()
-            self._spin(2000)
-            try:
-                state = self._blocking(lambda: redis_inspect.pool_state(remote))
-            except Exception:  # noqa: BLE001
-                continue
-            elapsed = int(time.monotonic() - start)
-            if not state.get("scaledown_pending"):
-                done = self._now()
-                break
-            if elapsed >= SCALEDOWN_TIMEOUT_S:
-                break
-            self._progress(f"Step {n}/{total_steps}: forced scale-down — {len(state.get('ready', []))} "
-                           f"pool(s) left ({elapsed // 60}:{elapsed % 60:02d})", n, total)
+        done, state = self._scaledown_and_wait(remote, sids, before, f"Step {n}/{total_steps}: "
+                                               "forced scale-down", n, total)
         self._spin(8000)                    # resource samples after the removal
         try:
             state = self._blocking(lambda: redis_inspect.pool_state(remote))
@@ -1337,15 +1325,75 @@ class PoolTestPage(QWidget):
             browser.clear_cookies()
             self._session_ids[i] = ""
             self._style_decision(i, Decision())
+        cleanup = (self._cleanup_after_reassign(remote, sids | {r["session_after"] for r in reassign
+                                                                if r.get("session_after")},
+                                                n, total_steps, total) if reassign else {})
         status = (before.get("status") or {}) if before else {}
         return {"requested": requested, "done": done, "sessions": len(sids),
                 "pools_before": before.get("ready", []) if before else [],
                 "building_before": sorted(int(n) for n in status.get("building", {})),
                 "pools_after": state.get("ready", []) if state else [],
-                "removed_pools": removed, "reassign": reassign,
+                "removed_pools": removed, "reassign": reassign, "cleanup": cleanup,
                 "idle_timeout": status.get("idle_timeout"), "spares": status.get("spares"),
                 "mem_per_pool": status.get("mem_per_pool"),
                 "cpus_per_pool": status.get("cpus_per_pool")}
+
+    def _scaledown_and_wait(self, remote, sids, state: dict, label: str, n: int,
+                            total: int) -> tuple[float | None, dict]:
+        """Release `sids` and have pool_manager scale down now; wait until it
+        reports the request done. Returns (time done or None on timeout, the
+        last pool state read)."""
+        self._blocking(lambda: redis_inspect.request_scaledown(remote, sorted(sids)))
+        start, done = time.monotonic(), None
+        while True:
+            if self._cancelled:
+                raise _Cancelled()
+            self._spin(2000)
+            try:
+                state = self._blocking(lambda: redis_inspect.pool_state(remote))
+            except Exception:  # noqa: BLE001
+                continue
+            elapsed = int(time.monotonic() - start)
+            if not state.get("scaledown_pending"):
+                done = self._now()
+                break
+            if elapsed >= SCALEDOWN_TIMEOUT_S:
+                break
+            self._progress(f"{label} — {len(state.get('ready', []))} pool(s) left "
+                           f"({elapsed // 60}:{elapsed % 60:02d})", n, total)
+        return done, state
+
+    def _cleanup_after_reassign(self, remote, sids: set[str], n: int, total_steps: int,
+                                total: int) -> dict:
+        """The reassignment check sent still-flagged sessions back to the shop
+        with no free pool left, so the router parked them on a surviving pool
+        and pool_manager started building pools for them -- which the run then
+        left behind (~350 MB each, plus the build load) until the idle timeout.
+        Release the sessions again (so no finished build is handed to them),
+        wait for those builds, and scale down once more to remove the pools
+        nobody needs."""
+        label = f"Step {n}/{total_steps}: cleaning up after the reassignment check"
+        start = self._now()
+        _done, state = self._scaledown_and_wait(remote, sids, {}, label, n, total)
+        building: set[int] = set()
+        t0 = time.monotonic()
+        while True:
+            now_building = {int(p) for p in (state.get("status") or {}).get("building", {})}
+            building |= now_building
+            if not now_building or time.monotonic() - t0 >= CLEANUP_BUILD_TIMEOUT_S:
+                break
+            self._progress(f"{label} — waiting for pool(s) {', '.join(map(str, sorted(now_building)))} "
+                           "to finish building before removing them", n, total)
+            self._spin(3000)
+            try:
+                state = self._blocking(lambda: redis_inspect.pool_state(remote))
+            except Exception:  # noqa: BLE001
+                pass
+        done = self._now()
+        if building:
+            done, state = self._scaledown_and_wait(remote, set(), state, label, n, total)
+        return {"start": start, "done": done, "building": sorted(building),
+                "pools_after": (state or {}).get("ready", [])}
 
     def _run_scenario(self, total_unused, _total, preset) -> PoolTestData | None:
         remote, target = self._remote(), target_for("edge", self.state)
