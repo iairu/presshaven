@@ -104,12 +104,28 @@ def _frames_table(data: PoolTestData) -> str:
             '<th>User-Agent (tail)</th></tr>' + "".join(rows) + '</table>')
 
 
+# router.lua's honeypot_reason tokens in plain words. A pattern or plugin match
+# diverts whatever the score; only "high risk score" needs the threshold.
+_REASON_TEXT = {"high_risk_score": "score over the threshold", "cve_pattern_match": "CVE pattern match",
+                "vulnerable_plugin_access": "vulnerable plugin request",
+                "multiple_admin_attempts": "repeated admin attempts",
+                "accumulated_suspicious_activities": "accumulated suspicious activity",
+                "rapid_automation_detected": "automation detected",
+                "suspicious_file_upload": "suspicious file upload"}
+
+
+def _reason_text(reason: str) -> str:
+    return _REASON_TEXT.get(reason, reason.replace("_", " "))
+
+
 def _decision_cell(d) -> str:
     color = {"HONEYPOT": _ORANGE, "PRODUCTION": _GREEN}.get(d.route, _GREY)
     label = {"HONEYPOT": "honeypot", "PRODUCTION": "production"}.get(d.route, d.route.lower() or "no route")
+    why = (f'<br/><span style="font-size:7pt; color:#555;">why: {_esc(_reason_text(d.reason))}</span>'
+           if d.route == "HONEYPOT" and d.reason else "")
     return (f'{_badge(label, color)}<br/><span style="font-size:8pt;">'
             f'{_esc("pool " + str(d.pool) if d.pool is not None else "no pool")}'
-            f'{_esc(", score " + str(d.score)) if d.score is not None else ""}</span>')
+            f'{_esc(", score " + str(d.score)) if d.score is not None else ""}</span>{why}')
 
 
 def _cart_cell(c) -> str:
@@ -202,7 +218,12 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
            '<p style="color:#555;">All windows move in every step. A user\'s pool '
            'must appear in their own step, differ from the earlier ones, and never change '
            'afterwards &ndash; except once, from a pool it only borrowed while its own was '
-           'being built to that new pool.</p>']
+           'being built to that new pool.</p>'
+           '<p style="color:#555;">Under each routing badge: the session\'s pool, its risk score and, '
+           'once diverted, why the router diverted it. A CVE pattern match or a request for a '
+           'vulnerable plugin diverts the session whatever its score, so a diverted window can show a '
+           'score below the diversion threshold (80 by default); only &ldquo;score over the '
+           'threshold&rdquo; depends on it.</p>']
     # At most STEP_COLUMNS windows side by side, the rest in a second block
     # under them: ten columns ran off the page's right edge (window J's
     # column was cut off) and squeezed the badges until they broke mid-word.
