@@ -566,13 +566,32 @@ def _event_markers(events: list) -> list[tuple[int, float, float, list[str]]]:
 
 
 def _summarize_events(labels: list[str]) -> str:
-    """'a healthy', 'b healthy', 'c started' -> 'healthy: a, b; started: c'."""
-    groups: dict[str, list[str]] = {}
-    for label in labels:
-        svc, state = event_state(label)
-        groups.setdefault(state, []).append(svc)
+    """'a healthy', 'b healthy', 'c started' -> 'healthy: a, b; started: c'.
+
+    ``labels`` are in time order. A service's event joins the earlier group of
+    its state only when that service has no event in a group after it, so
+    "x started" is never listed after "x finished"; a "running, health
+    pending" followed by healthy / unhealthy within the marker is left out
+    (it read "healthy: x; running, health pending: x")."""
+    events = [event_state(label) for label in labels]
+    settled = {svc for svc, state in events if state in ("healthy", "unhealthy")}
+    groups: list[tuple[str, list[str]]] = []
+    for svc, state in events:
+        if state == "running, health pending" and svc in settled:
+            continue
+        target = None
+        for k in range(len(groups) - 1, -1, -1):
+            if groups[k][0] == state:
+                target = k
+                break
+            if svc in groups[k][1]:
+                break           # this service already has a later event
+        if target is None:
+            groups.append((state, [svc]))
+        else:
+            groups[target][1].append(svc)
     return "; ".join(f"{state}: {', '.join(svcs)}" if state else ", ".join(svcs)
-                     for state, svcs in groups.items())
+                     for state, svcs in groups)
 
 
 def _fmt_t(t: float) -> str:
