@@ -118,6 +118,16 @@ def _reason_text(reason: str) -> str:
     return _REASON_TEXT.get(reason, reason.replace("_", " "))
 
 
+def _table_chunks(open_tag: str, head: str, rows: list[str], per: int) -> str:
+    """One table of `per` rows at a time, each with the header, instead of one
+    long table. Qt can only keep a table together by moving all of it to the
+    next page (core/report_pagination.py) and breaks a long one anywhere, even
+    inside a row; small chunks move whole. Columns need fixed widths in `head`
+    so the chunks line up."""
+    return "".join(open_tag + head + "".join(rows[i:i + per]) + "</table>"
+                   for i in range(0, len(rows), per))
+
+
 def _decision_cell(d) -> str:
     color = {"HONEYPOT": _ORANGE, "PRODUCTION": _GREEN}.get(d.route, _GREY)
     label = {"HONEYPOT": "honeypot", "PRODUCTION": "production"}.get(d.route, d.route.lower() or "no route")
@@ -379,12 +389,13 @@ def _cleared_html(data: PoolTestData) -> str:
                    'pool: ' + _esc(", ".join(data.frames[e.window].label for e in escaped
                                              if e.window < len(data.frames))) + '.</p>')
     return (intro + summary + alerts
-            + '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><thead><tr><th width="9%">Time</th>'
-            '<th width="8%">Step</th><th width="12%">Window</th><th width="23%">Tampering</th>'
-            '<th width="19%">Session before &rarr; after</th><th width="29%">What the stack did</th></tr></thead>'
-            + "".join(rows) + '</table>'
-            '<p style="color:#555; font-size:9pt;">Step: the tampering happened just before that step of '
+            + _table_chunks('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+                            'style="border-collapse:collapse; color:#333;">',
+                            '<thead><tr><th width="9%">Time</th>'
+                            '<th width="8%">Step</th><th width="12%">Window</th><th width="23%">Tampering</th>'
+                            '<th width="19%">Session before &rarr; after</th><th width="29%">What the stack did</th>'
+                            '</tr></thead>', rows, 4)
+            + '<p style="color:#555; font-size:9pt;">Step: the tampering happened just before that step of '
             '<i>Step by step</i>.</p>')
 
 
@@ -413,10 +424,11 @@ def _runs_html(data: PoolTestData) -> str:
             '<p style="color:#555;">Each window runs a different pattern, picked from the ones '
             'a live probe showed divert within three attempts. If a chosen pattern still did '
             'not divert in three attempts, the next candidate is used instead.</p>'
-            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><thead><tr><th>Round</th><th>Window</th>'
-            '<th>Pattern</th><th>Name</th><th>Routing</th><th>Pool</th></tr></thead>'
-            + "".join(rows) + '</table>')
+            + _table_chunks('<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+                            'style="border-collapse:collapse; color:#333;">',
+                            '<thead><tr><th width="10%">Round</th><th width="12%">Window</th>'
+                            '<th width="20%">Pattern</th><th width="27%">Name</th><th width="19%">Routing</th>'
+                            '<th width="12%">Pool</th></tr></thead>', rows, 10))
 
 
 def pool_owner_letters(data: PoolTestData, summ: ScalingSummary | None = None) -> dict[int, str]:
