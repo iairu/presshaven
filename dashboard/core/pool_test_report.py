@@ -941,6 +941,27 @@ def scaling_summary(data: PoolTestData) -> ScalingSummary:
             else:
                 borrow.append(BorrowCase(w, pool, start, None, "waiting", None, None, sid))
 
+    # A borrow shorter than the gap between two routing reads never shows in
+    # the samples: the session's diverting request lands on the borrowed pool
+    # and pool_manager hands it its own pool before the next read. Its
+    # hand-off event still records it (borrowed pool, wait) -- without it the
+    # report listed fewer borrows than the registry counted, and called the
+    # borrowed pool's traffic from that window unexplained.
+    sid_window = {smp.session_id: smp.window for smp in samples if smp.session_id}
+    seen = {c.session_id for c in borrow}
+    for sid, h in handoffs.items():
+        w = sid_window.get(sid)
+        if w is None or sid in seen or (cut is not None and float(h.get("at", 0)) >= cut):
+            continue
+        waited = h.get("waited")
+        at = float(h["at"])
+        borrowed = h.get("borrowed")
+        borrow.append(BorrowCase(w, int(borrowed) if borrowed is not None else None,
+                                 at - float(waited) if waited is not None else at, at, "own",
+                                 int(h.get("pool")) if h.get("pool") is not None else None,
+                                 waited, sid))
+    borrow.sort(key=lambda c: c.start)
+
     # Case B: a window's CURRENT session sharing its pool for good, with
     # another window (as the later arrival) or with sessions outside the
     # test (the registry counts more owners than windows on the pool).

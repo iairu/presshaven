@@ -203,6 +203,15 @@ class ScalingTests(unittest.TestCase):
         self.assertEqual((s.builds[0].pool, s.builds[0].reason, s.builds[0].seconds), (2, "waiting session", 28))
         self.assertEqual(s.limit, [])
 
+    def test_a_borrow_between_two_reads_comes_from_the_handoff(self):
+        from core.pool_test_report import scaling_summary
+        P, H5 = ("PRODUCTION", None, False), ("HONEYPOT", 5, False)
+        # The window is never sampled on borrowed pool 2: production, then its own pool 5.
+        d = self._data([(0, [P]), (10, [P]), (20, [H5])],
+                       [{"type": "handoff", "pool": 5, "session": "s0", "borrowed": 2, "waited": 4, "at": 16}])
+        (c,) = scaling_summary(d).borrow
+        self.assertEqual((c.window, c.borrowed, c.own_pool, c.start, c.end, c.outcome), (0, 2, 5, 12, 16, "own"))
+
     def test_reads_after_the_scale_down_are_not_the_run(self):
         from core.pool_test_report import OWN, scaling_summary
         H1, H2 = ("HONEYPOT", 1, False), ("HONEYPOT", 2, False)
