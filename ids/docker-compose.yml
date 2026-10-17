@@ -392,6 +392,10 @@ services:
   # failover consults.
   # ---------------------------------------------------------------------------
   honeypot_content_sync:
+    # tini as PID 1: it forwards SIGTERM. Without it the process (a shell
+    # loop / bash script / Python with no SIGTERM handler) ignored the
+    # signal as PID 1 and `down` killed it after the 10 s stop timeout.
+    init: true
     logging: *default-logging
     build: ./images/content_sync
     depends_on:
@@ -457,6 +461,10 @@ services:
   # (the router then reuses the 3 pools round-robin).
   # ---------------------------------------------------------------------------
   pool_manager:
+    # tini as PID 1: it forwards SIGTERM. Without it the process (a shell
+    # loop / bash script / Python with no SIGTERM handler) ignored the
+    # signal as PID 1 and `down` killed it after the 10 s stop timeout.
+    init: true
     logging: *default-logging
     build: ./images/pool_manager
     depends_on:
@@ -1464,7 +1472,7 @@ services:
       sh -c "
       echo 'Starting Redis with fresh data...'
       rm -rf /data/*
-      redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+      exec redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
       "
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
@@ -1680,6 +1688,10 @@ services:
   # and is limited in memory and CPU to avoid interfering with live traffic.
   # ---------------------------------------------------------------------------
   backup_service:
+    # tini as PID 1: it forwards SIGTERM. Without it the process (a shell
+    # loop / bash script / Python with no SIGTERM handler) ignored the
+    # signal as PID 1 and `down` killed it after the 10 s stop timeout.
+    init: true
     logging: *default-logging
     # alpine + mysql-client, built once (see images/backup_service/Dockerfile)
     # rather than `apk add`ed on every container start.
@@ -1891,6 +1903,10 @@ services:
   # Recent history is still shipped to Elasticsearch by Vector, so truncating
   # the local copy loses nothing important.
   log_capper:
+    # tini as PID 1: it forwards SIGTERM. Without it the process (a shell
+    # loop / bash script / Python with no SIGTERM handler) ignored the
+    # signal as PID 1 and `down` killed it after the 10 s stop timeout.
+    init: true
     image: alpine:latest
     container_name: log_capper
     restart: unless-stopped
