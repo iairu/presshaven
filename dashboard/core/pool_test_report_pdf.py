@@ -6,6 +6,8 @@ GUI-thread only, same print machinery and Baskerville styling as
 core/pattern_report_pdf.py."""
 from __future__ import annotations
 
+import re
+
 from PyQt6.QtCore import QMarginsF, QPointF, QRectF, QSizeF, Qt, QUrl
 from PyQt6.QtGui import QFont, QFontMetrics, QPageLayout, QPageSize, QPainter, QPen, QPolygonF
 from PyQt6.QtPrintSupport import QPrinter
@@ -16,7 +18,7 @@ from core.startup_events import fmt_tick, nice_axis
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
                                      _pool_state_html, _report_font_family)
-from core.pool_test_report import (REASSIGN_FAILED, REASSIGNED, REASSIGN_UNKNOWN, reassignment_outcome,
+from core.pool_test_report import (load_problems, REASSIGN_FAILED, REASSIGNED, REASSIGN_UNKNOWN, reassignment_outcome,
                                    TAMPER_ACCEPTED, BORROWED, CART_LOST, EXCLUSIVE, INCOMPLETE, MERGED, OWN,
                                    PRODUCTION, SHARED, SHARED_EXPECTED, STATES, UNSTABLE,
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
@@ -213,7 +215,10 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
             width = f' width="{100 // per}%"'
             head = "".join(f'<th{width}>{_esc(data.frames[i].label)}</th>' for i in idx)
             acts = "".join(f'<td style="font-size:8pt; color:#555;">'
-                           f'{_esc(step.actions[i]) if i < len(step.actions) else ""}</td>' for i in idx)
+                           f'{_esc(step.actions[i]) if i < len(step.actions) else ""}'
+                           + ('<br/><span style="color:#c62828;"><b>&#9888; page failed to load: '
+                              'screenshot and cart are from the error page</b></span>'
+                              if i in step.failed else '') + '</td>' for i in idx)
             decs = "".join(f'<td>{_decision_cell(step.decisions[i]) if i < len(step.decisions) else ""}</td>'
                            for i in idx)
             carts = ("".join(f'<td style="font-size:8pt;">{_cart_cell(step.carts[i]) if i < len(step.carts) else ""}'
@@ -1151,15 +1156,16 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     rows = [("Windows", f"{len(data.frames)}" + (f", of which {data.delayed} attacked only after "
                                                  "pools were pre-built for them" if data.delayed else "")),
             ("Run time", _mmss(data.duration))]
-    if data.load_failures:
-        rows.append(("Failed page loads", (
-            f"{data.load_failures} failed attempt(s), retried with back-off; "
-            + (f"{data.load_unrecovered} still failed after every retry"
-               + (f", {data.load_recovered} of them fixed by reloading before the next step"
-                  if data.load_recovered else "")
-               if data.load_unrecovered else "every one succeeded on a retry")
-            + ". Chromium aborts loads in flight (ERR_NETWORK_CHANGED) whenever Docker adds or "
-              "removes a container's network interface, i.e. while pools are built or removed.")))
+    if data.load_log:
+        loads, attempts, never = load_problems(data.load_log)
+        fixed = sum(1 for e in data.load_log if e.get("outcome") == "fixed before the next step")
+        text = (f"{loads} page load(s) did not succeed at the first attempt ({attempts} failed "
+                "attempt(s)), retried with back-off"
+                + (f"; {fixed} fixed by reloading before the next step" if fixed else "")
+                + (f"; {len(never)} never loaded (listed below)" if never else "; every one loaded in the end")
+                + ". Chromium aborts loads in flight (ERR_NETWORK_CHANGED) whenever Docker adds or "
+                  "removes a container's network interface, i.e. while pools are built or removed.")
+        rows.append(("Failed page loads", text))
     if status:
         lim = []
         if status.get("max_memory_mb"):
@@ -1204,6 +1210,21 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                'style="border-collapse:collapse; color:#333;">'
                + "".join(f'<tr><td width="32%"><b>{_esc(k)}</b></td><td>{_esc(v)}</td></tr>' for k, v in rows)
                + '</table><br/>')
+    never = load_problems(data.load_log)[2] if data.load_log else []
+    if never:
+        name = lambda w: data.frames[w].label if w < len(data.frames) else f"Window {w + 1}"   # noqa: E731
+        items = "".join(
+            f'<tr><td>{_mmss(e.get("t", 0))}</td><td>{_esc(e.get("step") or "-")}</td>'
+            f'<td>{_esc(name(int(e.get("window", 0))))}</td>'
+            f'<td style="font-size:8pt;">{_esc(re.sub(r"^https?://[^/]+", "", str(e.get("url", ""))) or "/")}</td>'
+            f'<td>{_esc(e.get("outcome", ""))} ({e.get("attempts", 1)} attempt(s))</td></tr>'
+            for e in never)
+        out.append('<p style="color:#555;">Page loads that never loaded (the window showed Chromium\'s '
+                   'error page; steps read in that state are marked in <i>Step by step</i>):</p>'
+                   '<table width="100%" cellspacing="0" cellpadding="3" border="1" '
+                   'style="border-collapse:collapse; color:#333; font-size:9pt;"><thead><tr><th>Time</th>'
+                   '<th>Step</th><th>Window</th><th>Page</th><th>Outcome</th></tr></thead>' + items
+                   + '</table><br/>')
 
     # If building pools was slow, point at the levers that speed it up.
     done_builds = [b for b in summ.builds if b.seconds is not None]

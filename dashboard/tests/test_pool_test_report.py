@@ -389,6 +389,19 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class LoadLogTests(unittest.TestCase):
+    def test_counts_per_load_not_per_attempt(self):
+        from core.pool_test_report import load_problems
+        log = [{"window": 0, "attempts": 3, "outcome": "retried"},
+               {"window": 1, "attempts": 5, "outcome": "failed"},
+               {"window": 2, "attempts": 5, "outcome": "fixed before the next step"},
+               {"window": 3, "attempts": 1, "outcome": "timed out"}]
+        loads, attempts, never = load_problems(log)
+        self.assertEqual(loads, 4)
+        self.assertEqual(attempts, 2 + 5 + 4 + 1)
+        self.assertEqual([e["window"] for e in never], [1, 3])
+
+
 class ReassignmentTests(unittest.TestCase):
     """What a window whose pool the forced scale-down removed got next."""
 

@@ -307,9 +307,7 @@ class PoolTestPage(QWidget):
         self._host_cpus, self._host_mem_total = 0, 0.0   # edge host, for the report
         self._sampling = False   # routing reads go into the run's timeline (see _observe)
         self._load_ok = [True] * MAX_WINDOWS     # last page load per window succeeded
-        # This run's failed page loads (each failed attempt), loads that never
-        # succeeded after every retry, and error pages reloaded before a step.
-        self._load_failures = self._load_unrecovered = self._load_recovered = 0
+        self._load_log: list[dict] = []          # this run's loads that failed at first (_log_load)
 
         self.pool_label = QLabel("")
         self.pool_label.setWordWrap(True)
@@ -636,7 +634,6 @@ class PoolTestPage(QWidget):
                     # give the retry a full timeout of its own.
                     delay = LOAD_RETRY_DELAYS_MS[retries[n]]
                     retries[n] += 1
-                    self._load_failures += 1
 
                     def again(n=n, u=u, b=b):
                         if n in pending:
@@ -645,9 +642,8 @@ class PoolTestPage(QWidget):
                     QTimer.singleShot(delay, again)
                     timer.start(9000 + delay)
                     return
-                if not ok and u.startswith("http"):
-                    self._load_failures += 1
-                    self._load_unrecovered += 1
+                if u.startswith("http") and (not ok or retries[n]):
+                    self._log_load(t, step, n, u, retries[n] + 1, "retried" if ok else "failed")
                 if ok and u.startswith("http") and self._t0:
                     self._pending_loads.append(LoadTiming(
                         t, n, step, (time.monotonic() - started[n]) * 1000.0))
@@ -659,6 +655,9 @@ class PoolTestPage(QWidget):
         timer.start(9000)
         loop.exec()
         timer.stop()
+        for n in sorted(pending):      # never finished loading within the timeout
+            if urls[n].startswith("http"):
+                self._log_load(t, step, n, urls[n], retries[n] + 1, "timed out")
         for browser, conn in conns:
             try:
                 browser.view.loadFinished.disconnect(conn)
@@ -687,12 +686,14 @@ class PoolTestPage(QWidget):
                 return parse_product_ids(self._run_js(w, product_ids_js(slugs)), slugs)
             except ProductListUnreadable as e:
                 error = e
-                self._load_one(w, shop)
+                self._load_one(w, shop, step="product lookup")
         raise error
 
-    def _load_one(self, w: int, url: str, timeout_ms: int = 9000) -> bool:
+    def _load_one(self, w: int, url: str, timeout_ms: int = 9000, step: str = "",
+                  log: bool = True) -> bool:
         """Navigate window `w` alone and wait for the load (retried like _load_all)."""
         browser = self.browsers[w]
+        t = self._now()
         for attempt in range(LOAD_RETRIES + 1):
             loop = QEventLoop()
             got: list = [False]
@@ -713,12 +714,22 @@ class PoolTestPage(QWidget):
             except TypeError:
                 pass
             if got[0]:
+                if attempt and log:
+                    self._log_load(t, step, w, url, attempt + 1, "retried")
                 return True
-            self._load_failures += 1
             if attempt < LOAD_RETRIES:
                 self._spin(LOAD_RETRY_DELAYS_MS[attempt])
-        self._load_unrecovered += 1
+        if log:
+            self._log_load(t, step, w, url, LOAD_RETRIES + 1, "failed")
         return False
+
+    def _log_load(self, t: float, step: str, w: int, url: str, attempts: int, outcome: str) -> None:
+        """One page load that did not succeed at the first attempt: "retried"
+        (loaded on a retry), "failed" / "timed out" (never loaded), later
+        "fixed before the next step" when _recover_error_pages reloads it."""
+        if self._t0:
+            self._load_log.append({"t": round(t, 1), "step": step, "window": w, "url": url,
+                                   "attempts": attempts, "outcome": outcome})
 
     def _recover_error_pages(self) -> int:
         """Reload every window whose last load failed (it shows Chromium's
@@ -729,9 +740,21 @@ class PoolTestPage(QWidget):
             url = browser.view.url().toString()
             if not self._load_ok[w] and url.startswith("http"):
                 n += 1
-                if self._load_one(w, url):
-                    self._load_recovered += 1
+                fixed = self._load_one(w, url, log=False)
+                # The load this repairs is already logged: mark it, don't add one.
+                last = next((e for e in reversed(self._load_log)
+                             if e["window"] == w and e["outcome"] in ("failed", "timed out")), None)
+                if last is not None:
+                    last["outcome"] = "fixed before the next step" if fixed else last["outcome"] + \
+                        ", reload before the next step failed too"
         return n
+
+    def _capture(self) -> tuple[list, list, list[int]]:
+        """Screenshots, carts, and the windows still on an error page (their
+        last load failed), for a StepResult."""
+        failed = [w for w, b in enumerate(self.browsers)
+                  if not self._load_ok[w] and b.view.url().toString().startswith("http")]
+        return [self._grab(b) for b in self.browsers], self._read_carts(), failed
 
     def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
         """Every window loads the same product page, one window at a time, so
@@ -773,7 +796,8 @@ class PoolTestPage(QWidget):
             else:
                 # Failed (see LOAD_RETRIES): no timing for it, but don't leave
                 # the window on Chromium's error page for the next step.
-                self._load_one(w, url)
+                fixed = self._load_one(w, url, log=False)
+                self._log_load(t, f"latency probe: {label}", w, url, 2, "retried" if fixed else "failed")
         self._settled_decisions(need_sessions=True)   # tags the probe loads
 
     # ---- run timeline (samples for the scaling / latency figures) ----
@@ -1124,7 +1148,7 @@ class PoolTestPage(QWidget):
         for w, (preset, attempts) in last.items():
             actions[w] = f"Opens {preset.cve} ({attempts} attempt(s))"
         return StepResult(title, detail, actions, decisions,
-                          [self._grab(b) for b in self.browsers], self._read_carts())
+                          *self._capture())
 
     def _wait_for_scaling(self, n: int, total_steps: int, total: int) -> StepResult:
         """Wait until pool_manager has built a pool for every window that is
@@ -1178,7 +1202,7 @@ class PoolTestPage(QWidget):
             "them, and must now each be in their own. Once the resource limit is reached no "
             "more pools are built and the remaining windows keep sharing the ready pools "
             "round-robin.",
-            actions, decisions, [self._grab(b) for b in self.browsers], self._read_carts())
+            actions, decisions, *self._capture())
 
     def _baseline_new_pools(self, state: dict) -> None:
         """Evidence baseline for pools that became ready during the run, taken
@@ -1258,7 +1282,7 @@ class PoolTestPage(QWidget):
             "windows find a pool of their own the moment they are diverted instead of "
             "borrowing one round-robin. If the resource limit stops the build first, they "
             "share the ready pools round-robin instead.",
-            actions, decisions, [self._grab(b) for b in self.browsers], self._read_carts())
+            actions, decisions, *self._capture())
 
     def _forced_scaledown(self, n: int, total_steps: int, total: int,
                           sampler: _UsageSampler) -> dict:
@@ -1436,7 +1460,7 @@ class PoolTestPage(QWidget):
         self._host_cpus = _h[0] if _h else 0
         self._host_mem_total = _h[1] if _h else 0.0
         self._t0 = time.time()
-        self._load_failures = self._load_unrecovered = self._load_recovered = 0
+        self._load_log = []
         self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
         self._sampling = True
         self._reserve = {}
@@ -1491,7 +1515,7 @@ class PoolTestPage(QWidget):
             results.append(StepResult(
                 "All windows open the shop", f"{count} new sessions, all routed to production.",
                 ["Browses the shop"] * len(self.browsers), decisions,
-                [self._grab(b) for b in self.browsers], self._read_carts()))
+                *self._capture()))
 
             # Every window fills its own cart, while still on production.
             next_step("every window fills its cart")
@@ -1512,7 +1536,7 @@ class PoolTestPage(QWidget):
                 ["Adds " + ", ".join(f"{slug} \u00d7 {q}" for slug, q in items)
                  + (", then looks at " + ", ".join(dict.fromkeys(self._seen[w])) if self._seen[w] else "")
                  for w, items in enumerate(cart_plan)],
-                decisions, [self._grab(b) for b in self.browsers], self._read_carts()))
+                decisions, *self._capture()))
             self._latency_probe("all on production", total_steps, total, step)
             # Every window is still on production: the pools' DB counters since
             # the baseline are their own background (healthchecks, cron, sync).
@@ -1570,7 +1594,7 @@ class PoolTestPage(QWidget):
                 "Sticky binding: each second pattern must land in the pool the window already "
                 "owns, nobody changes pool, nobody is merged.",
                 [f"Opens {p.cve}" if p else self._browsed(w) for w, p in enumerate(second)], decisions,
-                [self._grab(b) for b in self.browsers], self._read_carts()))
+                *self._capture()))
 
             self._latency_probe("at the end", total_steps, total, step)
 
@@ -1586,7 +1610,7 @@ class PoolTestPage(QWidget):
                 "The cart page, served by each window's honeypot pool, must show the same "
                 "products and quantities that were added on production.",
                 ["Opens the cart page"] * len(self.browsers), decisions,
-                [self._grab(b) for b in self.browsers], self._read_carts()))
+                *self._capture()))
         except _Cancelled:
             return None
         self._resolve_cleared(cleared, results)
@@ -1638,8 +1662,7 @@ class PoolTestPage(QWidget):
             marks=list(self._marks), reserve=dict(self._reserve),
             usage=list(sampler.samples), scaledown=scaledown,
             host_cpus=self._host_cpus, host_mem_total_mb=self._host_mem_total,
-            load_failures=self._load_failures, load_unrecovered=self._load_unrecovered,
-            load_recovered=self._load_recovered,
+            load_log=list(self._load_log),
             cleared=cleared, clear_seed=clear_seed)
 
     def reset_sessions(self) -> None:

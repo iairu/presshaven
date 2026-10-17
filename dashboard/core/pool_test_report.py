@@ -511,6 +511,9 @@ class StepResult:
     decisions: list[Decision]     # per frame, read after the step settled
     shots: list[Any] = field(default_factory=list)   # per frame QImage
     carts: list[CartState | None] = field(default_factory=list)   # per frame, read after the step
+    # Windows whose last page load had failed when the step was read: their
+    # screenshot (and cart) come from Chromium's error page, not the shop.
+    failed: list[int] = field(default_factory=list)
 
 
 def sticky_violations(steps: list[StepResult], resets: set[tuple[int, int]] | None = None) -> list[str]:
@@ -615,12 +618,20 @@ class PoolTestData:
     # Windows clearing their browser data mid-run (clear_seed None: switched off).
     cleared: list[ClearEvent] = field(default_factory=list)
     clear_seed: int | None = None
-    # Page loads in the windows that failed (every failed attempt, mostly
-    # ERR_NETWORK_CHANGED while Docker adds or removes pool containers), loads
-    # that still failed after every retry, and error pages reloaded before a step.
-    load_failures: int = 0
-    load_unrecovered: int = 0
-    load_recovered: int = 0
+    # Page loads that did not succeed at the first attempt (mostly
+    # ERR_NETWORK_CHANGED while Docker adds or removes pool containers), one
+    # entry per load: {"t", "step", "window", "url", "attempts", "outcome"}
+    # with outcome "retried", "failed", "timed out" or "fixed before the next step".
+    load_log: list[dict] = field(default_factory=list)
+
+
+def load_problems(log: list[dict]) -> tuple[int, int, list[dict]]:
+    """(loads that needed a retry, failed attempts, loads that never loaded)
+    from PoolTestData.load_log. A load fixed by the reload before the next
+    step counts as recovered."""
+    never = [e for e in log if e.get("outcome") not in ("retried", "fixed before the next step")]
+    attempts = sum(int(e.get("attempts", 1)) - (0 if e in never else 1) for e in log)
+    return len(log), attempts, never
 
 
 def classify(batch: list[Sample]) -> list[str]:
