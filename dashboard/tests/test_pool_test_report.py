@@ -389,6 +389,18 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class PrebuildTests(unittest.TestCase):
+    def test_breakdown_adds_up(self):
+        from core.pool_test_report import PoolBuild
+        from core.pool_test_report_pdf import prebuild_breakdown
+        self.assertEqual(prebuild_breakdown(2, 0, [8], [], 280),
+                         ": 2 built for it, 1 spare(s) that were already building (pool 8)")
+        # Older report: derived from the spare build that straddled the request.
+        spare = PoolBuild(8, 235, 66, True, "spare")
+        self.assertIn("(pool 8)", prebuild_breakdown(2, 0, None, [spare], 280))
+        self.assertEqual(prebuild_breakdown(3, 0, [], [], 280), ": 3 built for it")
+
+
 class LoadLogTests(unittest.TestCase):
     def test_counts_per_load_not_per_attempt(self):
         from core.pool_test_report import load_problems

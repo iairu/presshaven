@@ -1199,9 +1199,8 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     if res.get("requested"):
         took = (res.get("end") or data.duration) - res["start"]
         built = sum(1 for b in summ.builds if b.reason == "reserve")
-        already = res.get("free_at_start")
-        how = (f": {built} built for it, {already} spare(s) already free"
-               if already is not None else f" ({built} built for it)")
+        how = prebuild_breakdown(built, res.get("free_at_start"), res.get("building_at_start"),
+                                 summ.builds, res.get("start"))
         rows.append(("Pre-build for the delayed windows",
                      (f"{res['requested']} free pool(s) ready after {took:.0f} s" if res.get("reached")
                       else f"{res.get('free', 0)} of {res['requested']} free after {took:.0f} s "
@@ -1364,6 +1363,27 @@ def _building_before(sd: dict) -> list[int]:
 
 def _pools_before_count(sd: dict) -> int:
     return len(sd.get("pools_before", [])) + len(_building_before(sd))
+
+
+def prebuild_breakdown(built: int, free_at_start: int | None, building_at_start: list | None,
+                       builds: list, start: float | None) -> str:
+    """': 2 built for it, 1 spare that was already building' -- where the
+    pre-build's free pools came from. Spares still being built when it was
+    requested finish meanwhile but were not built for it; without counting
+    them '3 ready: 2 built, 0 already free' didn't add up."""
+    if free_at_start is None:
+        return f" ({built} built for it)"
+    if building_at_start is None:      # a report from before this was recorded
+        building_at_start = [b.pool for b in builds
+                             if start is not None and b.start < start and b.reason == "spare"
+                             and b.seconds is not None and b.start + b.seconds > start]
+    parts = [f"{built} built for it"]
+    if free_at_start:
+        parts.append(f"{free_at_start} spare(s) already free")
+    if building_at_start:
+        parts.append(f"{len(building_at_start)} spare(s) that were already building "
+                     f"(pool {', '.join(map(str, building_at_start))})")
+    return ": " + ", ".join(parts)
 
 
 def _build_outcome(b) -> str:

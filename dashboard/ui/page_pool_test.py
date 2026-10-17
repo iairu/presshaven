@@ -1241,6 +1241,9 @@ class PoolTestPage(QWidget):
                 # Spares that were already free when the pre-build was asked
                 # for: the report counts them apart from the pools built.
                 reserve.setdefault("free_at_start", free)
+                # ...and pools already being built then (a spare), which finish
+                # while waiting without being built for the pre-build.
+                reserve.setdefault("building_at_start", sorted(int(p) for p in building))
                 elapsed = int(time.monotonic() - start)
                 if free >= k:
                     reserve.update(reached=True, end=self._now())
