@@ -104,9 +104,10 @@ def _frames_table(data: PoolTestData) -> str:
 
 def _decision_cell(d) -> str:
     color = {"HONEYPOT": _ORANGE, "PRODUCTION": _GREEN}.get(d.route, _GREY)
-    return (f'{_badge(d.route, color)}<br/><span style="font-size:8pt;">'
+    label = {"HONEYPOT": "honeypot", "PRODUCTION": "production"}.get(d.route, d.route.lower() or "no route")
+    return (f'{_badge(label, color)}<br/><span style="font-size:8pt;">'
             f'{_esc("pool " + str(d.pool) if d.pool is not None else "no pool")}'
-            f'{_esc(" \u2022 score " + str(d.score)) if d.score is not None else ""}</span>')
+            f'{_esc(", score " + str(d.score)) if d.score is not None else ""}</span>')
 
 
 def _cart_cell(c) -> str:
@@ -178,6 +179,10 @@ def _cart_section_html(data: PoolTestData) -> str:
             f'<tr><th>Step</th>{head}</tr>' + "".join(rows) + '</table>' + verdict)
 
 
+# Windows per row in the step tables (as on the Segmentation Validation page).
+STEP_COLUMNS = 5
+
+
 def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
     """Per step: what each window did, the router's decision for its session
     afterwards, and a screenshot of each window at that moment."""
@@ -188,26 +193,40 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
            'must appear in their own step, differ from the earlier ones, and never change '
            'afterwards &ndash; except once, from a pool it only borrowed while its own was '
            'being built to that new pool.</p>']
-    shot_w = max(56, 615 // max(1, len(data.frames)))
+    # At most STEP_COLUMNS windows side by side, the rest in a second block
+    # under them: ten columns ran off the page's right edge (window J's
+    # column was cut off) and squeezed the badges until they broke mid-word.
+    per = min(STEP_COLUMNS, max(1, len(data.frames)))
+    shot_w = max(56, 615 // per)
     for n, step in enumerate(data.steps, start=1):
-        head = "".join(f'<th>{_esc(f.label)}</th>' for f in data.frames)
-        acts = "".join(f'<td style="font-size:8pt; color:#555;">{_esc(a)}</td>' for a in step.actions)
-        decs = "".join(f'<td>{_decision_cell(d)}</td>' for d in step.decisions)
-        carts = "".join(f'<td style="font-size:8pt;">{_cart_cell(c)}</td>' for c in step.carts) if step.carts else ""
-        imgs = ""
-        for i, shot in enumerate(step.shots):
-            if shot is None or shot.isNull():
-                imgs += "<td></td>"
-                continue
-            key = f"report://step{n}frame{i}"
-            doc.addResource(QTextDocument.ResourceType.ImageResource, QUrl(key), shot)
-            imgs += f'<td><img src="{key}" width="{shot_w}"/></td>'
+        blocks = []
+        for lo in range(0, len(data.frames), per):
+            idx = range(lo, min(lo + per, len(data.frames)))
+            width = f' width="{100 // per}%"'
+            head = "".join(f'<th{width}>{_esc(data.frames[i].label)}</th>' for i in idx)
+            acts = "".join(f'<td style="font-size:8pt; color:#555;">'
+                           f'{_esc(step.actions[i]) if i < len(step.actions) else ""}</td>' for i in idx)
+            decs = "".join(f'<td>{_decision_cell(step.decisions[i]) if i < len(step.decisions) else ""}</td>'
+                           for i in idx)
+            carts = ("".join(f'<td style="font-size:8pt;">{_cart_cell(step.carts[i]) if i < len(step.carts) else ""}'
+                             '</td>' for i in idx) if step.carts else "")
+            imgs = ""
+            for i in idx:
+                shot = step.shots[i] if i < len(step.shots) else None
+                if shot is None or shot.isNull():
+                    imgs += "<td></td>"
+                    continue
+                key = f"report://step{n}frame{i}"
+                doc.addResource(QTextDocument.ResourceType.ImageResource, QUrl(key), shot)
+                imgs += f'<td><img src="{key}" width="{shot_w}"/></td>'
+            blocks.append(
+                '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+                'style="border-collapse:collapse;">'
+                f'<thead><tr>{head}</tr></thead><tr>{acts}</tr><tr>{decs}</tr>'
+                + (f'<tr>{carts}</tr>' if carts else '') + f'<tr>{imgs}</tr></table>')
         out.append(
             f'<h3 style="color:#222;">Step {n}: {_esc(step.title)}</h3>'
-            f'<p style="color:#555;">{_esc(step.detail)}</p>'
-            '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse;">'
-            f'<tr>{head}</tr><tr>{acts}</tr><tr>{decs}</tr>' + (f'<tr>{carts}</tr>' if carts else '') + f'<tr>{imgs}</tr></table>')
+            f'<p style="color:#555;">{_esc(step.detail)}</p>' + "<br/>".join(blocks))
     return "".join(out)
 
 
