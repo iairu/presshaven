@@ -486,6 +486,10 @@ class ClearBrowserDataTests(unittest.TestCase):
             off = [v for events in clear_schedule([3, 4, 5], 3, random.Random(seed), forge=False).values()
                    for _w, v in events]
             self.assertFalse(any(v in FORGE_KEYS for v in off))
+        # With a second window there is always a hijack, after the first step.
+        for seed in range(50):
+            sched = clear_schedule([3, 4, 5, 6], 3, random.Random(seed))
+            self.assertTrue(any(v == "hijack_cookie" and n > 3 for n, ev in sched.items() for _w, v in ev))
         # One window has no other session to hijack.
         for seed in range(50):
             for events in clear_schedule([3, 4, 5, 6], 1, random.Random(seed)).values():

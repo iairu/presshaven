@@ -240,7 +240,8 @@ def clear_schedule(steps: list[int], windows: int, rng,
     before which step. Each step gets one event with CLEAR_CHANCE; a run with
     eligible steps always gets at least one clearing and (with ``forge``) at
     least one cookie forgery and one storage forgery, so the report has every
-    kind to show. A hijack needs a second window to steal from."""
+    kind to show. With a second window to steal from, at least one of the
+    cookie forgeries is a hijack, after the first eligible step."""
     if not steps or windows <= 0:
         return {}
     clears = [k for k, _t in CLEAR_VARIANTS]
@@ -256,6 +257,13 @@ def clear_schedule(steps: list[int], windows: int, rng,
         if pool and not any(v in pool for events in out.values() for _w, v in events):
             free = [n for n in steps if n not in out] or steps
             out.setdefault(rng.choice(free), []).append((rng.randrange(windows), rng.choice(pool)))
+    # The hijack (another window's real session) is the telling forgery; with
+    # a second window there is always one, after the first eligible step so
+    # that some window is already diverted and its session is worth stealing.
+    if "hijack_cookie" in cookie_forges and not any(
+            v == "hijack_cookie" and n > steps[0] for n, events in out.items() for _w, v in events):
+        later = [n for n in steps[1:] if n not in out] or steps[1:] or steps
+        out.setdefault(rng.choice(later), []).append((rng.randrange(windows), "hijack_cookie"))
     return out
 
 
