@@ -128,11 +128,19 @@ def _table_chunks(open_tag: str, head: str, rows: list[str], per: int) -> str:
                    for i in range(0, len(rows), per))
 
 
-def _decision_cell(d) -> str:
+def _decision_cell(d, diverted_by: str = "") -> str:
+    """Routing badge, pool, score and -- once diverted -- why. `diverted_by` is
+    the pattern whose request diverted this window (from the run log): the
+    router checks the score before the CVE list, so a single pattern request
+    scoring 100 is recorded as "score over the threshold", which on its own
+    hid which request did it."""
     color = {"HONEYPOT": _ORANGE, "PRODUCTION": _GREEN}.get(d.route, _GREY)
     label = {"HONEYPOT": "honeypot", "PRODUCTION": "production"}.get(d.route, d.route.lower() or "no route")
-    why = (f'<br/><span style="font-size:7pt; color:#555;">why: {_esc(_reason_text(d.reason))}</span>'
-           if d.route == "HONEYPOT" and d.reason else "")
+    reason = _reason_text(d.reason) if d.reason else ""
+    if reason and diverted_by and d.reason == "high_risk_score":
+        reason += f", from its {diverted_by} request"
+    why = (f'<br/><span style="font-size:7pt; color:#555;">why: {_esc(reason)}</span>'
+           if d.route == "HONEYPOT" and reason else "")
     return (f'{_badge(label, color)}<br/><span style="font-size:8pt;">'
             f'{_esc("pool " + str(d.pool) if d.pool is not None else "no pool")}'
             f'{_esc(", score " + str(d.score)) if d.score is not None else ""}</span>{why}')
@@ -233,13 +241,21 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
            'once diverted, why the router diverted it. A CVE pattern match or a request for a '
            'vulnerable plugin diverts the session whatever its score, so a diverted window can show a '
            'score below the diversion threshold (80 by default); only &ldquo;score over the '
-           'threshold&rdquo; depends on it. The score adds up over the session\'s requests (capped at '
+           'threshold&rdquo; depends on it. The router checks the score before its CVE list, so a '
+           'pattern request that scores 100 by itself is recorded as &ldquo;score over the '
+           'threshold&rdquo;; the pattern that did it is named next to it. The score adds up over the session\'s requests (capped at '
            '100) and slowly fades between them, so one diverted window may show 94 where another shows '
            '100 until its next suspicious request; once diverted, the session stays bound to its pool '
            'whatever its score does.</p>']
     # At most STEP_COLUMNS windows side by side, the rest in a second block
     # under them: ten columns ran off the page's right edge (window J's
     # column was cut off) and squeezed the badges until they broke mid-word.
+    # Window index -> the pattern whose request first diverted it.
+    letters = {f.label[-1]: i for i, f in enumerate(data.frames)}
+    diverted_by: dict[int, str] = {}
+    for r in data.runs:
+        if r.diverted and r.window in letters:
+            diverted_by.setdefault(letters[r.window], r.cve)
     per = min(STEP_COLUMNS, max(1, len(data.frames)))
     shot_w = max(56, 615 // per)
     for n, step in enumerate(data.steps, start=1):
@@ -253,7 +269,7 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
                            + ('<br/><span style="color:#c62828;"><b>&#9888; page failed to load: '
                               'screenshot and cart are from the error page</b></span>'
                               if i in step.failed else '') + '</td>' for i in idx)
-            decs = "".join(f'<td>{_decision_cell(step.decisions[i]) if i < len(step.decisions) else ""}</td>'
+            decs = "".join(f'<td>{_decision_cell(step.decisions[i], diverted_by.get(i, "")) if i < len(step.decisions) else ""}</td>'
                            for i in idx)
             carts = ("".join(f'<td style="font-size:8pt;">{_cart_cell(step.carts[i]) if i < len(step.carts) else ""}'
                              '</td>' for i in idx) if step.carts else "")
