@@ -281,22 +281,21 @@ def _cleared_html(data: PoolTestData) -> str:
     rows = []
     for e in data.cleared:
         label = data.frames[e.window].label if e.window < len(data.frames) else f"Window {e.window + 1}"
-        step = data.steps[e.step].title if e.step < len(data.steps) else "?"
-        before = f"{_short(e.before_session)}<br/>{_esc(where(e.before_pool, ''))}"
         if not e.resolved:
             after, badge = "&ndash;", _badge("not observed", _GREY)
         else:
-            after = f"{_short(e.after_session)}<br/>{_esc(where(e.after_pool, e.after_route))}"
+            after = f"{_short(e.after_session)}, {_esc(where(e.after_pool, e.after_route))}"
             badge = (_badge("same session", _BLUE_INK) if e.same_session()
                      else _badge("fresh session", _BLUE_INK) if e.after_session
                      else _badge("no session", _GREY))
         if e.is_forgery():
             text, color = _DETECTION_BADGE.get(e.detection(), (e.detection(), _GREY))
             badge = _badge(text, color) + " " + badge
+        before = f"{_short(e.before_session)}, {_esc(where(e.before_pool, ''))}"
         rows.append(
-            f'<tr><td>{_mmss(e.t)}</td><td>{e.step + 1}: {_esc(step)}</td><td><b>{_esc(label)}</b></td>'
-            f'<td>{_esc(e.what())}<br/><span style="font-size:8pt;color:#555;">{_esc(e.removed())}</span></td>'
-            f'<td style="font-size:8pt;">{before}</td><td style="font-size:8pt;">{after}</td>'
+            f'<tr><td>{_mmss(e.t)}</td><td align="center">{e.step + 1}</td><td><b>{_esc(label)}</b></td>'
+            f'<td><b>{_esc(e.short())}</b><br/><span style="font-size:8pt;color:#555;">{_esc(e.removed())}</span></td>'
+            f'<td style="font-size:8pt;">{before}<br/>&rarr; {after}</td>'
             f'<td>{badge}<br/><span style="font-size:8pt;color:#555;">{_esc(e.outcome())}</span></td></tr>')
     clears = [e for e in data.cleared if not e.is_forgery()]
     forged = [e for e in data.cleared if e.is_forgery()]
@@ -350,9 +349,12 @@ def _cleared_html(data: PoolTestData) -> str:
                                              if e.window < len(data.frames))) + '.</p>')
     return (intro + summary + alerts
             + '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
-            'style="border-collapse:collapse; color:#333;"><thead><tr><th>Time</th><th>Before step</th>'
-            '<th>Window</th><th>Tampering</th><th>Session before</th><th>Session after</th>'
-            '<th>What the stack did</th></tr></thead>' + "".join(rows) + '</table>')
+            'style="border-collapse:collapse; color:#333;"><thead><tr><th width="9%">Time</th>'
+            '<th width="8%">Step</th><th width="12%">Window</th><th width="23%">Tampering</th>'
+            '<th width="19%">Session before &rarr; after</th><th width="29%">What the stack did</th></tr></thead>'
+            + "".join(rows) + '</table>'
+            '<p style="color:#555; font-size:9pt;">Step: the tampering happened just before that step of '
+            '<i>Step by step</i>.</p>')
 
 
 def _runs_html(data: PoolTestData) -> str:

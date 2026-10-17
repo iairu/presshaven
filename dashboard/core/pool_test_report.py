@@ -224,6 +224,9 @@ FORGE_VARIANTS = [("forge_cookie", "forged its session cookie (invented session 
                                     "(made-up signature)"),
                   ("forge_storage", "wrote a fake session into its localStorage and sessionStorage")]
 CLEAR_TEXT = dict(CLEAR_VARIANTS + FORGE_VARIANTS + LEGACY_VARIANTS)
+SHORT_TEXT = {"cookies": "cleared cookies", "all": "cleared site data", "storage": "cleared storage",
+              "forge_cookie": "forged cookie", "hijack_cookie": "hijack attempt",
+              "forge_storage": "forged storage"}
 FORGE_KEYS = {k for k, _t in FORGE_VARIANTS}
 COOKIE_FORGERIES = {"forge_cookie", "hijack_cookie"}
 
@@ -322,6 +325,11 @@ class ClearEvent:
     def what(self) -> str:
         return CLEAR_TEXT.get(self.variant, self.variant)
 
+    def short(self) -> str:
+        """A few words for narrow cells (the step tables, the tamper table's
+        first line); what() is the full sentence."""
+        return SHORT_TEXT.get(self.variant, self.variant)
+
     def removed(self) -> str:
         if self.forges_cookie():
             victim = ""
@@ -334,8 +342,14 @@ class ClearEvent:
             return f"{self.storage_keys} storage entr{'y' if self.storage_keys == 1 else 'ies'} written"
         parts = []
         if self.clears_cookies():
-            parts.append(f"{len(self.cookies)} cookie(s)"
-                         + (f" ({', '.join(self.cookies)})" if self.cookies else ""))
+            # The session and cart cookies by name, the rest as a count: the full
+            # list (sourcebuster, WooCommerce hashes, a 50-character session
+            # cookie name) made one table row span two pages.
+            key = [c for c in self.cookies if c in ("SERVERID", "fh_cart")]
+            rest = len(self.cookies) - len(key)
+            named = ", ".join(key) + (f" + {rest} other(s)" if rest and key else
+                                      f"{rest} other(s)" if rest else "")
+            parts.append(f"{len(self.cookies)} cookie(s)" + (f" ({named})" if self.cookies else ""))
         if self.variant in ("storage", "all"):
             parts.append(f"{self.storage_keys} storage entr{'y' if self.storage_keys == 1 else 'ies'}")
         return ", ".join(parts)
