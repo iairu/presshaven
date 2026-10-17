@@ -641,6 +641,40 @@ class PoolTestData:
     cleanup_seconds: float = 0.0
 
 
+def score_causes(data: "PoolTestData") -> list[dict[int, str]]:
+    """Per step, window -> what pushed its score over the threshold, for the
+    "why: score over the threshold" badge: "its <pattern> request" from the
+    step the window sent its pattern on, before that "its rejected forged
+    cookie(s)" when a scored forgery rejection came first. Crediting the
+    pattern from the start named a request a delayed window only sent steps
+    after two rejected forgeries had diverted it."""
+    letters = {f.label[-1]: i for i, f in enumerate(data.frames)}
+    pattern: dict[int, tuple[str, int]] = {}      # window -> (pattern, step it was first sent)
+    for r in data.runs:
+        i = letters.get(r.window)
+        if not r.diverted or i is None or i in pattern:
+            continue
+        sent = next((k for k, st in enumerate(data.steps)
+                     if i < len(st.actions) and r.cve in st.actions[i]), None)
+        pattern[i] = (r.cve, sent if sent is not None else 0)
+    forged: dict[int, list[int]] = {}
+    for e in data.cleared:
+        if e.is_forgery() and e.rejection and e.rejection.get("scored"):
+            forged.setdefault(e.window, []).append(e.step)
+    out = []
+    for k in range(len(data.steps)):
+        causes = {}
+        for i in range(len(data.frames)):
+            if i in pattern and k >= pattern[i][1]:
+                causes[i] = f"its {pattern[i][0]} request"
+            else:
+                n = sum(1 for s in forged.get(i, []) if s <= k)
+                if n:
+                    causes[i] = "its rejected forged cookie" + ("s" if n > 1 else "")
+        out.append(causes)
+    return out
+
+
 def load_problems(log: list[dict]) -> tuple[int, int, list[dict]]:
     """(loads that needed a retry, failed attempts, loads that never loaded)
     from PoolTestData.load_log. A load fixed by the reload before the next

@@ -715,6 +715,24 @@ class IssueFixTests(unittest.TestCase):
         self.assertEqual([x.ms for x in chosen], [400])
         self.assertEqual(latency_loads(loads[:1]), (loads[:1], False))
 
+    def test_score_cause_is_the_forgery_until_the_pattern_is_sent(self):
+        from core.pool_test_report import (ClearEvent, FrameResult, PatternRun, PoolTestData, StepResult,
+                                           score_causes)
+        steps = [StepResult(f"s{k}", "", ["Looks at the FAQ", "Looks at the FAQ"], [], [], [])
+                 for k in range(4)]
+        steps[3].actions[1] = "Opens CVE-2025-2266 (1 attempt(s))"
+        steps[1].actions[0] = "Opens CVE-2024-2387 (1 attempt(s))"
+        rej = {"status": "bad_signature", "scored": True, "score": 50}
+        d = PoolTestData("now", "t", "u", "", [FrameResult("User A"), FrameResult("User B")], steps=steps,
+                         runs=[PatternRun("A", "CVE-2024-2387", "x", 1, True, 1),
+                               PatternRun("B", "CVE-2025-2266", "y", 1, True, 3)],
+                         cleared=[ClearEvent(1, 1, 1, "hijack_cookie", "s", rejection=rej),
+                                  ClearEvent(2, 1, 2, "forge_cookie", "s", rejection=rej)])
+        c = score_causes(d)
+        self.assertEqual([x.get(0) for x in c], [None] + ["its CVE-2024-2387 request"] * 3)
+        self.assertEqual([x.get(1) for x in c], [None, "its rejected forged cookie",
+                                                 "its rejected forged cookies", "its CVE-2025-2266 request"])
+
 
 class ResponseRealismTests(unittest.TestCase):
     def test_counts_4xx_pattern_responses(self):

@@ -24,7 +24,7 @@ from core.pool_test_report import (load_problems, REASSIGN_FAILED, REASSIGNED, R
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
                                    CART_UNREADABLE, cart_marks, cart_resets, latency_loads, load_stats,
-                                   scaling_summary,
+                                   scaling_summary, score_causes,
                                    usage_at)
 
 _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY, MERGED: _RED,
@@ -130,7 +130,7 @@ def _table_chunks(open_tag: str, head: str, rows: list[str], per: int) -> str:
 
 def _decision_cell(d, diverted_by: str = "") -> str:
     """Routing badge, pool, score and -- once diverted -- why. `diverted_by` is
-    the pattern whose request diverted this window (from the run log): the
+    what raised the score ("its <pattern> request", see score_causes()): the
     router checks the score before the CVE list, so a single pattern request
     scoring 100 is recorded as "score over the threshold", which on its own
     hid which request did it."""
@@ -138,7 +138,7 @@ def _decision_cell(d, diverted_by: str = "") -> str:
     label = {"HONEYPOT": "honeypot", "PRODUCTION": "production"}.get(d.route, d.route.lower() or "no route")
     reason = _reason_text(d.reason) if d.reason else ""
     if reason and diverted_by and d.reason == "high_risk_score":
-        reason += f", from its {diverted_by} request"
+        reason += f", from {diverted_by}"
     why = (f'<br/><span style="font-size:7pt; color:#555;">why: {_esc(reason)}</span>'
            if d.route == "HONEYPOT" and reason else "")
     return (f'{_badge(label, color)}<br/><span style="font-size:8pt;">'
@@ -250,12 +250,7 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
     # At most STEP_COLUMNS windows side by side, the rest in a second block
     # under them: ten columns ran off the page's right edge (window J's
     # column was cut off) and squeezed the badges until they broke mid-word.
-    # Window index -> the pattern whose request first diverted it.
-    letters = {f.label[-1]: i for i, f in enumerate(data.frames)}
-    diverted_by: dict[int, str] = {}
-    for r in data.runs:
-        if r.diverted and r.window in letters:
-            diverted_by.setdefault(letters[r.window], r.cve)
+    causes = score_causes(data)
     per = min(STEP_COLUMNS, max(1, len(data.frames)))
     shot_w = max(56, 615 // per)
     for n, step in enumerate(data.steps, start=1):
@@ -271,7 +266,7 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
                               if i in step.failed else '')
                            + (f'<br/><span style="color:#555;">page answered HTTP {step.http[i]}</span>'
                               if i < len(step.http) and step.http[i] >= 400 else '') + '</td>' for i in idx)
-            decs = "".join(f'<td>{_decision_cell(step.decisions[i], diverted_by.get(i, "")) if i < len(step.decisions) else ""}</td>'
+            decs = "".join(f'<td>{_decision_cell(step.decisions[i], causes[n - 1].get(i, "")) if i < len(step.decisions) else ""}</td>'
                            for i in idx)
             carts = ("".join(f'<td style="font-size:8pt;">{_cart_cell(step.carts[i]) if i < len(step.carts) else ""}'
                              '</td>' for i in idx) if step.carts else "")
