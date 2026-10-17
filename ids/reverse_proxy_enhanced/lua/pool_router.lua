@@ -275,11 +275,20 @@ local function get_or_assign_pool(owner)
         return 1
     end
 
-    -- 1. Fast path: local in-worker cache (no Redis round-trip)
+    -- 1. Fast path: local in-worker cache (no Redis round-trip). The cache
+    --    outlives a scale-down (pool_manager releases the assignment in Redis
+    --    only), so an entry for a pool that is no longer in the ready list is
+    --    dropped and the session goes the slow path: proxying to the removed
+    --    pool's container answered 502 Bad Gateway.
     local cached = get_from_local_cache(owner)
-    if cached then
+    if cached and rules.assignment_valid(cached, pool_ids()) then
         ngx.log(ngx.DEBUG, "[POOL] Local cache hit for session ", owner, " → pool ", cached)
         return find_healthy_pool(cached)
+    elseif cached then
+        local dict = ngx.shared.honeypot_routes
+        if dict then dict:delete(LOCAL_CACHE_KEY_PREFIX .. owner) end
+        ngx.log(ngx.WARN, "[POOL] Cached pool ", cached, " for session ", owner,
+                " is no longer ready (removed?); looking the assignment up again")
     end
 
     -- 2. Slow path: query Redis for a previously stored assignment
@@ -292,6 +301,18 @@ local function get_or_assign_pool(owner)
 
     local redis_key = POOL_ASSIGNMENT_KEY_PREFIX .. owner
     local existing_pool, redis_err = red:get(redis_key)
+
+    -- An assignment to a pool that is no longer registered ready (it was
+    -- scaled down) is stale: drop it and assign afresh below. Checked against
+    -- Redis' ready set, not the shared-dict list, which lags by up to 5 s and
+    -- would also reject a pool registered a moment ago.
+    if existing_pool and existing_pool ~= ngx.null
+            and red:sismember(rules.READY_KEY, clamp_pool(existing_pool)) ~= 1 then
+        ngx.log(ngx.WARN, "[POOL] Session ", owner, " was assigned pool ", existing_pool,
+                ", which is no longer ready; assigning it afresh")
+        red:del(redis_key)
+        existing_pool = nil
+    end
 
     if existing_pool and existing_pool ~= ngx.null then
         -- Assignment already exists in Redis; restore it to local cache and return.

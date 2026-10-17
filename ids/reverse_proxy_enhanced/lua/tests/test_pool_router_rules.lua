@@ -220,5 +220,14 @@ do
     end
 end
 
+-- An assignment to a pool that left the ready list (scaled down) is stale.
+do
+    check("assigned pool still ready is valid", rules.assignment_valid(5, {1, 2, 3, 5}))
+    check("removed pool is stale", not rules.assignment_valid(7, {1, 2, 3}))
+    check("string pool numbers compare as numbers", rules.assignment_valid("2", {"1", "2"}))
+    check("nil pool is never valid", not rules.assignment_valid(nil, {1, 2, 3}))
+    check("empty ready list makes every assignment stale", not rules.assignment_valid(1, {}))
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 os.exit(failed == 0 and 0 or 1)

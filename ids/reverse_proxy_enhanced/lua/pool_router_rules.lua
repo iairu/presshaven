@@ -270,6 +270,25 @@ function _M.find_healthy_pool(preferred_pool, pool_count, is_healthy)
     return preferred_pool, false
 end
 
+--- Whether a cached / stored session->pool assignment may still be used, given
+--- the ready pools. pool_manager removes a pool from the ready list before it
+--- deletes its containers, so an assignment to a pool that is no longer listed
+--- points at a container that is gone (proxying there answered 502 Bad
+--- Gateway after a scale-down). Such an assignment must be dropped and the
+--- session assigned afresh.
+---
+--- @param  pool_num  integer
+--- @param  ready     table  Ready pool numbers (any order).
+--- @return boolean
+function _M.assignment_valid(pool_num, ready)
+    pool_num = tonumber(pool_num)
+    if not pool_num then return false end
+    for _, n in ipairs(ready or {}) do
+        if tonumber(n) == pool_num then return true end
+    end
+    return false
+end
+
 --- Parse the comma-separated pool list pool_router mirrors into the shared
 --- dict ("1,2,3,5") into a sorted array of valid pool numbers.
 ---
