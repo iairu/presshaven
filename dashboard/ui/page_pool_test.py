@@ -39,7 +39,7 @@ from core import redis_inspect
 from core.docker_ctl import target_for
 from core.patterns import PATTERN_PRESETS
 from core import pool_evidence
-from core.pool_test_report import (COOKIE_FORGERIES, capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
+from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
                                     browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
@@ -81,6 +81,14 @@ SCALE_TIMEOUT_S = 900
 # while a report export runs (the export's steps wait in nested event loops,
 # so the timer keeps firing).
 POOL_REFRESH_MS = 5000
+
+# A page load that fails is retried this many times. Chromium aborts every
+# request in flight with ERR_NETWORK_CHANGED whenever a host network interface
+# appears or goes away -- which Docker does on each container it creates or
+# removes (veth pairs), so pools being built or scaled down during a run make
+# frames' loads fail at random. The retry is a plain new navigation.
+LOAD_RETRIES = 3
+LOAD_RETRY_DELAY_MS = 800
 
 # While the report waits for pools, every window opens its next page this often.
 BROWSE_EVERY_S = 10.0
@@ -588,22 +596,37 @@ class PoolTestPage(QWidget):
             for browser, url in zip(self.browsers, urls):
                 browser.navigate(url)
             return
-        started = time.monotonic()
+        started = [time.monotonic()] * len(urls)
         t = self._now()
+        retries = [0] * len(urls)
+        timer = QTimer(self)   # stoppable: a stale single-shot would cut a later wait short
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
         conns = []
         for i, (browser, url) in enumerate(zip(self.browsers, urls)):
-            def finished(ok, n=i, u=url):
-                if ok and u.startswith("http") and n in pending and self._t0:
+            def finished(ok, n=i, u=url, b=browser):
+                if n not in pending:
+                    return
+                if not ok and u.startswith("http") and retries[n] < LOAD_RETRIES:
+                    # Transient (see LOAD_RETRIES): load it again, and give the
+                    # retry a full timeout of its own.
+                    retries[n] += 1
+
+                    def again(n=n, u=u, b=b):
+                        if n in pending:
+                            started[n] = time.monotonic()
+                            b.navigate(u)
+                    QTimer.singleShot(LOAD_RETRY_DELAY_MS, again)
+                    timer.start(9000 + LOAD_RETRY_DELAY_MS)
+                    return
+                if ok and u.startswith("http") and self._t0:
                     self._pending_loads.append(LoadTiming(
-                        t, n, step, (time.monotonic() - started) * 1000.0))
+                        t, n, step, (time.monotonic() - started[n]) * 1000.0))
                 pending.discard(n)
                 if not pending:
                     loop.quit()
             conns.append((browser, browser.view.loadFinished.connect(finished)))
             browser.navigate(url)
-        timer = QTimer(self)   # stoppable: a stale single-shot would cut a later wait short
-        timer.setSingleShot(True)
-        timer.timeout.connect(loop.quit)
         timer.start(9000)
         loop.exec()
         timer.stop()
@@ -612,6 +635,49 @@ class PoolTestPage(QWidget):
                 browser.view.loadFinished.disconnect(conn)
             except TypeError:
                 pass
+
+    def _product_ids(self, slugs: list[str]) -> dict[str, int]:
+        """Product IDs for `slugs`, looked up from inside a window (see
+        product_ids_js). When the answer isn't a product list -- the window sits
+        on Chromium's error page after a failed load -- it reloads the shop in
+        that window and asks again (from the next window on later tries)."""
+        shop = self._base_url() + "/"
+        error: Exception | None = None
+        for attempt in range(LOAD_RETRIES + 1):
+            w = attempt % len(self.browsers)
+            try:
+                return parse_product_ids(self._run_js(w, product_ids_js(slugs)), slugs)
+            except ProductListUnreadable as e:
+                error = e
+                self._load_one(w, shop)
+        raise error
+
+    def _load_one(self, w: int, url: str, timeout_ms: int = 9000) -> bool:
+        """Navigate window `w` alone and wait for the load (retried like _load_all)."""
+        browser = self.browsers[w]
+        for _attempt in range(LOAD_RETRIES + 1):
+            loop = QEventLoop()
+            got: list = [False]
+
+            def finished(ok):
+                got[0] = ok
+                loop.quit()
+            conn = browser.view.loadFinished.connect(finished)
+            browser.navigate(url)
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(loop.quit)
+            timer.start(timeout_ms)
+            loop.exec()
+            timer.stop()
+            try:
+                browser.view.loadFinished.disconnect(conn)
+            except TypeError:
+                pass
+            if got[0]:
+                return True
+            self._spin(LOAD_RETRY_DELAY_MS)
+        return False
 
     def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
         """Every window loads the same product page, one window at a time, so
@@ -650,6 +716,10 @@ class PoolTestPage(QWidget):
                 self._pending_loads.append(LoadTiming(t, w, f"latency probe: {label}",
                                                       (time.monotonic() - started) * 1000.0,
                                                       probe=True))
+            else:
+                # Failed (see LOAD_RETRIES): no timing for it, but don't leave
+                # the window on Chromium's error page for the next step.
+                self._load_one(w, url)
         self._settled_decisions(need_sessions=True)   # tags the probe loads
 
     # ---- run timeline (samples for the scaling / latency figures) ----
@@ -1298,7 +1368,7 @@ class PoolTestPage(QWidget):
             next_step("every window fills its cart")
             self._mark("Every window fills its cart")
             slugs = sorted({slug for items in cart_plan for slug, _q in items})
-            ids = parse_product_ids(self._run_js(0, product_ids_js(slugs)), slugs)
+            ids = self._product_ids(slugs)
             self._begin_browse()
             for k in range(max(len(items) for items in cart_plan)):
                 urls = [f"{self._base_url()}/?add-to-cart={ids[items[k][0]]}&quantity={items[k][1]}"

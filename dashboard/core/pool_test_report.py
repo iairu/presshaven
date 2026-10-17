@@ -430,12 +430,26 @@ def cart_violations(steps: list["StepResult"], resets: set[tuple[int, int]] | No
     return cart_marks(steps, resets)[1]
 
 
+class ProductListUnreadable(RuntimeError):
+    """The Store API answer wasn't a product list at all: the request never
+    reached the shop (e.g. the window was on Chromium's error page after a
+    failed load) -- as opposed to products that are really missing."""
+
+
 def parse_product_ids(store_api_json: str, slugs: list[str]) -> dict[str, int]:
-    """{slug: product id} from a Store API products response; raises when one is missing."""
+    """{slug: product id} from a Store API products response. Raises
+    ProductListUnreadable when the response isn't a product list (no answer
+    from the shop), RuntimeError when the list lacks one of ``slugs``."""
     try:
-        found = {p["slug"]: int(p["id"]) for p in json.loads(store_api_json or "[]")}
+        data = json.loads(store_api_json or "")
+        if not isinstance(data, list):
+            raise TypeError
+        found = {p["slug"]: int(p["id"]) for p in data}
     except (ValueError, KeyError, TypeError):
-        found = {}
+        raise ProductListUnreadable(
+            "Could not read the shop's product list: the request from the test window got no "
+            "valid answer (the shop page failed to load, e.g. ERR_NETWORK_CHANGED while Docker "
+            "created or removed containers, or the shop is not up yet).") from None
     missing = [s for s in slugs if s not in found]
     if missing:
         raise RuntimeError(f"Could not find product(s) {', '.join(missing)} on the shop.")

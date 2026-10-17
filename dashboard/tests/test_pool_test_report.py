@@ -272,6 +272,18 @@ class ProductIds(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             parse_product_ids("<html>", ["a"])
 
+    def test_no_answer_is_told_apart_from_missing_products(self):
+        from core.pool_test_report import ProductListUnreadable, parse_product_ids
+        for body in ("", "<html>", '{"code": "rest_no_route"}'):
+            with self.assertRaises(ProductListUnreadable):
+                parse_product_ids(body, ["a"])
+        try:
+            parse_product_ids('[{"id": 1, "slug": "a"}]', ["a", "b"])
+        except ProductListUnreadable:
+            self.fail("a real missing product is not an unreadable list")
+        except RuntimeError as e:
+            self.assertIn("b", str(e))
+
 
 class Browsing(unittest.TestCase):
     def test_windows_look_at_different_pages_and_move_on(self):
