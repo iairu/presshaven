@@ -11,7 +11,7 @@ from PyQt6.QtGui import QFont, QFontMetrics, QPageLayout, QPageSize, QPainter, Q
 from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtGui import QColor, QTextDocument
 
-from core import diagrams, pool_evidence, vector_figures
+from core import diagrams, pool_evidence, report_pagination, vector_figures
 from core.startup_events import fmt_tick, nice_axis
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
@@ -230,7 +230,9 @@ def _steps_html(data: PoolTestData, doc: QTextDocument) -> str:
             blocks.append(
                 '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
                 'style="border-collapse:collapse;">'
-                f'<thead><tr>{head}</tr></thead><tr>{acts}</tr><tr>{decs}</tr>'
+                # No <thead>: its rows are tall and kept whole across a page break
+                # (report_pagination), which Qt can't do under a repeated header.
+                f'<tr>{head}</tr><tr>{acts}</tr><tr>{decs}</tr>'
                 + (f'<tr>{carts}</tr>' if carts else '') + f'<tr>{imgs}</tr></table>')
         out.append(
             f'<h3 style="color:#222;">Step {n}: {_esc(step.title)}</h3>'
@@ -560,6 +562,8 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
     printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout.Unit.Millimeter)
     doc.setPageSize(QSizeF(printer.pageRect(QPrinter.Unit.DevicePixel).size()))
+    # No heading, caption or table row left stranded at a page bottom.
+    report_pagination.keep_together(doc)
     doc.print(printer)
     return verdict
 

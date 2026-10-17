@@ -560,6 +560,7 @@ def figure_html(doc: QTextDocument, img: VectorFigure, key: str, number: int,
     Callers reference it elsewhere as "Figure {number}"."""
     add_figure(doc, f"diagram://{key}", img)
     cap = _html.escape(caption)
-    return (f'<div><img src="diagram://{key}" width="{width}"/><br/>'
-            f'<span style="color:#666; font-size:9pt;"><b>Figure {number}.</b> {cap}</span>'
-            '</div><br/>')
+    # Image and caption in paragraphs of their own, so a report's page-break
+    # pass (core/report_pagination.py) can keep the caption with its figure.
+    return (f'<p><img src="diagram://{key}" width="{width}"/></p>'
+            f'<p style="color:#666; font-size:9pt;"><b>Figure {number}.</b> {cap}</p>')
