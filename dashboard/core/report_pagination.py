@@ -12,7 +12,10 @@ honoured, but with image cells or a repeated <thead> Qt then renders blank
 pages holding only the table's borders or header. So a table that has to
 move moves whole, and a table too tall for that splits as before.)
 
-keep_together() lays the document out at its page size, finds the first
+A vector figure that does not fit under the text above it and would leave a
+third of a page blank is first scaled down to fill that gap (to no less than
+70% of its size). Then keep_together() lays the document out at its page
+size, finds the first
 such break, forces a page break before the offending heading, paragraph,
 table, or the figure whose "Figure N." caption would start or run onto the
 next page, and repeats until nothing is left to fix. Each fix only moves
@@ -27,7 +30,7 @@ import re
 
 from PyQt6.QtGui import QTextBlockFormat, QTextCursor, QTextDocument, QTextFormat
 
-from core.vector_figures import _relayout
+from core.vector_figures import _HEIGHT_PROP, _OBJECT_TYPE, _WIDTH_PROP, _relayout
 
 # Headings taller than this share of a page are allowed to end a page.
 _MAX_KEEP_SHARE = 0.5
@@ -172,6 +175,55 @@ def _first_violation(doc: QTextDocument, page_h: float) -> tuple[str, int] | Non
     return min(found, key=lambda f: f[0])[1]
 
 
+# A vector figure pushed to the next page is scaled down to fit the gap it
+# left instead, when that gap is at least this share of a page and the figure
+# keeps at least this share of its size.
+_GAP_SHARE = 0.3
+_MIN_FIGURE_SCALE = 0.7
+
+
+def _fit_figures(doc: QTextDocument, page_h: float, max_passes: int = 20) -> int:
+    """Shrink vector figures that don't fit under the text above them so they
+    fill the rest of the page, caption included, rather than be moved to the
+    next page leaving a third or more of this one blank. Returns how many were
+    shrunk."""
+    lay = doc.documentLayout()
+    shrunk = 0
+    for _ in range(max_passes):
+        fix = None
+        b = doc.begin()
+        while b.isValid() and fix is None:
+            if b.text().strip() == _OBJECT_CHAR and QTextCursor(b).currentTable() is None:
+                # Qt lays a figure that doesn't fit out across the page break;
+                # keep-together would then move it (and its caption) to the next
+                # page, leaving the rest of this one blank.
+                rect = lay.blockBoundingRect(b)
+                page = int(rect.top() // page_h)
+                if int((rect.bottom() - 1) // page_h) != page:
+                    gap = (page + 1) * page_h - rect.top()
+                    cap = b.next()
+                    cap_h = lay.blockBoundingRect(cap).height() if cap.isValid() and \
+                        _CAPTION_RE.match(cap.text()) else 0.0
+                    scale = (gap - cap_h - 12) / max(1.0, rect.height())
+                    if gap >= page_h * _GAP_SHARE and _MIN_FIGURE_SCALE <= scale < 1:
+                        fix = (b, scale)
+            b = b.next()
+        if fix is None:
+            break
+        block, scale = fix
+        cur = QTextCursor(block)
+        cur.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
+        fmt = cur.charFormat()
+        if fmt.objectType() != _OBJECT_TYPE:
+            break                       # a plain image, not a vector figure: leave it
+        fmt.setProperty(_WIDTH_PROP, float(fmt.property(_WIDTH_PROP)) * scale)
+        fmt.setProperty(_HEIGHT_PROP, float(fmt.property(_HEIGHT_PROP)) * scale)
+        cur.setCharFormat(fmt)
+        _relayout(doc)
+        shrunk += 1
+    return shrunk
+
+
 def keep_together(doc: QTextDocument, max_passes: int = 120) -> int:
     """Fix bad page breaks in place (see the module docstring); returns how
     many page breaks were inserted."""
@@ -182,6 +234,7 @@ def keep_together(doc: QTextDocument, max_passes: int = 120) -> int:
     block_fmt.setPageBreakPolicy(_ALWAYS_BEFORE)
     inserted = 0
     _relayout(doc)
+    _fit_figures(doc, page_h)
     for _ in range(max_passes):
         fix = _first_violation(doc, page_h)
         if not fix:
