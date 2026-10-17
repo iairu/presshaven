@@ -633,6 +633,9 @@ class PoolTestData:
     # entry per load: {"t", "step", "window", "url", "attempts", "outcome"}
     # with outcome "retried", "failed", "timed out" or "fixed before the next step".
     load_log: list[dict] = field(default_factory=list)
+    # Seconds the clean-up after the reassignment check took, after `duration`
+    # (not part of the run's figures).
+    cleanup_seconds: float = 0.0
 
 
 def load_problems(log: list[dict]) -> tuple[int, int, list[dict]]:

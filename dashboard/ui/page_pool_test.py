@@ -1705,12 +1705,18 @@ class PoolTestPage(QWidget):
             scaledown = self._forced_scaledown(step + 1, total_steps, total, sampler)
         except _Cancelled:
             return None
-        duration = self._now()
+        now = self._now()
+        # The run ends where the clean-up after the reassignment check starts:
+        # that clean-up (waiting for builds, a second scale-down) is not part of
+        # the test, and in the figures it showed as extra minutes with pools
+        # coming back up. Its length is reported on its own.
+        cleanup_start = (scaledown.get("cleanup") or {}).get("start")
+        duration = cleanup_start if cleanup_start is not None else now
         try:
             raw_events = self._blocking(lambda: redis_inspect.pool_events(remote))
         except Exception:  # noqa: BLE001 -- the latency section says so
             raw_events = []
-        t0 = time.time() - duration
+        t0 = time.time() - now
         events = []
         for e in raw_events:
             at = float(e["at"]) - offset - t0
@@ -1728,9 +1734,10 @@ class PoolTestPage(QWidget):
                 for w in sorted({r.window for r in runs})), frames=frames,
             pool_state=pool_state, steps=results, runs=runs, evidence=evidence,
             since=baseline.get("since", ""), duration=duration, delayed=delayed,
+            cleanup_seconds=now - duration,
             samples=list(self._samples), loads=list(self._loads), events=events,
             marks=list(self._marks), reserve=dict(self._reserve),
-            usage=list(sampler.samples), scaledown=scaledown,
+            usage=[u for u in sampler.samples if u.t <= duration], scaledown=scaledown,
             host_cpus=self._host_cpus, host_mem_total_mb=self._host_mem_total,
             load_log=list(self._load_log),
             cleared=cleared, clear_seed=clear_seed)

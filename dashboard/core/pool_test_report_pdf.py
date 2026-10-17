@@ -1196,7 +1196,9 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
            'waiting; the duration of each page load).</p>']
     rows = [("Windows", f"{len(data.frames)}" + (f", of which {data.delayed} attacked only after "
                                                  "pools were pre-built for them" if data.delayed else "")),
-            ("Run time", _mmss(data.duration))]
+            ("Run time", _mmss(data.duration)
+             + (f" (then {_mmss(data.cleanup_seconds)} of clean-up after the reassignment check, "
+                "not in the figures)" if data.cleanup_seconds >= 1 else ""))]
     if data.load_log:
         loads, attempts, never = load_problems(data.load_log)
         fixed = sum(1 for e in data.load_log if e.get("outcome") == "fixed before the next step")
