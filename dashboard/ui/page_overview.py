@@ -142,7 +142,7 @@ class OverviewPage(QWidget):
         self._cards = FlowLayout(cards_host, margin=0, h_spacing=10, v_spacing=10)
         self.card_score = StatCard("Current risk score")
         self.card_health = StatCard("System health")
-        self.card_diverted = StatCard("Attackers diverted")
+        self.card_diverted = StatCard("Attacker IPs diverted")
         self.card_pools = StatCard("Honeypot pools")
         self.card_events = StatCard("Notable events (1h)")
         for card in (self.card_score, self.card_health, self.card_diverted,
