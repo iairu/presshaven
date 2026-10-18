@@ -81,6 +81,10 @@ class AppState:
     # Honeypot layer of the ids stack: "reverse_proxy" (default) or
     # "database" -- see core/honeypot_layer.py. Picked on the Workloads page.
     honeypot_layer: str = "reverse_proxy"
+    # Security-alert policy (core/alert_policy.AlertPolicy.to_dict()): which
+    # proxy events raise a desktop notification / webhook. Edited on the
+    # Connectors & Config page's Alerts tab.
+    alert_policy: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "AppState":

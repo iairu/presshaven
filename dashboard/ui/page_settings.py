@@ -9,9 +9,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QFormLayout, QLabel, QMessageBox,
+    QCheckBox, QComboBox, QFileDialog, QFormLayout, QLabel, QLineEdit, QMessageBox,
     QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
+
+from core import alert_policy
 
 from core.paths import (
     EDGE_ENV_EXAMPLE, EDGE_ENV_FILE, SIEM_ENV_EXAMPLE, SIEM_ENV_FILE,
@@ -24,11 +26,13 @@ from ui.remote_config_widget import RemoteConfigWidget
 
 
 class SettingsPage(QWidget):
-    def __init__(self, state: AppState, on_state_changed, on_poll_interval_changed=None, parent=None):
+    def __init__(self, state: AppState, on_state_changed, on_poll_interval_changed=None,
+                 on_test_alert=None, parent=None):
         super().__init__(parent)
         self.state = state
         self._on_state_changed = on_state_changed
         self._on_poll_interval_changed = on_poll_interval_changed
+        self._on_test_alert = on_test_alert
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
@@ -44,6 +48,7 @@ class SettingsPage(QWidget):
         self.tabs.clear()
 
         self.tabs.addTab(self._build_general_tab(), "General")
+        self.tabs.addTab(self._build_alerts_tab(), "Alerts")
 
         # Each .env tab has its own Local/Remote toggle (only enabled once
         # that project's remote connection is configured) -- get_remote_config
@@ -101,6 +106,79 @@ class SettingsPage(QWidget):
         form.addRow(note)
 
         return container
+
+    def _build_alerts_tab(self) -> QWidget:
+        policy = alert_policy.AlertPolicy.from_dict(self.state.alert_policy)
+        container = QWidget()
+        form = QFormLayout(container)
+
+        self.alert_enabled = QCheckBox("Raise alerts for security events")
+        self.alert_enabled.setChecked(policy.enabled)
+        form.addRow("", self.alert_enabled)
+
+        self.alert_severity = QComboBox()
+        self.alert_severity.addItem("Medium and above", "medium")
+        self.alert_severity.addItem("High only", "high")
+        self.alert_severity.setCurrentIndex(alert_policy.MIN_SEVERITIES.index(policy.min_severity))
+        form.addRow("Minimum severity:", self.alert_severity)
+
+        self.alert_diversion = QCheckBox("Always alert when a session is diverted to the honeypot")
+        self.alert_diversion.setChecked(policy.on_diversion)
+        form.addRow("", self.alert_diversion)
+
+        self.alert_score = QSpinBox()
+        self.alert_score.setRange(0, 100)
+        self.alert_score.setSpecialValueText("off")
+        self.alert_score.setValue(policy.score_threshold)
+        form.addRow("Alert at risk score ≥:", self.alert_score)
+
+        self.alert_cooldown = QSpinBox()
+        self.alert_cooldown.setRange(0, 3600)
+        self.alert_cooldown.setSuffix(" s")
+        self.alert_cooldown.setValue(policy.cooldown_seconds)
+        form.addRow("Repeat suppression:", self.alert_cooldown)
+
+        self.alert_desktop = QCheckBox("Desktop notification (system tray)")
+        self.alert_desktop.setChecked(policy.desktop)
+        form.addRow("", self.alert_desktop)
+
+        self.alert_webhook = QLineEdit(policy.webhook_url)
+        self.alert_webhook.setPlaceholderText("https://hooks.slack.com/… or any endpoint accepting a JSON POST")
+        form.addRow("Webhook URL:", self.alert_webhook)
+
+        test_btn = QPushButton("Send test alert")
+        test_btn.clicked.connect(self._send_test_alert)
+        form.addRow("", test_btn)
+
+        note = QLabel("Container-health notifications are separate (General tab). Changes apply immediately.")
+        note.setWordWrap(True)
+        form.addRow(note)
+
+        for widget, signal in ((self.alert_enabled, "toggled"), (self.alert_severity, "currentIndexChanged"),
+                               (self.alert_diversion, "toggled"), (self.alert_score, "valueChanged"),
+                               (self.alert_cooldown, "valueChanged"), (self.alert_desktop, "toggled"),
+                               (self.alert_webhook, "editingFinished")):
+            getattr(widget, signal).connect(self._save_alert_policy)
+        return container
+
+    def _save_alert_policy(self, *_args) -> None:
+        self.state.alert_policy = alert_policy.AlertPolicy(
+            enabled=self.alert_enabled.isChecked(), min_severity=self.alert_severity.currentData(),
+            on_diversion=self.alert_diversion.isChecked(), score_threshold=self.alert_score.value(),
+            cooldown_seconds=self.alert_cooldown.value(), desktop=self.alert_desktop.isChecked(),
+            webhook_url=self.alert_webhook.text().strip()).to_dict()
+        self.state.save()
+
+    def _send_test_alert(self) -> None:
+        self._save_alert_policy()
+        if self._on_test_alert:
+            self._on_test_alert()
+        url = self.state.alert_policy.get("webhook_url", "")
+        if url:
+            error = alert_policy.send_webhook(
+                url, alert_policy.webhook_payload("Test alert", "from the dashboard", "high", None, 0))
+            QMessageBox.information(self, "Webhook test", "Webhook delivered." if not error
+                                    else f"Webhook failed: {error}")
 
     def _on_poll_interval_spin_changed(self, seconds: int) -> None:
         interval_ms = seconds * 1000

@@ -6,6 +6,8 @@ guard while a mutating docker compose action is in flight."""
 from __future__ import annotations
 
 import base64
+import threading
+import time
 
 from PyQt6.QtCore import QByteArray, QSize, Qt
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut
@@ -15,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
-from core import honeypot_layer
+from core import alert_policy, honeypot_layer, live_events
 from core.docker_ctl import all_targets, target_for
 from core.paths import DASHBOARD_DIR
 from core.learning import PAGE_GUIDES
@@ -209,7 +211,8 @@ class MainWindow(QMainWindow):
         self.pool_test_page = PoolTestPage(state)
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
-        self.settings_page = SettingsPage(state, self._on_remote_settings_changed, self.set_poll_interval)
+        self.settings_page = SettingsPage(state, self._on_remote_settings_changed, self.set_poll_interval,
+                                      on_test_alert=self._test_alert)
         self.learn_page = LearnPage(state, PAGE_LABELS)
         self.learn_page.open_page_requested.connect(self._open_page)
 
@@ -261,6 +264,11 @@ class MainWindow(QMainWindow):
         self._last_status: dict[tuple[str, str], str] = {}
 
         self._build_tray_icon()
+
+        # Security alerting (core/alert_policy.py): every parsed proxy event
+        # is checked against the user's policy.
+        self._alerts_sent: dict[str, float] = {}
+        self.security_feed.event_parsed.connect(self._on_security_event)
 
         # A required tool going missing is recorded into the same
         # persisted security-events history as everything else the feed
@@ -551,6 +559,28 @@ class MainWindow(QMainWindow):
                 )
         self._last_status = current
 
+    def _on_security_event(self, event, ts: int) -> None:
+        policy = alert_policy.AlertPolicy.from_dict(self.state.alert_policy)
+        if alert_policy.should_alert(policy, event.kind, event.label, event.color, event.score,
+                                     self._alerts_sent, time.time()):
+            self._deliver_alert(policy, event.label, event.detail, live_events.severity(event.color),
+                                event.score, ts)
+
+    def _test_alert(self) -> None:
+        policy = alert_policy.AlertPolicy.from_dict(self.state.alert_policy)
+        self._deliver_alert(policy, "Test alert", "from the dashboard", "high", None, int(time.time()),
+                            webhook=False)
+
+    def _deliver_alert(self, policy, label: str, detail: str, severity: str, score, ts: int,
+                       webhook: bool = True) -> None:
+        if policy.desktop and self.tray_icon:
+            self.tray_icon.showMessage(f"Security alert ({severity})", alert_policy.message(label, detail),
+                                       QSystemTrayIcon.MessageIcon.Critical, 10000)
+        if webhook and policy.webhook_url:
+            payload = alert_policy.webhook_payload(label, detail, severity, score, ts)
+            threading.Thread(target=alert_policy.send_webhook, args=(policy.webhook_url, payload),
+                             daemon=True).start()
+
     @staticmethod
     def _classify_all(results: dict) -> dict[tuple[str, str], str]:
         classified = {}
@@ -664,7 +694,8 @@ class MainWindow(QMainWindow):
         area = self.stack.widget(PAGES.index("settings"))
         area.takeWidget()
         self.settings_page.deleteLater()
-        self.settings_page = SettingsPage(self.state, self._on_remote_settings_changed, self.set_poll_interval)
+        self.settings_page = SettingsPage(self.state, self._on_remote_settings_changed, self.set_poll_interval,
+                                      on_test_alert=self._test_alert)
         area.setWidget(self.settings_page)
 
     # ---- responsive layout ----
