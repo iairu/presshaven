@@ -448,8 +448,17 @@ class MainWindow(QMainWindow):
         self.page_subtitle = QLabel()
         self.page_subtitle.setObjectName("PageSubtitle")
         self.page_subtitle.setWordWrap(True)
+        # Always-visible entry point to the command palette (also Ctrl+K /
+        # View menu), so the quick switcher is discoverable from every page
+        # rather than only by those who know the shortcut.
+        self.palette_btn = QPushButton("⌘K  Search")
+        self.palette_btn.setObjectName("PaletteButton")
+        self.palette_btn.setProperty("compact", True)
+        self.palette_btn.setToolTip("Jump to any page or action (Ctrl+K)")
+        self.palette_btn.clicked.connect(self._show_palette)
         crumb_row.addWidget(self.nav_toggle)
         crumb_row.addWidget(self.page_crumb, stretch=1)
+        crumb_row.addWidget(self.palette_btn)
         layout.addLayout(crumb_row)
         layout.addWidget(self.page_title)
         layout.addWidget(self.page_subtitle)
