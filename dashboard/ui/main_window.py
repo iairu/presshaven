@@ -38,6 +38,7 @@ from ui.page_learn import LearnPage, page_guide_html
 from ui.page_live_events import LiveEventsPage
 from ui.page_log_search import LogSearchPage
 from ui.page_overview import OverviewPage
+from ui.page_pipeline import PipelinePage
 from ui.page_pool_scaling import PoolScalingPage
 from ui.page_pool_test import PoolTestPage
 from ui.page_redis import RedisPage
@@ -67,12 +68,13 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "live_events", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
     "live_events": "Live Events",
+    "pipeline": "Log Pipeline",
     "sessions": "Attacker Sessions",
     "suricata": "Network IDS (Suricata)",
     "detection": "Detection Policy",
@@ -97,7 +99,7 @@ PAGE_LABELS = {
 # the View menu follow, so the shortcuts match what the rail shows.
 NAV_GROUPS = [
     ("Overview", ["overview"]),
-    ("Monitor", ["live_events", "health", "resources", "kibana", "log_search"]),
+    ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
     ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
@@ -197,6 +199,7 @@ class MainWindow(QMainWindow):
         self.overview_page = OverviewPage(state, self.security_feed)
         self.overview_page.open_page_requested.connect(self._open_page)
         self.live_events_page = LiveEventsPage(self.security_feed)
+        self.pipeline_page = PipelinePage(state)
         self.sessions_page = SessionsPage(state)
         self.suricata_page = SuricataPage(state)
         self.detection_page = DetectionPage(state)
@@ -225,6 +228,7 @@ class MainWindow(QMainWindow):
         for page_id, widget in [
             ("overview", self.overview_page),
             ("live_events", self.live_events_page),
+            ("pipeline", self.pipeline_page),
             ("sessions", self.sessions_page),
             ("suricata", self.suricata_page),
             ("detection", self.detection_page),
@@ -477,6 +481,7 @@ class MainWindow(QMainWindow):
         # Global Visualization page rebuilds its diagram automatically on the next poll
         # tick (it always calls _get_targets() fresh in apply_status()).
         self.redis_page.rebuild_targets()
+        self.pipeline_page.rebuild_targets()
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
@@ -692,6 +697,7 @@ class MainWindow(QMainWindow):
         self._reload_settings_page()
         self.services_page.rebuild_panels()
         self.redis_page.rebuild_targets()
+        self.pipeline_page.rebuild_targets()
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()

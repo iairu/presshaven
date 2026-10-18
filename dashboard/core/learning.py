@@ -272,6 +272,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Each row is one decision or scoring signal. Severity follows the points added; the stream keeps working "
         "even when Kibana or the SIEM stack is down.",
     ),
+    "pipeline": PageGuide(
+        "Is the edge shipper really delivering logs to the SIEM? Shipping config, shipper, log errors and aggregator in one check.",
+        "Open it with both stacks up; then stop the SIEM's vector_inbound and watch the verdict turn to failing.",
+        "A green container is not a working pipeline: the mTLS channel can be broken while everything shows up. "
+        "Delivery errors in the shipper's own log are the earliest sign that telemetry is being lost.",
+    ),
     "sessions": PageGuide(
         "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.",
         "Run a pattern, open this page, and select your session to read its timeline.",
