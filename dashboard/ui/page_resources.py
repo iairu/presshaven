@@ -298,14 +298,29 @@ class ResourcesPage(QWidget):
         self.tabs.currentChanged.connect(lambda _i: self._refresh_visible_chart(time.monotonic()))
         layout.addWidget(self.tabs, stretch=3)
 
-    # ---- lifecycle: poll only while visible ----
+        # Collect for the app's lifetime (not just while visible) so the
+        # graphs already hold ~5 minutes of history the moment the page is
+        # first opened, instead of starting blank and filling over the next
+        # 5 minutes. UI updates in _on_sample are gated on visibility; only
+        # the history deques are kept warm while the page is hidden.
+        self._start_worker()
+
+    # ---- lifecycle: collect always, render only while visible ----
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        # Worker is already running (started in __init__); make sure it's up
+        # after a target rebuild, and paint the warm history immediately.
         self._start_worker()
+        self._refresh_visible_chart(time.monotonic())
 
     def hideEvent(self, event) -> None:
+        # Deliberately keep the worker running so history stays warm.
         super().hideEvent(event)
+
+    def stop(self) -> None:
+        """Retire the background worker -- called from MainWindow.closeEvent
+        so the QThread isn't destroyed mid-run on app exit."""
         self._stop_worker()
 
     def rebuild_targets(self) -> None:
@@ -322,8 +337,9 @@ class ResourcesPage(QWidget):
                 break
         self.target_combo.setCurrentIndex(idx)
         self.target_combo.blockSignals(False)
-        if self.isVisible():
-            self._restart_worker()
+        # Worker runs app-lifetime now, so always re-point it at the
+        # (possibly new) current target, visible or not.
+        self._restart_worker()
 
     def _current_target(self):
         return self.target_combo.currentData()
@@ -341,8 +357,7 @@ class ResourcesPage(QWidget):
         self.table.setRowCount(0)
         # Recreate the charts to fully reset their per-service series set.
         self._recreate_charts()
-        if self.isVisible():
-            self._restart_worker()
+        self._restart_worker()
 
     def _recreate_charts(self) -> None:
         for i, (key, title, y_title, _) in enumerate(_METRICS):
@@ -407,9 +422,12 @@ class ResourcesPage(QWidget):
             if vals:
                 self._avg[key].append((now, sum(vals) / len(vals)))
 
-        self._rebuild_table(resources)
-        self._update_summary(resources)
-        self._refresh_visible_chart(now)
+        # While hidden, keep filling history (above) but skip the UI work --
+        # the table/summary/chart repaint is wasted on an off-screen page.
+        if self.isVisible():
+            self._rebuild_table(resources)
+            self._update_summary(resources)
+            self._refresh_visible_chart(now)
 
     def _rebuild_table(self, resources: list) -> None:
         services = [r.service for r in resources]

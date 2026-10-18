@@ -862,6 +862,10 @@ class MainWindow(QMainWindow):
         self.poller.stop()
         self.poller.wait(2000)
         self.security_feed.stop()
+        # The telemetry worker runs for the app's lifetime now (to keep ~5
+        # min of history warm); retire it cleanly so its QThread isn't
+        # destroyed mid-run on exit.
+        self.resources_page.stop()
         if self.tray_icon:
             self.tray_icon.hide()
         super().closeEvent(event)
