@@ -6,7 +6,6 @@ guard while a mutating docker compose action is in flight."""
 from __future__ import annotations
 
 import base64
-import threading
 import time
 
 from PyQt6.QtCore import QByteArray, QSize, Qt
@@ -24,7 +23,7 @@ from core.learning import PAGE_GUIDES
 from core.state import AppState
 from ui import theme
 from ui.command_palette import CommandPalette
-from ui.common import confirm
+from ui.common import Job, confirm
 from ui.dependency_banner import DependencyBanner
 from ui.host_settings_banner import HostSettingsBanner
 from ui.error_monitor import ErrorLogMonitor
@@ -283,6 +282,9 @@ class MainWindow(QMainWindow):
         # Security alerting (core/alert_policy.py): every parsed proxy event
         # is checked against the user's policy.
         self._alerts_sent: dict[str, float] = {}
+        self._webhook_jobs: set = set()
+        self._last_webhook_error = ""
+        self._last_webhook_warn_at = 0.0
         self.security_feed.event_parsed.connect(self._on_security_event)
 
         # A required tool going missing is recorded into the same
@@ -609,8 +611,35 @@ class MainWindow(QMainWindow):
                                        QSystemTrayIcon.MessageIcon.Critical, 10000)
         if webhook and policy.webhook_url:
             payload = alert_policy.webhook_payload(label, detail, severity, score, ts)
-            threading.Thread(target=alert_policy.send_webhook, args=(policy.webhook_url, payload),
-                             daemon=True).start()
+            # Via a tracked Job (not a fire-and-forget daemon thread) so a
+            # failing webhook is reported instead of silently dropping every
+            # alert -- a misconfigured endpoint should be visible.
+            job = Job(lambda u=policy.webhook_url, p=payload: alert_policy.send_webhook(u, p), self)
+            self._webhook_jobs.add(job)
+
+            def finished(result, error):
+                self._webhook_jobs.discard(job)
+                job.deleteLater()
+                self._on_webhook_result(result or error or "")
+            job.done.connect(finished)
+            job.start()
+
+    def _on_webhook_result(self, error: str) -> None:
+        """Surface a webhook delivery failure once per cooldown, so a broken
+        endpoint doesn't drop alerts unnoticed; a later success clears it."""
+        if not error:
+            self._last_webhook_error = ""
+            return
+        now = time.time()
+        if now - self._last_webhook_warn_at < 300:
+            self._last_webhook_error = error
+            return
+        self._last_webhook_warn_at = now
+        self._last_webhook_error = error
+        if self.tray_icon:
+            self.tray_icon.showMessage("Alert webhook failed",
+                                       f"A security alert could not be delivered: {error[:160]}",
+                                       QSystemTrayIcon.MessageIcon.Warning, 10000)
 
     @staticmethod
     def _classify_all(results: dict) -> dict[tuple[str, str], str]:
