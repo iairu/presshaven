@@ -1511,6 +1511,9 @@ services:
       - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
       - ELASTICSEARCH_USER=${ELASTICSEARCH_USER:-}
       - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
+      # Clear Suricata's own logs at the start of each ids run (default on);
+      # set SURICATA_AUTO_CLEANUP=false in .env to keep them across runs.
+      - SURICATA_AUTO_CLEANUP=${SURICATA_AUTO_CLEANUP:-true}
     # network_mode: host -- NOT the usual `networks:` list. Confirmed live
     # (attack-test-2026-08-05.log, repo root) that plain bridge-network
     # *membership* (this container was on ids_network, same as
@@ -1574,6 +1577,24 @@ services:
 
         # Ensure log directory exists and is writable
         mkdir -p /var/log/suricata
+
+        # Clear the previous run's Suricata logs so each ids run starts
+        # clean, instead of eve.json/fast.log/stats.log/suricata.log (and
+        # any rotated files or pcaps) accumulating across restarts -- the
+        # dashboard's Network IDS page and the log_capper read these, and a
+        # fresh start keeps "recent alerts" actually recent. On by default;
+        # set SURICATA_AUTO_CLEANUP=false in .env to retain logs across runs.
+        # ($$VAR, not $VAR: Compose consumes a single $ before passing the
+        # script to the shell, same as $$sc_pid/$$FILTER_FIFO below.)
+        if [ "$${SURICATA_AUTO_CLEANUP:-true}" = "true" ]; then
+          echo '  SURICATA_AUTO_CLEANUP=true -- clearing previous run logs in /var/log/suricata'
+          rm -f /var/log/suricata/eve.json /var/log/suricata/fast.log \
+                /var/log/suricata/stats.log /var/log/suricata/suricata.log
+          rm -f /var/log/suricata/*.pcap /var/log/suricata/eve.json.* \
+                /var/log/suricata/fast.log.* 2>/dev/null || true
+        else
+          echo "  SURICATA_AUTO_CLEANUP=$${SURICATA_AUTO_CLEANUP} -- keeping previous run logs"
+        fi
 
         # Copy custom rules into the rules directory Suricata expects.
         # The local.rules file is mounted at /var/lib/suricata/rules/local.rules
