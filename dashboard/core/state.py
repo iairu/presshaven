@@ -85,6 +85,10 @@ class AppState:
     # proxy events raise a desktop notification / webhook. Edited on the
     # Connectors & Config page's Alerts tab.
     alert_policy: dict = field(default_factory=dict)
+    # Forensics Analysis page: recent queries (most recent first) and named
+    # saved searches -- see core/log_query.py.
+    log_search_history: list = field(default_factory=list)
+    log_saved_searches: list = field(default_factory=list)
 
     @classmethod
     def load(cls) -> "AppState":

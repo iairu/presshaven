@@ -14,6 +14,10 @@ on top of whatever coloring the underlying app's own log lines carry.
 Matching itself still runs against the ANSI-stripped text (so escape codes
 can't hide/split a search term), only DISPLAY keeps the original codes.
 
+Beyond plain substring search: a Regex toggle, a time range (docker's
+--since), a history completer, named saved searches and export of the full
+result set to text / JSON lines -- query logic is in core/log_query.py.
+
 Runs in a background QThread (mirroring ui/status_poller.StatusPoller's own
 reasoning) so a slow/unreachable remote target never freezes the UI.
 """
@@ -22,12 +26,13 @@ from __future__ import annotations
 import re
 import subprocess
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QStringListModel, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton,
-    QSpinBox, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QCompleter, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from core import log_query
 from core.docker_ctl import Target, all_targets
 from core.state import AppState
 from ui import ansi_render, theme
@@ -40,23 +45,20 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 class LogSearchWorker(QThread):
     results_ready = pyqtSignal(list, list)  # matching lines, errors
 
-    def __init__(
-        self, targets: list[Target], query: str, tail: int, case_sensitive: bool,
-        parent=None,
-    ):
+    def __init__(self, targets: list[Target], matcher, tail: int, since: str | None = None,
+                 parent=None):
         super().__init__(parent)
         self._targets = targets
-        self._query = query
+        self._matcher = matcher        # line -> bool, from core.log_query.compile_matcher
         self._tail = tail
-        self._case_sensitive = case_sensitive
+        self._since = since
 
     def run(self) -> None:
         matches: list[str] = []
         errors: list[str] = []
-        needle = self._query if self._case_sensitive else self._query.lower()
 
         for target in self._targets:
-            argv, cwd = target.build("logs", f"--tail={self._tail}")
+            argv, cwd = target.build("logs", f"--tail={self._tail}", *log_query.since_args(self._since))
             try:
                 result = subprocess.run(
                     argv, cwd=cwd, capture_output=True, text=True, timeout=30,
@@ -69,13 +71,10 @@ class LogSearchWorker(QThread):
                 continue
 
             for line in result.stdout.splitlines():
-                clean = _ANSI_RE.sub("", line)
-                haystack = clean if self._case_sensitive else clean.lower()
-                if needle in haystack:
-                    # Keep the ORIGINAL line (with its ANSI codes intact)
-                    # for display -- only the target-label prefix is plain
-                    # text. Matching above ran against `clean` so escape
-                    # codes can't hide/split the search term.
+                # Matching runs against the ANSI-stripped text so escape
+                # codes can't hide/split the search term; the ORIGINAL line
+                # (codes intact) is kept for display.
+                if self._matcher(_ANSI_RE.sub("", line)):
                     matches.append(f"[{target.label}] {line}")
                     if len(matches) >= MAX_DISPLAYED_MATCHES:
                         self.results_ready.emit(matches, errors)
@@ -107,6 +106,13 @@ class LogSearchPage(QWidget):
 
         self.case_check = QCheckBox("Case sensitive")
         search_row.addWidget(self.case_check)
+        self.regex_check = QCheckBox("Regex")
+        self.regex_check.setToolTip("Treat the search as a regular expression (Python syntax)")
+        search_row.addWidget(self.regex_check)
+        self._history_model = QStringListModel(list(self.state.log_search_history))
+        completer = QCompleter(self._history_model, self)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.search_box.setCompleter(completer)
 
         # On by default -- a burst of the same repeated message (a crash-
         # looping container, a periodic job failing every cycle) is exactly
@@ -130,6 +136,31 @@ class LogSearchPage(QWidget):
         self.search_btn.clicked.connect(self.run_search)
         search_row.addWidget(self.search_btn)
         layout.addLayout(search_row)
+
+        options_row = QHBoxLayout()
+        options_row.addWidget(QLabel("Time range:"))
+        self.range_combo = QComboBox()
+        for label, since in log_query.TIME_RANGES:
+            self.range_combo.addItem(label, since)
+        options_row.addWidget(self.range_combo)
+        options_row.addSpacing(16)
+        options_row.addWidget(QLabel("Saved:"))
+        self.saved_combo = QComboBox()
+        self.saved_combo.setMinimumWidth(180)
+        self.saved_combo.activated.connect(self._load_saved)
+        options_row.addWidget(self.saved_combo)
+        self.save_btn = QPushButton("Save search…")
+        self.save_btn.clicked.connect(self._save_current)
+        options_row.addWidget(self.save_btn)
+        self.delete_saved_btn = QPushButton("Delete")
+        self.delete_saved_btn.clicked.connect(self._delete_saved)
+        options_row.addWidget(self.delete_saved_btn)
+        options_row.addStretch()
+        self.export_btn = QPushButton("Export results…")
+        self.export_btn.clicked.connect(self._export)
+        options_row.addWidget(self.export_btn)
+        layout.addLayout(options_row)
+        self._refresh_saved()
 
         targets_row = QHBoxLayout()
         targets_row.addWidget(QLabel("Targets:"))
@@ -195,6 +226,12 @@ class LogSearchPage(QWidget):
         query = self.search_box.text().strip()
         if not query:
             return
+        try:
+            matcher = log_query.compile_matcher(query, self.regex_check.isChecked(),
+                                                self.case_check.isChecked())
+        except log_query.QueryError as e:
+            self.status_label.setText(str(e))
+            return
         targets = self._selected_targets()
         if not targets:
             self.status_label.setText("No targets selected.")
@@ -203,13 +240,81 @@ class LogSearchPage(QWidget):
         if self._worker is not None and self._worker.isRunning():
             return  # a search is already in flight
 
+        self.state.log_search_history = log_query.push_history(self.state.log_search_history, query)
+        self._history_model.setStringList(self.state.log_search_history)
+        self.state.save()
+
         self.search_btn.setEnabled(False)
         self.status_label.setText(f"Searching {len(targets)} target(s)...")
         self.results.clear()
 
-        self._worker = LogSearchWorker(targets, query, self.tail_spin.value(), self.case_check.isChecked())
+        self._worker = LogSearchWorker(targets, matcher, self.tail_spin.value(),
+                                       self.range_combo.currentData())
         self._worker.results_ready.connect(self._on_results)
         self._worker.start()
+
+    # ---- saved searches / export ----
+
+    def _refresh_saved(self) -> None:
+        self.saved_combo.clear()
+        self.saved_combo.addItem("— saved searches —")
+        for entry in self.state.log_saved_searches:
+            self.saved_combo.addItem(entry.get("name", "?"), entry)
+        self.delete_saved_btn.setEnabled(bool(self.state.log_saved_searches))
+
+    def _save_current(self) -> None:
+        query = self.search_box.text().strip()
+        name, ok = QInputDialog.getText(self, "Save search", "Name for this search:", text=query[:40])
+        if not ok:
+            return
+        try:
+            self.state.log_saved_searches = log_query.save_search(
+                self.state.log_saved_searches, name, query, self.regex_check.isChecked(),
+                self.case_check.isChecked(), self.range_combo.currentData())
+        except log_query.QueryError as e:
+            QMessageBox.warning(self, "Save search", str(e))
+            return
+        self.state.save()
+        self._refresh_saved()
+        self.saved_combo.setCurrentIndex(1)
+
+    def _load_saved(self, index: int) -> None:
+        entry = self.saved_combo.itemData(index)
+        if not isinstance(entry, dict):
+            return
+        self.search_box.setText(entry.get("query", ""))
+        self.regex_check.setChecked(bool(entry.get("regex")))
+        self.case_check.setChecked(bool(entry.get("case")))
+        idx = self.range_combo.findData(entry.get("since"))
+        self.range_combo.setCurrentIndex(max(0, idx))
+        self.run_search()
+
+    def _delete_saved(self) -> None:
+        entry = self.saved_combo.currentData()
+        if not isinstance(entry, dict):
+            return
+        self.state.log_saved_searches = log_query.delete_search(self.state.log_saved_searches, entry["name"])
+        self.state.save()
+        self._refresh_saved()
+
+    def _export(self) -> None:
+        if not self._last_matches:
+            QMessageBox.information(self, "Export", "Run a search with results first.")
+            return
+        path, chosen = QFileDialog.getSaveFileName(
+            self, "Export search results", "log_search.txt",
+            "Text (*.txt);;JSON lines (*.jsonl)")
+        if not path:
+            return
+        as_json = path.endswith(".jsonl") or "jsonl" in chosen
+        lines = self._last_matches          # every match, not just the collapsed view
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(log_query.export_jsonl(lines) if as_json else log_query.export_text(lines))
+        except OSError as e:
+            QMessageBox.warning(self, "Export failed", str(e))
+            return
+        self.status_label.setText(f"Exported {len(lines)} line(s) to {path}")
 
     def _on_results(self, matches: list[str], errors: list[str]) -> None:
         self.search_btn.setEnabled(True)
