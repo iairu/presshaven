@@ -105,19 +105,37 @@ class PlanTests(unittest.TestCase):
             self.assertEqual(by_cve[cve].headers, {}, cve)
         self.assertFalse(set(planned) & set(FALLBACK_PATTERNS))
 
-    def test_database_layer_runs_only_patterns_it_isolates(self):
+    def test_database_layer_keeps_two_thirds_patterns_database_reaching(self):
+        import math
         from core.patterns import PATTERN_PRESETS
-        from core.pool_test_report import fallback_patterns, pattern_plan, window_plan
+        from core.pool_test_report import fallback_patterns, window_plan, MAX_WINDOWS
         by_cve = {p.cve: p for p in PATTERN_PRESETS}
-        planned = [c for pair in pattern_plan(True) for c in pair]
-        self.assertEqual(len(planned), len(set(planned)))
-        for cve in planned + fallback_patterns(True):
+        # Fallbacks a database-layer window may pull are all database-isolated,
+        # so a pattern that does not divert never lowers the ratio below 2/3.
+        for cve in fallback_patterns(True):
             self.assertTrue(by_cve[cve].db_isolated, cve)
-            self.assertEqual((by_cve[cve].method, by_cve[cve].headers), ("GET", {}), cve)
-        self.assertFalse(set(planned) & set(fallback_patterns(True)))
-        for n in range(3, 11):
-            for pair in window_plan(n, database=True):
-                self.assertTrue(all(by_cve[c].db_isolated for c in pair), (n, pair))
+        for n in range(3, MAX_WINDOWS + 1):
+            plan = window_plan(n, database=True)
+            self.assertEqual(len(plan), n)
+            firsts = [a for a, _b in plan]
+            self.assertEqual(len(firsts), len(set(firsts)), f"{n}: first patterns repeat")
+            self.assertTrue(all(a != b for a, b in plan), f"{n}: first == second")
+            slots = [c for pair in plan for c in pair]
+            for cve in slots:                                   # every pattern is browser-runnable
+                self.assertEqual((by_cve[cve].method, by_cve[cve].headers), ("GET", {}), cve)
+            reaching = sum(1 for c in slots if by_cve[c].db_isolated)
+            self.assertGreaterEqual(reaching, math.ceil(2 * len(slots) / 3),
+                                    f"{n}: only {reaching}/{len(slots)} patterns reach the database")
+            self.assertTrue(any(not by_cve[c].db_isolated for c in slots),
+                            f"{n}: no non-isolated pattern to show the gap")
+
+    def test_wordpress_layer_plan_is_unchanged(self):
+        from core.pool_test_report import (FALLBACK_PATTERNS, PATTERN_PLAN, fallback_patterns,
+                                           window_plan)
+        self.assertEqual(window_plan(3), PATTERN_PLAN)
+        self.assertEqual(window_plan(3, database=False), PATTERN_PLAN)
+        self.assertEqual(fallback_patterns(), FALLBACK_PATTERNS)
+        self.assertEqual(fallback_patterns(False), FALLBACK_PATTERNS)
 
     def test_window_plan_covers_every_window_count(self):
         from core.pool_test_report import (CART_PLAN, PATTERN_PLAN, MAX_WINDOWS, MIN_WINDOWS,

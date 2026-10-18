@@ -29,30 +29,59 @@ PATTERN_PLAN = [("CVE-2024-2387", "CVE-2024-1071"),     # A: SQL injection
 FALLBACK_PATTERNS = ["CVE-2024-27956", "CVE-2022-0739", "CVE-2024-2879", "CVE-2023-2986",
                      "CVE-2025-2266", "GENERIC-SQLI-001", "GENERIC-XSS-001", "GENERIC-XSS-002",
                      "GENERIC-WP-001"]
-# The database proxy layer (core/honeypot_layer.py) shares one filesystem and
-# PHP runtime between production and every pool, so window B's file-upload
-# patterns (and the wp-config.php disclosure among the fallbacks) would land
-# on production's real files there (ids/db_proxy/COVERAGE.md). That layer runs
-# database-isolated patterns only: B attacks the database with an options
-# write and a token forgery instead (both divert within MAX_ATTEMPTS).
-DB_PATTERN_PLAN = [PATTERN_PLAN[0],
-                   ("CVE-2025-2266", "CVE-2023-2986"),     # B: options write / token forgery
-                   PATTERN_PLAN[2]]
-DB_UNISOLATED = {"CVE-2025-47577", "CVE-2025-4403", "GENERIC-WP-001"}
+# The database proxy layer (core/honeypot_layer.py) switches the database per
+# request but shares one filesystem and PHP runtime with production, so it
+# isolates database-layer attacks only; file upload, path traversal, config
+# disclosure and RCE reach the shared, production files instead
+# (ids/db_proxy/COVERAGE.md). A report run on that layer deliberately keeps
+# TWO THIRDS of its patterns on attacks that DO reach the honeypot database
+# (SQL injection, option writes, token forgery, enumeration) and ONE THIRD on
+# attacks that do not -- so the report can show the gap (what the non-isolated
+# third wrote to the shared filesystem) next to the two thirds the database
+# contained. db_window_plan() places a non-isolated pattern on every third
+# window (index 2, 5, 8) and a database-isolated one on the rest.
+#
+# (first, second) pairs, each first unique across the pool so no two windows
+# open with the same pattern. Every CVE here diverts within MAX_ATTEMPTS.
+DB_ISOLATED_PLAN = [("CVE-2024-2387", "CVE-2024-1071"),     # AFI SQLi / UM SQLi
+                    ("GENERIC-WP-003", "GENERIC-WP-002"),   # author enum / installer
+                    ("CVE-2025-2266", "CVE-2023-2986"),     # options write / token forgery
+                    ("CVE-2024-27956", "CVE-2022-0739"),    # WP Automatic / BookingPress SQLi
+                    ("CVE-2024-2879", "GENERIC-SQLI-001"),  # LayerSlider SQLi / search SQLi
+                    ("CVE-2024-1071", "CVE-2024-2387"),     # UM SQLi / AFI SQLi
+                    ("CVE-2022-0739", "CVE-2024-2879")]     # BookingPress / LayerSlider SQLi
+DB_UNISOLATED_PLAN = [("CVE-2025-47577", "CVE-2025-4403"),  # Gift Voucher RCE / DnD file upload
+                      ("CVE-2025-10142", "CVE-2024-50508"), # PagSeguro / WP File Upload traversal
+                      ("GENERIC-WP-001", "CVE-2025-47577")] # wp-config disclosure / Gift Voucher RCE
+# FALLBACK_PATTERNS the database layer must not use (not database-isolated).
+DB_UNISOLATED_FALLBACKS = {"GENERIC-WP-001"}
 MAX_ATTEMPTS = 3
 
 
-def pattern_plan(database: bool = False) -> list[tuple[str, str]]:
-    return DB_PATTERN_PLAN if database else PATTERN_PLAN
+def db_window_plan(windows: int) -> list[tuple[str, str]]:
+    """Database layer (first, second) per window: a non-isolated pair on every
+    third window (so a third of the patterns are attacks that slip past the
+    database honeypot), a database-isolated pair on the rest -- at least two
+    thirds reach the honeypot database. See DB_ISOLATED_PLAN / DB_UNISOLATED_PLAN."""
+    plan, iso, non = [], 0, 0
+    for w in range(windows):
+        if w % 3 == 2:
+            plan.append(DB_UNISOLATED_PLAN[non % len(DB_UNISOLATED_PLAN)])
+            non += 1
+        else:
+            plan.append(DB_ISOLATED_PLAN[iso % len(DB_ISOLATED_PLAN)])
+            iso += 1
+    return plan
 
 
 def fallback_patterns(database: bool = False) -> list[str]:
-    """FALLBACK_PATTERNS for the layer: in the database layer without the
-    patterns it cannot isolate and the ones its plan already runs."""
+    """FALLBACK_PATTERNS for the layer: in the database layer, the isolated
+    ones its plan does not already run (so a window that pulls a fallback
+    still reaches the honeypot database, keeping the two-thirds guarantee)."""
     if not database:
         return FALLBACK_PATTERNS
-    planned = {c for pair in DB_PATTERN_PLAN for c in pair}
-    return [c for c in FALLBACK_PATTERNS if c not in DB_UNISOLATED and c not in planned]
+    skip = {c for pair in DB_ISOLATED_PLAN + DB_UNISOLATED_PLAN for c in pair} | DB_UNISOLATED_FALLBACKS
+    return [c for c in FALLBACK_PATTERNS if c not in skip]
 
 # How many test windows the Segmentation Validation page can run side by side.
 MIN_WINDOWS, MAX_WINDOWS = 3, 10
@@ -105,15 +134,17 @@ def browse_action(labels: list[str]) -> str:
 
 
 def window_plan(windows: int, database: bool = False) -> list[tuple[str, str]]:
-    """(first, second) pattern per window. Windows A-C use the layer's
-    pattern_plan(); further windows open with a fallback pattern (a different
-    one each while they last) and run one of A-C's second patterns afterwards
-    -- separate sessions, so a repeat across windows does not matter there."""
-    base, fallbacks = pattern_plan(database), fallback_patterns(database)
-    plan = list(base[:windows])
+    """(first, second) pattern per window. The WordPress proxy layer is
+    unchanged: windows A-C use PATTERN_PLAN, further windows open with a
+    fallback pattern (a different one while they last) and run one of A-C's
+    second patterns afterwards. The database layer uses db_window_plan()."""
+    if database:
+        return db_window_plan(windows)
+    plan = list(PATTERN_PLAN[:windows])
     for w in range(len(plan), windows):
-        k = w - len(base)
-        plan.append((fallbacks[k % len(fallbacks)], base[k % len(base)][1]))
+        k = w - len(PATTERN_PLAN)
+        plan.append((FALLBACK_PATTERNS[k % len(FALLBACK_PATTERNS)],
+                     PATTERN_PLAN[k % len(PATTERN_PLAN)][1]))
     return plan
 
 EXCLUSIVE = "exclusive"

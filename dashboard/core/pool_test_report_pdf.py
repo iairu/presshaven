@@ -540,9 +540,12 @@ def _db_evidence_html(data: PoolTestData) -> str:
             or '<li style="color:#777;">no files written</li>'
         out.append('<p style="color:#555;">Files written in production_eshop during the run. In '
                    'this layer every pool shares this one filesystem with production, so anything '
-                   'here is visible to production visitors as well. The run only plays patterns '
-                   'that act on the database, so ideally this list holds nothing but WordPress\'s '
-                   'own cache files (ids/db_proxy/COVERAGE.md).</p><ul>' + files + '</ul>')
+                   'here is visible to production visitors as well. Two thirds of the run\'s '
+                   'patterns act on the database and leave nothing here; the other third are '
+                   'WordPress attacks (file upload, path traversal, config reads) that this '
+                   'level does not isolate, so whatever they wrote shows up below &ndash; the '
+                   'gap this topology cannot close (ids/db_proxy/COVERAGE.md).</p><ul>'
+                   + files + '</ul>')
     return "".join(out)
 
 
@@ -647,9 +650,11 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              'memory, CPU or disk; from then on further users share the ready pools in '
              'strict round-robin order.</p>'
              + ('<p style="color:#555;">This level isolates database effects only: the shop\'s '
-                'files and PHP runtime are production\'s. The run therefore plays only patterns '
-                'whose effect is in the database (window B writes options and forges a token '
-                'instead of uploading files), and checks the shared filesystem at the end '
+                'files and PHP runtime are production\'s. The run keeps two thirds of its '
+                'patterns on attacks that reach the honeypot database (SQL injection, option '
+                'writes, token forgery, enumeration) and a third on WordPress attacks it cannot '
+                'isolate (file upload, path traversal, config disclosure), whose effect lands on '
+                'the shared filesystem instead &ndash; checked at the end '
                 '(ids/db_proxy/COVERAGE.md).</p>' if data.database_layer else '')]
     parts.append(diagrams.figure_html(
         doc, routing_figure(data, verdict, family), "pool-routing", 1,

@@ -457,9 +457,10 @@ class PoolTestPage(QWidget):
                     "connects each diverted session to a database of its own. Attack from "
                     "several at once and check that every user gets a database of their own: "
                     "the databases scale with the user sessions until the resource limit, after "
-                    "which the remaining sessions share them round-robin. Only patterns this "
-                    "level isolates are offered (file and code-execution attacks would reach "
-                    "the shared files).")
+                    "which the remaining sessions share them round-robin. A report run keeps "
+                    "two thirds of its patterns on attacks that reach the honeypot database and "
+                    "a third on WordPress attacks that slip past it to the shared files, so the "
+                    "report shows both.")
         return ("3 to 10 browsers, each a separate session (own cookies, own User-Agent and "
                 "language, so the proxy cannot merge them). Open the shop in each, then attack "
                 "from several at once and check that every user lands in a honeypot pool "
@@ -467,25 +468,20 @@ class PoolTestPage(QWidget):
                 "limit, after which the remaining sessions share the pools round-robin.")
 
     def _fill_presets(self) -> None:
-        """The GET patterns a window can open; in the database layer only the
-        ones it isolates (core.patterns.PatternPreset.db_isolated)."""
-        database = honeypot_layer.is_database()
-        current = self._presets[self.preset_combo.currentIndex()].cve \
-            if 0 <= self.preset_combo.currentIndex() < len(self._presets) else None
-        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"
-                         and (p.db_isolated or not database)]
+        """The GET patterns a window can open by hand (the same in both
+        layers; a report run on the database layer picks which reach the
+        honeypot database, see core.pool_test_report.window_plan)."""
+        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"]
         self.preset_combo.blockSignals(True)
         self.preset_combo.clear()
         for p in self._presets:
             self.preset_combo.addItem(f"{p.cve} — {p.name}")
-        keep = next((k for k, p in enumerate(self._presets) if p.cve == current), 0)
-        self.preset_combo.setCurrentIndex(keep)
         self.preset_combo.blockSignals(False)
 
     def set_honeypot_layer(self) -> None:
-        """The Workloads page switched the honeypot layer."""
+        """The Workloads page switched the honeypot layer (only the intro and a
+        report run's pattern choice depend on it; the dropdown is the same)."""
         self.intro.setText(self._intro_text())
-        self._fill_presets()
 
     def _pool_kind(self) -> str:
         return ("a honeypot database cloned from production" if self._layer_db
