@@ -90,6 +90,9 @@ local function assign_honeypot_pool(routing_decision, extra_session_data, remote
 
     routing_decision.target   = "honeypot"
     routing_decision.upstream = upstream
+    -- The pool this request is served by (the assignment, or a healthy
+    -- fallback while it is down). The database layer names it to db.php.
+    routing_decision.pool     = pool_num
     routing_decision.update_session = true
 
     -- Merge caller-supplied session fields with the pool assignment metadata
@@ -368,6 +371,7 @@ function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
 
         routing_decision.target   = "honeypot"
         routing_decision.upstream = pool_router.get_upstream_for_pool(pool_num)
+        routing_decision.pool     = pool_num
         ngx.log(ngx.WARN, "[ROUTING] ⚠️  Session bound to HONEYPOT | Session: ", session_data.id or "unknown",
                 " | Pool: ", pool_num,
                 " | IP: ", remote_ip, " | Reason: ", session_data.honeypot_reason or "unknown",

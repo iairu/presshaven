@@ -158,13 +158,14 @@ do
     assignments.s1 = 3
     local d = route({ uri = "/shop/" }, nil, bound)
     check("bound session stays on its own pool", d.target == "honeypot" and d.upstream == "honeypot_backend_3")
+    check("bound session names the pool it is served by", d.pool == 3)
     check("bound session keeps original reason", reason(d) == "cve_pattern_match")
     check("bound session refreshes pool TTL", pool_calls.refresh == 1)
     check("unchanged assignment is not rewritten into the session", not d.update_session)
 
     assignments.s1 = 5   -- pool_manager moved it (its own pool is built / it was released)
     d = route({ uri = "/shop/" }, nil, bound)
-    check("bound session follows its Redis assignment", d.upstream == "honeypot_backend_5")
+    check("bound session follows its Redis assignment", d.upstream == "honeypot_backend_5" and d.pool == 5)
     check("moved assignment is persisted in the session",
           d.update_session and d.session_data.honeypot_pool == 5)
     assignments.s1 = nil
@@ -190,6 +191,7 @@ do
     check("score at threshold -> honeypot", d.target == "honeypot" and reason(d) == "high_risk_score")
     check("honeypot session is bound to the assigned pool",
           d.session_data.honeypot_bound == true and d.session_data.honeypot_pool == 2)
+    check("new diversion names the pool it is served by", d.pool == 2)
     check("diversion is reported to AbuseIPDB", #abuse_reports == 1 and abuse_reports[1].reason == "high_risk_score")
     check("diversion logs a security event", #security_events == 1 and security_events[1].kind == "routing_to_honeypot")
 
