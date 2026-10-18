@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
         self.pool_test_page = PoolTestPage(state)
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
+        self.extras_page.open_page_requested.connect(self._open_page)
         self.settings_page = SettingsPage(state, self._on_remote_settings_changed, self.set_poll_interval,
                                       on_test_alert=self._test_alert)
         self.learn_page = LearnPage(state, PAGE_LABELS)

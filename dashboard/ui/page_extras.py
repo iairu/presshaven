@@ -10,18 +10,37 @@ from __future__ import annotations
 
 import os
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QGuiApplication
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import (
-    QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
 from core import thesis_export
 
+# The report/export surfaces that live on OTHER pages. Reporting routes to
+# each one rather than duplicating it: (page id, title, what it produces).
+_REPORT_LINKS = [
+    ("patterns", "Attack run report",
+     "Fires every attack preset once and saves a PDF of what the proxy did with each — "
+     "scores, routing and the resulting timeline."),
+    ("pool_test", "Segmentation validation report",
+     "Runs the pool / segmentation test and saves a PDF of each pool event and how the "
+     "stack isolated the attack windows."),
+    ("resources", "Workload resource graphs",
+     "The Workloads page can start or stop a stack and export a PDF of the host and "
+     "per-container CPU / memory graphs for that run."),
+    ("kibana", "SIEM dashboard snapshot",
+     "Captures every Kibana dashboard bookmark as full-page screenshots, each annotated, "
+     "into one PDF — a point-in-time SIEM snapshot."),
+]
+
 
 class ExtrasPage(QWidget):
+    open_page_requested = pyqtSignal(str)
+
     def __init__(self, health_screenshot_provider=None, parent=None):
         super().__init__(parent)
         # Callable returning a PNG path of the Global Visualization page (or "" on failure);
@@ -30,10 +49,28 @@ class ExtrasPage(QWidget):
         self._health_screenshot_provider = health_screenshot_provider
         layout = QVBoxLayout(self)
 
+        # ---- hub: reports that live on other pages ----
+        hub_title = QLabel("Reports &amp; exports across the console")
+        hub_title.setStyleSheet("font-weight: 700; font-size: 12pt;")
+        layout.addWidget(hub_title)
+        hub_intro = QLabel(
+            "Most reports are produced on the page that owns the data, so they capture its live "
+            "state. Jump straight to each one:")
+        hub_intro.setWordWrap(True)
+        hub_intro.setStyleSheet("color: #aaaaaa;")
+        layout.addWidget(hub_intro)
+        for page_id, title, desc in _REPORT_LINKS:
+            layout.addWidget(self._link_row(page_id, title, desc))
 
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #444444;")
+        layout.addWidget(sep)
+
+        # ---- document exports that only live here ----
         intro = QLabel(
-            "Auto-generated PDF exports, all rendered in the same Baskerville face as the "
-            "pattern report:<br/>"
+            "<b>Document exports</b> generated here — auto-generated PDFs rendered in a "
+            "Baskerville face:<br/>"
             "&bull; <b>Implementation chapter</b> &ndash; the project's more interesting "
             "algorithms, pulled from the source and condensed (comments, docstrings, debug "
             "logging and blank runs removed), plus a services overview and a Global Visualization shot.<br/>"
@@ -89,6 +126,28 @@ class ExtrasPage(QWidget):
         layout.addWidget(self.status_label)
 
         self._reload_preview()
+
+    def _link_row(self, page_id: str, title: str, desc: str) -> QWidget:
+        row = QFrame()
+        row.setObjectName("ReportLinkRow")
+        row.setStyleSheet("#ReportLinkRow { border: 1px solid #3a3a3a; border-radius: 6px; }")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(12, 8, 12, 8)
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        name = QLabel(title)
+        name.setStyleSheet("font-weight: 700;")
+        blurb = QLabel(desc)
+        blurb.setWordWrap(True)
+        blurb.setStyleSheet("color: #999999; font-size: 9pt;")
+        text.addWidget(name)
+        text.addWidget(blurb)
+        h.addLayout(text, stretch=1)
+        btn = QPushButton("Open →")
+        btn.setToolTip(f"Go to the {title} page")
+        btn.clicked.connect(lambda _c, p=page_id: self.open_page_requested.emit(p))
+        h.addWidget(btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        return row
 
     def _reload_preview(self) -> None:
         self.preview.clear()
