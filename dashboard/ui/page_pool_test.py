@@ -504,7 +504,8 @@ class PoolTestPage(QWidget):
     def _add_frame(self) -> None:
         i = len(self._boxes)
         label = FRAMES[i][0]
-        browser = BrowserWidget()
+        # Homepage is the shop (https://localhost by default), not about:blank.
+        browser = BrowserWidget(home_url=self._base_url() + "/")
         ua, lang = frame_identity(browser.profile.httpUserAgent(), i)
         browser.profile.setHttpUserAgent(ua)
         browser.profile.setHttpAcceptLanguage(lang)
@@ -1912,7 +1913,7 @@ class PoolTestPage(QWidget):
     def reset_sessions(self) -> None:
         for browser in self.browsers:
             browser.clear_cookies()
-            browser.navigate("about:blank")
+            browser.navigate(self._base_url() + "/")
 
     def _show_export_result(self, text: str) -> None:
         self.export_label.setText(text)
