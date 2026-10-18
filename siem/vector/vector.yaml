@@ -108,19 +108,25 @@ transforms:
           }
         }
 
-        # Separate a real user navigation (a browser loading a page) from the
-        # background sub-resources it then fetches automatically -- CSS, JS,
-        # images, fonts -- and XHR/REST calls, so the Kibana dashboards can
-        # count actual page views without every asset request inflating the
-        # total. nginx's security log carries no Sec-Fetch-Dest /
-        # content-type field, so this is derived from the request path: a
-        # static-asset extension or a known background endpoint is an
-        # "asset", everything else "navigation".
+        # Separate a real user navigation (a page requested directly) from the
+        # background sub-resources a browser then fetches automatically --
+        # CSS, JS, images, fonts -- and XHR/REST calls, so the Kibana
+        # dashboards can count actual page views without every asset request
+        # inflating the total. nginx's security log carries no
+        # Sec-Fetch-Dest/content-type, so this is derived from the request
+        # path AND the Referer: a browser-issued sub-resource always carries a
+        # Referer pointing at the page that pulled it in, whereas a direct
+        # request -- a navigation, or a curl / scanner / attack hit -- does
+        # not. So a static-asset extension or XHR endpoint counts as
+        # "background" only when it also has a Referer; every direct request
+        # (tools included) stays "navigation", which is why a curl fetch is
+        # never miscounted as background.
         .request_kind = "navigation"
         req_path = downcase!(split(string(.uri) ?? "", "?")[0])
-        if match(req_path, r'\.(js|mjs|css|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|otf|eot|bmp|cur|mp4|webm)$') {
-          .request_kind = "asset"
-        } else if match(req_path, r'(admin-ajax\.php|wp-cron\.php|/wp-json/|/robots\.txt)') {
+        ref = string(.referer) ?? ""
+        has_referer = ref != "" && ref != "-"
+        is_subresource = match(req_path, r'\.(js|mjs|css|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|otf|eot|bmp|cur|mp4|webm)$') || match(req_path, r'(admin-ajax\.php|/wp-json/)')
+        if is_subresource && has_referer {
           .request_kind = "asset"
         }
       }

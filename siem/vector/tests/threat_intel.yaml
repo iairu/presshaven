@@ -114,6 +114,24 @@ tests:
               # sub-resource, so it must not inflate the page-view count.
               assert_eq!(.request_kind, "asset")
 
+  - name: a curl fetch of an asset path has no referer and stays a direct request
+    inputs:
+      - insert_at: enrich
+        type: log
+        log_fields:
+          log_type: nginx_security
+          message: >-
+            172.18.0.60 - - [03/Oct/2026:09:30:06 +0000] "GET /wp-content/uploads/payload.js HTTP/1.1" 200 120 "-" "curl/8.5.0" "-" session_id="s9" route="production" risk_score="0" suspicious="false" request_score="0" decayed_score="0" offenses="0" decay_state="clean" uri_class="safe" patterns="-" reason="-"
+    outputs:
+      - extract_from: enrich
+        conditions:
+          - type: vrl
+            source: |
+              # Same .js extension as a browser sub-resource, but curl sends
+              # no Referer, so it's a direct request -- a real hit, not a
+              # browser-issued background fetch.
+              assert_eq!(.request_kind, "navigation")
+
   - name: Suricata alert gets the same indicator fields
     inputs:
       - insert_at: enrich
