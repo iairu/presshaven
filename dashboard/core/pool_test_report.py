@@ -646,6 +646,9 @@ class UsageSample:
     cpu_percent: float            # sum over pool containers (100 = one core busy)
     ready: int | None = None      # pools registered ready with the router (Redis)
     host_mem_mb: float | None = None   # total RAM in use on the host at this sample
+    # Database layer: production_eshop, which serves every pool (None otherwise).
+    eshop_mem_mb: float | None = None
+    eshop_cpu_percent: float | None = None
 
 
 @dataclass

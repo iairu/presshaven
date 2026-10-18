@@ -13,7 +13,7 @@ from PyQt6.QtGui import QFont, QFontMetrics, QPageLayout, QPageSize, QPainter, Q
 from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtGui import QColor, QTextDocument
 
-from core import diagrams, pool_evidence, report_pagination, vector_figures
+from core import diagrams, honeypot_layer, pool_evidence, report_pagination, vector_figures
 from core.startup_events import fmt_tick, nice_axis
 from core.diagrams import _arrow, _box, _new
 from core.pattern_report_pdf import (_FONT_CSS_STACK, _GREEN, _GREY, _ORANGE, _RED, _badge, _esc,
@@ -474,9 +474,83 @@ def expected_visitors(data: PoolTestData, summ: ScalingSummary) -> dict[int, set
     return out
 
 
+def _db_counters_html(ev) -> str:
+    fmt = lambda d: ", ".join(f"{k.replace('Com_', '').lower()} +{v}" for k, v in d.items())   # noqa: E731
+    if ev.db_delta is None:
+        return '<span style="color:#777;">no baseline (pool built during the run)</span>'
+    if ev.db_attack is not None:
+        return (f'<b>{_esc(fmt(ev.db_attack))}</b> beyond its own background'
+                f'<br/><span style="font-size:8pt;color:#777;">total {_esc(fmt(ev.db_delta))}; the '
+                'background (healthchecks, WP cron, content sync) was measured while every window '
+                'was still on production</span>')
+    return (f'{_esc(fmt(ev.db_delta))}<br/><span style="font-size:8pt;color:#777;">total, '
+            'including the pool\'s own background (not measured for a pool that came up '
+            'during the run)</span>')
+
+
+def _db_evidence_html(data: PoolTestData) -> str:
+    """Database layer: each honeypot database's query log, attributed to the
+    windows by their WooCommerce session keys, and the shared filesystem."""
+    owner = pool_owner_letters(data)
+    out = ['<h2 style="color:#222;">What each honeypot database saw and changed</h2>',
+           '<p style="color:#555;">Database proxy level: one shop serves every window, so a '
+           'pool is a database only. Each database\'s MySQL general query log was on for the run '
+           f'(since {_esc(data.since or "unknown")}). WordPress opens one database connection per '
+           'request, and a request names its window\'s WooCommerce session key when it loads the '
+           'session, so every statement on that connection is credited to that window. A database '
+           'should show its owner\'s requests and nobody else\'s. <i>SQL-injection statements</i> '
+           'are the ones carrying an injection payload (UNION SELECT, SLEEP(), information_schema, '
+           '...): the attack reached that database, not production\'s. A database no window owns '
+           'is shown for contrast.</p>']
+    for ev in sorted(data.evidence, key=lambda e: (e.pool not in owner, e.pool)):
+        who = f"window {owner[ev.pool]}" if ev.pool in owner else "unowned spare"
+        head = f'{_badge("database " + str(ev.pool), _GREEN if ev.pool in owner else _GREY)} &nbsp;<b>{_esc(who)}</b>'
+        if ev.error:
+            out.append(f'<h3>{head}</h3><p style="color:#c62828;">{_esc(ev.error)}</p>')
+            continue
+        if ev.db_other_requests is None and not ev.db_windows:
+            traffic = ('<span style="color:#777;">query log not read (it could not be turned on, '
+                       'or no window had a WooCommerce session to attribute by)</span>')
+        else:
+            rows = "".join(
+                f'<tr><td><b>{_esc(q.window)}</b></td><td>{q.requests}</td><td>{q.queries}</td>'
+                f'<td>{q.writes}</td><td>{q.suspicious}</td><td style="font-size:8pt;">'
+                + ("<br/>".join(_esc(x[:150]) for x in q.examples) or "&ndash;") + '</td></tr>'
+                for q in ev.db_windows) or '<tr><td colspan="6" style="color:#777;">no test window</td></tr>'
+            traffic = ('<table width="100%" cellspacing="0" cellpadding="3" border="1" '
+                       'style="border-collapse:collapse; color:#333; font-size:9pt;"><tr><th width="9%">Window</th>'
+                       '<th width="10%">Requests</th><th width="10%">Queries</th><th width="9%">Writes</th>'
+                       '<th width="12%">SQL-injection statements</th><th>Examples</th></tr>' + rows + '</table>')
+            if ev.db_other_requests is not None:
+                traffic += (f'<span style="font-size:8pt;color:#777;">{ev.db_other_requests} other '
+                            'connection(s): content sync, WP cron, requests without a session cookie, '
+                            'other visitors</span>')
+        out.append(
+            f'<h3 style="color:#222;">{head}</h3>'
+            f'<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;">'
+            f'<tr><td width="22%"><b>Windows seen</b></td><td>{_esc(", ".join(ev.windows()) or "none")}</td></tr>'
+            f'<tr><td><b>Query log</b></td><td>{traffic}</td></tr>'
+            f'<tr><td><b>Database activity</b></td><td>{_db_counters_html(ev)}</td></tr></table>')
+    out.append('<h3 style="color:#222;">Shared WordPress filesystem</h3>')
+    if data.shared_files is None:
+        out.append('<p style="color:#777;">Not checked (production_eshop could not be read).</p>')
+    else:
+        files = "".join(f'<li style="font-size:8pt;">{_esc(f)}</li>' for f in data.shared_files[:20]) \
+            or '<li style="color:#777;">no files written</li>'
+        out.append('<p style="color:#555;">Files written in production_eshop during the run. In '
+                   'this layer every pool shares this one filesystem with production, so anything '
+                   'here is visible to production visitors as well. The run only plays patterns '
+                   'that act on the database, so ideally this list holds nothing but WordPress\'s '
+                   'own cache files (ids/db_proxy/COVERAGE.md).</p><ul>' + files + '</ul>')
+    return "".join(out)
+
+
 def _evidence_html(data: PoolTestData) -> str:
     if not data.evidence:
         return ""
+    if data.database_layer:
+        return _db_evidence_html(data)
     owner = pool_owner_letters(data)
     out = ['<h2 style="color:#222;">What each honeypot container saw and changed</h2>',
            '<p style="color:#555;">Read from each pool\'s own eshop and database containers '
@@ -505,18 +579,7 @@ def _evidence_html(data: PoolTestData) -> str:
             or '<li style="color:#777;">none</li>'
         files = "".join(f'<li style="font-size:8pt;">{_esc(f)}</li>' for f in ev.files_changed[:10]) \
             or '<li style="color:#777;">no files written</li>'
-        fmt = lambda d: ", ".join(f"{k.replace('Com_', '').lower()} +{v}" for k, v in d.items())   # noqa: E731
-        if ev.db_delta is None:
-            db = '<span style="color:#777;">no baseline (pool built during the run)</span>'
-        elif ev.db_attack is not None:
-            db = (f'<b>{_esc(fmt(ev.db_attack))}</b> beyond its own background'
-                  f'<br/><span style="font-size:8pt;color:#777;">total {_esc(fmt(ev.db_delta))}; the '
-                  'background (healthchecks, WP cron, content sync) was measured while every window '
-                  'was still on production</span>')
-        else:
-            db = (f'{_esc(fmt(ev.db_delta))}<br/><span style="font-size:8pt;color:#777;">total, '
-                  'including the pool\'s own background (not measured for a pool that came up '
-                  'during the run)</span>')
+        db = _db_counters_html(ev)
         out.append(
             f'<h3 style="color:#222;">{head}</h3>'
             f'<table width="100%" cellspacing="0" cellpadding="4" border="1" '
@@ -556,6 +619,7 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              '<table width="100%" style="color:#555;"><tr><td>'
              f'Generated: {_esc(data.generated_at)}<br/>'
              f'Target: {_esc(data.target_label)} &nbsp; ({_esc(data.base_url)})<br/>'
+             f'Honeypot layer: {_esc(honeypot_layer.layer(data.honeypot_layer).short_label)}<br/>'
              f'Patterns: {_esc(data.pattern)}<br/>'
              f'Windows: {len(data.frames)}<br/>'
              'Session tamper-proofing: ' + (
@@ -571,14 +635,22 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
              '<p style="color:#555;">Users are told apart by session, not by address. '
              'Each test window has its own cookie jar and its own User-Agent and language, so '
              f'the proxy sees {len(data.frames)} separate users. By default every flagged '
-             'session is given a honeypot pool <b>of its own</b> (an eshop container with its own '
-             'seeded database): the router hands a new user a free ready pool no other '
+             'session is given a honeypot pool <b>of its own</b> ('
+             + ('database proxy level: a honeypot database cloned from production, which the '
+                'one shared shop connects the session to on every request'
+                if data.database_layer else 'an eshop container with its own seeded database')
+             + '): the router hands a new user a free ready pool no other '
              'session owns, and the pools scale with the user sessions &ndash; a session '
              'that finds no free pool borrows one round-robin while pool_manager builds one for '
              'it, then moves there. Scaling stops at the configured resource limit '
              '(POOL_MAX_MEMORY_MB / POOL_MAX_CPUS / POOL_MAX) or when the host is short of '
              'memory, CPU or disk; from then on further users share the ready pools in '
-             'strict round-robin order.</p>']
+             'strict round-robin order.</p>'
+             + ('<p style="color:#555;">This level isolates database effects only: the shop\'s '
+                'files and PHP runtime are production\'s. The run therefore plays only patterns '
+                'whose effect is in the database (window B writes options and forges a token '
+                'instead of uploading files), and checks the shared filesystem at the end '
+                '(ids/db_proxy/COVERAGE.md).</p>' if data.database_layer else '')]
     parts.append(diagrams.figure_html(
         doc, routing_figure(data, verdict, family), "pool-routing", 1,
         "One arrow per test window, from its session to the honeypot pool the router bound "
@@ -967,11 +1039,18 @@ def usage_figure(data: PoolTestData, summ: ScalingSummary, family: str = "Serif"
     cpus = data.host_cpus or 0
     have_host_mem = any(u.host_mem_mb is not None for u in usage)
     # (title, value_fn, unit, color, overlay_fn|None, overlay_label)
+    # Database layer: production_eshop serves every pool, so its CPU is the
+    # other half of what the pools cost (grey overlay).
+    eshop = data.database_layer and any(u.eshop_cpu_percent is not None for u in usage)
+    div = cpus if cpus > 0 else 1
+    cpu_overlay = ((lambda u: None if u.eshop_cpu_percent is None else u.eshop_cpu_percent / div)
+                   if eshop else None)
     if cpus > 0:
         cpu_panel = ("CPU in use", lambda u: u.cpu_percent / cpus,
-                     f"% of all {cpus} CPUs", _BLUE_INK, None, "")
+                     f"% of all {cpus} CPUs", _BLUE_INK, cpu_overlay, "production_eshop")
     else:
-        cpu_panel = ("CPU in use", lambda u: u.cpu_percent, "% of one CPU", _BLUE_INK, None, "")
+        cpu_panel = ("CPU in use", lambda u: u.cpu_percent, "% of one CPU", _BLUE_INK,
+                     cpu_overlay, "production_eshop")
     mem_overlay = ((lambda u: u.host_mem_mb) if have_host_mem else None)
     panels = [("Memory in use", lambda u: u.mem_mb, "MB", _BLUE_INK, mem_overlay,
                "whole host (all services)"),
@@ -1186,8 +1265,9 @@ def _memory_scope_html(data: PoolTestData, summ: ScalingSummary) -> str:
                      f"{charge:g} MB (POOL_RESERVE_MEM_MB) \u2014 what the scaling budget counts, "
                      "deliberately above measured use as headroom"))
     rows.append(("Container memory limit per pool",
-                 "1536 MB (1024 eshop + 512 database) \u2014 the hard ceiling a pool can reach, "
-                 "rarely approached at rest"))
+                 ("512 MB (the database alone; production_eshop, which serves every pool, is "
+                  "not counted)" if data.database_layer else "1536 MB (1024 eshop + 512 database)")
+                 + " \u2014 the hard ceiling a pool can reach, rarely approached at rest"))
     if data.host_mem_total_mb:
         hpeak = max((u.host_mem_mb or 0) for u in usage)
         rows.append(("Whole host RAM",
@@ -1196,8 +1276,8 @@ def _memory_scope_html(data: PoolTestData, summ: ScalingSummary) -> str:
                      "so it sits well above the pool containers alone"))
     return ('<h3 style="color:#222;">Why pool memory is below the budget</h3>'
             '<p style="color:#555;">The figure\'s memory panel counts the honeypot pool '
-            'containers only. A WordPress pool idles far below both its budget charge and its '
-            'container limit, so 10 pools use far less than a 12 GB budget suggests; the host as a '
+            'containers only. A pool idles far below both its budget charge and its '
+            'container limit, so 10 pools use far less than the budget suggests; the host as a '
             'whole (grey line) is higher because it runs everything else too.</p>'
             '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
             'style="border-collapse:collapse; color:#333;">'
@@ -1221,8 +1301,10 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     waits = [c.end - c.start for c in summ.borrow if c.end is not None and c.outcome == "own"]
     res = summ.reserve
     out = ['<h2 style="color:#222;">Scaling and latency</h2>',
-           '<p style="color:#555;">pool_manager adds one honeypot pool (an eshop container plus '
-           'its own database seeded from production) for every user session that finds no '
+           '<p style="color:#555;">pool_manager adds one honeypot pool ('
+           + ('a honeypot database cloned from production' if data.database_layer
+              else 'an eshop container plus its own database seeded from production')
+           + ') for every user session that finds no '
            'free pool, up to the resource limit. These figures come from pool_manager\'s own '
            'event log (build phases, hand-overs with their wait time, resource-limit changes) '
            'and from the windows themselves (routing read after every step and every 2 s while '
@@ -1312,15 +1394,23 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
     parallel = ((data.pool_state or {}).get("status") or {}).get("parallel")
     prebuild_s = ((res.get("end") or data.duration) - res["start"]) if res.get("requested") else 0
     if slowest >= 100 or prebuild_s >= 150:
-        wphase = max((dict(b.phases).get("WordPress seed", 0) for b in done_builds), default=0)
-        tips = ["<b>Why it is slow and how to speed it up.</b> A pool is built by cloning "
-                "production, then re-applying the WordPress storefront config via wp-cli "
-                f"(the “WordPress seed” phase, ~{wphase:.0f} s here — the biggest part of a "
-                f"~{slowest:.0f} s build)."]
-        tips.append("That config is identical to production, which was just cloned, so it can be "
-                    "skipped: set <b>POOL_FAST_CLONE=1</b> (ids/.env) to inherit the storefront "
-                    "from the clone instead of rebuilding it, saving most of that phase. Verify a "
-                    "built pool still serves the shop before relying on it.")
+        if data.database_layer:
+            start = max((dict(b.phases).get("database start", 0) for b in done_builds), default=0)
+            clone = max((dict(b.phases).get("clone + scrub", 0) for b in done_builds), default=0)
+            tips = ["<b>Why it is slow and how to speed it up.</b> A database pool is built by "
+                    f"starting a MySQL container (“database start”, ~{start:.0f} s here) and "
+                    f"cloning production into it (“clone + scrub”, ~{clone:.0f} s) — a "
+                    f"~{slowest:.0f} s build."]
+        else:
+            wphase = max((dict(b.phases).get("WordPress seed", 0) for b in done_builds), default=0)
+            tips = ["<b>Why it is slow and how to speed it up.</b> A pool is built by cloning "
+                    "production, then re-applying the WordPress storefront config via wp-cli "
+                    f"(the “WordPress seed” phase, ~{wphase:.0f} s here — the biggest part of a "
+                    f"~{slowest:.0f} s build)."]
+            tips.append("That config is identical to production, which was just cloned, so it can be "
+                        "skipped: set <b>POOL_FAST_CLONE=1</b> (ids/.env) to inherit the storefront "
+                        "from the clone instead of rebuilding it, saving most of that phase. Verify a "
+                        "built pool still serves the shop before relying on it.")
         if res.get("requested") and parallel:
             tips.append(f"The pre-build ran {parallel} build(s) at a time, so {res['requested']} "
                         f"pools took {int((res['requested'] + parallel - 1) // parallel)} wave(s). "
@@ -1396,10 +1486,16 @@ def _scaling_html(data: PoolTestData, doc: QTextDocument, family: str, fig: int)
                     "CPU is the sum over the pool containers, where 100% is one core busy")
         out.append(diagrams.figure_html(
             doc, usage_figure(data, summ, family), "pool-usage", fig,
-            "Memory and CPU of the honeypot pool containers (eshop + database) only, and the number "
+            "Memory and CPU of the honeypot pool containers ("
+            + ("the honeypot databases" if data.database_layer else "eshop + database")
+            + ") only, and the number "
             "of pools registered ready with the router (docker stats every 10 s, every 3 s around "
             "the scale-down). " + cpu_note + ". The memory panel's grey line is the whole host's "
-            "RAM in use (every service, not just the pools). Dashed lines: green a pool finished "
+            "RAM in use (every service, not just the pools)."
+            + (" The CPU panel's grey line is production_eshop, the one shop that runs every "
+               "pool's PHP in this level, so the diverted sessions' load shows there, on "
+               "production's container." if data.database_layer else "")
+            + " Dashed lines: green a pool finished "
             "building, red the resource limit was reached, brown a pool was removed. Shaded: the "
             "forced scale-down at the end of the run.", width=640))
         fig += 1

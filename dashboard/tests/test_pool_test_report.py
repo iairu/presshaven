@@ -304,6 +304,9 @@ class ScaledownReportTests(unittest.TestCase):
         self.assertEqual((u.containers, u.pools), (4, 3))
         self.assertEqual(u.per_pool_mem[2], 768 * 2 ** 20)
         self.assertAlmostEqual(u.cpu_percent, 15.0)
+        # production_eshop is never a pool; reported apart (database layer).
+        self.assertEqual(u.eshop_mem_bytes, 900 * 2 ** 20)
+        self.assertAlmostEqual(u.eshop_cpu_percent, 50.0)
 
     def test_removals_and_usage_lookup(self):
         from core.pool_test_report import PoolTestData, UsageSample, scaling_summary, usage_at

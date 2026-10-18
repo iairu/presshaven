@@ -245,9 +245,10 @@ class _UsageSampler(QThread):
     seconds for the whole report run, so the PDF can show resource use going
     up while pools are built and down again at the scale-down."""
 
-    def __init__(self, target, t0: float, parent=None):
+    def __init__(self, target, t0: float, parent=None, shared_eshop: bool = False):
         super().__init__(parent)
         self._target, self._t0 = target, t0
+        self._shared_eshop = shared_eshop     # database layer: sample production_eshop too
         self.interval = 10.0
         self.samples: list[UsageSample] = []
         self._stop = False
@@ -259,15 +260,17 @@ class _UsageSampler(QThread):
         while not self._stop:
             started = time.time()
             try:
-                u = collect_pool_usage(self._target)
+                u = collect_pool_usage(self._target, shared_eshop=self._shared_eshop)
                 try:
                     ready = redis_inspect.ready_pool_count(self._target.remote)
                 except Exception:  # noqa: BLE001
                     ready = None
                 host = host_stats(self._target)
-                self.samples.append(UsageSample(started - self._t0, u.containers, u.pools,
-                                                u.mem_bytes / 2 ** 20, u.cpu_percent, ready,
-                                                host[2] if host else None))
+                self.samples.append(UsageSample(
+                    started - self._t0, u.containers, u.pools, u.mem_bytes / 2 ** 20,
+                    u.cpu_percent, ready, host[2] if host else None,
+                    u.eshop_mem_bytes / 2 ** 20 if u.eshop_mem_bytes is not None else None,
+                    u.eshop_cpu_percent))
             except Exception:  # noqa: BLE001 -- a gap in the curve, not a failed run
                 pass
             while not self._stop and time.time() - started < self.interval:
@@ -1658,7 +1661,7 @@ class PoolTestPage(QWidget):
             self._sampling = True
             self._reserve = {}
             self._visits = [0] * MAX_WINDOWS
-            sampler = _UsageSampler(target, self._t0, self)
+            sampler = _UsageSampler(target, self._t0, self, shared_eshop=self._layer_db)
             sampler.start()
             try:
                 return self._run_steps(remote, target, baseline, offset, sampler, count, delayed,

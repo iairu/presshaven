@@ -156,6 +156,10 @@ def collect_live(target: Target, timeout: float = 12.0) -> list[ContainerResourc
 _POOL_CONTAINER_RE = re.compile(r"(?:^|-)honeypot_(eshop|database)(?:_(\d+))?(?:-\d+)?$")
 
 
+# The database layer's one shop, which serves every honeypot database pool.
+_SHARED_ESHOP_RE = re.compile(r"(?:^|-)production_eshop(?:-\d+)?$")
+
+
 def pool_container(name: str) -> tuple[str, int] | None:
     """("eshop" | "database", pool number) for a honeypot pool container name."""
     m = _POOL_CONTAINER_RE.search(name)
@@ -170,6 +174,10 @@ class PoolUsage:
     mem_bytes: int = 0
     cpu_percent: float = 0.0     # sum over containers (100 = one CPU busy)
     per_pool_mem: dict = None    # pool -> bytes
+    # production_eshop, when it was sampled too (database layer: it does the
+    # PHP work of every pool); None otherwise.
+    eshop_mem_bytes: int | None = None
+    eshop_cpu_percent: float | None = None
 
 
 def parse_pool_usage(stats_lines: str) -> PoolUsage:
@@ -180,10 +188,13 @@ def parse_pool_usage(stats_lines: str) -> PoolUsage:
             st = json.loads(line)
         except json.JSONDecodeError:
             continue
+        mem = _to_bytes((st.get("MemUsage", "") or "").partition("/")[0])
+        if _SHARED_ESHOP_RE.search(st.get("Name", "")):
+            out.eshop_mem_bytes, out.eshop_cpu_percent = mem, _percent(st.get("CPUPerc", ""))
+            continue
         kind = pool_container(st.get("Name", ""))
         if kind is None:
             continue
-        mem = _to_bytes((st.get("MemUsage", "") or "").partition("/")[0])
         out.containers += 1
         out.mem_bytes += mem
         out.cpu_percent += _percent(st.get("CPUPerc", ""))
@@ -218,8 +229,11 @@ def host_stats(target: Target, timeout: float = 10.0) -> tuple[int, float, float
     return parse_host_stats(out) if out else None
 
 
-def collect_pool_usage(target: Target, timeout: float = 20.0) -> PoolUsage:
+def collect_pool_usage(target: Target, timeout: float = 20.0,
+                       shared_eshop: bool = False) -> PoolUsage:
     """Memory/CPU of every running honeypot pool container, runtime ones included.
+    `shared_eshop` samples production_eshop alongside (eshop_* fields): in the
+    database layer it serves every pool.
 
     `docker stats` fails outright when one of the listed containers is removed
     before it answers -- which is exactly what happens while pools are scaled
@@ -229,7 +243,8 @@ def collect_pool_usage(target: Target, timeout: float = 20.0) -> PoolUsage:
     text = _run(
         target,
         "for try in 1 2 3; do "
-        "ids=$(docker ps -q --filter name=honeypot_eshop --filter name=honeypot_database); "
+        "ids=$(docker ps -q --filter name=honeypot_eshop --filter name=honeypot_database"
+        + (" --filter name=production_eshop" if shared_eshop else "") + "); "
         "[ -z \"$ids\" ] && { echo none; exit 0; }; "
         "out=$(docker stats --no-stream --format '{{json .}}' $ids 2>/dev/null) "
         "&& { printf '%s\\n' \"$out\"; exit 0; }; "
