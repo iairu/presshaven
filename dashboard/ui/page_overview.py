@@ -114,6 +114,7 @@ class StatCard(QFrame):
 
 class OverviewPage(QWidget):
     open_page_requested = pyqtSignal(str)
+    lifecycle_requested = pyqtSignal(str)   # "start" | "stop" | "restart", for both stacks
 
     def __init__(self, state: AppState, security_feed: SecurityEventFeed, parent=None):
         super().__init__(parent)
@@ -135,11 +136,23 @@ class OverviewPage(QWidget):
             self._cards.addWidget(card)
         root.addWidget(cards_host)
 
-        # ---- per-stack health lines ----
-        self.stacks_label = QLabel("Bring the stacks up on the Workloads page to see live health.")
+        # ---- per-stack health lines + lifecycle controls ----
+        stacks_row = QHBoxLayout()
+        self.stacks_label = QLabel("Bring the stacks up to see live health.")
         self.stacks_label.setWordWrap(True)
         self.stacks_label.setStyleSheet(f"color: {GREY};")
-        root.addWidget(self.stacks_label)
+        stacks_row.addWidget(self.stacks_label, stretch=1)
+        self.start_btn = QPushButton("▶ Start all")
+        self.start_btn.setToolTip("docker compose up -d on the ids and siem stacks (every configured target)")
+        self.start_btn.clicked.connect(lambda: self.lifecycle_requested.emit("start"))
+        self.restart_all_btn = QPushButton("⟳ Restart all")
+        self.restart_all_btn.clicked.connect(lambda: self.lifecycle_requested.emit("restart"))
+        self.stop_btn = QPushButton("■ Stop all")
+        self.stop_btn.setToolTip("docker compose stop on the ids and siem stacks")
+        self.stop_btn.clicked.connect(lambda: self.lifecycle_requested.emit("stop"))
+        for b in (self.start_btn, self.restart_all_btn, self.stop_btn):
+            stacks_row.addWidget(b)
+        root.addLayout(stacks_row)
 
         # ---- quick actions ----
         actions = QHBoxLayout()
@@ -188,25 +201,13 @@ class OverviewPage(QWidget):
         """Called from MainWindow on every poll tick with the same results
         dict the other pages get."""
         self._last_results = results
-        lines = []
-        colors = []
-        for project, name in (("edge", "Edge (IDS honeypot)"), ("siem", "SIEM (ELK)")):
-            text, color, _up, total = overview_stats.project_summary(results, project)
-            if total == 0:
-                continue
-            colors.append(color)
-            lines.append(f"<b>{name}:</b> <span style='color:{color};'>{text}</span>")
-        if lines:
-            self.stacks_label.setText("&nbsp;&nbsp;·&nbsp;&nbsp;".join(lines))
-            self.stacks_label.setTextFormat(Qt.TextFormat.RichText)
-            overall = overview_stats.overall_color(colors)
-            summary = {GREEN: "Operational", ORANGE: "Degraded", RED: "Attention needed",
-                       GREY: "Idle"}.get(overall, "Unknown")
-            self.card_health.set_value(summary, accent=overall)
-        else:
-            self.stacks_label.setText(
-                "Bring the stacks up on the Workloads page to see live health.")
-            self.card_health.set_value("Idle", "no containers running", GREY)
+        healths = [overview_stats.project_health(results, "edge", "Edge (IDS honeypot)"),
+                   overview_stats.project_health(results, "siem", "SIEM (ELK)")]
+        lines = [f"<b>{h.label}:</b> <span style='color:{h.color};'>{h.text}</span>" for h in healths]
+        self.stacks_label.setText("&nbsp;&nbsp;·&nbsp;&nbsp;".join(lines))
+        self.stacks_label.setTextFormat(Qt.TextFormat.RichText)
+        headline, color, caption = overview_stats.system_summary(healths)
+        self.card_health.set_value(headline, caption, color)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

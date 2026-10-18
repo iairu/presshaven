@@ -15,13 +15,18 @@ sys.path.insert(0, str(DASHBOARD_DIR))
 
 from core import overview_stats  # noqa: E402
 from core.colors import GREEN, GREY, ORANGE, RED  # noqa: E402
+from core.overview_stats import DEGRADED, OFFLINE, OPERATIONAL, STARTING_UP, STOPPED  # noqa: E402
 
 
 def _c(service, state="running", health="healthy", exit_code="0"):
     return {"Service": service, "State": state, "Health": health, "ExitCode": exit_code}
 
 
-class ProjectAggregationTests(unittest.TestCase):
+def _exited(service, code="0"):
+    return {"Service": service, "State": "exited", "ExitCode": code}
+
+
+class ProjectHealthTests(unittest.TestCase):
     def test_project_containers_spans_local_and_remote(self):
         results = {
             "edge-local": [_c("proxy"), _c("redis")],
@@ -31,32 +36,68 @@ class ProjectAggregationTests(unittest.TestCase):
         self.assertEqual(len(overview_stats.project_containers(results, "edge")), 3)
         self.assertEqual(len(overview_stats.project_containers(results, "siem")), 1)
 
-    def test_project_summary_all_up(self):
-        results = {"edge-local": [_c("proxy"), _c("redis")]}
-        text, color, up, total = overview_stats.project_summary(results, "edge")
-        self.assertEqual((up, total), (2, 2))
-        self.assertEqual(color, GREEN)
+    def test_all_up_is_operational(self):
+        h = overview_stats.project_health({"edge-local": [_c("proxy"), _c("redis")]}, "edge")
+        self.assertEqual((h.state, h.running, h.total, h.color, h.up), (OPERATIONAL, 2, 2, GREEN, True))
 
-    def test_project_summary_flags_unhealthy(self):
-        results = {"edge-local": [_c("proxy", health="unhealthy"), _c("redis")]}
-        _text, color, up, total = overview_stats.project_summary(results, "edge")
-        self.assertEqual((up, total), (2, 2))  # unhealthy still counts as "up/running"
-        self.assertEqual(color, RED)
+    def test_unhealthy_is_degraded(self):
+        h = overview_stats.project_health({"edge-local": [_c("proxy", health="unhealthy"), _c("redis")]}, "edge")
+        self.assertEqual((h.state, h.color), (DEGRADED, RED))
 
-    def test_empty_project(self):
-        text, color, up, total = overview_stats.project_summary({}, "edge")
-        self.assertEqual((up, total), (0, 0))
-        self.assertEqual(color, GREY)
+    def test_no_containers_is_offline(self):
+        h = overview_stats.project_health({"edge-local": []}, "edge")
+        self.assertEqual((h.state, h.total, h.up), (OFFLINE, 0, False))
+
+    def test_all_exited_is_stopped_not_up(self):
+        # The regression the user hit: a stopped stack of exited-0 services
+        # must not read as "up" just because the exit code was clean.
+        h = overview_stats.project_health({"edge-local": [_exited("proxy"), _exited("redis")]}, "edge")
+        self.assertEqual((h.state, h.running, h.up), (STOPPED, 0, False))
+        self.assertEqual(h.color, ORANGE)
+
+    def test_running_plus_finished_oneshot_is_operational(self):
+        h = overview_stats.project_health(
+            {"edge-local": [_c("proxy"), _exited("init_setup")]}, "edge")
+        self.assertEqual(h.state, OPERATIONAL)
+
+    def test_starting(self):
+        h = overview_stats.project_health({"siem-local": [_c("es01", health="starting")]}, "siem")
+        self.assertEqual((h.state, h.color), (STARTING_UP, ORANGE))
 
 
-class OverallColorTests(unittest.TestCase):
-    def test_worst_wins(self):
-        self.assertEqual(overview_stats.overall_color([GREEN, ORANGE, GREEN]), ORANGE)
-        self.assertEqual(overview_stats.overall_color([GREEN, RED, ORANGE]), RED)
-        self.assertEqual(overview_stats.overall_color([GREEN, GREEN]), GREEN)
+class SystemSummaryTests(unittest.TestCase):
+    def _edge(self, state):
+        return overview_stats.ProjectHealth("edge", "Edge (IDS honeypot)", state, 1, 1)
 
-    def test_empty_is_grey(self):
-        self.assertEqual(overview_stats.overall_color([]), GREY)
+    def _siem(self, state):
+        return overview_stats.ProjectHealth("siem", "SIEM (ELK)", state, 1, 1)
+
+    def test_both_up_operational(self):
+        label, color, _cap = overview_stats.system_summary([self._edge(OPERATIONAL), self._siem(OPERATIONAL)])
+        self.assertEqual((label, color), ("Operational", GREEN))
+
+    def test_edge_down_siem_up_is_not_operational(self):
+        # The exact reported bug.
+        label, color, caption = overview_stats.system_summary([self._edge(STOPPED), self._siem(OPERATIONAL)])
+        self.assertNotEqual(label, "Operational")
+        self.assertEqual(color, RED)   # the honeypot being down is serious
+        self.assertIn("Edge", label)
+        self.assertIn("edge stopped", caption)
+
+    def test_siem_down_edge_up_is_amber(self):
+        label, color, _cap = overview_stats.system_summary([self._edge(OPERATIONAL), self._siem(OFFLINE)])
+        self.assertEqual((label, color), ("SIEM down", ORANGE))
+
+    def test_degraded_wins(self):
+        label, color, _c = overview_stats.system_summary([self._edge(DEGRADED), self._siem(OPERATIONAL)])
+        self.assertEqual((label, color), ("Degraded", RED))
+
+    def test_both_down_offline(self):
+        label, color, _c = overview_stats.system_summary([self._edge(OFFLINE), self._siem(OFFLINE)])
+        self.assertEqual((label, color), ("Offline", GREY))
+
+    def test_empty(self):
+        self.assertEqual(overview_stats.system_summary([])[0], "Idle")
 
 
 class EventCountTests(unittest.TestCase):

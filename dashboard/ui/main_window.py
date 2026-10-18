@@ -24,6 +24,7 @@ from core.learning import PAGE_GUIDES
 from core.state import AppState
 from ui import theme
 from ui.command_palette import CommandPalette
+from ui.common import confirm
 from ui.dependency_banner import DependencyBanner
 from ui.host_settings_banner import HostSettingsBanner
 from ui.error_monitor import ErrorLogMonitor
@@ -199,6 +200,7 @@ class MainWindow(QMainWindow):
         # poller's results (wired in _on_status_results).
         self.overview_page = OverviewPage(state, self.security_feed)
         self.overview_page.open_page_requested.connect(self._open_page)
+        self.overview_page.lifecycle_requested.connect(self._on_lifecycle_requested)
         self.live_events_page = LiveEventsPage(self.security_feed)
         self.pipeline_page = PipelinePage(state)
         self.sessions_page = SessionsPage(state)
@@ -508,6 +510,19 @@ class MainWindow(QMainWindow):
         self.state.poll_interval_ms = interval_ms
         self.state.save()
         self.poller.set_interval(interval_ms)
+
+    def _on_lifecycle_requested(self, action: str) -> None:
+        """Overview page's Start/Restart/Stop all: drive every Workloads
+        panel (both stacks, local + remote) at once, reusing their progress
+        bars and the quit-while-mutating guard. Stop asks first."""
+        if action == "stop" and not confirm(
+                self, "Stop all stacks",
+                "Run 'docker compose down' on the ids and siem stacks (every configured target)? "
+                "Containers are removed; data volumes are kept."):
+            return
+        self._open_page("services")   # so the user sees the live output/progress
+        {"start": self.services_page.start_all, "restart": self.services_page.restart_all,
+         "stop": self.services_page.stop_all}[action]()
 
     def _on_status_results(self, results: dict) -> None:
         self.overview_page.apply_status(results)

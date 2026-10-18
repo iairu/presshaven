@@ -10,13 +10,52 @@ test_overview_stats.py) the same way every other core module is.
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 
 from core.colors import GREEN, GREY, ORANGE, RED
-from core.container_status import classify, summarize, HEALTHY, RUNNING, UNHEALTHY, EXITED_OK
+from core.container_status import (
+    classify, summarize, CREATED, DOWN, EXITED_BAD, EXITED_OK, HEALTHY, RUNNING, STARTING, UNHEALTHY,
+)
 
-# Severity ranking of the semantic colors, so the worst project drives the
-# overall health chip.
-_SEVERITY = {GREEN: 0, GREY: 1, ORANGE: 2, RED: 3}
+# Per-project operational states, worst-last.
+OFFLINE, STOPPED, STARTING_UP, OPERATIONAL, DEGRADED = (
+    "offline", "stopped", "starting", "operational", "degraded")
+
+# A container whose process is genuinely up right now (vs. a one-shot job
+# that exited cleanly, which is "done", not "running").
+_RUNNING_STATES = (HEALTHY, RUNNING, STARTING, UNHEALTHY)
+
+_STATE_COLOR = {OPERATIONAL: GREEN, STARTING_UP: ORANGE, DEGRADED: RED,
+                STOPPED: ORANGE, OFFLINE: GREY}
+
+
+@dataclass(frozen=True)
+class ProjectHealth:
+    project: str
+    label: str
+    state: str
+    running: int      # containers with a live process
+    total: int
+
+    @property
+    def color(self) -> str:
+        return _STATE_COLOR[self.state]
+
+    @property
+    def up(self) -> bool:
+        return self.state in (OPERATIONAL, STARTING_UP)
+
+    @property
+    def text(self) -> str:
+        if self.state == OFFLINE:
+            return "not running"
+        if self.state == STOPPED:
+            return f"stopped ({self.total} container(s) not running)"
+        if self.state == DEGRADED:
+            return f"{self.running}/{self.total} running, problems detected"
+        if self.state == STARTING_UP:
+            return f"starting ({self.running}/{self.total})"
+        return f"all {self.total} up"
 
 
 def project_containers(results: dict, project: str) -> list[dict]:
@@ -32,22 +71,53 @@ def project_containers(results: dict, project: str) -> list[dict]:
     return containers
 
 
-def project_summary(results: dict, project: str) -> tuple[str, str, int, int]:
-    """(summary_text, color, up, total) for a whole project -- the same
-    vocabulary ui/page_services.py shows per target, aggregated across
-    local+remote so the Overview shows one line per stack."""
+def project_health(results: dict, project: str, label: str = "") -> ProjectHealth:
+    """Operational state of a whole project. Unlike summarize(), a stack
+    with containers that have ALL exited counts as "stopped", not "up" --
+    an exited-0 long-running service is not operational just because its
+    exit code was clean (that leniency is only right for one-shot jobs,
+    which never make up a whole stack)."""
     containers = project_containers(results, project)
-    text, color = summarize(containers)
-    up = sum(1 for c in containers if classify(c) in (HEALTHY, RUNNING, UNHEALTHY, EXITED_OK))
-    return text, color, up, len(containers)
+    statuses = [classify(c) for c in containers]
+    running = sum(1 for s in statuses if s in _RUNNING_STATES)
+    if not containers:
+        state = OFFLINE
+    elif any(s in (UNHEALTHY, EXITED_BAD) for s in statuses):
+        state = DEGRADED
+    elif running == 0:
+        # Containers exist but none have a live process (all exited/created).
+        state = STOPPED
+    elif any(s in (STARTING, CREATED) for s in statuses):
+        state = STARTING_UP
+    else:
+        state = OPERATIONAL
+    return ProjectHealth(project, label or project, state, running, len(containers))
 
 
-def overall_color(colors: list[str]) -> str:
-    """The worst (most severe) of several status colors -- for a single
-    "system health" chip summarising every stack at once."""
-    if not colors:
-        return GREY
-    return max(colors, key=lambda c: _SEVERITY.get(c, 1))
+def system_summary(healths: list[ProjectHealth]) -> tuple[str, str, str]:
+    """(headline, color, caption) across every stack. "Operational" ONLY
+    when every stack is up -- a stack being down names which one, so the
+    chip can never read green while the honeypot (or the SIEM) is off."""
+    if not healths:
+        return "Idle", GREY, "no containers running"
+    caption = " · ".join(f"{h.label.split()[0].lower()} {_short(h.state)}" for h in healths)
+    if any(h.state == DEGRADED for h in healths):
+        return "Degraded", RED, caption
+    down = [h for h in healths if h.state in (OFFLINE, STOPPED)]
+    up = [h for h in healths if h.up]
+    if down and up:
+        names = " and ".join(h.label.split()[0] for h in down)
+        return f"{names} down", RED if any(h.project == "edge" for h in down) else ORANGE, caption
+    if down and not up:
+        return "Offline", GREY, caption
+    if any(h.state == STARTING_UP for h in healths):
+        return "Starting", ORANGE, caption
+    return "Operational", GREEN, caption
+
+
+def _short(state: str) -> str:
+    return {OPERATIONAL: "up", STARTING_UP: "starting", DEGRADED: "degraded",
+            STOPPED: "stopped", OFFLINE: "down"}[state]
 
 
 def is_diversion(event: dict) -> bool:

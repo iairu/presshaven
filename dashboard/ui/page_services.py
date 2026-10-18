@@ -441,6 +441,20 @@ class ServicesPage(QWidget):
         interrupt."""
         return any(p.is_mutating_action_running() for p in self.panels.values())
 
+    def start_all(self) -> None:
+        """`docker compose up -d` on every target (both stacks) -- the
+        Overview page's "Start all". Each panel shows its own progress."""
+        for panel in self.panels.values():
+            panel._start()
+
+    def restart_all(self) -> None:
+        for panel in self.panels.values():
+            panel._restart()
+
+    def stop_all(self) -> None:
+        for panel in self.panels.values():
+            panel._stop()
+
     def _on_layer_selected(self, _index: int) -> None:
         new_id = self.layer_combo.currentData()
         old = honeypot_layer.active()
