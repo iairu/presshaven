@@ -48,6 +48,11 @@ class RankTests(unittest.TestCase):
     def test_fuzzy_subsequence(self):
         self.assertEqual(rank("gvz", CMDS)[0].id, "page:health")
 
+    def test_lifecycle_keywords(self):
+        cmds = CMDS + [Command("lifecycle:start", "Start all stacks", "Actions",
+                               "bring up docker compose run")]
+        self.assertEqual(rank("start", cmds)[0].id, "lifecycle:start")
+
     def test_no_match(self):
         self.assertEqual(rank("qqqq", CMDS), [])
 

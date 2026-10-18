@@ -689,6 +689,10 @@ class MainWindow(QMainWindow):
                 commands.append(palette.Command(f"page:{page_id}", PAGE_LABELS[page_id], group,
                                                 guide.summary if guide else ""))
         commands += [
+            palette.Command("lifecycle:start", "Start all stacks", "Actions",
+                            "bring up docker compose ids siem run"),
+            palette.Command("lifecycle:restart", "Restart all stacks", "Actions", "recreate docker compose"),
+            palette.Command("lifecycle:stop", "Stop all stacks", "Actions", "bring down halt docker compose"),
             palette.Command("action:help", "Help for this page", "Actions", "F1 what is this page for"),
             palette.Command("action:wizard", "Re-run setup wizard…", "Actions", "first run configuration"),
             palette.Command("action:find", "Search all logs", "Actions", "Ctrl+F forensics grep"),
@@ -699,6 +703,8 @@ class MainWindow(QMainWindow):
         kind, _, name = command.id.partition(":")
         if kind == "page":
             self._open_page(name)
+        elif kind == "lifecycle":
+            self._on_lifecycle_requested(name)
         elif name == "help":
             self._show_page_help()
         elif name == "wizard":
