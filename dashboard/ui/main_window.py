@@ -33,6 +33,7 @@ from ui.page_health import HealthPage
 from ui.page_kibana import KibanaPage
 from ui.page_learn import LearnPage, page_guide_html
 from ui.page_log_search import LogSearchPage
+from ui.page_overview import OverviewPage
 from ui.page_pool_test import PoolTestPage
 from ui.page_redis import RedisPage
 from ui.page_resources import ResourcesPage
@@ -59,10 +60,11 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
+    "overview": "Overview",
     "services": "Workloads",
     "health": "Global Visualization",
     "resources": "Workload Telemetry",
@@ -82,6 +84,7 @@ PAGE_LABELS = {
 # exactly once; NAV_ORDER (the flattened list) is also what Ctrl+1..9 and
 # the View menu follow, so the shortcuts match what the rail shows.
 NAV_GROUPS = [
+    ("Overview", ["overview"]),
     ("Monitor", ["health", "resources", "kibana", "log_search"]),
     ("Threat Operations", ["patterns", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
@@ -176,6 +179,11 @@ class MainWindow(QMainWindow):
         # -- see ui/error_monitor.py.
         self.error_monitor = ErrorLogMonitor(self)
 
+        # Landing page -- consumes the security feed created just above (its
+        # current score + persisted notable-event history) and the status
+        # poller's results (wired in _on_status_results).
+        self.overview_page = OverviewPage(state, self.security_feed)
+        self.overview_page.open_page_requested.connect(self._open_page)
         self.services_page = ServicesPage(
             self._get_targets, self.error_monitor, self._grab_health_screenshot, state)
         self.services_page.layer_changed.connect(self._on_honeypot_layer_changed)
@@ -197,6 +205,7 @@ class MainWindow(QMainWindow):
         self.learn_page.open_page_requested.connect(self._open_page)
 
         for page_id, widget in [
+            ("overview", self.overview_page),
             ("services", self.services_page),
             ("health", self.health_page),
             ("resources", self.resources_page),
@@ -463,6 +472,7 @@ class MainWindow(QMainWindow):
         self.poller.set_interval(interval_ms)
 
     def _on_status_results(self, results: dict) -> None:
+        self.overview_page.apply_status(results)
         self.services_page.apply_status(results)
         self.health_page.apply_status(results)
         self.patterns_page.apply_status(results)

@@ -260,6 +260,12 @@ class PageGuide:
 
 
 PAGE_GUIDES: dict[str, PageGuide] = {
+    "overview": PageGuide(
+        "Operations landing page: current risk score, both stacks' health, and a live feed of notable security events.",
+        "Leave it open and run a pattern on the Attack Simulation page -- watch the score and events update here live.",
+        "A SOC console opens on a summary. The current score and recent diversions tell you at a glance whether "
+        "anything is happening right now, before you drill into any single page.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",
