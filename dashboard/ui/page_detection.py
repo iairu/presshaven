@@ -19,7 +19,7 @@ from core import detection_policy as dp
 from core.docker_ctl import targets_for
 from core.env_upload import EnvUploadError, load_project_env, upload_env_text
 from core.state import AppState
-from ui.common import ErrorBanner, TargetSelector, muted_label, set_status
+from ui.common import ErrorBanner, TargetSelector, confirm, muted_label, set_status
 from ui.process_runner import LogPanel
 
 
@@ -69,9 +69,12 @@ class DetectionPage(QWidget):
         buttons = QHBoxLayout()
         self.save_btn = QPushButton("Save")
         self.save_restart_btn = QPushButton("Save && restart reverse_proxy")
+        self.defaults_btn = QPushButton("Restore defaults")
+        self.defaults_btn.setToolTip("Set every field to its documented default (not saved until you Save)")
         self.status = QLabel("")
         buttons.addWidget(self.save_btn)
         buttons.addWidget(self.save_restart_btn)
+        buttons.addWidget(self.defaults_btn)
         buttons.addWidget(self.status, stretch=1)
         layout.addLayout(buttons)
 
@@ -80,14 +83,39 @@ class DetectionPage(QWidget):
         layout.addWidget(self.restart_log)
         layout.addStretch()
 
-        self.reload_btn.clicked.connect(self.reload)
-        self.target_combo.currentIndexChanged.connect(self.reload)
+        self.reload_btn.clicked.connect(lambda: self.reload(force=True))
+        self.target_combo.currentIndexChanged.connect(self._on_target_changed)
         self.save_btn.clicked.connect(lambda: self._save(restart=False))
         self.save_restart_btn.clicked.connect(lambda: self._save(restart=True))
+        self.defaults_btn.clicked.connect(self._restore_defaults)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self.reload()
+        # Don't wipe unsaved edits just because the user switched tabs and
+        # came back -- only (re)load when there's nothing in progress.
+        if self._env is None or not self._has_unsaved():
+            self.reload()
+
+    def _has_unsaved(self) -> bool:
+        return self._env is not None and bool(dp.changes(self._env, self._form_values()))
+
+    def _on_target_changed(self) -> None:
+        if self._has_unsaved() and not confirm(
+                self, "Discard changes?",
+                "You have unsaved detection-policy changes. Switch target and discard them?"):
+            return
+        self.reload(force=True)
+
+    def _restore_defaults(self) -> None:
+        for key, w in self._widgets.items():
+            knob = dp.KNOB_BY_KEY[key]
+            w.blockSignals(True)
+            if isinstance(w, QCheckBox):
+                w.setChecked(knob.default == "true")
+            else:
+                w.setValue(int(knob.default))
+            w.blockSignals(False)
+        self._on_edited()
 
     def rebuild_targets(self) -> None:
         self.target_combo.rebuild()
@@ -98,7 +126,9 @@ class DetectionPage(QWidget):
             out[key] = ("true" if w.isChecked() else "false") if isinstance(w, QCheckBox) else str(w.value())
         return out
 
-    def reload(self) -> None:
+    def reload(self, force: bool = False) -> None:
+        if not force and self._has_unsaved():
+            return
         remote = self.target_combo.current_remote()
         try:
             self._env = load_project_env("edge", remote)
