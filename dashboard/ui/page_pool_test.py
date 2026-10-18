@@ -56,6 +56,7 @@ from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capa
 from core.resource_stats import collect_pool_usage, host_stats
 from core.state import AppState
 from ui.browser_widget import BrowserWidget
+from ui.common import clear_all_attacks, danger_button
 from ui.flow_layout import FlowLayout, labeled
 
 # Name of the proxy's session cookie (init.lua: session.cookie_name).
@@ -358,6 +359,17 @@ class PoolTestPage(QWidget):
             "one user per pool (shared only when pools run out).")
         self.export_btn.clicked.connect(self.export_report)
         bar.addWidget(self.export_btn)
+        # Global reset: wipe every attacker's scored session, IP reputation,
+        # cached Suricata alerts and sticky pool assignments across the
+        # session store, plus the dashboard's recorded event history -- a
+        # clean slate before a validation run. Keeps the pool registry.
+        self.clear_attacks_btn = danger_button("Clear all attacks")
+        self.clear_attacks_btn.setToolTip(
+            "Wipe all accumulated attack state and history across the session store "
+            "(keeps the honeypot pool registry and running containers).")
+        self.clear_attacks_btn.clicked.connect(
+            lambda: clear_all_attacks(self, self.state, on_cleared=self.refresh_pool_state))
+        bar.addWidget(self.clear_attacks_btn)
         layout.addLayout(bar)
 
         # In-page progress row (not a floating dialog, so it can never land in

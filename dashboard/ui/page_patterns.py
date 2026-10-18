@@ -66,7 +66,7 @@ from core.state import AppState
 from core.learning import explain_event, lesson_for
 from core.pattern_log_parser import COLOR_HIGH, COLOR_LOW, COLOR_MED, SCORE_MAX, LineBuffer, PatternEvent, parse_line
 from ui import theme
-from ui.common import ErrorBanner
+from ui.common import ErrorBanner, clear_all_attacks, danger_button
 from ui.flow_layout import FlowLayout, labeled
 from ui.responsive import ResponsiveSplitter
 from ui.browser_widget import BrowserWidget
@@ -501,6 +501,19 @@ class PatternsPage(QWidget):
         )
         self.unpoison_btn.clicked.connect(self._unpoison_host_ip)
         toolbar.addWidget(self.unpoison_btn)
+
+        # Global reset: unlike "Unpoison host IP" (just this host's own
+        # entries + a proxy restart), this wipes every attacker's scored
+        # session, IP reputation, cached Suricata alerts and sticky pool
+        # assignments across the whole session store, plus the dashboard's
+        # recorded event history -- a clean slate for a fresh demo/lab.
+        self.clear_attacks_btn = danger_button("Clear all attacks")
+        self.clear_attacks_btn.setToolTip(
+            "Wipe all accumulated attack state and history across the session store "
+            "(keeps the honeypot pool registry and running containers).")
+        self.clear_attacks_btn.clicked.connect(
+            lambda: clear_all_attacks(self, self.state, on_cleared=self._clear_pattern_analyzer))
+        toolbar.addWidget(self.clear_attacks_btn)
 
         self.export_btn = QPushButton("Export report (PDF)")
         self.export_btn.setToolTip(

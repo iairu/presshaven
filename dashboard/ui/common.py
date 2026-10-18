@@ -10,7 +10,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QLabel, QLayout, QMessageBox, QPushButton, QWidget
 
 from core.colors import RED
-from core.docker_ctl import Target
+from core.docker_ctl import Target, target_for
+from core.redis_inspect import flush_threat_state
 from ui import theme
 
 
@@ -146,3 +147,49 @@ class Job(QThread):
             self.done.emit(self._fn(), "")
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller as text
             self.done.emit(None, str(e))
+
+
+# Holds Clear-all-attacks jobs alive until they finish (they outlive the
+# local that starts them; the Job is also parented to its widget).
+_clear_attack_jobs: set = set()
+
+
+def clear_all_attacks(widget: QWidget, state, on_cleared=None) -> None:
+    """Global 'clear all attacks', shared by the Attack Simulation and
+    Segmentation Validation pages. After a confirmation, wipes the honeypot's
+    accumulated attack state in the session store -- every scored session and
+    IP-reputation entry, the cached Suricata alerts and the sticky honeypot
+    pool assignments, keeping only pool_manager's pool registry
+    (redis_inspect.flush_threat_state) -- and the dashboard's own recorded
+    security-event history (core/state.security_events, which feeds Overview
+    and Live Events). The redis flush runs off the GUI thread; on_cleared()
+    is invoked on the GUI thread on success."""
+    if not confirm(
+            widget, "Clear all attacks",
+            "Wipe all accumulated attack state and history? This clears:\n\n"
+            "• every scored session and IP-reputation entry in the session store\n"
+            "• the cached Suricata alerts and sticky honeypot pool assignments\n"
+            "• the dashboard's recorded security-event history (Overview / Live Events)\n\n"
+            "The honeypot pool registry and all running containers are left alone. "
+            "This cannot be undone."):
+        return
+    remote = target_for("edge", state).remote
+    job = Job(lambda: flush_threat_state(remote), widget)
+    _clear_attack_jobs.add(job)
+
+    def done(result, error):
+        _clear_attack_jobs.discard(job)
+        job.deleteLater()
+        if error:
+            QMessageBox.warning(widget, "Clear all attacks failed", error)
+            return
+        state.security_events.clear()
+        state.save()
+        QMessageBox.information(
+            widget, "Attacks cleared",
+            f"Removed {result} key(s) from the session store and cleared the "
+            "dashboard's security-event history.")
+        if on_cleared is not None:
+            on_cleared()
+    job.done.connect(done)
+    job.start()
