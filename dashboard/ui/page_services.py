@@ -329,7 +329,10 @@ class ServicesPage(QWidget):
         self._health_screenshot_provider = health_screenshot_provider
         self._state = state
         self.panels: dict[str, TargetPanel] = {}
-        self._tab_view = True
+        # Stack view by default: show every target's panel at once. The tab
+        # view is the opt-in for when there are enough targets that scrolling
+        # the stack is tedious.
+        self._tab_view = False
         self._last_status: dict[str, list[dict]] = {}
 
         outer = QVBoxLayout(self)
@@ -353,12 +356,19 @@ class ServicesPage(QWidget):
             self.layer_combo.findData(honeypot_layer.active().id))
         self.layer_combo.currentIndexChanged.connect(self._on_layer_selected)
         layer_row.addWidget(self.layer_combo)
+        # The layer is a compose-file choice: switching it only makes sense
+        # while the ids stack is down, so the dropdown is disabled (with this
+        # note) whenever any edge target is running -- see _apply_layer_lock().
+        self.layer_note = QLabel("")
+        self.layer_note.setStyleSheet("color: #888888;")
+        self.layer_note.setWordWrap(True)
+        layer_row.addWidget(self.layer_note)
         layer_row.addStretch()
         outer.addLayout(layer_row)
 
         toggle_row = QHBoxLayout()
         toggle_row.addStretch()
-        self.view_toggle_btn = QPushButton("Switch to stack view")
+        self.view_toggle_btn = QPushButton("Switch to tab view" if not self._tab_view else "Switch to stack view")
         self.view_toggle_btn.clicked.connect(self._toggle_view)
         toggle_row.addWidget(self.view_toggle_btn)
         outer.addLayout(toggle_row)
@@ -512,3 +522,18 @@ class ServicesPage(QWidget):
         for key, containers in results.items():
             if key in self.panels:
                 self.panels[key].update_status(containers)
+        self._apply_layer_lock()
+
+    def _edge_running(self) -> bool:
+        """Any edge (ids) target with at least one running container."""
+        edge_keys = [t.key for t in self._get_targets() if t.project == "edge"]
+        return any(any(c.get("State") == "running" for c in self._last_status.get(k, []))
+                   for k in edge_keys)
+
+    def _apply_layer_lock(self) -> None:
+        """The honeypot layer is a compose-file choice; only let it change
+        while the ids stack is down, so a reconfiguration can't race a
+        running stack. While up, disable the dropdown and say why."""
+        running = self._edge_running()
+        self.layer_combo.setEnabled(not running)
+        self.layer_note.setText("stop the ids stack to change the layer" if running else "")
