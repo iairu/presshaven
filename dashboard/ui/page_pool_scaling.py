@@ -14,16 +14,16 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QHBoxLayout, QHeaderView, QLabel, QListWidget, QProgressBar, QPushButton, QSplitter,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from PyQt6.QtCore import Qt
 
 from core import pool_view
 from core.colors import GREEN, GREY, ORANGE, RED
 from core.docker_ctl import targets_for
-from core.redis_inspect import pool_snapshot
+from core.redis_inspect import RedisInspectError, pool_snapshot, request_scaledown
 from core.state import AppState
-from ui.common import ErrorBanner, Job, TargetSelector
+from ui.common import ErrorBanner, Job, TargetSelector, confirm
 from ui.flow_layout import FlowLayout
 from ui.page_overview import StatCard
 
@@ -56,6 +56,10 @@ class PoolScalingPage(QWidget):
         bar.addWidget(self.target_combo)
         self.refresh_btn = QPushButton("Refresh")
         bar.addWidget(self.refresh_btn)
+        self.reclaim_btn = QPushButton("Reclaim idle pools now")
+        self.reclaim_btn.setToolTip("Ask pool_manager to remove unowned runtime pools down to the spare "
+                                    "count now, instead of waiting for the idle timeout")
+        bar.addWidget(self.reclaim_btn)
         self.updated = QLabel("")
         bar.addWidget(self.updated, stretch=1)
         layout.addLayout(bar)
@@ -99,6 +103,7 @@ class PoolScalingPage(QWidget):
         self.timer.setInterval(REFRESH_MS)
         self.timer.timeout.connect(self.refresh)
         self.refresh_btn.clicked.connect(self.refresh)
+        self.reclaim_btn.clicked.connect(self._reclaim)
         self.target_combo.currentIndexChanged.connect(self.refresh)
 
     def showEvent(self, event) -> None:
@@ -112,6 +117,18 @@ class PoolScalingPage(QWidget):
 
     def rebuild_targets(self) -> None:
         self.target_combo.rebuild()
+
+    def _reclaim(self) -> None:
+        if not confirm(self, "Reclaim idle pools",
+                       "Ask pool_manager to remove unowned runtime pools down to the spare count now, "
+                       "instead of waiting for the idle timeout? Pools with users are left alone."):
+            return
+        try:
+            request_scaledown(self.target_combo.current_remote(), [])
+        except RedisInspectError as e:
+            QMessageBox.warning(self, "Reclaim failed", str(e))
+            return
+        self.refresh()
 
     def refresh(self) -> None:
         if self._busy:
