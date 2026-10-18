@@ -1,6 +1,13 @@
 """Segmentation Validation page: 3 to 10 embedded browsers, each its own user session,
 to see how the honeypot pool receives several users at once.
 
+In the database proxy layer (core/honeypot_layer.py) a pool is a honeypot
+database: one production_eshop serves every window and connects a diverted
+session to its own database. The run then offers and plays only the patterns
+that layer isolates, and tells the windows apart in each database's MySQL
+query log, by the WooCommerce session key in each window's cookie (see
+core/pool_evidence.py).
+
 Every frame is a BrowserWidget, i.e. its own off-the-record profile and so its
 own cookie jar -- the proxy hands each one a separate signed session cookie.
 Cookies alone are not enough, though: a request that arrives WITHOUT a cookie
@@ -37,15 +44,15 @@ from PyQt6.QtWidgets import (
     QProgressBar, QPushButton, QSpinBox, QSplitter, QVBoxLayout, QWidget,
 )
 
-from core import redis_inspect
+from core import honeypot_layer, redis_inspect
 from core.docker_ctl import target_for
 from core.patterns import PATTERN_PRESETS
 from core import pool_evidence
-from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, FALLBACK_PATTERNS, MAX_ATTEMPTS, MAX_WINDOWS,
+from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
                                     LoadTiming, PoolTestData, Sample, StepResult, UsageSample,
-                                    browse_action, browse_page, classify, clear_schedule, parse_cart, parse_decision, parse_product_ids,
-                                    window_plan)
+                                    browse_action, browse_page, classify, clear_schedule, fallback_patterns,
+                                    parse_cart, parse_decision, parse_product_ids, window_plan)
 from core.resource_stats import collect_pool_usage, host_stats
 from core.state import AppState
 from ui.browser_widget import BrowserWidget
@@ -282,19 +289,17 @@ class PoolTestPage(QWidget):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
-        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"]
+        self._presets: list = []     # see _fill_presets
+        # The honeypot layer a report run started on (the Workloads page can
+        # switch it meanwhile; the run keeps the one it measured).
+        self._layer_db = honeypot_layer.is_database()
 
         layout = QVBoxLayout(self)
 
-        intro = QLabel(
-            "3 to 10 browsers, each a separate session (own cookies, own User-Agent and "
-            "language, so the proxy cannot merge them). Open the shop in each, then attack "
-            "from several at once and check that every user lands in a honeypot pool "
-            "of their own: the pools scale with the user sessions until the resource "
-            "limit, after which the remaining sessions share the pools round-robin.")
-        intro.setWordWrap(True)
-        intro.setStyleSheet("color: #aaaaaa;")
-        layout.addWidget(intro)
+        self.intro = QLabel(self._intro_text())
+        self.intro.setWordWrap(True)
+        self.intro.setStyleSheet("color: #aaaaaa;")
+        layout.addWidget(self.intro)
 
         # Wraps onto more rows in a narrow window instead of forcing it wider.
         bar = FlowLayout()
@@ -317,8 +322,7 @@ class PoolTestPage(QWidget):
             "built.")
         bar.addWidget(labeled("of which wait for pools:", self.delayed_spin))
         self.preset_combo = QComboBox()
-        for p in self._presets:
-            self.preset_combo.addItem(f"{p.cve} — {p.name}")
+        self._fill_presets()
         self.preset_combo.setMinimumWidth(320)
         bar.addWidget(labeled("Pattern:", self.preset_combo))
         self.open_all_btn = QPushButton("Open shop in all")
@@ -419,6 +423,12 @@ class PoolTestPage(QWidget):
         # Per frame: the session id from the SERVERID cookie the proxy set it
         # ("<id>.<mac>"), kept up to date from the profile's cookie store.
         self._session_ids = [""] * MAX_WINDOWS
+        # WooCommerce session key -> window, every key a window held during
+        # the run (a cleared cookie brings a new one): the database layer's
+        # query logs are attributed by it.
+        self._wc_keys: dict[str, int] = {}
+        # Pools whose query log a database-layer run turned on (None: none).
+        self._qlog_pools: set[int] | None = None
         self._cookie_names: list[set[str]] = [set() for _ in range(MAX_WINDOWS)]
         self._visits = [0] * MAX_WINDOWS          # pages each window has browsed this run
         self._seen: list[list[str]] = [[] for _ in range(MAX_WINDOWS)]   # ... this step
@@ -432,6 +442,51 @@ class PoolTestPage(QWidget):
         self._pool_poll = QTimer(self)
         self._pool_poll.setInterval(POOL_REFRESH_MS)
         self._pool_poll.timeout.connect(self.refresh_pool_state)
+
+    # ---- honeypot layer ----
+
+    @staticmethod
+    def _intro_text() -> str:
+        if honeypot_layer.is_database():
+            return ("3 to 10 browsers, each a separate session (own cookies, own User-Agent and "
+                    "language, so the proxy cannot merge them). Database proxy level: a honeypot "
+                    "pool is a honeypot database -- the one shop serves every window and "
+                    "connects each diverted session to a database of its own. Attack from "
+                    "several at once and check that every user gets a database of their own: "
+                    "the databases scale with the user sessions until the resource limit, after "
+                    "which the remaining sessions share them round-robin. Only patterns this "
+                    "level isolates are offered (file and code-execution attacks would reach "
+                    "the shared files).")
+        return ("3 to 10 browsers, each a separate session (own cookies, own User-Agent and "
+                "language, so the proxy cannot merge them). Open the shop in each, then attack "
+                "from several at once and check that every user lands in a honeypot pool "
+                "of their own: the pools scale with the user sessions until the resource "
+                "limit, after which the remaining sessions share the pools round-robin.")
+
+    def _fill_presets(self) -> None:
+        """The GET patterns a window can open; in the database layer only the
+        ones it isolates (core.patterns.PatternPreset.db_isolated)."""
+        database = honeypot_layer.is_database()
+        current = self._presets[self.preset_combo.currentIndex()].cve \
+            if 0 <= self.preset_combo.currentIndex() < len(self._presets) else None
+        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"
+                         and (p.db_isolated or not database)]
+        self.preset_combo.blockSignals(True)
+        self.preset_combo.clear()
+        for p in self._presets:
+            self.preset_combo.addItem(f"{p.cve} — {p.name}")
+        keep = next((k for k, p in enumerate(self._presets) if p.cve == current), 0)
+        self.preset_combo.setCurrentIndex(keep)
+        self.preset_combo.blockSignals(False)
+
+    def set_honeypot_layer(self) -> None:
+        """The Workloads page switched the honeypot layer."""
+        self.intro.setText(self._intro_text())
+        self._fill_presets()
+
+    def _pool_kind(self) -> str:
+        return ("a honeypot database cloned from production" if self._layer_db
+                else "eshop + seeded database")
 
     # ---- frames ----
 
@@ -544,6 +599,9 @@ class PoolTestPage(QWidget):
         if name == SESSION_COOKIE:
             value = bytes(cookie.value()).decode(errors="replace")
             self._session_ids[index] = value.split(".", 1)[0]
+        key = pool_evidence.wc_session_key(name, bytes(cookie.value()).decode(errors="replace"))
+        if key:
+            self._wc_keys[key] = index
 
     def _on_cookie_removed(self, index: int, cookie) -> None:
         name = bytes(cookie.name()).decode(errors="replace")
@@ -1073,8 +1131,9 @@ class PoolTestPage(QWidget):
         """Patterns for one window: its primary and secondary choice, then the
         fallbacks, as presets (those that divert within MAX_ATTEMPTS only)."""
         by_cve = {p.cve: p for p in PATTERN_PRESETS}
-        plan = window_plan(self._count)[window]
-        return [by_cve[c] for c in dict.fromkeys((*plan, *FALLBACK_PATTERNS)) if c in by_cve]
+        plan = window_plan(self._count, self._layer_db)[window]
+        return [by_cve[c] for c in dict.fromkeys((*plan, *fallback_patterns(self._layer_db)))
+                if c in by_cve]
 
     def _letter(self, window: int) -> str:
         return FRAMES[window][0][-1]
@@ -1208,7 +1267,7 @@ class PoolTestPage(QWidget):
         self._mark(title)
         self._begin_browse()
         shop = self._base_url() + "/"
-        plan = window_plan(self._count)
+        plan = window_plan(self._count, self._layer_db)
         state: dict[int, list] = {}     # window -> [preset, attempts, replaced, done]
         tried: dict[int, set[str]] = {}
         for w in windows:
@@ -1311,7 +1370,7 @@ class PoolTestPage(QWidget):
         return StepResult(
             title,
             "Windows that found no free pool (not scaled up yet) borrowed a ready one "
-            "round-robin while pool_manager built a pool (eshop + seeded database) for each of "
+            f"round-robin while pool_manager built a pool ({self._pool_kind()}) for each of "
             "them, and must now each be in their own. Once the resource limit is reached no "
             "more pools are built and the remaining windows keep sharing the ready pools "
             "round-robin.",
@@ -1545,11 +1604,12 @@ class PoolTestPage(QWidget):
 
     def _run_scenario(self, total_unused, _total, preset) -> PoolTestData | None:
         remote, target = self._remote(), target_for("edge", self.state)
+        self._layer_db = honeypot_layer.is_database()
         count, delayed = self._count, self._delayed()
         now_windows = list(range(count - delayed))
         later_windows = list(range(count - delayed, count))
         cart_plan = CART_PLAN[:count]
-        plan = window_plan(count)
+        plan = window_plan(count, self._layer_db)
         # open, fill carts, one attack per immediate window, scale-up, [pre-build,
         # delayed attack, scale-up], second pattern, cart page
         total_steps = 2 + len(now_windows) + (1 if now_windows else 0) \
@@ -1563,42 +1623,75 @@ class PoolTestPage(QWidget):
             self._style_decision(i, Decision())
         self._load_all(["about:blank"] * len(self.browsers))
         self._spin(500)
+        self._wc_keys = {}
 
         try:
             ready = self._blocking(lambda: redis_inspect.pool_state(remote)).get("ready", [])
         except Exception:  # noqa: BLE001
             ready = []
-        baseline = self._blocking(lambda: pool_evidence.take_baseline(target, ready))
-        self._baseline = baseline
-        # The run's clock starts here; pool_manager's events carry the edge
-        # host's clock, so remember how far Redis' clock is from ours.
         try:
-            offset = self._blocking(lambda: redis_inspect.server_time(remote)) - time.time()
-        except Exception:  # noqa: BLE001 -- same host: no offset
-            offset = 0.0
-        try:
-            _h = self._blocking(lambda: host_stats(target))
-        except Exception:  # noqa: BLE001
-            _h = None
-        # Read by _run_steps when it builds the report data.
-        self._host_cpus = _h[0] if _h else 0
-        self._host_mem_total = _h[1] if _h else 0.0
-        self._t0 = time.time()
-        self._load_log = []
-        self._pattern_urls = set()
-        self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
-        self._sampling = True
-        self._reserve = {}
-        self._visits = [0] * MAX_WINDOWS
-        sampler = _UsageSampler(target, self._t0, self)
-        sampler.start()
-        try:
-            return self._run_steps(remote, target, baseline, offset, sampler, count, delayed,
-                                   now_windows, later_windows, cart_plan, plan, total_steps, total)
+            if self._layer_db:
+                # Databases built from now on get their query log turned on
+                # by pool_manager; take_baseline turns it on in these.
+                self._qlog_pools = set(ready)
+                self._blocking(lambda: redis_inspect.set_query_log(remote, True))
+            baseline = self._blocking(
+                lambda: pool_evidence.take_baseline(target, ready, self._layer_db))
+            self._baseline = baseline
+            # The run's clock starts here; pool_manager's events carry the edge
+            # host's clock, so remember how far Redis' clock is from ours.
+            try:
+                offset = self._blocking(lambda: redis_inspect.server_time(remote)) - time.time()
+            except Exception:  # noqa: BLE001 -- same host: no offset
+                offset = 0.0
+            try:
+                _h = self._blocking(lambda: host_stats(target))
+            except Exception:  # noqa: BLE001
+                _h = None
+            # Read by _run_steps when it builds the report data.
+            self._host_cpus = _h[0] if _h else 0
+            self._host_mem_total = _h[1] if _h else 0.0
+            self._t0 = time.time()
+            self._load_log = []
+            self._pattern_urls = set()
+            self._samples, self._loads, self._pending_loads, self._marks = [], [], [], []
+            self._sampling = True
+            self._reserve = {}
+            self._visits = [0] * MAX_WINDOWS
+            sampler = _UsageSampler(target, self._t0, self)
+            sampler.start()
+            try:
+                return self._run_steps(remote, target, baseline, offset, sampler, count, delayed,
+                                       now_windows, later_windows, cart_plan, plan, total_steps, total)
+            finally:
+                sampler.stop()
+                sampler.wait(30000)
+                self._t0 = 0.0
         finally:
-            sampler.stop()
-            sampler.wait(30000)
-            self._t0 = 0.0
+            self._stop_query_log(remote, target)
+
+    def _stop_query_log(self, remote, target) -> None:
+        """Database layer: turn the query logs a run turned on off again (in
+        the pools it started with, and every ready one, built during the run
+        with the log on) and withdraw the build flag. Idempotent, so it runs
+        once the evidence is read and again after a cancelled or failed run."""
+        if self._qlog_pools is None:
+            return
+        pools, self._qlog_pools = self._qlog_pools, None
+
+        def stop() -> None:
+            try:
+                ready = set(redis_inspect.pool_state(remote).get("ready", []))
+            except Exception:  # noqa: BLE001 -- the pools it knows still get theirs off
+                ready = set()
+            try:
+                redis_inspect.set_query_log(remote, False)
+            finally:
+                pool_evidence.disable_query_log(target, sorted(pools | ready), True)
+        try:
+            self._blocking(stop)
+        except Exception:  # noqa: BLE001 -- the flag's TTL ends it anyway
+            pass
 
     def _run_steps(self, remote, target, baseline, offset, sampler, count, delayed,
                    now_windows, later_windows, cart_plan, plan, total_steps, total):
@@ -1704,7 +1797,7 @@ class PoolTestPage(QWidget):
             second = []
             for w in range(count):
                 own = {r.cve for r in runs if r.window == self._letter(w)}
-                second.append(next((by_cve[c] for c in (plan[w][1], *FALLBACK_PATTERNS)
+                second.append(next((by_cve[c] for c in (plan[w][1], *fallback_patterns(self._layer_db))
                                     if c in by_cve and c not in own), None))
             urls = [self._base_url() + p.path if p else self._browse_url(w)
                     for w, p in enumerate(second)]
@@ -1759,7 +1852,14 @@ class PoolTestPage(QWidget):
         final = results[-1].decisions
         pools = list(dict.fromkeys(d.pool for d in final if d.pool is not None))
         pools += [n for n in pool_state.get("ready", []) if n not in pools][:max(0, count + 3 - len(pools))]
-        evidence = self._blocking(lambda: pool_evidence.collect(target, pools, baseline))
+        wc_keys = {k: self._letter(i) for k, i in self._wc_keys.items() if i < count}
+        evidence = self._blocking(lambda: pool_evidence.collect(target, pools, baseline, wc_keys))
+        shared_files = None
+        if self._layer_db:
+            shared_files = self._blocking(lambda: pool_evidence.shared_files_changed(
+                target, baseline.get("shared_since", "")))
+            # The rest (scale-down, reassignment check) is not evidence.
+            self._stop_query_log(remote, target)
         frames = [FrameResult(
             label=FRAMES[i][0], user_agent=b.profile.httpUserAgent(),
             language=b.profile.httpAcceptLanguage(), url=b.view.url().toString(),
@@ -1805,7 +1905,10 @@ class PoolTestPage(QWidget):
             usage=[u for u in sampler.samples if u.t <= duration], scaledown=scaledown,
             host_cpus=self._host_cpus, host_mem_total_mb=self._host_mem_total,
             load_log=list(self._load_log),
-            cleared=cleared, clear_seed=clear_seed)
+            cleared=cleared, clear_seed=clear_seed,
+            honeypot_layer=(honeypot_layer.DATABASE.id if self._layer_db
+                            else honeypot_layer.REVERSE_PROXY.id),
+            shared_files=shared_files)
 
     def reset_sessions(self) -> None:
         for browser in self.browsers:

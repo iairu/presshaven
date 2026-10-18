@@ -449,9 +449,12 @@ class MainWindow(QMainWindow):
     def _on_honeypot_layer_changed(self, _layer_id: str) -> None:
         """Workloads page switched the ids stack's honeypot layer: rebuild
         every page's targets (their compose file and labels changed), let the
-        Attack Simulation page re-grey its presets, and re-poll right away."""
+        Attack Simulation page re-grey its presets and the Segmentation
+        Validation page offer only the patterns the layer isolates, and re-poll
+        right away."""
         self._on_remote_settings_changed()
         self.patterns_page.set_honeypot_layer()
+        self.pool_test_page.set_honeypot_layer()
         self.poller.poll_now()
 
     def set_poll_interval(self, interval_ms: int) -> None:

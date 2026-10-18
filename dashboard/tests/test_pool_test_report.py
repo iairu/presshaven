@@ -105,6 +105,20 @@ class PlanTests(unittest.TestCase):
             self.assertEqual(by_cve[cve].headers, {}, cve)
         self.assertFalse(set(planned) & set(FALLBACK_PATTERNS))
 
+    def test_database_layer_runs_only_patterns_it_isolates(self):
+        from core.patterns import PATTERN_PRESETS
+        from core.pool_test_report import fallback_patterns, pattern_plan, window_plan
+        by_cve = {p.cve: p for p in PATTERN_PRESETS}
+        planned = [c for pair in pattern_plan(True) for c in pair]
+        self.assertEqual(len(planned), len(set(planned)))
+        for cve in planned + fallback_patterns(True):
+            self.assertTrue(by_cve[cve].db_isolated, cve)
+            self.assertEqual((by_cve[cve].method, by_cve[cve].headers), ("GET", {}), cve)
+        self.assertFalse(set(planned) & set(fallback_patterns(True)))
+        for n in range(3, 11):
+            for pair in window_plan(n, database=True):
+                self.assertTrue(all(by_cve[c].db_isolated for c in pair), (n, pair))
+
     def test_window_plan_covers_every_window_count(self):
         from core.pool_test_report import (CART_PLAN, PATTERN_PLAN, MAX_WINDOWS, MIN_WINDOWS,
                                            window_plan)

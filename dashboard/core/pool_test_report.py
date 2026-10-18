@@ -29,7 +29,30 @@ PATTERN_PLAN = [("CVE-2024-2387", "CVE-2024-1071"),     # A: SQL injection
 FALLBACK_PATTERNS = ["CVE-2024-27956", "CVE-2022-0739", "CVE-2024-2879", "CVE-2023-2986",
                      "CVE-2025-2266", "GENERIC-SQLI-001", "GENERIC-XSS-001", "GENERIC-XSS-002",
                      "GENERIC-WP-001"]
+# The database proxy layer (core/honeypot_layer.py) shares one filesystem and
+# PHP runtime between production and every pool, so window B's file-upload
+# patterns (and the wp-config.php disclosure among the fallbacks) would land
+# on production's real files there (ids/db_proxy/COVERAGE.md). That layer runs
+# database-isolated patterns only: B attacks the database with an options
+# write and a token forgery instead (both divert within MAX_ATTEMPTS).
+DB_PATTERN_PLAN = [PATTERN_PLAN[0],
+                   ("CVE-2025-2266", "CVE-2023-2986"),     # B: options write / token forgery
+                   PATTERN_PLAN[2]]
+DB_UNISOLATED = {"CVE-2025-47577", "CVE-2025-4403", "GENERIC-WP-001"}
 MAX_ATTEMPTS = 3
+
+
+def pattern_plan(database: bool = False) -> list[tuple[str, str]]:
+    return DB_PATTERN_PLAN if database else PATTERN_PLAN
+
+
+def fallback_patterns(database: bool = False) -> list[str]:
+    """FALLBACK_PATTERNS for the layer: in the database layer without the
+    patterns it cannot isolate and the ones its plan already runs."""
+    if not database:
+        return FALLBACK_PATTERNS
+    planned = {c for pair in DB_PATTERN_PLAN for c in pair}
+    return [c for c in FALLBACK_PATTERNS if c not in DB_UNISOLATED and c not in planned]
 
 # How many test windows the Segmentation Validation page can run side by side.
 MIN_WINDOWS, MAX_WINDOWS = 3, 10
@@ -81,16 +104,16 @@ def browse_action(labels: list[str]) -> str:
     return "Looks at " + ", ".join(seen)
 
 
-def window_plan(windows: int) -> list[tuple[str, str]]:
-    """(first, second) pattern per window. Windows A-C use PATTERN_PLAN; further
-    windows open with a fallback pattern (a different one each while they last)
-    and run one of A-C's second patterns afterwards -- separate sessions, so a
-    repeat across windows does not matter there."""
-    plan = list(PATTERN_PLAN[:windows])
+def window_plan(windows: int, database: bool = False) -> list[tuple[str, str]]:
+    """(first, second) pattern per window. Windows A-C use the layer's
+    pattern_plan(); further windows open with a fallback pattern (a different
+    one each while they last) and run one of A-C's second patterns afterwards
+    -- separate sessions, so a repeat across windows does not matter there."""
+    base, fallbacks = pattern_plan(database), fallback_patterns(database)
+    plan = list(base[:windows])
     for w in range(len(plan), windows):
-        k = w - len(PATTERN_PLAN)
-        plan.append((FALLBACK_PATTERNS[k % len(FALLBACK_PATTERNS)],
-                     PATTERN_PLAN[k % len(PATTERN_PLAN)][1]))
+        k = w - len(base)
+        plan.append((fallbacks[k % len(fallbacks)], base[k % len(base)][1]))
     return plan
 
 EXCLUSIVE = "exclusive"
@@ -662,6 +685,16 @@ class PoolTestData:
     # Seconds the clean-up after the reassignment check took, after `duration`
     # (not part of the run's figures).
     cleanup_seconds: float = 0.0
+    # core.honeypot_layer id the edge stack ran: in the database layer a pool
+    # is a honeypot database behind the one shared production_eshop.
+    honeypot_layer: str = "reverse_proxy"
+    # Database layer: files written to the shared WordPress filesystem during
+    # the run (pool_evidence.shared_files_changed); None = not checked.
+    shared_files: list[str] | None = None
+
+    @property
+    def database_layer(self) -> bool:
+        return self.honeypot_layer == "database"
 
 
 def score_causes(data: "PoolTestData") -> list[dict[int, str]]:

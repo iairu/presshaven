@@ -440,6 +440,18 @@ def set_pool_reserve(remote: RemoteConfig | None, pools: int, ttl: int = 1800,
         _run_redis_cli(remote, "DEL", "honeypot_pool:reserve", timeout=timeout)
 
 
+def set_query_log(remote: RemoteConfig | None, on: bool, ttl: int = 7200,
+                  timeout: float = 10.0) -> None:
+    """Database layer: ask pool_manager to build every database with MySQL's
+    general query log on while `on` (honeypot_pool:query_log); False withdraws
+    it. The TTL makes a request a crashed run left behind expire."""
+    if on:
+        _run_redis_cli(remote, "SET", "honeypot_pool:query_log", "1", "EX", str(ttl),
+                       timeout=timeout)
+    else:
+        _run_redis_cli(remote, "DEL", "honeypot_pool:query_log", timeout=timeout)
+
+
 def request_scaledown(remote: RemoteConfig | None, session_ids: list[str], ttl: int = 600,
                       timeout: float = 10.0) -> None:
     """Ask pool_manager to scale down now instead of after
