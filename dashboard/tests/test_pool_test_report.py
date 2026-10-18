@@ -400,6 +400,82 @@ class PoolEvidenceRuntimePools(unittest.TestCase):
         self.assertEqual(baseline["pool_since"], {4: "2026-10-08T17:31:00Z"})
 
 
+class PoolEvidenceDatabaseLayer(unittest.TestCase):
+    """Database proxy layer: a pool is a database, attributed to the test
+    windows through its MySQL general query log."""
+
+    def test_pool_one_is_the_compose_database(self):
+        from core import pool_evidence as pe
+        self.assertEqual(pe.db_service(1, database=True), "honeypot_database")
+        self.assertEqual(pe.db_service(4, database=True), "honeypot_database_4")
+        self.assertEqual(pe.db_service(1, database=False), "honeypot_database_1")
+
+    def test_session_key_from_the_woocommerce_cookie(self):
+        from core import pool_evidence as pe
+        self.assertEqual(pe.wc_session_key("wp_woocommerce_session_abc",
+                                           "t_1f2e3d4c%7C%7C1760000000%7C%7C1759990000%7C%7Cdeadbeef"),
+                         "t_1f2e3d4c")
+        self.assertEqual(pe.wc_session_key("wp_woocommerce_session_abc", "42||1||1||x"), "")   # too short
+        self.assertEqual(pe.wc_session_key("SERVERID", "t_1f2e3d4c||1||1||x"), "")
+        self.assertEqual(pe.wc_session_key("wp_woocommerce_session_abc", "x'; DROP||1"), "")
+
+    def test_sql_names_only_safe_keys_and_skips_the_reader(self):
+        from core import pool_evidence as pe
+        q = pe.attribution_sql({"t_ab12ef34": "A", "bad'keyabc": "B", "t_cd34ef56": "lower"},
+                               "2026-10-18 06:24:23.282976")
+        self.assertIn("'%t\\_ab12ef34%'", q[0])
+        self.assertNotIn("bad", q[0])
+        self.assertNotIn("cd34", q[0])                  # window must be one capital letter
+        for sql in q:
+            self.assertIn("NOT LIKE '%[root] @%'", sql)
+            self.assertIn("event_time >= '2026-10-18 06:24:23.282976'", sql)
+        self.assertNotIn("event_time", pe.attribution_sql({"t_ab12ef34": "A"}, "")[0])   # whole log
+        self.assertIsNone(pe.attribution_sql({}, ""))
+        self.assertIsNone(pe.attribution_sql({"t_ab12ef34": "A"}, "yesterday'; --"))
+
+    def test_parse_attribution(self):
+        from core import pool_evidence as pe
+        totals = "A\t3\t120\t4\t1\nB\t2\t80\t2\t0\n"
+        examples = ("A\t0\tINSERT INTO wp_woocommerce_sessions VALUES ('t_a','x')\n"
+                    "A\t0\tUPDATE wp_options SET option_value='1' WHERE option_name='cwmp'\n"
+                    "A\t1\tSELECT * FROM wp_afi WHERE id = '1' UNION SELECT user_pass FROM wp_users\n"
+                    "C\t1\tSELECT 1\n")
+        windows, other = pe.parse_attribution(totals, examples, "9\n")
+        self.assertEqual([(q.window, q.requests, q.queries, q.writes, q.suspicious) for q in windows],
+                         [("A", 3, 120, 4, 1), ("B", 2, 80, 2, 0)])
+        self.assertEqual(windows[0].examples, [
+            "SELECT * FROM wp_afi WHERE id = '1' UNION SELECT user_pass FROM wp_users",
+            "UPDATE wp_options SET option_value='1' WHERE option_name='cwmp'"])
+        self.assertEqual(other, 4)
+        ev = pe.ContainerEvidence(2, db_windows=windows)
+        self.assertEqual(ev.windows(), ["A", "B"])
+        self.assertEqual(len(pe.cross_traffic([ev], {2: "A"})), 1)
+        self.assertEqual(pe.parse_attribution("", "", "")[1], None)
+
+    def test_database_baseline_turns_the_query_log_on(self):
+        from unittest import mock
+        from core import pool_evidence as pe
+        services = []
+
+        def fake_exec(_t, service, command, timeout=30.0):
+            services.append(service)
+            if command.startswith("date"):
+                return "2026-10-18T06:00:00Z\n"
+            if "NOW(6)" in command:
+                return "2026-10-18 06:00:01.123456\n"
+            return "Questions\t7\n"
+        with mock.patch.object(pe, "_exec", side_effect=fake_exec):
+            b = pe.take_baseline(mock.MagicMock(), [1, 4], database=True)
+            pe.extend_baseline(mock.MagicMock(), b, [5])
+        self.assertTrue(b["database"])
+        self.assertEqual(b["since"], "2026-10-18T06:00:00Z")
+        self.assertEqual(b["qlog"], {1: "2026-10-18 06:00:01.123456", 4: "2026-10-18 06:00:01.123456",
+                                     5: ""})                 # built during the run: whole log
+        self.assertEqual(b["shared_since"], "2026-10-18T06:00:00Z")
+        self.assertIn("honeypot_database", services)
+        self.assertNotIn("honeypot_eshop_1", services)
+
+
 if __name__ == "__main__":
     unittest.main()
 

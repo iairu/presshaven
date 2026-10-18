@@ -3,6 +3,15 @@ run: the requests that reached its eshop (from the Apache access log, told
 apart by each test window's User-Agent tag), files written inside that eshop,
 and how far its database's statement counters moved.
 
+In the database proxy layer (core/honeypot_layer.py) a pool is a database
+only: one production_eshop serves every pool, so there is no per-pool access
+log or filesystem. There each database's MySQL general query log (turned on
+for the run, see enable_query_log) tells the windows apart instead: WordPress
+opens one MySQL connection per request, and a window's request looks up its
+WooCommerce session by the key in that window's cookie, so every statement on
+a connection that names a window's session key is that window's
+(attribution_sql). Files are then checked once, on the shared filesystem.
+
 Different windows run different patterns, so each pool's evidence should be its
 owner's pattern and nobody else's -- that is what the Pool test report shows.
 The parsers are pure (unit tested); the collectors shell out through the
@@ -15,6 +24,7 @@ import time
 import shlex
 from dataclasses import dataclass, field
 
+from core import honeypot_layer
 from core.docker_ctl import Target
 from core.proc import run_checked
 
@@ -44,9 +54,25 @@ class Hit:
 
 
 @dataclass
+class WindowQueries:
+    """One window's traffic in one database's query log (database layer)."""
+    window: str          # "A", "B", ...
+    requests: int        # MySQL connections, i.e. WordPress requests
+    queries: int
+    writes: int          # INSERT / UPDATE / DELETE / REPLACE
+    suspicious: int      # statements carrying SQL-injection markers
+    examples: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ContainerEvidence:
     pool: int
     hits: list[Hit] = field(default_factory=list)
+    # Database layer: the windows the database's query log attributes to it,
+    # and how many other connections it had (content sync, cron, visitors
+    # outside the test); None when the log was not read.
+    db_windows: list[WindowQueries] = field(default_factory=list)
+    db_other_requests: int | None = None
     files_changed: list[str] = field(default_factory=list)
     db_delta: dict[str, int] | None = None   # None: no baseline (pool built mid-run)
     # db_delta minus the pool's own background (healthchecks, WP cron, content
@@ -55,7 +81,7 @@ class ContainerEvidence:
     error: str = ""
 
     def windows(self) -> list[str]:
-        return sorted({h.window for h in self.hits})
+        return sorted({h.window for h in self.hits} | {q.window for q in self.db_windows})
 
     def notable(self, limit: int = 8) -> list[Hit]:
         """Distinct non-asset requests, in the order they arrived."""
@@ -118,6 +144,102 @@ def without_background(delta: dict[str, int] | None, base: dict[str, int] | None
     return out
 
 
+# ---- query log attribution (database layer, pure) ----
+
+# A WooCommerce session key as it appears in the cookie and in SQL: "t_" plus
+# ~30 hex digits for a guest (the test windows). A short one (a logged-in
+# user's id, "42") would match unrelated statements, and anything else is
+# never interpolated into SQL.
+_SESSION_KEY_RE = re.compile(r"^[A-Za-z0-9_]{8,64}$")
+_WC_COOKIE_PREFIX = "wp_woocommerce_session_"
+_SINCE_SQL_RE = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{1,6})?$")
+# Statements with these in them carry an SQL-injection payload (MySQL regexp,
+# matched case-insensitively).
+_SUSPICIOUS_SQL = ("union[[:space:]]+(all[[:space:]]+)?select|sleep[[:space:]]*[(]|"
+                   "benchmark[[:space:]]*[(]|information_schema|load_file|"
+                   "into[[:space:]]+(out|dump)file|or[[:space:]]+1[[:space:]]*=[[:space:]]*1")
+_WRITE_SQL = "^[[:space:]]*(insert|update|delete|replace)[[:space:]]"
+# Writes every request makes; not worth showing as an example.
+_ROUTINE_WRITES = ("woocommerce_sessions", "_transient", "actionscheduler", "wc_admin")
+
+
+def wc_session_key(cookie_name: str, cookie_value: str) -> str:
+    """The session key in a WooCommerce session cookie
+    ("wp_woocommerce_session_<hash>" = "<key>||<expiry>||<expiring>||<hash>",
+    the bars possibly URL-encoded); "" for any other cookie."""
+    if not cookie_name.startswith(_WC_COOKIE_PREFIX):
+        return ""
+    key = cookie_value.replace("%7C", "|").replace("%7c", "|").split("||", 1)[0]
+    return key if _SESSION_KEY_RE.match(key) else ""
+
+
+def _like(key: str) -> str:
+    return "'%" + key.replace("_", "\\_") + "%'"
+
+
+def attribution_sql(keys: dict[str, str], since: str) -> tuple[str, str, str] | None:
+    """(per-window totals, example statements, all connections) queries for
+    one database's mysql.general_log, or None when no key is usable. `keys`
+    maps WooCommerce session key -> window letter; `since` is the database's
+    own NOW(6) at the start of the run ("" = the whole log, for a database
+    built during the run with the log on). The reading user's connections
+    (root) are left out: their SQL names the keys too."""
+    keys = {k: w for k, w in keys.items() if _SESSION_KEY_RE.match(k) and re.match(r"^[A-Z]$", w)}
+    if not keys or (since and not _SINCE_SQL_RE.match(since)):
+        return None
+    when = f"event_time >= '{since}' AND " if since else ""
+    arg = "CONVERT(argument USING utf8)"
+    case = " ".join(f"WHEN {arg} LIKE {_like(k)} THEN '{w}'" for k, w in keys.items())
+    match = " OR ".join(f"{arg} LIKE {_like(k)}" for k in keys)
+    owners = (f"SELECT thread_id, MIN(CASE {case} END) AS w FROM mysql.general_log "
+              f"WHERE {when}user_host NOT LIKE '%[root] @%' AND ({match}) GROUP BY thread_id")
+    garg = "CONVERT(g.argument USING utf8)"
+    query = "g.command_type = 'Query'"
+    totals = (f"SELECT m.w, COUNT(DISTINCT g.thread_id), SUM({query}), "
+              f"SUM({query} AND {garg} REGEXP '{_WRITE_SQL}'), "
+              f"SUM({query} AND {garg} REGEXP '{_SUSPICIOUS_SQL}') "
+              f"FROM mysql.general_log g JOIN ({owners}) m ON m.thread_id = g.thread_id "
+              f"WHERE {when.replace('event_time', 'g.event_time')}1 GROUP BY m.w")
+    examples = (f"SELECT m.w, {garg} REGEXP '{_SUSPICIOUS_SQL}' AS susp, "
+                f"REPLACE(REPLACE(LEFT({garg}, 160), '\\n', ' '), '\\t', ' ') AS stmt "
+                f"FROM mysql.general_log g JOIN ({owners}) m ON m.thread_id = g.thread_id "
+                f"WHERE {when.replace('event_time', 'g.event_time')}{query} AND "
+                f"({garg} REGEXP '{_WRITE_SQL}' OR {garg} REGEXP '{_SUSPICIOUS_SQL}') "
+                "GROUP BY m.w, susp, stmt LIMIT 400")
+    connections = (f"SELECT COUNT(DISTINCT thread_id) FROM mysql.general_log WHERE {when}"
+                   "command_type = 'Connect' AND user_host NOT LIKE '%[root] @%'")
+    return totals, examples, connections
+
+
+def parse_attribution(totals: str, examples: str, connections: str,
+                      per_window: int = 4) -> tuple[list[WindowQueries], int | None]:
+    """WindowQueries per window from the attribution_sql() answers (mysql -N
+    -B output), and the database's connections no window accounts for. A
+    window's examples put SQL-injection statements first and skip the writes
+    every request makes (session, transients)."""
+    out: dict[str, WindowQueries] = {}
+    for line in totals.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 5 and re.match(r"^[A-Z]$", parts[0]) and all(
+                p.strip().isdigit() for p in parts[1:]):
+            out[parts[0]] = WindowQueries(parts[0], *(int(p) for p in parts[1:]))
+    picked: dict[str, list[tuple[int, str]]] = {}
+    for line in examples.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3 or parts[0] not in out:
+            continue
+        susp, stmt = parts[1].strip() == "1", " ".join(parts[2].split())
+        if not susp and any(r in stmt for r in _ROUTINE_WRITES):
+            continue
+        picked.setdefault(parts[0], []).append((0 if susp else 1, stmt))
+    for w, items in picked.items():
+        out[w].examples = [stmt for _p, stmt in sorted(items)[:per_window]]
+    total = connections.strip().splitlines()[-1].strip() if connections.strip() else ""
+    other = (max(0, int(total) - sum(q.requests for q in out.values()))
+             if total.isdigit() else None)
+    return sorted(out.values(), key=lambda q: q.window), other
+
+
 # ---- collectors (docker / compose) ----
 
 def _run_container(target: Target, service: str, compose_args: tuple[str, ...],
@@ -170,31 +292,83 @@ _STATUS_CMD = ("mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -N -e \"SHOW GLOBAL STAT
                "Variable_name IN (" + ",".join(f"'{c}'" for c in DB_COUNTERS) + ")\" 2>/dev/null")
 
 
-def db_status(target: Target, pool: int) -> dict[str, int] | None:
+def _database_layer(database: bool | None) -> bool:
+    return honeypot_layer.is_database() if database is None else database
+
+
+def db_service(pool: int, database: bool | None = None) -> str:
+    """The pool's MySQL container: honeypot_database_N, except pool 1 of the
+    database layer, which is the compose service `honeypot_database`."""
+    return "honeypot_database" if _database_layer(database) and pool == 1 else f"honeypot_database_{pool}"
+
+
+def db_status(target: Target, pool: int, database: bool | None = None) -> dict[str, int] | None:
     try:
-        return parse_status(_exec(target, f"honeypot_database_{pool}", _STATUS_CMD))
+        return parse_status(_exec(target, db_service(pool, database), _STATUS_CMD))
     except PoolEvidenceError:
         return None
 
 
-_SINCE_RE = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+def _mysql(target: Target, pool: int, sql: str, database: bool | None = None,
+           timeout: float = 60.0) -> str:
+    """Run `sql` as root in the pool's database; its rows tab-separated."""
+    return _exec(target, db_service(pool, database),
+                 "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -N -B -e " + shlex.quote(sql)
+                 + " 2>/dev/null", timeout=timeout)
 
 
-def take_baseline(target: Target, pools: list[int]) -> dict:
-    """Start time (read from a pool's own container, so its clock is the one
-    the logs and file times use) and each existing pool's DB counters."""
-    since = ""
+def enable_query_log(target: Target, pool: int, database: bool | None = None) -> str | None:
+    """Turn the database's general query log on (log_output=TABLE) and return
+    its clock (NOW(6)) right after, the time attribution_sql() reads from;
+    None when it could not be turned on."""
+    try:
+        got = _mysql(target, pool, "SET GLOBAL log_output='TABLE'; SET GLOBAL general_log='ON'; "
+                     "SELECT NOW(6)", database).strip().splitlines()
+    except PoolEvidenceError:
+        return None
+    return got[-1].strip() if got and _SINCE_SQL_RE.match(got[-1].strip()) else None
+
+
+def disable_query_log(target: Target, pools: list[int], database: bool | None = None) -> None:
+    """Turn the general query log off again (best effort: a pool may be gone)."""
     for pool in pools:
         try:
-            got = _exec(target, f"honeypot_eshop_{pool}", "date -u +%Y-%m-%dT%H:%M:%SZ").strip()
-            if _SINCE_RE.match(got):   # interpolated into a shell command below
-                since = got
-                break
+            _mysql(target, pool, "SET GLOBAL general_log='OFF'", database, timeout=20.0)
         except PoolEvidenceError:
-            continue
+            pass
+
+
+_SINCE_RE = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+_DATE_CMD = "date -u +%Y-%m-%dT%H:%M:%SZ"
+
+
+def _clock(target: Target, service: str) -> str:
+    """The container's UTC time, ISO formatted; "" when unreadable."""
+    try:
+        got = _exec(target, service, _DATE_CMD).strip()
+    except PoolEvidenceError:
+        return ""
+    return got if _SINCE_RE.match(got) else ""   # interpolated into shell commands
+
+
+def take_baseline(target: Target, pools: list[int], database: bool | None = None) -> dict:
+    """Start time (read from a pool's own container, so its clock is the one
+    the logs and file times use) and each existing pool's DB counters. In the
+    database layer also turns each database's query log on (enable_query_log)
+    and reads the shared eshop's clock for its file check."""
+    database = _database_layer(database)
+    since = ""
+    for pool in pools:
+        since = _clock(target, db_service(pool, True) if database else f"honeypot_eshop_{pool}")
+        if since:
+            break
     now = time.time()
-    return {"since": since, "db": {p: db_status(target, p) for p in pools}, "pool_since": {},
-            "db_at": {p: now for p in pools}}
+    baseline = {"since": since, "db": {p: db_status(target, p, database) for p in pools},
+                "pool_since": {}, "db_at": {p: now for p in pools}, "database": database}
+    if database:
+        baseline["qlog"] = {p: enable_query_log(target, p, True) for p in pools}
+        baseline["shared_since"] = _clock(target, "production_eshop")
+    return baseline
 
 
 def mark_idle(target: Target, baseline: dict) -> None:
@@ -202,7 +376,7 @@ def mark_idle(target: Target, baseline: dict) -> None:
     every window is still on production: the counters between the baseline and
     this are the pools' own background (see without_background())."""
     now = time.time()
-    baseline["idle"] = {p: (db_status(target, p), now)
+    baseline["idle"] = {p: (db_status(target, p, baseline.get("database")), now)
                         for p, b in baseline.get("db", {}).items() if b is not None}
 
 
@@ -210,24 +384,43 @@ def extend_baseline(target: Target, baseline: dict, pools: list[int]) -> None:
     """Baseline for pools that came up during the run (built by pool_manager
     for windows that attack later): their DB counters and start time, taken
     before any test window reaches them, so their evidence covers the
-    windows' traffic only and not the pool's own build."""
+    windows' traffic only and not the pool's own build. A database layer pool
+    built during the run already has its query log on from its build (see
+    QUERY_LOG_KEY in pool_manager): it is read whole ("" = no start time), so
+    a window handed the pool before this ran is still counted."""
+    database = bool(baseline.get("database"))
     tried = baseline.setdefault("tried", set())
     for pool in pools:
         if baseline.setdefault("db", {}).get(pool) is not None or pool in tried:
             continue
         tried.add(pool)
-        try:
-            got = _exec(target, f"honeypot_eshop_{pool}", "date -u +%Y-%m-%dT%H:%M:%SZ").strip()
-        except PoolEvidenceError:
+        got = _clock(target, db_service(pool, True) if database else f"honeypot_eshop_{pool}")
+        if not got:
             continue
-        if _SINCE_RE.match(got):
-            baseline["db"][pool] = db_status(target, pool)
-            baseline.setdefault("pool_since", {})[pool] = got
-            if not baseline.get("since"):
-                baseline["since"] = got
+        baseline["db"][pool] = db_status(target, pool, database)
+        baseline.setdefault("pool_since", {})[pool] = got
+        if database:
+            baseline.setdefault("qlog", {})[pool] = "" if enable_query_log(target, pool, True) else None
+        if not baseline.get("since"):
+            baseline["since"] = got
 
 
-def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerEvidence]:
+def query_log_windows(target: Target, pool: int, since: str, keys: dict[str, str]
+                      ) -> tuple[list[WindowQueries], int | None]:
+    """The windows a database's query log attributes to it (attribution_sql),
+    and its other connections."""
+    queries = attribution_sql(keys, since)
+    if queries is None:
+        return [], None
+    return parse_attribution(*(_mysql(target, pool, q, True, timeout=120.0) for q in queries))
+
+
+def collect(target: Target, pools: list[int], baseline: dict,
+            wc_keys: dict[str, str] | None = None) -> list[ContainerEvidence]:
+    """Each pool's evidence. `wc_keys` (WooCommerce session key -> window
+    letter, every key a window held during the run) attributes the database
+    layer's query logs."""
+    database = bool(baseline.get("database"))
     out = []
     for pool in pools:
         since = baseline.get("pool_since", {}).get(pool) or baseline.get("since", "")
@@ -235,6 +428,11 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
         try:
             if not since:
                 ev.error = "Could not read the start time from the pool containers."
+            elif database:
+                qsince = baseline.get("qlog", {}).get(pool)
+                if qsince is not None and wc_keys:
+                    ev.db_windows, ev.db_other_requests = query_log_windows(
+                        target, pool, qsince, wc_keys)
             else:
                 log = _logs(target, f"honeypot_eshop_{pool}", since)
                 ev.hits = parse_access_log(log)
@@ -242,7 +440,7 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
                               "find / -xdev \\( -path /proc -o -path /sys -o -path /run -o -path /dev \\) "
                               f"-prune -o -type f -newermt '{since}' -print 2>/dev/null | head -60")
                 ev.files_changed = filter_files(files.splitlines())
-            after = db_status(target, pool)
+            after = db_status(target, pool, database)
             base = baseline.get("db", {}).get(pool)
             ev.db_delta = db_delta(base, after) if after else None
             idle, idle_at = baseline.get("idle", {}).get(pool, (None, 0.0))
@@ -254,6 +452,21 @@ def collect(target: Target, pools: list[int], baseline: dict) -> list[ContainerE
             ev.error = str(e)
         out.append(ev)
     return out
+
+
+def shared_files_changed(target: Target, since: str) -> list[str] | None:
+    """Database layer: files written in the one WordPress filesystem every
+    pool shares (production_eshop) since `since`. Anything a diverted
+    window's request wrote there is production's too -- the gap that layer
+    cannot close (ids/db_proxy/COVERAGE.md). None when unreadable."""
+    if not _SINCE_RE.match(since or ""):
+        return None
+    try:
+        files = _exec(target, "production_eshop",
+                      f"find /var/www/html -type f -newermt '{since}' -print 2>/dev/null | head -60")
+    except PoolEvidenceError:
+        return None
+    return filter_files(files.splitlines())
 
 
 def response_realism(evidence: list[ContainerEvidence]) -> tuple[int, int, list[str]]:
