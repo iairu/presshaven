@@ -78,6 +78,14 @@ PW_PREFIX = "honeypot_pool:pw:"
 # the health cache pool_router.lua consults, so a session whose database is
 # down is served from another pool until it is back.
 HEALTH_KEY = "honeypot_pool:health"
+# Database layer: while this flag exists (a client sets it with a TTL, e.g. the
+# dashboard's segmentation validation), every database built is registered
+# with MySQL's general query log on (log_output=TABLE), so the client can tell
+# from mysql.general_log which of its sessions each database served -- from
+# the first request on, a newly built database being handed to a waiting
+# session at once. The client turns the log on in the existing databases and
+# off again in all of them when it is done.
+QUERY_LOG_KEY = "honeypot_pool:query_log"
 SESSION_KEY_PREFIX = "honeypot_pool_session:"
 
 PROJECT = os.environ.get("COMPOSE_PROJECT", "honeypot-ids-system-v1")
@@ -540,7 +548,21 @@ class Manager:
             environment={"HP": db_name, "PROD": "production_database",
                          "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
                          "MYSQL_DATABASE": DB_NAME})
+        if self.redis.exists(QUERY_LOG_KEY):
+            self._enable_query_log(db)
         self.register_ready(n)
+
+    def _enable_query_log(self, db) -> None:
+        """Turn the general query log on (see QUERY_LOG_KEY). Not fatal: the
+        pool still serves, the client's evidence for it is only incomplete."""
+        started = time.time()
+        res = db.exec_run(["sh", "-c", "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -e "
+                           "\"SET GLOBAL log_output='TABLE'; SET GLOBAL general_log='ON'\""])
+        if res.exit_code != 0:
+            log(f"{db.name}: could not turn the query log on: "
+                + (res.output or b"").decode(errors="replace")[-200:])
+            return
+        self._phase("query log", started)
 
     def _create_database_container(self, name, volume, password, labels):
         return self.docker.containers.create(

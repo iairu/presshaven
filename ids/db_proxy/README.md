@@ -56,6 +56,7 @@ The honeypot database is a pool, like the pods of the WordPress proxy level:
 - With no spare ready, the router reuses the existing databases round-robin, so two users then share one.
 - `pool_manager` publishes each ready database's container health in `honeypot_pool:health`. A stopped or restarting container counts as down at once, and a hung `mysqld` once Docker's `mysqladmin ping` healthcheck has run out of retries. `lua/init_worker.lua` here copies these records into the proxy's health cache every 5 s. While a session's database is down, the router serves that session from another ready database, and moves it back once its own is healthy. The assignment itself is never changed.
 - Every clone keeps production's site name, so a diverted user sees the same shop.
+- While `honeypot_pool:query_log` exists in Redis, `pool_manager` turns MySQL's general query log on (`log_output=TABLE`) in every database it builds, before registering it. The dashboard's Segmentation Validation sets this flag for the length of a run, and turns the log on and off in the existing databases itself. It then reads `mysql.general_log` to see which test window each database served (see `dashboard/core/pool_evidence.py`). Outside a run the log stays off.
 - `honeypot_content_sync` replicates production content into every ready database.
 
 All honeypot databases use production's credentials. The isolation is the separate database host, as before.
