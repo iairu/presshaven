@@ -94,6 +94,25 @@ tests:
               assert_eq!(.risk_verdict, "benign")
               assert!(!exists(.threat))
               assert!(!exists(.vulnerability))
+              # A real page load counts as a user navigation.
+              assert_eq!(.request_kind, "navigation")
+
+  - name: a static asset request is classified as background, not a page view
+    inputs:
+      - insert_at: enrich
+        type: log
+        log_fields:
+          log_type: nginx_security
+          message: >-
+            10.0.0.7 - - [03/Oct/2026:09:30:05 +0000] "GET /wp-content/themes/shop/style.css?ver=1.2 HTTP/1.1" 200 4096 "https://localhost/shop/" "Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0" "-" session_id="s3" route="production" risk_score="0" suspicious="false" request_score="0" decayed_score="0" offenses="0" decay_state="clean" uri_class="safe" patterns="-" reason="-"
+    outputs:
+      - extract_from: enrich
+        conditions:
+          - type: vrl
+            source: |
+              # .css (with a cache-busting query string) is a browser-issued
+              # sub-resource, so it must not inflate the page-view count.
+              assert_eq!(.request_kind, "asset")
 
   - name: Suricata alert gets the same indicator fields
     inputs:

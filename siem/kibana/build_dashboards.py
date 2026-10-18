@@ -314,11 +314,19 @@ VISUALIZATIONS = [
     _markdown("viz-web-guide", "About: Web Traffic",
               "**What was requested and how it was answered.** Every request passes the reverse "
               "proxy, which scores it and sends it to production or the honeypot. "
+              "**User Requests** counts real page views (navigation); **Background Requests** counts "
+              "the sub-resources a browser then fetches on its own — CSS, JS, images, fonts — plus "
+              "XHR/REST calls, so one page load doesn't read as dozens of hits. "
               "**Top URIs** marks each URI as `attack_pattern` (it matched an attack pattern or "
               "CVE signature) or `safe`. See *Threat Decisions & Decay* for why a request was routed "
               "where it was."),
-    _viz("viz-web-total-requests", "Total Requests", "metric",
-         [_count_metric_agg("Requests")], query=_WEB_Q),
+    _viz("viz-web-total-requests", "User Requests (page views)", "metric",
+         [_count_metric_agg("Page views")], query=f'{_WEB_Q} and request_kind:"navigation"'),
+    _viz("viz-web-background-requests", "Background Requests (assets / XHR)", "metric",
+         [_count_metric_agg("Background")], query=f'{_WEB_Q} and request_kind:"asset"'),
+    _viz("viz-web-request-kind-pie", "User Navigation vs Background", "pie",
+         [_count_metric_agg(), _terms_agg("request_kind.keyword", size=2, label="Request kind")],
+         query=_WEB_Q, params_extra=_PIE),
     _viz("viz-web-requests-over-time", "Requests Over Time by Route", "area",
          [_count_metric_agg(), _date_histogram_agg(),
           _terms_agg("route.keyword", agg_id="3", size=5, schema="group", label="Route")],
@@ -619,7 +627,8 @@ DASHBOARDS = [
         "What was requested and how it was answered: volume by route, status codes, methods, and top URIs marked attack_pattern or safe.",
         [
             ("viz-web-guide", 0, 0, 16, 8),
-            ("viz-web-total-requests", 16, 0, 8, 8),
+            ("viz-web-total-requests", 16, 0, 8, 4),
+            ("viz-web-background-requests", 16, 4, 8, 4),
             ("viz-web-requests-over-time", 24, 0, 24, 8),
             ("viz-web-top-uris", 0, 8, 28, 18),
             ("viz-web-routing-pie", 28, 8, 10, 9),
@@ -627,6 +636,7 @@ DASHBOARDS = [
             ("viz-web-methods", 28, 17, 20, 9),
             ("viz-web-status-codes", 0, 26, 24, 13),
             ("viz-web-top-user-agents", 24, 26, 24, 13),
+            ("viz-web-request-kind-pie", 0, 39, 16, 10),
         ],
     ),
     _dashboard(

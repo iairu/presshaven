@@ -107,6 +107,22 @@ transforms:
             del(.route_reason)
           }
         }
+
+        # Separate a real user navigation (a browser loading a page) from the
+        # background sub-resources it then fetches automatically -- CSS, JS,
+        # images, fonts -- and XHR/REST calls, so the Kibana dashboards can
+        # count actual page views without every asset request inflating the
+        # total. nginx's security log carries no Sec-Fetch-Dest /
+        # content-type field, so this is derived from the request path: a
+        # static-asset extension or a known background endpoint is an
+        # "asset", everything else "navigation".
+        .request_kind = "navigation"
+        req_path = downcase!(split(string(.uri) ?? "", "?")[0])
+        if match(req_path, r'\.(js|mjs|css|map|png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2|ttf|otf|eot|bmp|cur|mp4|webm)$') {
+          .request_kind = "asset"
+        } else if match(req_path, r'(admin-ajax\.php|wp-cron\.php|/wp-json/|/robots\.txt)') {
+          .request_kind = "asset"
+        }
       }
 
       ##############################################################
