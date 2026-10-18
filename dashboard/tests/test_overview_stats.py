@@ -128,5 +128,36 @@ class EventCountTests(unittest.TestCase):
         self.assertIsNone(counts["last_timestamp"])
 
 
+class PostureScoreTests(unittest.TestCase):
+    def test_none_without_scored_events(self):
+        self.assertIsNone(overview_stats.posture_score([], now=1_000_000.0))
+        # Routing/signal context lines carry no numeric score.
+        self.assertIsNone(overview_stats.posture_score(
+            [{"timestamp": 999_999.0, "label": "Routed to HONEYPOT", "score": None}], now=1_000_000.0))
+
+    def test_fresh_score_is_undecayed(self):
+        now = 1_000_000.0
+        self.assertEqual(
+            overview_stats.posture_score([{"timestamp": now, "score": 100}], half_life=300, now=now), 100)
+
+    def test_decays_by_half_life(self):
+        now = 1_000_000.0
+        events = [{"timestamp": now - 300, "score": 100}]  # exactly one half-life old
+        self.assertEqual(overview_stats.posture_score(events, half_life=300, now=now), 50)
+
+    def test_takes_strongest_surviving_contribution(self):
+        now = 1_000_000.0
+        events = [
+            {"timestamp": now - 300, "score": 100},  # decays to 50
+            {"timestamp": now - 10, "score": 70},    # barely decayed, ~68
+        ]
+        self.assertEqual(overview_stats.posture_score(events, half_life=300, now=now), 68)
+
+    def test_ignores_bools_and_missing(self):
+        now = 1_000_000.0
+        events = [{"timestamp": now, "score": True}, {"timestamp": now, "label": "x"}]
+        self.assertIsNone(overview_stats.posture_score(events, now=now))
+
+
 if __name__ == "__main__":
     unittest.main()

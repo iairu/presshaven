@@ -120,6 +120,39 @@ def _short(state: str) -> str:
             STOPPED: "stopped", OFFLINE: "down"}[state]
 
 
+# Fallback decay half-life when the detector's own setting isn't plumbed
+# through to the Overview page -- matches SCORE_DECAY_HALF_LIFE_SECONDS'
+# documented default (core/detection_policy.py).
+DEFAULT_HALF_LIFE_SECONDS = 300
+
+
+def posture_score(events: list[dict], half_life: float = DEFAULT_HALF_LIFE_SECONDS,
+                  now: float | None = None) -> int | None:
+    """A decayed "current risk" from the persisted notable-event history,
+    instead of whatever the single most recent request happened to score.
+
+    Each event that carries a numeric score contributes that score decayed
+    by its age -- peak * 0.5**(elapsed / half_life), the same exponential
+    half-life the detector itself uses (core/detection_policy.decayed) -- and
+    the posture is the strongest surviving contribution. So a score of 100
+    from a honeypot routing fades back toward 0 over the following minutes
+    unless fresh high-scoring activity keeps it up. Returns None when the
+    history holds no scored event yet."""
+    now = time.time() if now is None else now
+    best: float | None = None
+    for e in events:
+        s = e.get("score")
+        # Guard against bools (a subclass of int) and missing/None scores;
+        # routing/signal context lines carry no score and don't contribute.
+        if not isinstance(s, (int, float)) or isinstance(s, bool):
+            continue
+        elapsed = max(0.0, now - e.get("timestamp", 0))
+        decayed = s * (0.5 ** (elapsed / half_life)) if half_life > 0 else float(s)
+        if best is None or decayed > best:
+            best = decayed
+    return None if best is None else max(0, round(best))
+
+
 def is_diversion(event: dict) -> bool:
     """A recorded event that represents a session being routed to a
     honeypot (vs. a CVE/high-severity signal or a dependency warning).

@@ -189,11 +189,11 @@ class OverviewPage(QWidget):
         for event, ts in self.feed.recent_events():
             self._add_event_item(event, ts)
         self._scroll_events_to_bottom()
-        self._set_score(self.feed.latest_score)
+        self._refresh_score()
         self._refresh_counts()
 
         self.feed.event_added.connect(self._on_event_added)
-        self.feed.score_changed.connect(self._set_score)
+        self.feed.score_changed.connect(self._on_score_changed)
 
     # ---- live updates ----
 
@@ -211,9 +211,10 @@ class OverviewPage(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        # Time-based captions ("3m ago", last-hour counts) drift while the
-        # page is hidden -- recompute whenever it comes back into view.
+        # Time-based captions ("3m ago", last-hour counts) and the decayed
+        # risk score drift while the page is hidden -- recompute on re-entry.
         self._refresh_counts()
+        self._refresh_score()
         if self._last_results:
             self.apply_status(self._last_results)
 
@@ -221,14 +222,30 @@ class OverviewPage(QWidget):
         self._add_event_item(event, ts)
         self._scroll_events_to_bottom()
         self._refresh_counts()
+        self._refresh_score()
 
-    def _set_score(self, score) -> None:
+    def _on_score_changed(self, _score) -> None:
+        # A fresh per-request score just landed; recompute the decayed
+        # posture (which now includes it via the persisted history).
+        self._refresh_score()
+
+    def _refresh_score(self) -> None:
+        """The headline risk is a decayed aggregate of recent notable
+        activity (core/overview_stats.posture_score), not just the last
+        request's raw score -- so it fades as attacks stop and climbs again
+        when they resume. The latest raw request score is the caption."""
+        score = overview_stats.posture_score(self.state.security_events)
+        latest = self.feed.latest_score
         if score is None:
-            self.card_score.set_value("—", "no requests scored yet", GREY)
+            caption = f"latest request: {latest}" if latest is not None else "no requests scored yet"
+            self.card_score.set_value("—", caption, GREY)
             return
         band = ("honeypot threshold reached" if score >= _HONEYPOT_THRESHOLD
                 else "elevated" if score >= _ELEVATED else "benign")
-        self.card_score.set_value(str(score), f"latest request · {band}", _score_color(score))
+        caption = f"{band} · decayed from recent activity"
+        if latest is not None:
+            caption = f"{band} · latest request {latest}"
+        self.card_score.set_value(str(score), caption, _score_color(score))
 
     def _refresh_counts(self) -> None:
         counts = overview_stats.event_window_counts(self.state.security_events)
