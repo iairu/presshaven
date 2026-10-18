@@ -17,12 +17,13 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
-from core import alert_policy, honeypot_layer, live_events
+from core import alert_policy, honeypot_layer, live_events, palette
 from core.docker_ctl import all_targets, target_for
 from core.paths import DASHBOARD_DIR
 from core.learning import PAGE_GUIDES
 from core.state import AppState
 from ui import theme
+from ui.command_palette import CommandPalette
 from ui.dependency_banner import DependencyBanner
 from ui.host_settings_banner import HostSettingsBanner
 from ui.error_monitor import ErrorLogMonitor
@@ -618,6 +619,9 @@ class MainWindow(QMainWindow):
         rerun_wizard_action.triggered.connect(self._rerun_wizard)
 
         view_menu = menu_bar.addMenu("&View")
+        palette_action = view_menu.addAction("Command palette…")
+        palette_action.setShortcut(QKeySequence("Ctrl+K"))
+        palette_action.triggered.connect(self._show_palette)
         for group, page_ids in NAV_GROUPS:
             view_menu.addSection(group)
             for page_id in page_ids:
@@ -630,6 +634,36 @@ class MainWindow(QMainWindow):
         page_help_action.triggered.connect(self._show_page_help)
         learn_action = help_menu.addAction(f"{PAGE_LABELS['learn']}: labs, glossary, attack lessons")
         learn_action.triggered.connect(lambda: self._open_page("learn"))
+
+    def palette_commands(self) -> list[palette.Command]:
+        """Every page (grouped as in the rail, searchable by its summary)
+        plus a few actions."""
+        commands = []
+        for group, page_ids in NAV_GROUPS:
+            for page_id in page_ids:
+                guide = PAGE_GUIDES.get(page_id)
+                commands.append(palette.Command(f"page:{page_id}", PAGE_LABELS[page_id], group,
+                                                guide.summary if guide else ""))
+        commands += [
+            palette.Command("action:help", "Help for this page", "Actions", "F1 what is this page for"),
+            palette.Command("action:wizard", "Re-run setup wizard…", "Actions", "first run configuration"),
+            palette.Command("action:find", "Search all logs", "Actions", "Ctrl+F forensics grep"),
+        ]
+        return commands
+
+    def _run_palette_command(self, command: palette.Command) -> None:
+        kind, _, name = command.id.partition(":")
+        if kind == "page":
+            self._open_page(name)
+        elif name == "help":
+            self._show_page_help()
+        elif name == "wizard":
+            self._rerun_wizard()
+        elif name == "find":
+            self._on_find_shortcut()
+
+    def _show_palette(self) -> None:
+        CommandPalette(self.palette_commands(), self._run_palette_command, self).exec()
 
     def _show_page_help(self) -> None:
         """F1: what the current page is for, what to try, what to notice
