@@ -40,8 +40,10 @@ from ui.security_feed import SecurityEventFeed
 
 # How often the landing-page stats refresh while the page is visible, so the
 # decayed score, the "(1h)" windows and the live redis-backed cards don't go
-# stale just because the user is sitting on the page.
-REFRESH_MS = 10000
+# stale just because the user is sitting on the page. Kept brisk (3s) so the
+# decaying risk score visibly ticks down; the redis-backed cards self-
+# throttle via _redis_busy if a fetch is slower than one interval.
+REFRESH_MS = 3000
 
 # Risk-score colour bands -- the honeypot routing threshold is 80 (see the
 # Knowledge Base glossary / init.lua), so a score at or above it is the
