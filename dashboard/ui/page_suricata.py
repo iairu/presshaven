@@ -10,7 +10,7 @@ All container access goes through core/suricata_ctl.py (docker compose exec,
 local or SSH) on a background thread so a slow remote never freezes the UI."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QTabWidget,
@@ -21,24 +21,9 @@ from core import suricata_ctl
 from core.colors import GREY, ORANGE, RED
 from core.docker_ctl import targets_for
 from core.state import AppState
-from ui.common import ErrorBanner, TargetSelector, confirm
+from ui.common import ErrorBanner, Job, TargetSelector, confirm
 
 _SEV_COLOR = {"critical": RED, "high": ORANGE}
-
-
-class _Job(QThread):
-    """Runs fn() off the GUI thread; emits (result, error message or '')."""
-    done = pyqtSignal(object, str)
-
-    def __init__(self, fn, parent=None):
-        super().__init__(parent)
-        self._fn = fn
-
-    def run(self) -> None:
-        try:
-            self.done.emit(self._fn(), "")
-        except Exception as e:  # noqa: BLE001 -- surfaced in the banner
-            self.done.emit(None, str(e))
 
 
 class SuricataPage(QWidget):
@@ -48,7 +33,7 @@ class SuricataPage(QWidget):
         self._alerts: list[suricata_ctl.SuricataAlert] = []
         self._rules_text = ""
         self._rules: list[suricata_ctl.Rule] = []
-        self._jobs: set[_Job] = set()
+        self._jobs: set[Job] = set()
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -122,7 +107,7 @@ class SuricataPage(QWidget):
         self.target_combo.rebuild()
 
     def _run(self, fn, on_done) -> None:
-        job = _Job(fn, self)
+        job = Job(fn, self)
         self._jobs.add(job)
 
         def finished(result, error):

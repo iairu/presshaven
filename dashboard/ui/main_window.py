@@ -38,6 +38,7 @@ from ui.page_learn import LearnPage, page_guide_html
 from ui.page_live_events import LiveEventsPage
 from ui.page_log_search import LogSearchPage
 from ui.page_overview import OverviewPage
+from ui.page_pool_scaling import PoolScalingPage
 from ui.page_pool_test import PoolTestPage
 from ui.page_redis import RedisPage
 from ui.page_resources import ResourcesPage
@@ -66,7 +67,7 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "live_events", "sessions", "suricata", "detection", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
@@ -75,6 +76,7 @@ PAGE_LABELS = {
     "sessions": "Attacker Sessions",
     "suricata": "Network IDS (Suricata)",
     "detection": "Detection Policy",
+    "pool_scaling": "Pool Scaling",
     "services": "Workloads",
     "health": "Global Visualization",
     "resources": "Workload Telemetry",
@@ -96,7 +98,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
@@ -198,6 +200,7 @@ class MainWindow(QMainWindow):
         self.sessions_page = SessionsPage(state)
         self.suricata_page = SuricataPage(state)
         self.detection_page = DetectionPage(state)
+        self.pool_scaling_page = PoolScalingPage(state)
         self.services_page = ServicesPage(
             self._get_targets, self.error_monitor, self._grab_health_screenshot, state)
         self.services_page.layer_changed.connect(self._on_honeypot_layer_changed)
@@ -225,6 +228,7 @@ class MainWindow(QMainWindow):
             ("sessions", self.sessions_page),
             ("suricata", self.suricata_page),
             ("detection", self.detection_page),
+            ("pool_scaling", self.pool_scaling_page),
             ("services", self.services_page),
             ("health", self.health_page),
             ("resources", self.resources_page),
@@ -476,6 +480,7 @@ class MainWindow(QMainWindow):
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
+        self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
@@ -690,6 +695,7 @@ class MainWindow(QMainWindow):
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
+        self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()

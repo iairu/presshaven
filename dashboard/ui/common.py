@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QLabel, QLayout, QMessageBox, QPushButton, QWidget
 
 from core.colors import RED
@@ -128,3 +129,20 @@ class TargetSelector(QComboBox):
     def current_remote(self):
         target = self.current_target()
         return target.remote if target else None
+
+
+class Job(QThread):
+    """Runs fn() off the GUI thread; emits done(result, error message or "").
+    For short-lived fetches (docker exec / redis-cli) that can be slow over
+    SSH. Keep a reference until done fires."""
+    done = pyqtSignal(object, str)
+
+    def __init__(self, fn, parent=None):
+        super().__init__(parent)
+        self._fn = fn
+
+    def run(self) -> None:
+        try:
+            self.done.emit(self._fn(), "")
+        except Exception as e:  # noqa: BLE001 -- surfaced to the caller as text
+            self.done.emit(None, str(e))

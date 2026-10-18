@@ -290,6 +290,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Detection is configuration. The summary under the form turns the half-life into seconds so you can "
         "see how long an attacker stays flagged after they stop.",
     ),
+    "pool_scaling": PageGuide(
+        "Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.",
+        "Open it, then run Attack from all on Segmentation Validation and watch pools being built and handed over.",
+        "Pools are built per session until a memory, CPU or pool-count budget is hit; after that sessions share "
+        "pools. The event log shows each build, hand-off and scale-down as it happens.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",

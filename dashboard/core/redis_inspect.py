@@ -494,3 +494,32 @@ def list_sessions(remote: RemoteConfig | None, timeout: float = 20.0) -> str:
     """Raw JSON snapshot of all sessions (see _LIST_SESSIONS_SCRIPT); parse
     with core.session_view.parse_snapshot()."""
     return _run_redis_cli(remote, "EVAL", _LIST_SESSIONS_SCRIPT, "0", timeout=timeout).strip()
+
+
+# One-round-trip snapshot of the honeypot pool registry for the standing
+# Pool Scaling page (interpreted by core/pool_view.parse_snapshot()).
+_POOL_SNAPSHOT_SCRIPT = """
+local owners = {}
+for _, n in ipairs(redis.call('SMEMBERS', 'honeypot_pool:ready')) do
+  owners[n] = redis.call('SCARD', 'honeypot_pool:owner:' .. n)
+end
+return cjson.encode({
+  ready = redis.call('SMEMBERS', 'honeypot_pool:ready'),
+  free = redis.call('ZRANGE', 'honeypot_pool:free', 0, -1),
+  owners = owners,
+  capped = redis.call('GET', 'honeypot_pool:capped') or '',
+  waiting = redis.call('ZCARD', 'honeypot_pool:waiting'),
+  status = redis.call('GET', 'honeypot_pool:status') or '',
+  last_seen = redis.call('HGETALL', 'honeypot_pool:last_seen'),
+  health = redis.call('HGETALL', 'honeypot_pool:health'),
+  events = redis.call('LRANGE', 'honeypot_pool:events', -60, -1),
+  scaledown = redis.call('EXISTS', 'honeypot_pool:scaledown_now'),
+  now = tonumber(redis.call('TIME')[1])
+})
+"""
+
+
+def pool_snapshot(remote: RemoteConfig | None, timeout: float = 20.0) -> str:
+    """Raw JSON snapshot of the pool registry; parse with
+    core.pool_view.parse_snapshot()."""
+    return _run_redis_cli(remote, "EVAL", _POOL_SNAPSHOT_SCRIPT, "0", timeout=timeout).strip()
