@@ -47,6 +47,29 @@ class FilterTests(unittest.TestCase):
         self.assertFalse(live_events.text_matches("xss", "sql injection", "d"))
 
 
+class BackfillTests(unittest.TestCase):
+    def test_rfc3339_to_epoch(self):
+        import calendar
+        self.assertEqual(live_events.rfc3339_to_epoch("2026-10-17T07:22:59.885Z"),
+                         calendar.timegm((2026, 10, 17, 7, 22, 59, 0, 0, 0)))
+        self.assertEqual(live_events.rfc3339_to_epoch(None), 0)
+        self.assertEqual(live_events.rfc3339_to_epoch("nonsense"), 0)
+
+    def test_parse_backfill_uses_log_timestamps_and_skips_noise(self):
+        text = (
+            "reverse_proxy-1  | 2026-10-17T07:22:59.100Z [LOCATION / HEADER] route_decision='honeypot' risk_score='90'\n"
+            "reverse_proxy-1  | 2026-10-17T07:23:00.000Z SESSION DEBUG nothing to see\n"
+        )
+        rows = live_events.parse_backfill(text)
+        self.assertEqual(len(rows), 1)
+        ts, event = rows[0]
+        self.assertEqual(ts, live_events.rfc3339_to_epoch("2026-10-17T07:22:59Z"))
+        self.assertEqual(event.kind, "outcome")
+
+    def test_parse_backfill_empty(self):
+        self.assertEqual(live_events.parse_backfill(""), [])
+
+
 class CsvTests(unittest.TestCase):
     def test_csv_round_trip(self):
         text = live_events.to_csv([(0, "high", "outcome", "Routed, to HONEYPOT", 'a "b"')])

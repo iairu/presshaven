@@ -3,11 +3,15 @@ severity levels derived from the parser's colours, the view filters, and
 plain-text/CSV export of the visible rows."""
 from __future__ import annotations
 
+import calendar
 import csv
 import io
+import re
 import time
 
-from core.pattern_log_parser import COLOR_HIGH, COLOR_INFO, COLOR_LOW, COLOR_MED
+from core.pattern_log_parser import (
+    COLOR_HIGH, COLOR_INFO, COLOR_LOW, COLOR_MED, LineBuffer, parse_line,
+)
 
 SEVERITY_ORDER = ["info", "low", "medium", "high"]
 _COLOR_TO_SEVERITY = {COLOR_INFO: "info", COLOR_LOW: "low", COLOR_MED: "medium", COLOR_HIGH: "high"}
@@ -52,6 +56,34 @@ def text_matches(needle: str, *fields: str) -> bool:
 
 def format_time(ts: int) -> str:
     return time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "--:--:--"
+
+
+_RFC3339_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})")
+
+
+def rfc3339_to_epoch(ts: str | None) -> int:
+    """Epoch seconds from a `docker compose logs --timestamps` RFC3339
+    string (always UTC/Z here), 0 when it's missing or unparseable."""
+    if not ts:
+        return 0
+    m = _RFC3339_RE.match(ts)
+    if not m:
+        return 0
+    return calendar.timegm(tuple(int(g) for g in m.groups()) + (0, 0, 0))
+
+
+def parse_backfill(text: str) -> list[tuple[int, object]]:
+    """Parse a `docker compose logs --timestamps reverse_proxy` tail into
+    (epoch, PatternEvent) rows, oldest first, so a freshly-opened feed is
+    not blank. Lines the parser doesn't recognise are skipped; each event's
+    own log timestamp is used (0 when absent)."""
+    buffer = LineBuffer()
+    rows: list[tuple[int, object]] = []
+    for line in buffer.feed(text + "\n"):
+        event = parse_line(line)
+        if event is not None:
+            rows.append((rfc3339_to_epoch(event.timestamp), event))
+    return rows
 
 
 def to_csv(rows: list[tuple[int, str, str, str, str]]) -> str:

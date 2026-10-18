@@ -1,10 +1,12 @@
 """Live Events page: an in-app, always-available stream of everything the
 reverse proxy's pattern analyzer decides, independent of Kibana and the
 SIEM stack. Subscribes to SecurityEventFeed.event_parsed (the existing
-app-lifetime log tail -- no second process), keeps a bounded table of the
-most recent events, and offers severity/kind filters, free-text search,
-pause, clear and CSV export. Filtering/export logic is in
-core/live_events.py (Qt-free, tested)."""
+app-lifetime log tail -- no second process) and, on first open, backfills
+recent history with one `docker compose logs` read so the table is not
+blank until the next request arrives. Keeps a bounded table of the most
+recent events, with severity/kind filters, free-text search, a per-severity
+count summary, pause, clear and CSV export. Filtering, backfill parsing and
+export are in core/live_events.py (Qt-free, tested)."""
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
@@ -15,18 +17,27 @@ from PyQt6.QtWidgets import (
 )
 
 from core import live_events
+from core.colors import GREEN, GREY, ORANGE, RED
+from core.docker_ctl import target_for
 from core.pattern_log_parser import PatternEvent
+from core.state import AppState
+from ui.common import Job
 from ui.security_feed import SecurityEventFeed
 
 MAX_ROWS = 1000
+BACKFILL_LINES = 500
+_SEV_COLOR = {"high": RED, "medium": ORANGE, "low": GREEN, "info": GREY}
 
 
 class LiveEventsPage(QWidget):
-    def __init__(self, feed: SecurityEventFeed, parent=None):
+    def __init__(self, feed: SecurityEventFeed, state: AppState, parent=None):
         super().__init__(parent)
+        self.state = state
         self._events: list[tuple[int, PatternEvent]] = []   # newest last, all kept up to MAX_ROWS
         self._paused = False
         self._buffered: list[tuple[int, PatternEvent]] = []
+        self._backfilled = False
+        self._backfill_job: Job | None = None
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -48,11 +59,15 @@ class LiveEventsPage(QWidget):
             bar.addWidget(w)
         layout.addLayout(bar)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Time", "Severity", "Event", "Detail"])
+        self.counts = QLabel("")
+        self.counts.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.counts)
+
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Time", "Severity", "Kind", "Event", "Detail"])
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.verticalHeader().setVisible(False)
@@ -68,6 +83,40 @@ class LiveEventsPage(QWidget):
         self.export_btn.clicked.connect(self._export)
         feed.event_parsed.connect(self._on_event)
         self._update_status()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._backfill()
+
+    def _backfill(self) -> None:
+        """One-shot read of recent reverse_proxy history, off-thread, so the
+        feed is populated the moment the page is first opened instead of
+        only from the next live request onward."""
+        if self._backfilled or self._backfill_job is not None:
+            return
+        self._backfilled = True
+        self.status.setText("loading recent history…")
+        target = target_for("edge", self.state)
+
+        def fetch():
+            import subprocess
+            argv, cwd = target.build("logs", f"--tail={BACKFILL_LINES}", "--timestamps", "reverse_proxy")
+            return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30).stdout
+
+        self._backfill_job = Job(fetch, self)
+
+        def done(text, _error):
+            self._backfill_job = None
+            if text:
+                existing = {(ts, e.label, e.detail) for ts, e in self._events}
+                rows = [(ts, e) for ts, e in live_events.parse_backfill(text)
+                        if (ts, e.label, e.detail) not in existing]
+                self._events = (rows + self._events)[-MAX_ROWS:]
+                self._rebuild()
+            else:
+                self._update_status()
+        self._backfill_job.done.connect(done)
+        self._backfill_job.start()
 
     def _visible(self, event: PatternEvent) -> bool:
         return (live_events.matches(self.filter_combo.currentData(), event.kind, event.label, event.color)
@@ -95,7 +144,8 @@ class LiveEventsPage(QWidget):
         row = self.table.rowCount()
         self.table.insertRow(row)
         sev = live_events.severity(event.color)
-        for col, text in enumerate((live_events.format_time(ts), sev.upper(), event.label, event.detail)):
+        for col, text in enumerate((live_events.format_time(ts), sev.upper(), event.kind,
+                                    event.label, event.detail)):
             item = QTableWidgetItem(text)
             if col == 1:
                 item.setForeground(QColor(event.color))
@@ -146,3 +196,12 @@ class LiveEventsPage(QWidget):
         if self._paused:
             text += f" · paused, {len(self._buffered)} buffered"
         self.status.setText(text)
+        self._update_counts()
+
+    def _update_counts(self) -> None:
+        tally = {"high": 0, "medium": 0, "low": 0, "info": 0}
+        for _ts, e in self._events:
+            tally[live_events.severity(e.color)] += 1
+        parts = [f"<b style='color:{_SEV_COLOR[sev]}'>{tally[sev]}</b> {sev}"
+                 for sev in ("high", "medium", "low", "info")]
+        self.counts.setText(" &nbsp; ".join(parts))

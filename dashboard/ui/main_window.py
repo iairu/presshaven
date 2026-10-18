@@ -201,7 +201,7 @@ class MainWindow(QMainWindow):
         self.overview_page = OverviewPage(state, self.security_feed)
         self.overview_page.open_page_requested.connect(self._open_page)
         self.overview_page.lifecycle_requested.connect(self._on_lifecycle_requested)
-        self.live_events_page = LiveEventsPage(self.security_feed)
+        self.live_events_page = LiveEventsPage(self.security_feed, state)
         self.pipeline_page = PipelinePage(state)
         self.sessions_page = SessionsPage(state)
         self.suricata_page = SuricataPage(state)
