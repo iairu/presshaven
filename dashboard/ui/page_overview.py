@@ -21,19 +21,27 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton,
     QVBoxLayout, QWidget,
 )
 
-from core import overview_stats
+from core import overview_stats, pool_view, session_view
 from core.colors import GREEN, GREY, ORANGE, RED
+from core.docker_ctl import target_for
 from core.pattern_log_parser import COLOR_HIGH, PatternEvent
+from core.redis_inspect import list_sessions, pool_snapshot
 from core.state import AppState
 from ui import theme
+from ui.common import Job
 from ui.flow_layout import FlowLayout
 from ui.security_feed import SecurityEventFeed
+
+# How often the landing-page stats refresh while the page is visible, so the
+# decayed score, the "(1h)" windows and the live redis-backed cards don't go
+# stale just because the user is sitting on the page.
+REFRESH_MS = 10000
 
 # Risk-score colour bands -- the honeypot routing threshold is 80 (see the
 # Knowledge Base glossary / init.lua), so a score at or above it is the
@@ -121,6 +129,8 @@ class OverviewPage(QWidget):
         self.state = state
         self.feed = security_feed
         self._last_results: dict = {}
+        self._redis_busy = False
+        self._jobs: set[Job] = set()
 
         root = QVBoxLayout(self)
         root.setSpacing(12)
@@ -130,9 +140,11 @@ class OverviewPage(QWidget):
         self._cards = FlowLayout(cards_host, margin=0, h_spacing=10, v_spacing=10)
         self.card_score = StatCard("Current risk score")
         self.card_health = StatCard("System health")
-        self.card_diversions = StatCard("Honeypot diversions (1h)")
+        self.card_diverted = StatCard("Attackers diverted")
+        self.card_pools = StatCard("Honeypot pools")
         self.card_events = StatCard("Notable events (1h)")
-        for card in (self.card_score, self.card_health, self.card_diversions, self.card_events):
+        for card in (self.card_score, self.card_health, self.card_diverted,
+                     self.card_pools, self.card_events):
             self._cards.addWidget(card)
         root.addWidget(cards_host)
 
@@ -191,9 +203,18 @@ class OverviewPage(QWidget):
         self._scroll_events_to_bottom()
         self._refresh_score()
         self._refresh_counts()
+        self.card_diverted.set_value("—", "bring the edge stack up", GREY)
+        self.card_pools.set_value("—", "bring the edge stack up", GREY)
 
         self.feed.event_added.connect(self._on_event_added)
         self.feed.score_changed.connect(self._on_score_changed)
+
+        # Auto-refresh while visible: time-based cards and the decayed score
+        # recomputed locally, the diverted-attacker and pool cards re-fetched
+        # from the session store off the GUI thread.
+        self.timer = QTimer(self)
+        self.timer.setInterval(REFRESH_MS)
+        self.timer.timeout.connect(self._tick)
 
     # ---- live updates ----
 
@@ -212,11 +233,63 @@ class OverviewPage(QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         # Time-based captions ("3m ago", last-hour counts) and the decayed
-        # risk score drift while the page is hidden -- recompute on re-entry.
+        # risk score drift while the page is hidden -- recompute on re-entry,
+        # then keep them fresh on a timer.
+        self._tick()
+        self.timer.start()
+
+    def hideEvent(self, event) -> None:
+        self.timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
         self._refresh_counts()
         self._refresh_score()
         if self._last_results:
             self.apply_status(self._last_results)
+        self._fetch_redis()
+
+    def _fetch_redis(self) -> None:
+        """One off-thread round-trip to the edge session store for the two
+        live cards (attackers diverted, pool state). Silently leaves the
+        cards on their last value if the store is unreachable -- the page is
+        a glanceable summary, not a place to surface redis errors."""
+        if self._redis_busy:
+            return
+        self._redis_busy = True
+        remote = target_for("edge", self.state).remote
+
+        def work():
+            return list_sessions(remote), pool_snapshot(remote)
+
+        job = Job(work, self)
+        self._jobs.add(job)
+
+        def done(result, error):
+            self._redis_busy = False
+            self._jobs.discard(job)
+            job.deleteLater()
+            if error or result is None:
+                self.card_diverted.set_value("—", "session store unreachable", GREY)
+                self.card_pools.set_value("—", "session store unreachable", GREY)
+                return
+            sessions_text, pools_text = result
+            self._render_diverted(session_view.parse_snapshot(sessions_text))
+            self._render_pools(pool_view.parse_snapshot(pools_text))
+        job.done.connect(done)
+        job.start()
+
+    def _render_diverted(self, sessions) -> None:
+        n = overview_stats.unique_diverted_ips(sessions)
+        self.card_diverted.set_value(
+            str(n), f"{len(sessions)} active session(s)", RED if n else GREEN)
+
+    def _render_pools(self, o: pool_view.PoolOverview) -> None:
+        used = max(0, o.ready - o.free)
+        preparing = len(o.building)
+        self.card_pools.set_value(
+            str(used), f"{o.free} available · {preparing} preparing",
+            ORANGE if (used or preparing) else GREEN)
 
     def _on_event_added(self, event: PatternEvent, ts: int) -> None:
         self._add_event_item(event, ts)
@@ -249,10 +322,6 @@ class OverviewPage(QWidget):
 
     def _refresh_counts(self) -> None:
         counts = overview_stats.event_window_counts(self.state.security_events)
-        self.card_diversions.set_value(
-            str(counts["window_diversions"]),
-            f"{counts['total_diversions']} all-time",
-            RED if counts["window_diversions"] else GREY)
         self.card_events.set_value(
             str(counts["window_total"]),
             f"last event {_ago(counts['last_timestamp'])}",

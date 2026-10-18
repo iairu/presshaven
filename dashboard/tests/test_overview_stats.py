@@ -159,5 +159,26 @@ class PostureScoreTests(unittest.TestCase):
         self.assertIsNone(overview_stats.posture_score(events, now=now))
 
 
+class _FakeSession:
+    def __init__(self, ip, diverted):
+        self.ip = ip
+        self.diverted = diverted
+
+
+class UniqueDivertedIpsTests(unittest.TestCase):
+    def test_counts_distinct_diverted_ips_only(self):
+        sessions = [
+            _FakeSession("1.1.1.1", True),
+            _FakeSession("1.1.1.1", True),   # same IP, second session
+            _FakeSession("2.2.2.2", True),
+            _FakeSession("3.3.3.3", False),  # not diverted
+            _FakeSession("", True),          # no IP
+        ]
+        self.assertEqual(overview_stats.unique_diverted_ips(sessions), 2)
+
+    def test_empty(self):
+        self.assertEqual(overview_stats.unique_diverted_ips([]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

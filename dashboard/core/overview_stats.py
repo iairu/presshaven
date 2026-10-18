@@ -153,6 +153,15 @@ def posture_score(events: list[dict], half_life: float = DEFAULT_HALF_LIFE_SECON
     return None if best is None else max(0, round(best))
 
 
+def unique_diverted_ips(sessions) -> int:
+    """How many distinct source IPs are currently routed to a honeypot --
+    i.e. how many real attackers are being diverted right now, from the
+    live session store (session_view.SessionSummary.diverted), rather than
+    how many diversion *events* have been logged over time. `sessions` is a
+    list of SessionSummary (anything with `.ip` and a `.diverted` flag)."""
+    return len({s.ip for s in sessions if getattr(s, "diverted", False) and s.ip})
+
+
 def is_diversion(event: dict) -> bool:
     """A recorded event that represents a session being routed to a
     honeypot (vs. a CVE/high-severity signal or a dependency warning).
