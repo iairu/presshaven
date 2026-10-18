@@ -45,6 +45,33 @@ def since_args(since: str | None) -> list[str]:
     return ["--since", since] if since else []
 
 
+# Marks a gap between non-adjacent context groups, grep -C style.
+SEPARATOR = "─" * 8
+
+
+def with_context(entries: list[tuple[str, str]], matcher, context: int = 0) -> tuple[list[str], int]:
+    """Select matching lines (and `context` lines on each side) from
+    `entries`, each a (haystack, display) pair -- `matcher` runs against the
+    haystack, the display string is what's returned. Adjacent/overlapping
+    windows merge; a SEPARATOR is inserted between disjoint groups.
+    context=0 returns just the matches with no separators. Returns
+    (display_lines, match_count)."""
+    match_idx = [i for i, (hay, _d) in enumerate(entries) if matcher(hay)]
+    if context <= 0:
+        return [entries[i][1] for i in match_idx], len(match_idx)
+    keep = set()
+    for i in match_idx:
+        keep.update(range(max(0, i - context), min(len(entries), i + context + 1)))
+    display: list[str] = []
+    prev = None
+    for j in sorted(keep):
+        if prev is not None and j != prev + 1:
+            display.append(SEPARATOR)
+        display.append(entries[j][1])
+        prev = j
+    return display, len(match_idx)
+
+
 def push_history(history: list[str], query: str, limit: int = HISTORY_LIMIT) -> list[str]:
     """`history` with `query` moved/added to the front (most recent first),
     de-duplicated and capped. Blank queries are ignored."""

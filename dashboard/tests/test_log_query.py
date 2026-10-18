@@ -49,6 +49,31 @@ class SinceTests(unittest.TestCase):
         self.assertIsNone(lq.TIME_RANGES[0][1])
 
 
+class ContextTests(unittest.TestCase):
+    def _entries(self):
+        lines = ["a0", "HIT1", "a2", "a3", "a4", "HIT2", "a6"]
+        return [(l, f"[t] {l}") for l in lines]
+
+    def test_no_context_returns_matches_only(self):
+        m = lambda l: l.startswith("HIT")
+        disp, n = lq.with_context(self._entries(), m, context=0)
+        self.assertEqual(disp, ["[t] HIT1", "[t] HIT2"])
+        self.assertEqual(n, 2)
+
+    def test_context_window_with_separator(self):
+        m = lambda l: l.startswith("HIT")
+        disp, n = lq.with_context(self._entries(), m, context=1)
+        self.assertEqual(n, 2)
+        self.assertEqual(disp, ["[t] a0", "[t] HIT1", "[t] a2", lq.SEPARATOR,
+                                "[t] a4", "[t] HIT2", "[t] a6"])
+
+    def test_overlapping_windows_merge(self):
+        entries = [(l, l) for l in ["HIT", "x", "HIT"]]
+        disp, _n = lq.with_context(entries, lambda l: l == "HIT", context=1)
+        self.assertNotIn(lq.SEPARATOR, disp)   # windows touch, so no gap
+        self.assertEqual(disp, ["HIT", "x", "HIT"])
+
+
 class HistoryAndSavedTests(unittest.TestCase):
     def test_history_dedupes_and_caps(self):
         h = lq.push_history(["a", "b"], "b")

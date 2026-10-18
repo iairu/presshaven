@@ -43,18 +43,20 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class LogSearchWorker(QThread):
-    results_ready = pyqtSignal(list, list)  # matching lines, errors
+    results_ready = pyqtSignal(list, int, list)  # display lines, match count, errors
 
     def __init__(self, targets: list[Target], matcher, tail: int, since: str | None = None,
-                 parent=None):
+                 context: int = 0, parent=None):
         super().__init__(parent)
         self._targets = targets
         self._matcher = matcher        # line -> bool, from core.log_query.compile_matcher
         self._tail = tail
         self._since = since
+        self._context = context
 
     def run(self) -> None:
-        matches: list[str] = []
+        display: list[str] = []
+        total_matches = 0
         errors: list[str] = []
 
         for target in self._targets:
@@ -70,17 +72,19 @@ class LogSearchWorker(QThread):
                 errors.append(f"{target.label}: {result.stderr.strip()[:200] or 'command failed'}")
                 continue
 
-            for line in result.stdout.splitlines():
-                # Matching runs against the ANSI-stripped text so escape
-                # codes can't hide/split the search term; the ORIGINAL line
-                # (codes intact) is kept for display.
-                if self._matcher(_ANSI_RE.sub("", line)):
-                    matches.append(f"[{target.label}] {line}")
-                    if len(matches) >= MAX_DISPLAYED_MATCHES:
-                        self.results_ready.emit(matches, errors)
-                        return
+            # Matching runs against the ANSI-stripped text so escape codes
+            # can't hide/split the search term; the ORIGINAL line (codes
+            # intact), target-prefixed, is what's displayed. Context lines
+            # around each match are selected per target.
+            entries = [(_ANSI_RE.sub("", line), f"[{target.label}] {line}")
+                       for line in result.stdout.splitlines()]
+            lines, count = log_query.with_context(entries, self._matcher, self._context)
+            display.extend(lines)
+            total_matches += count
+            if total_matches >= MAX_DISPLAYED_MATCHES:
+                break
 
-        self.results_ready.emit(matches, errors)
+        self.results_ready.emit(display, total_matches, errors)
 
 
 class LogSearchPage(QWidget):
@@ -93,6 +97,7 @@ class LogSearchPage(QWidget):
         # collapse_check re-renders instantly instead of re-running the
         # (possibly slow/remote) search.
         self._last_matches: list[str] = []
+        self._last_match_count = 0
         self._last_errors: list[str] = []
 
         layout = QVBoxLayout(self)
@@ -124,6 +129,14 @@ class LogSearchPage(QWidget):
         self.collapse_check.setChecked(True)
         self.collapse_check.toggled.connect(self._render_results)
         search_row.addWidget(self.collapse_check)
+
+        search_row.addWidget(QLabel("Context:"))
+        self.context_spin = QSpinBox()
+        self.context_spin.setRange(0, 20)
+        self.context_spin.setValue(0)
+        self.context_spin.setToolTip("Lines of surrounding context to show around each match (grep -C)")
+        self.context_spin.setSuffix(" lines")
+        search_row.addWidget(self.context_spin)
 
         search_row.addWidget(QLabel("Lines/container:"))
         self.tail_spin = QSpinBox()
@@ -249,7 +262,7 @@ class LogSearchPage(QWidget):
         self.results.clear()
 
         self._worker = LogSearchWorker(targets, matcher, self.tail_spin.value(),
-                                       self.range_combo.currentData())
+                                       self.range_combo.currentData(), self.context_spin.value())
         self._worker.results_ready.connect(self._on_results)
         self._worker.start()
 
@@ -316,9 +329,10 @@ class LogSearchPage(QWidget):
             return
         self.status_label.setText(f"Exported {len(lines)} line(s) to {path}")
 
-    def _on_results(self, matches: list[str], errors: list[str]) -> None:
+    def _on_results(self, display: list[str], match_count: int, errors: list[str]) -> None:
         self.search_btn.setEnabled(True)
-        self._last_matches = matches
+        self._last_matches = display          # lines to show (incl. any context / separators)
+        self._last_match_count = match_count
         self._last_errors = errors
         self._render_results()
 
@@ -367,10 +381,12 @@ class LogSearchPage(QWidget):
                 # live tail (ui/process_runner.LogPanel's own use case).
                 ansi_render.append(self.results, ansi_render.make_parser(), line + "\n", default_color)
 
-        status = f"{len(matches)} match(es)"
+        status = f"{self._last_match_count} match(es)"
+        if self.context_spin.value():
+            status += f" (+{self.context_spin.value()} context line(s) each)"
         if len(display_lines) != len(matches):
-            status += f" ({len(display_lines)} shown, repeats collapsed)"
-        if len(matches) >= MAX_DISPLAYED_MATCHES:
+            status += f" ({len(display_lines)} lines shown, repeats collapsed)"
+        if self._last_match_count >= MAX_DISPLAYED_MATCHES:
             status += f" (capped at {MAX_DISPLAYED_MATCHES}, refine your search)"
         if errors:
             status += " -- " + "; ".join(errors)
