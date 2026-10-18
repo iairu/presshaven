@@ -8,19 +8,21 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSplitter,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QCheckBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
+    QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core import session_view
 from core.colors import GREEN, GREY, ORANGE, RED
 from core.docker_ctl import targets_for
-from core.redis_inspect import RedisInspectError, list_sessions
+from core.redis_inspect import RedisInspectError, delete_session, list_sessions
 from core.state import AppState
-from ui.common import ErrorBanner, TargetSelector, set_status
+from ui.common import ErrorBanner, Job, TargetSelector, confirm, set_status
+
+REFRESH_MS = 6000
 
 _VERDICT_COLOR = {"benign": GREEN, "suspicious": ORANGE, "over threshold": RED,
                   "diverted": RED, "compromised": RED}
@@ -37,6 +39,8 @@ class SessionsPage(QWidget):
         self.state = state
         self._sessions: list[session_view.SessionSummary] = []
         self._shown: list[session_view.SessionSummary] = []
+        self._busy = False
+        self._jobs: set[Job] = set()
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -47,6 +51,14 @@ class SessionsPage(QWidget):
         self.search.setPlaceholderText("Filter by IP, session id or user agent…")
         self.search.setClearButtonEnabled(True)
         bar.addWidget(self.search, stretch=1)
+        self.auto_check = QCheckBox("Live")
+        self.auto_check.setChecked(True)
+        self.auto_check.setToolTip("Refresh the session list every few seconds")
+        bar.addWidget(self.auto_check)
+        self.reset_btn = QPushButton("Reset session")
+        self.reset_btn.setToolTip("Drop the selected session's state so its next request is scored fresh")
+        self.reset_btn.setEnabled(False)
+        bar.addWidget(self.reset_btn)
         self.refresh_btn = QPushButton("Refresh")
         bar.addWidget(self.refresh_btn)
         self.count_label = QLabel("")
@@ -82,26 +94,71 @@ class SessionsPage(QWidget):
         split.addWidget(detail)
         split.setSizes([300, 260])
 
+        self.timer = QTimer(self)
+        self.timer.setInterval(REFRESH_MS)
+        self.timer.timeout.connect(self._tick)
         self.refresh_btn.clicked.connect(self.refresh)
+        self.reset_btn.clicked.connect(self._reset_selected)
         self.search.textChanged.connect(self._render)
         self.target_combo.currentIndexChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._on_select)
+        self.auto_check.toggled.connect(self._tick)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self.refresh()
+        self.timer.start()
+
+    def hideEvent(self, event) -> None:
+        self.timer.stop()
+        super().hideEvent(event)
 
     def rebuild_targets(self) -> None:
         self.target_combo.rebuild()
 
+    def _tick(self) -> None:
+        if self.auto_check.isChecked():
+            self.refresh()
+
     def refresh(self) -> None:
+        """Fetch off the GUI thread -- list_sessions can be slow over SSH."""
+        if self._busy:
+            return
+        self._busy = True
+        remote = self.target_combo.current_remote()
+        job = Job(lambda: list_sessions(remote), self)
+        self._jobs.add(job)
+
+        def finished(text, error):
+            self._busy = False
+            self._jobs.discard(job)
+            job.deleteLater()
+            if error or text is None:
+                self._sessions = []
+                self.error_banner.set_error(error or "no data",
+                                            prefix="⚠ session_store (Redis) unreachable: ")
+            else:
+                self._sessions = session_view.parse_snapshot(text)
+                self.error_banner.set_error(None)
+            self._render()
+        job.done.connect(finished)
+        job.start()
+
+    def _reset_selected(self) -> None:
+        s = self._selected_session()
+        if s is None:
+            return
+        if not confirm(self, "Reset session",
+                       f"Drop all stored state for session {s.session_id[:12]} (from {s.ip or 'unknown IP'})? "
+                       "Its risk score, honeypot pool binding and fingerprint recovery are cleared, so its "
+                       "next request is scored from scratch."):
+            return
         try:
-            self._sessions = session_view.parse_snapshot(list_sessions(self.target_combo.current_remote()))
-            error = None
+            delete_session(self.target_combo.current_remote(), s.session_id)
         except RedisInspectError as e:
-            self._sessions, error = [], str(e)
-        self.error_banner.set_error(error, prefix="⚠ session_store (Redis) unreachable: ")
-        self._render()
+            QMessageBox.warning(self, "Reset failed", str(e))
+            return
+        self.refresh()
 
     def _render(self) -> None:
         needle = self.search.text().strip().lower()
@@ -120,21 +177,31 @@ class SessionsPage(QWidget):
             if s.session_id == keep:
                 self.table.selectRow(row)
         set_status(self.count_label, f"{len(self._shown)} of {len(self._sessions)} sessions")
-        if not self.table.selectionModel().selectedRows():
+        selected = bool(self.table.selectionModel().selectedRows())
+        self.reset_btn.setEnabled(selected)
+        if not selected:
             self.story.clear()
             self.timeline.setRowCount(0)
+            if not self._sessions:
+                self.story.setPlaceholderText(
+                    "No sessions yet. Bring the edge stack up and run a pattern on the Attack "
+                    "Simulation page, then select the session here to read its story.")
 
     def _selected_id(self) -> str | None:
+        s = self._selected_session()
+        return s.session_id if s else None
+
+    def _selected_session(self) -> session_view.SessionSummary | None:
         rows = self.table.selectionModel().selectedRows()
         if rows and rows[0].row() < len(self._shown):
-            return self._shown[rows[0].row()].session_id
+            return self._shown[rows[0].row()]
         return None
 
     def _on_select(self) -> None:
-        rows = self.table.selectionModel().selectedRows()
-        if not rows or rows[0].row() >= len(self._shown):
+        s = self._selected_session()
+        self.reset_btn.setEnabled(s is not None)
+        if s is None:
             return
-        s = self._shown[rows[0].row()]
         lines = [session_view.narrative(s), "", f"User agent: {s.user_agent or '—'}",
                  f"First request: {s.first_uri or '—'}",
                  f"Created: {_clock(s.created_at)}   Last activity: {_clock(s.last_activity)}"]

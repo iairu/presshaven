@@ -523,3 +523,30 @@ def pool_snapshot(remote: RemoteConfig | None, timeout: float = 20.0) -> str:
     """Raw JSON snapshot of the pool registry; parse with
     core.pool_view.parse_snapshot()."""
     return _run_redis_cli(remote, "EVAL", _POOL_SNAPSHOT_SCRIPT, "0", timeout=timeout).strip()
+
+
+# Removes one session and everything that would recover or re-bind it: the
+# session record, its honeypot pool assignment, its passive-fingerprint
+# pointer(s), the active_sessions index entry and any waiting-queue entry.
+# For the Attacker Sessions page's "Reset session" -- unlike
+# clear_local_threat_state() this is a single, explicitly chosen session,
+# so it is not limited to local/test IPs.
+_DELETE_SESSION_SCRIPT = """
+local id = ARGV[1]
+redis.call('DEL', 'session:' .. id)
+redis.call('DEL', 'honeypot_pool_session:' .. id)
+redis.call('SREM', 'active_sessions', id)
+redis.call('ZREM', 'honeypot_pool:waiting', id)
+for _, k in ipairs(redis.call('KEYS', 'fp_session:*')) do
+  if redis.call('GET', k) == id then redis.call('DEL', k) end
+end
+return 1
+"""
+
+
+def delete_session(remote: RemoteConfig | None, session_id: str, timeout: float = 15.0) -> None:
+    """Drop one session's state so its next request is scored fresh (see
+    _DELETE_SESSION_SCRIPT). The session id must be a bare id, no prefix."""
+    if not session_id:
+        raise RedisInspectError("No session id given.")
+    _run_redis_cli(remote, "EVAL", _DELETE_SESSION_SCRIPT, "0", session_id, timeout=timeout)
