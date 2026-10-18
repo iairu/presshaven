@@ -471,3 +471,26 @@ def ready_pool_count(remote: RemoteConfig | None, timeout: float = 10.0) -> int 
     """How many honeypot pools are registered ready with the router."""
     out = _run_redis_cli(remote, "SCARD", "honeypot_pool:ready", timeout=timeout).strip()
     return int(out) if out.isdigit() else None
+
+
+# One round-trip snapshot of every proxy session with its pool assignment,
+# plus the threat_ips blob, for ui/page_sessions.py (interpreted by
+# core/session_view.parse_snapshot()).
+_LIST_SESSIONS_SCRIPT = """
+local rows = {}
+for _, k in ipairs(redis.call('KEYS', 'session:*')) do
+  local id = string.sub(k, 9)
+  local v = redis.call('GET', k)
+  if v then
+    table.insert(rows, {id = id, session = v,
+                        pool = redis.call('GET', 'honeypot_pool_session:' .. id) or ''})
+  end
+end
+return cjson.encode({sessions = rows, threat_ips = redis.call('GET', 'threat_ips') or '{}'})
+"""
+
+
+def list_sessions(remote: RemoteConfig | None, timeout: float = 20.0) -> str:
+    """Raw JSON snapshot of all sessions (see _LIST_SESSIONS_SCRIPT); parse
+    with core.session_view.parse_snapshot()."""
+    return _run_redis_cli(remote, "EVAL", _LIST_SESSIONS_SCRIPT, "0", timeout=timeout).strip()

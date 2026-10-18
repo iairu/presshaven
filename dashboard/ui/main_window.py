@@ -39,6 +39,7 @@ from ui.page_pool_test import PoolTestPage
 from ui.page_redis import RedisPage
 from ui.page_resources import ResourcesPage
 from ui.page_services import ServicesPage
+from ui.page_sessions import SessionsPage
 from ui.page_settings import SettingsPage
 from ui.responsive import scrollable
 from ui.security_feed import SecurityEventFeed
@@ -61,12 +62,13 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "live_events", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "sessions", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
     "live_events": "Live Events",
+    "sessions": "Attacker Sessions",
     "services": "Workloads",
     "health": "Global Visualization",
     "resources": "Workload Telemetry",
@@ -88,7 +90,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["patterns", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "sessions", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
@@ -187,6 +189,7 @@ class MainWindow(QMainWindow):
         self.overview_page = OverviewPage(state, self.security_feed)
         self.overview_page.open_page_requested.connect(self._open_page)
         self.live_events_page = LiveEventsPage(self.security_feed)
+        self.sessions_page = SessionsPage(state)
         self.services_page = ServicesPage(
             self._get_targets, self.error_monitor, self._grab_health_screenshot, state)
         self.services_page.layer_changed.connect(self._on_honeypot_layer_changed)
@@ -210,6 +213,7 @@ class MainWindow(QMainWindow):
         for page_id, widget in [
             ("overview", self.overview_page),
             ("live_events", self.live_events_page),
+            ("sessions", self.sessions_page),
             ("services", self.services_page),
             ("health", self.health_page),
             ("resources", self.resources_page),
@@ -453,6 +457,7 @@ class MainWindow(QMainWindow):
         # Global Visualization page rebuilds its diagram automatically on the next poll
         # tick (it always calls _get_targets() fresh in apply_status()).
         self.redis_page.rebuild_targets()
+        self.sessions_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
@@ -642,6 +647,7 @@ class MainWindow(QMainWindow):
         self._reload_settings_page()
         self.services_page.rebuild_panels()
         self.redis_page.rebuild_targets()
+        self.sessions_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()

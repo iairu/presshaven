@@ -272,6 +272,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Each row is one decision or scoring signal. Severity follows the points added; the stream keeps working "
         "even when Kibana or the SIEM stack is down.",
     ),
+    "sessions": PageGuide(
+        "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.",
+        "Run a pattern, open this page, and select your session to read its timeline.",
+        "An attack is a story, not a number: the timeline shows which requests added points and when the "
+        "session crossed the honeypot threshold.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",
