@@ -58,6 +58,9 @@ class SecurityEventFeed(QObject):
     # Emitted whenever a fresh per-request outcome score is seen (every
     # request, not just notable ones) -- for a live "current score" display.
     score_changed = pyqtSignal(object)  # int score, or None if unavailable
+    # Emitted for EVERY parsed event (signals, routing steps, outcomes), not
+    # just the notable ones recorded to state -- feeds the Live Events page.
+    event_parsed = pyqtSignal(object, int)
 
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
@@ -92,6 +95,7 @@ class SecurityEventFeed(QObject):
             event = parse_line(line)
             if event is None:
                 continue
+            self.event_parsed.emit(event, int(time.time()))
             if event.kind == "outcome" and event.score is not None:
                 self.latest_score = event.score
                 self.score_changed.emit(event.score)

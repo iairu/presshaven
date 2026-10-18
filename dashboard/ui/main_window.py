@@ -32,6 +32,7 @@ from ui.page_extras import ExtrasPage
 from ui.page_health import HealthPage
 from ui.page_kibana import KibanaPage
 from ui.page_learn import LearnPage, page_guide_html
+from ui.page_live_events import LiveEventsPage
 from ui.page_log_search import LogSearchPage
 from ui.page_overview import OverviewPage
 from ui.page_pool_test import PoolTestPage
@@ -60,11 +61,12 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
+    "live_events": "Live Events",
     "services": "Workloads",
     "health": "Global Visualization",
     "resources": "Workload Telemetry",
@@ -85,7 +87,7 @@ PAGE_LABELS = {
 # the View menu follow, so the shortcuts match what the rail shows.
 NAV_GROUPS = [
     ("Overview", ["overview"]),
-    ("Monitor", ["health", "resources", "kibana", "log_search"]),
+    ("Monitor", ["live_events", "health", "resources", "kibana", "log_search"]),
     ("Threat Operations", ["patterns", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
@@ -184,6 +186,7 @@ class MainWindow(QMainWindow):
         # poller's results (wired in _on_status_results).
         self.overview_page = OverviewPage(state, self.security_feed)
         self.overview_page.open_page_requested.connect(self._open_page)
+        self.live_events_page = LiveEventsPage(self.security_feed)
         self.services_page = ServicesPage(
             self._get_targets, self.error_monitor, self._grab_health_screenshot, state)
         self.services_page.layer_changed.connect(self._on_honeypot_layer_changed)
@@ -206,6 +209,7 @@ class MainWindow(QMainWindow):
 
         for page_id, widget in [
             ("overview", self.overview_page),
+            ("live_events", self.live_events_page),
             ("services", self.services_page),
             ("health", self.health_page),
             ("resources", self.resources_page),

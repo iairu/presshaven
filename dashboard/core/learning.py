@@ -266,6 +266,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "A SOC console opens on a summary. The current score and recent diversions tell you at a glance whether "
         "anything is happening right now, before you drill into any single page.",
     ),
+    "live_events": PageGuide(
+        "Real-time stream of the proxy's detection decisions, filterable and exportable, without needing the SIEM.",
+        "Run a pattern, then filter to 'Honeypot diversions' and watch the request that tipped the score.",
+        "Each row is one decision or scoring signal. Severity follows the points added; the stream keeps working "
+        "even when Kibana or the SIEM stack is down.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",
