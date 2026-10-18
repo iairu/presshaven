@@ -17,8 +17,8 @@ name: honeypot-ids-system-v1
 # shared with docker-compose.yml, including the project name, so switching
 # layers with `up -d --remove-orphans` swaps the services in place. The one
 # volume that is NOT shared is the honeypot database
-# (honeypot_database_proxy_data): the default layer's pool-1 database must not
-# pick up this layer's "Demo Honeypot eShop" site name.
+# (honeypot_database_proxy_data): this layer's databases are clones of
+# production (scrubbed), not the default layer's seeded pool-1 database.
 # ============================================================================
 # Cap every container's json-file log so a runaway stdout log can't fill
 # the disk (see also suricata.yaml + the log_capper sidecar for FILE logs).
@@ -179,17 +179,13 @@ services:
         done
       fi
 
-      # Give the honeypot database a DISTINCT site name so the shared WordPress
-      # frontend visibly renders 'Demo Honeypot eShop' whenever the DB proxy
-      # (wp-content/db.php) routes a request to the honeypot database, vs
-      # 'Fernhill Coffee Roasters' from production -- a simple, at-a-glance demo on the
-      # Patterns dashboard page that the same frontend is switching databases
-      # correctly. Applied on every run (idempotent) and NOT overwritten by
-      # honeypot_content_sync (which only mirrors content tables, never
-      # wp_options). Only the blogname differs; everything else stays a faithful
-      # clone so the two sides remain otherwise indistinguishable.
-      echo 'Setting honeypot site name to \"Demo Honeypot eShop\"...'
-      mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\" -e \"UPDATE wp_options SET option_value='Demo Honeypot eShop' WHERE option_name='blogname';\" || echo '  (could not set honeypot blogname, continuing)'
+      # Same site name as production. The honeypot used to rename itself
+      # 'Demo Honeypot eShop', which told every diverted user they had been
+      # diverted. Copied on every run (REPLACE of production's blogname row),
+      # so a volume that still carries the old demo name is put right too;
+      # honeypot_content_sync never touches wp_options.
+      echo 'Copying the production site name into the honeypot database...'
+      mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --no-create-info --replace --skip-add-locks --no-tablespaces --skip-triggers --where=\"option_name='blogname'\" \"\$$MYSQL_DATABASE\" wp_options | mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\" || echo '  (could not copy the site name, continuing)'
 
       echo 'Honeypot database initialisation complete.'
       "

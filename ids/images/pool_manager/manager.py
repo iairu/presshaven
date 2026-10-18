@@ -974,8 +974,11 @@ fi
 for m in $(ls /migrations/*.sql 2>/dev/null | sort); do
   mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
 done
-mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
-  -e "UPDATE wp_options SET option_value='Demo Honeypot eShop' WHERE option_name='blogname';" || true
+# Production's own site name (see honeypot_db_init): a renamed honeypot gave
+# itself away to every diverted user.
+mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --no-create-info --replace --skip-add-locks \
+  --no-tablespaces --skip-triggers --where="option_name='blogname'" "$MYSQL_DATABASE" wp_options \
+  | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" || true
 """
 
 MIGRATE_SCRIPT = r"""

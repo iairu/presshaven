@@ -201,7 +201,7 @@ SERVICE_DESCRIPTIONS: dict[str, str] = {
     "honeypot_db_migration": "One-shot schema/data migration that brings a honeypot database "
                              "up to the expected structure before seeding.",
     "honeypot_db_init": "One-shot initialiser for the honeypot database on the single-eshop "
-                        "topology (schema + the 'Demo Honeypot eShop' identity).",
+                        "topology (a scrubbed clone of production).",
     "honeypot_content_sync": "Periodically replicates chosen production content into the "
                              "honeypot database(s) so the decoy stays believable without "
                              "leaking live customer data.",
