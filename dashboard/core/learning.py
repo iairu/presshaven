@@ -284,6 +284,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Suricata watches packets, the Lua analyzer watches requests. Switching a rule off and re-running the "
         "same attack shows which layer actually caught it.",
     ),
+    "detection": PageGuide(
+        "Tune how evidence builds and fades: score decay, IP-reputation weight and shared-address handling.",
+        "Lengthen the decay half-life, save and restart the proxy, then re-run the same pattern.",
+        "Detection is configuration. The summary under the form turns the half-life into seconds so you can "
+        "see how long an attacker stays flagged after they stop.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",
