@@ -229,5 +229,20 @@ do
     check("empty ready list makes every assignment stale", not rules.assignment_valid(1, {}))
 end
 
+-- Database layer: pool_manager's health records become health-cache entries.
+do
+    local e = rules.health_entry_from_manager({ healthy = false, state = "exited", at = 1000.5 })
+    check("manager record maps to a cache entry",
+          e and e.healthy == false and e.last_check == 1000.5 and e.state == "exited")
+    check("a down database is unhealthy while fresh", not rules.is_health_status_healthy(e, 1030))
+    check("a record pool_manager stopped refreshing counts as healthy",
+          rules.is_health_status_healthy(e, 1100))
+    check("healthy record stays healthy",
+          rules.is_health_status_healthy(rules.health_entry_from_manager({ healthy = true, at = 1000 }), 1001))
+    check("record without healthy flag is rejected", rules.health_entry_from_manager({ at = 1 }) == nil)
+    check("record without timestamp is rejected", rules.health_entry_from_manager({ healthy = true }) == nil)
+    check("non-table is rejected", rules.health_entry_from_manager("x") == nil)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 os.exit(failed == 0 and 0 or 1)

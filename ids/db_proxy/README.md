@@ -27,7 +27,7 @@ shared version:
 
 - `reverse_proxy_enhanced/nginx.conf`: no pool upstreams, and every location proxies to `production_backend`.
 - `reverse_proxy_enhanced/proxy_params`: sets `X-Honeypot-Backend` from the Lua routing decision. It always overwrites the header, so a client can't forge it.
-- `reverse_proxy_enhanced/lua/health_check.lua` and `lua/init_worker.lua`: set `POOL_COUNT` to 0, so nothing probes or pre-warms pools that don't exist.
+- `reverse_proxy_enhanced/lua/health_check.lua` and `lua/init_worker.lua`: set `POOL_COUNT` to 0, so nothing probes or pre-warms honeypot eshops that don't exist. `init_worker.lua` mirrors the database pools' health from Redis instead (see below).
 - `scripts/replicate_content_to_honeypot.sh`: syncs content into the single `honeypot_database`.
 - `honeypot_database_migrations/01_clean-honeypot-data.sql`: DELETEs that tolerate missing tables, for the clone-of-production database.
 
@@ -54,6 +54,8 @@ The honeypot database is a pool, like the pods of the WordPress proxy level:
 - The proxy names the user's database in the `X-Honeypot-DB` header (set in `proxy_params`, overwritten on every request). `wp-content/db.php` accepts only a plain positive integer and maps it to `honeypot_database_N`.
 - Every assignment wakes the `pool_manager` service (`POOL_MODE=database`), which clones another database from production, scrubs it, and registers it as the next spare. `POOL_SPARES` unowned databases are kept ready; `POOL_MAX` caps the total.
 - With no spare ready, the router reuses the existing databases round-robin, so two users then share one.
+- `pool_manager` publishes each ready database's container health in `honeypot_pool:health`. A stopped or restarting container counts as down at once, and a hung `mysqld` once Docker's `mysqladmin ping` healthcheck has run out of retries. `lua/init_worker.lua` here copies these records into the proxy's health cache every 5 s. While a session's database is down, the router serves that session from another ready database, and moves it back once its own is healthy. The assignment itself is never changed.
+- Every clone keeps production's site name, so a diverted user sees the same shop.
 - `honeypot_content_sync` replicates production content into every ready database.
 
 All honeypot databases use production's credentials. The isolation is the separate database host, as before.

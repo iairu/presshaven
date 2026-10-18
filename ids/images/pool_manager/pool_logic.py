@@ -126,3 +126,23 @@ def scaledown_plan(pools: dict[int, dict], static_count: int, spares: int, now: 
         destroy.append(n)
         keep -= 1
     return release, destroy
+
+
+def database_pool_number(labels: dict, project: str) -> int | None:
+    """Pool number of a database-layer pool's MySQL container, from its labels:
+    the compose service `honeypot_database` is pool 1, the ones pool_manager
+    creates carry `honeypot.pool`. None for any other container."""
+    if labels.get("com.docker.compose.project") == project:
+        return 1 if labels.get("com.docker.compose.service") == "honeypot_database" else None
+    value = labels.get("honeypot.pool", "")
+    return int(value) if value.isdigit() else None
+
+
+def container_state(state: dict) -> str:
+    """One word for a container's `State`: its healthcheck status while it
+    runs ("healthy", "unhealthy", "starting"; "running" without one), else
+    Docker's status ("exited", "restarting", "created", ...)."""
+    status = state.get("Status") or "unknown"
+    if status != "running":
+        return status
+    return (state.get("Health") or {}).get("Status") or "running"

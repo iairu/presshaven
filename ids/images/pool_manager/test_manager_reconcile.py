@@ -441,6 +441,46 @@ class ReconcileDatabaseLayer(Reconcile):
     """Database layer: only `honeypot_database` (pool 1) is compose-declared."""
     STATIC = 1
 
+    def setUp(self):
+        super().setUp()
+        self.mgr.health = {}
+
+    def tearDown(self):
+        self.m.MODE = "wordpress"
+
+    def health_events(self):
+        import json
+        return [e for e in map(json.loads, self.r.lrange(self.m.EVENTS_KEY, 0, -1))
+                if e["type"] == "pool_health"]
+
+    def test_publishes_each_ready_database_health(self):
+        import json
+        self.m.MODE = "database"
+        states = {1: "healthy", 4: "exited"}
+        self.mgr.database_states = lambda: dict(states)
+        self.run_reconcile()                      # publishes pool 1 (healthy: no event)
+        self.r.sadd(self.m.READY_KEY, 4)
+        self.mgr.publish_health()
+        one = json.loads(self.r.hget(self.m.HEALTH_KEY, "1"))
+        four = json.loads(self.r.hget(self.m.HEALTH_KEY, "4"))
+        self.assertTrue(one["healthy"])
+        self.assertEqual((four["healthy"], four["state"]), (False, "exited"))
+        self.assertEqual([(e["pool"], e["healthy"]) for e in self.health_events()], [(4, False)])
+        states[4] = "healthy"                     # back: one more transition, logged once
+        self.mgr.publish_health()
+        self.mgr.publish_health()
+        self.assertEqual([(e["pool"], e["healthy"]) for e in self.health_events()],
+                         [(4, False), (4, True)])
+        self.r.srem(self.m.READY_KEY, 4)          # removed pools drop out
+        self.mgr.publish_health()
+        self.assertIsNone(self.r.hget(self.m.HEALTH_KEY, "4"))
+
+    def test_a_failed_listing_publishes_nothing(self):
+        self.m.MODE = "database"
+        self.mgr.database_states = lambda: None
+        self.run_reconcile()
+        self.assertEqual(self.r.hlen(self.m.HEALTH_KEY), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

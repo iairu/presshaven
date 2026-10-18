@@ -166,6 +166,46 @@ local function init_worker()
             end
         end
 
+        -- Honeypot database health. pool_manager publishes each ready
+        -- database's container state in Redis (pool_router_rules.HEALTH_KEY);
+        -- copying it into the same health cache health_check.lua fills for
+        -- the default layer's pools lets pool_router's is_pool_healthy()
+        -- steer a session whose database is down to another one until it is
+        -- back (find_healthy_pool), instead of WordPress failing to connect.
+        -- Entries expire, and one pool_manager stopped refreshing goes stale
+        -- and counts as healthy (is_health_status_healthy), as before.
+        local rules_ok, pool_rules = pcall(require, "pool_router_rules")
+        if rules_ok then
+            local last_healthy = {}
+            local function mirror_database_health()
+                local red = _G.redis_pool.get_connection()
+                if not red then return end
+                local flat = red:hgetall(pool_rules.HEALTH_KEY)
+                _G.redis_pool.close_connection(red)
+                local dict = ngx.shared.threat_intel
+                if type(flat) ~= "table" or not dict then return end
+                for k = 1, #flat - 1, 2 do
+                    local pool = tonumber(flat[k])
+                    local ok, rec = pcall(cjson.decode, flat[k + 1])
+                    local entry = ok and pool_rules.health_entry_from_manager(rec) or nil
+                    if pool and entry then
+                        dict:set("health:honeypot_backend_" .. pool, cjson.encode(entry), 120)
+                        if last_healthy[pool] ~= nil and last_healthy[pool] ~= entry.healthy then
+                            ngx.log(entry.healthy and ngx.INFO or ngx.WARN, "[HEALTH] Honeypot database ",
+                                pool, entry.healthy and " is healthy again" or " is UNHEALTHY",
+                                " (", entry.state or "?", ")")
+                        end
+                        last_healthy[pool] = entry.healthy
+                    end
+                end
+            end
+            ngx.timer.at(2, function() pcall(mirror_database_health) end)
+            local ok, err = ngx.timer.every(5, function() pcall(mirror_database_health) end)
+            if not ok then
+                ngx.log(ngx.ERR, "Failed to schedule honeypot database health mirroring: ", err)
+            end
+        end
+
         -- WordPress install-state probe. Feeds wp_install_state.lua's cache,
         -- which pattern_analyzer.lua/router.lua consult so that
         -- /wp-admin/install.php is treated as legitimate traffic (not an

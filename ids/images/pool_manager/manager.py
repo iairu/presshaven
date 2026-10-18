@@ -73,6 +73,11 @@ DIRTY_KEY = "honeypot_pool:dirty"
 RELEASE_KEY = "honeypot_pool:release"
 SCALEDOWN_KEY = "honeypot_pool:scaledown_now"
 PW_PREFIX = "honeypot_pool:pw:"
+# Database layer: pool -> JSON {"healthy", "state", "at"} for every ready pool,
+# from its MySQL container's state (publish_health). The proxy mirrors it into
+# the health cache pool_router.lua consults, so a session whose database is
+# down is served from another pool until it is back.
+HEALTH_KEY = "honeypot_pool:health"
 SESSION_KEY_PREFIX = "honeypot_pool_session:"
 
 PROJECT = os.environ.get("COMPOSE_PROJECT", "honeypot-ids-system-v1")
@@ -194,6 +199,7 @@ class Manager:
         self.build_reasons: dict[int, str] = {}
         self.capped_reason = ""
         self.forced_removed: list[int] = []   # removed so far by an unfinished forced scale-down
+        self.health: dict[int, bool] = {}     # last published health per ready pool
         self._local = threading.local()    # per build thread: phase timings
 
     # ---- discovery -------------------------------------------------------
@@ -397,6 +403,53 @@ class Manager:
                 continue
             if self.pool_container_healthy(n):
                 self.register_ready(n, owned=bool(self.redis.scard(OWNER_PREFIX + str(n))))
+
+    # ---- database health (database layer) ---------------------------------
+
+    def database_states(self) -> dict[int, str] | None:
+        """Pool number -> state of its MySQL container (see pl.container_state),
+        or None when the listing failed (a container removed while it was
+        being listed, e.g. during a scale-down: next pass)."""
+        try:
+            listed = self.docker.containers.list(all=True, filters={"name": "honeypot_database"})
+        except docker.errors.NotFound:
+            return None
+        out: dict[int, str] = {}
+        for c in listed:
+            n = pl.database_pool_number(c.attrs.get("Config", {}).get("Labels") or {}, PROJECT)
+            if n is not None:
+                out[n] = pl.container_state(c.attrs.get("State", {}))
+        return out
+
+    def publish_health(self) -> None:
+        """Database layer: publish every ready pool's database health
+        (HEALTH_KEY). In this layer the proxy has no HTTP backend per pool to
+        probe -- one production_eshop serves every pool -- so without this a
+        database that crashed or hung kept getting its sessions, which then
+        saw WordPress's "Error establishing a database connection". A stopped
+        or restarting container counts at once; a hung mysqld once Docker's
+        healthcheck (mysqladmin ping) has failed its retries."""
+        if MODE != "database":
+            return
+        states = self.database_states()
+        if states is None:
+            return
+        ready = {int(x) for x in self.redis.smembers(READY_KEY)}
+        now = time.time()
+        for n in sorted(ready):
+            state = states.get(n, "missing")
+            healthy = state == "healthy"
+            self.redis.hset(HEALTH_KEY, str(n), json.dumps(
+                {"healthy": healthy, "state": state, "at": round(now, 3)}))
+            if self.health.get(n, True) != healthy:
+                log(f"pool {n}: database {'healthy again' if healthy else 'UNHEALTHY'} ({state})")
+                self.event("pool_health", pool=n, healthy=healthy, state=state)
+            self.health[n] = healthy
+        gone = [f for f in self.redis.hkeys(HEALTH_KEY) if not f.isdigit() or int(f) not in ready]
+        if gone:
+            self.redis.hdel(HEALTH_KEY, *gone)
+        for n in [n for n in self.health if n not in ready]:
+            del self.health[n]
 
     # ---- capacity --------------------------------------------------------
 
@@ -649,6 +702,7 @@ class Manager:
             raise ValueError("static pools are owned by docker compose")
         self.unregister(n)
         self.redis.hdel(LAST_SEEN_KEY, str(n))
+        self.redis.hdel(HEALTH_KEY, str(n))
         self.redis.srem(DIRTY_KEY, n)
         for c in self.docker.containers.list(all=True, filters={"label": f"honeypot.pool={n}"}):
             c.remove(force=True, v=True)
@@ -831,6 +885,7 @@ class Manager:
         self.adopt_runtime_pools()
         self.remove_dead_pools()
         self.restore_passwords()
+        self.publish_health()
         self.release_idle_pools()
         self.drain_wakeups()
 

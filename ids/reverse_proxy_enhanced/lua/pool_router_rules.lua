@@ -57,6 +57,10 @@ _M.WAITING_SEEN_KEY = "honeypot_pool:waiting_seen"
 -- HASH pool number -> epoch seconds a request was last routed to it; pool_manager
 -- scales down pools nobody has used for POOL_IDLE_TIMEOUT_SECONDS.
 _M.LAST_SEEN_KEY = "honeypot_pool:last_seen"
+-- HASH pool number -> JSON {"healthy", "state", "at"}: the database layer's
+-- pool health, published by pool_manager from each MySQL container's state
+-- (that layer has no HTTP backend per pool for health_check.lua to probe).
+_M.HEALTH_KEY = "honeypot_pool:health"
 
 -- Most sessions that may wait for a pool at once (oldest dropped beyond it;
 -- also bounds the set when pool_manager is not running at all).
@@ -323,6 +327,18 @@ end
 --- @param  status  table|nil  Decoded health status, or nil if none recorded.
 --- @param  now     integer    Current time (ngx.time()).
 --- @return boolean
+--- The health-cache entry (the shape is_health_status_healthy reads) for one
+--- pool_manager health record (decoded HEALTH_KEY value), or nil when it is
+--- not one. last_check is pool_manager's own timestamp, so a record that
+--- stops being refreshed (pool_manager down) goes stale and counts as healthy.
+function _M.health_entry_from_manager(rec)
+    if type(rec) ~= "table" or type(rec.healthy) ~= "boolean" or not tonumber(rec.at) then
+        return nil
+    end
+    return { healthy = rec.healthy, last_check = tonumber(rec.at),
+             state = type(rec.state) == "string" and rec.state or nil }
+end
+
 function _M.is_health_status_healthy(status, now)
     if type(status) ~= "table" then
         return true

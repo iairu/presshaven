@@ -139,5 +139,31 @@ class IdleAction(unittest.TestCase):
         self.assertEqual(pl.idle_action(False, True, False), "reuse")
 
 
+class DatabaseHealth(unittest.TestCase):
+    P = "honeypot-ids-system-v1"
+
+    def test_compose_database_is_pool_one(self):
+        self.assertEqual(pl.database_pool_number(
+            {"com.docker.compose.project": self.P,
+             "com.docker.compose.service": "honeypot_database"}, self.P), 1)
+
+    def test_other_compose_services_are_not_pools(self):
+        self.assertIsNone(pl.database_pool_number(
+            {"com.docker.compose.project": self.P,
+             "com.docker.compose.service": "production_database"}, self.P))
+
+    def test_runtime_database_by_label(self):
+        self.assertEqual(pl.database_pool_number({"honeypot.pool": "7"}, self.P), 7)
+        self.assertIsNone(pl.database_pool_number({}, self.P))
+
+    def test_container_state(self):
+        self.assertEqual(pl.container_state({"Status": "running", "Health": {"Status": "healthy"}}), "healthy")
+        self.assertEqual(pl.container_state({"Status": "running", "Health": {"Status": "unhealthy"}}), "unhealthy")
+        self.assertEqual(pl.container_state({"Status": "running"}), "running")
+        self.assertEqual(pl.container_state({"Status": "restarting",
+                                             "Health": {"Status": "healthy"}}), "restarting")
+        self.assertEqual(pl.container_state({}), "unknown")
+
+
 if __name__ == "__main__":
     unittest.main()
