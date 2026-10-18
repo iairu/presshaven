@@ -64,6 +64,19 @@ class CombineTests(unittest.TestCase):
         running = {"State": "running", "Health": ""}
         self.assertEqual(sh.combine(True, "", running, OK + RETRY).verdict, sh.FAILING)
 
+    def test_index_stats(self):
+        text = ('[{"index":"honeypot-nginx_access-2026.10.17","docs.count":"166","store.size":"1mb"},'
+                '{"index":"honeypot-suricata-2026.10.17","docs.count":"41","store.size":"300kb"}]')
+        stats = sh.parse_index_stats(text)
+        self.assertEqual(stats["total_docs"], 207)
+        self.assertEqual(stats["index_count"], 2)
+        self.assertEqual(stats["indices"][0][0], "honeypot-nginx_access-2026.10.17")
+
+    def test_index_stats_bad_input(self):
+        self.assertIsNone(sh.parse_index_stats("missing authentication credentials"))
+        self.assertIsNone(sh.parse_index_stats('{"error":"x"}'))
+        self.assertEqual(sh.parse_index_stats("[]")["total_docs"], 0)
+
     def test_aggregator_state(self):
         self.assertEqual(sh.aggregator_state([{"Service": "vector_inbound", "State": "running", "Health": "healthy"}]),
                          "healthy")

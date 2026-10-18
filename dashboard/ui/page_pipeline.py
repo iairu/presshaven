@@ -20,6 +20,7 @@ from PyQt6.QtGui import QColor
 from core import shipper_health as sh
 from core.colors import GREEN, GREY, ORANGE, RED
 from core.docker_ctl import Target, targets_for
+from core.kibana_credentials import get_elastic_credentials
 from core.state import AppState
 from ui.common import ErrorBanner, Job, TargetSelector
 from ui.flow_layout import FlowLayout
@@ -32,23 +33,38 @@ _AGG_COLOR = {"healthy": GREEN, "running": GREEN, "unhealthy": RED, "exited_bad"
               "starting": ORANGE, "created": ORANGE, "unknown": GREY}
 
 
-def _check(edge: Target, siem_targets: list[Target]):
-    """(ShipperHealth, aggregator state) -- runs docker/ssh, so off-thread."""
+def _run(argv, cwd) -> str:
+    try:
+        return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30).stdout
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+
+
+def _check(edge: Target, siem_targets: list[Target], state):
+    """(ShipperHealth, aggregator state, index stats or None) -- runs
+    docker/ssh, so off-thread."""
     enabled, why = edge.siem_shipping()
     shipper = next((c for c in edge.ps() if c.get("Service") == sh.SHIPPER_SERVICE), None)
     logs = ""
     if enabled and shipper is not None:
         argv, cwd = edge.build("logs", "--tail=300", "--timestamps", sh.SHIPPER_SERVICE)
-        try:
-            logs = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30).stdout
-        except (subprocess.TimeoutExpired, OSError):
-            logs = ""
-    agg = "unknown"
+        logs = _run(argv, cwd)
+    agg, agg_target = "unknown", None
     for t in siem_targets:
         agg = sh.aggregator_state(t.ps())
         if agg != "unknown":
+            agg_target = t
             break
-    return sh.combine(enabled, why, shipper, logs), agg
+    # Direct end-to-end confirmation: ask Elasticsearch (inside es01, same
+    # path the SIEM healthcheck uses) how many honeypot-* docs it holds.
+    index_stats = None
+    if agg_target is not None and agg in ("healthy", "running"):
+        creds = get_elastic_credentials(state)
+        if creds is not None:
+            argv, cwd = agg_target.build("exec", "-T", "es01", "sh", "-c",
+                                         sh.ES_INDEX_CURL.format(password=creds[1]))
+            index_stats = sh.parse_index_stats(_run(argv, cwd))
+    return sh.combine(enabled, why, shipper, logs), agg, index_stats
 
 
 class PipelinePage(QWidget):
@@ -57,6 +73,7 @@ class PipelinePage(QWidget):
         self.state = state
         self._busy = False
         self._jobs: set[Job] = set()
+        self._last_docs: int | None = None
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -75,18 +92,19 @@ class PipelinePage(QWidget):
         cards = FlowLayout(cards_host, margin=0, h_spacing=10, v_spacing=10)
         self.card_verdict = StatCard("Edge → SIEM delivery")
         self.card_agg = StatCard("SIEM aggregator")
+        self.card_docs = StatCard("Documents in SIEM")
         self.card_errors = StatCard("Delivery errors (log tail)")
         self.card_ok = StatCard("Last healthcheck pass")
-        for c in (self.card_verdict, self.card_agg, self.card_errors, self.card_ok):
+        for c in (self.card_verdict, self.card_agg, self.card_docs, self.card_errors, self.card_ok):
             cards.addWidget(c)
         layout.addWidget(cards_host)
 
         self.detail = QLabel("")
         self.detail.setWordWrap(True)
         layout.addWidget(self.detail)
-        note = QLabel("Vector does not log every successful batch, so “delivering” means: the healthcheck passed and "
-                      "no delivery error (retry, TLS, DNS, refused connection) has been logged since. To confirm "
-                      "end to end, check that honeypot-* indices keep growing on the SIEM.")
+        note = QLabel("“Delivering” from the log means the healthcheck passed and no delivery error has been "
+                      "logged since (Vector does not log every batch). The Documents card is the direct check: "
+                      "it queries Elasticsearch for the honeypot-* indices and shows whether they are growing.")
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {GREY}; font-size: 8pt;")
         layout.addWidget(note)
@@ -120,7 +138,7 @@ class PipelinePage(QWidget):
             return
         self._busy = True
         siem = targets_for("siem", self.state)
-        job = Job(lambda: _check(edge, siem), self)
+        job = Job(lambda: _check(edge, siem, self.state), self)
         self._jobs.add(job)
 
         def finished(result, error):
@@ -135,10 +153,11 @@ class PipelinePage(QWidget):
         job.done.connect(finished)
         job.start()
 
-    def _render(self, h: sh.ShipperHealth, agg: str) -> None:
+    def _render(self, h: sh.ShipperHealth, agg: str, index_stats: dict | None) -> None:
         self.updated.setText(f"checked {time.strftime('%H:%M:%S')}")
         self.card_verdict.set_value(h.verdict, accent=_VERDICT_COLOR.get(h.verdict, GREY))
         self.card_agg.set_value(agg.replace("_", " "), "vector_inbound", _AGG_COLOR.get(agg, GREY))
+        self._render_docs(index_stats)
         self.card_errors.set_value(str(h.error_count), "none in the tail" if not h.error_count else
                                    f"latest {h.last_error or 'unknown time'}", RED if h.error_count else GREEN)
         self.card_ok.set_value(h.last_ok[11:19] if h.last_ok else "—",
@@ -149,3 +168,25 @@ class PipelinePage(QWidget):
             item = QListWidgetItem(("✓ " if e.ok else "✗ ") + e.text)
             item.setForeground(QColor(GREEN if e.ok else RED))
             self.evidence.addItem(item)
+
+    def _render_docs(self, index_stats: dict | None) -> None:
+        """The direct end-to-end check: honeypot-* document count in ES, and
+        whether it grew since the previous poll."""
+        if index_stats is None:
+            self.card_docs.set_value("—", "SIEM not reachable / no auth", GREY)
+            self._last_docs = None
+            return
+        total = index_stats["total_docs"]
+        if self._last_docs is None:
+            caption = f"{index_stats['index_count']} honeypot-* indices"
+            color = GREEN if total else ORANGE
+        else:
+            delta = total - self._last_docs
+            if delta > 0:
+                caption, color = f"+{delta} since last check — growing", GREEN
+            elif total == 0:
+                caption, color = "no documents yet", ORANGE
+            else:
+                caption, color = "no change since last check", ORANGE
+        self.card_docs.set_value(f"{total:,}", caption, color)
+        self._last_docs = total

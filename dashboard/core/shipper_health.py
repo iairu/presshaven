@@ -9,6 +9,7 @@ the wording says so: the last healthcheck pass, and whether any delivery
 error (retry, TLS, DNS, connection refused) has been logged since it."""
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 
@@ -105,6 +106,37 @@ def combine(shipping_enabled: bool, why_not: str, shipper: dict | None, logs: st
     if status in (DOWN, EXITED_BAD, EXITED_OK, CREATED):
         return ShipperHealth(STOPPED, f"vector_outbound is {status.replace('_', ' ')}; nothing is being shipped.")
     return analyse_logs(logs)
+
+
+# Inside the es01 container: list the shipped honeypot-* indices with doc
+# counts. The cert path and es01:9200 match the SIEM compose healthcheck.
+ES_INDEX_CURL = (
+    "curl -s --max-time 10 --cacert config/certs/ca/ca.crt -u elastic:{password} "
+    '"https://es01:9200/_cat/indices/honeypot-*?h=index,docs.count,store.size&format=json&s=index"')
+
+
+def parse_index_stats(text: str) -> dict | None:
+    """Total shipped documents and per-index counts from the _cat/indices
+    JSON. None when the response isn't the expected JSON array (e.g. an
+    auth error or es not ready)."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, list):
+        return None
+    total = 0
+    indices = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        try:
+            docs = int(row.get("docs.count") or 0)
+        except (TypeError, ValueError):
+            docs = 0
+        total += docs
+        indices.append((str(row.get("index", "")), docs, str(row.get("store.size", ""))))
+    return {"total_docs": total, "index_count": len(indices), "indices": sorted(indices)}
 
 
 def aggregator_state(containers: list[dict]) -> str:
