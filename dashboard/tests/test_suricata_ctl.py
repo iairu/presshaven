@@ -40,6 +40,16 @@ class AlertTests(unittest.TestCase):
         a = sc.parse_alerts(_eve(http=None))[0]
         self.assertEqual(a.url, "")
 
+    def test_detail_fields_and_lines(self):
+        a = sc.parse_alerts(_eve(proto="TCP", app_proto="http",
+                                 http={"url": "/x", "http_user_agent": "ua", "hostname": "shop",
+                                       "http_method": "POST"}))[0]
+        self.assertEqual((a.hostname, a.http_method, a.proto, a.app_proto), ("shop", "POST", "TCP", "http"))
+        labels = dict(a.detail_lines())
+        self.assertEqual(labels["Host"], "shop")
+        self.assertEqual(labels["Request"], "POST /x")
+        self.assertNotIn("", labels.values())   # blanks omitted
+
     def test_summarize(self):
         alerts = sc.parse_alerts("\n".join([_eve(), _eve(), _eve(src_ip="7.7.7.7")]))
         s = sc.summarize(alerts)

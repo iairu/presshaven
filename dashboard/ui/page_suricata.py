@@ -10,11 +10,11 @@ All container access goes through core/suricata_ctl.py (docker compose exec,
 local or SSH) on a background thread so a slow remote never freezes the UI."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QTabWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
+    QPushButton, QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core import suricata_ctl
@@ -24,6 +24,10 @@ from core.state import AppState
 from ui.common import ErrorBanner, Job, TargetSelector, confirm
 
 _SEV_COLOR = {"critical": RED, "high": ORANGE}
+REFRESH_MS = 8000
+# Severity filters: label -> set of severity labels to keep (None = all).
+_SEV_FILTERS = [("All severities", None), ("Critical", {"critical"}),
+                ("Critical + high", {"critical", "high"}), ("Medium", {"medium"})]
 
 
 class SuricataPage(QWidget):
@@ -31,9 +35,11 @@ class SuricataPage(QWidget):
         super().__init__(parent)
         self.state = state
         self._alerts: list[suricata_ctl.SuricataAlert] = []
+        self._shown_alerts: list[suricata_ctl.SuricataAlert] = []
         self._rules_text = ""
         self._rules: list[suricata_ctl.Rule] = []
         self._jobs: set[Job] = set()
+        self._busy = False
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -58,18 +64,33 @@ class SuricataPage(QWidget):
         self.summary.setWordWrap(True)
         self.summary.setTextFormat(Qt.TextFormat.RichText)
         al.addWidget(self.summary)
+        filter_row = QHBoxLayout()
         self.alert_filter = QLineEdit()
         self.alert_filter.setPlaceholderText("Filter by signature, IP, URL or category…")
         self.alert_filter.setClearButtonEnabled(True)
-        al.addWidget(self.alert_filter)
+        filter_row.addWidget(self.alert_filter, stretch=1)
+        self.sev_combo = QComboBox()
+        for label, _keep in _SEV_FILTERS:
+            self.sev_combo.addItem(label)
+        filter_row.addWidget(self.sev_combo)
+        al.addLayout(filter_row)
+        alert_split = QSplitter(Qt.Orientation.Vertical)
+        al.addWidget(alert_split, stretch=1)
         self.alert_table = QTableWidget(0, 6)
         self.alert_table.setHorizontalHeaderLabels(["Time", "Severity", "Signature", "Source", "Target", "URL"])
         self.alert_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.alert_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.alert_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.alert_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.alert_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.alert_table.verticalHeader().setVisible(False)
-        al.addWidget(self.alert_table, stretch=1)
+        self.alert_table.itemSelectionChanged.connect(self._on_alert_selected)
+        alert_split.addWidget(self.alert_table)
+        self.alert_detail = QPlainTextEdit(readOnly=True)
+        self.alert_detail.setPlaceholderText("Select an alert to see its full detail.")
+        self.alert_detail.setMaximumHeight(170)
+        alert_split.addWidget(self.alert_detail)
+        alert_split.setSizes([400, 150])
         tabs.addTab(alerts_tab, "Alerts")
 
         # ---- rules tab ----
@@ -95,16 +116,31 @@ class SuricataPage(QWidget):
         self.refresh_btn.clicked.connect(self.refresh)
         self.target_combo.currentIndexChanged.connect(self.refresh)
         self.alert_filter.textChanged.connect(self._render_alerts)
+        self.sev_combo.currentIndexChanged.connect(self._render_alerts)
         self.rule_filter.textChanged.connect(self._render_rules)
         self.rule_table.itemChanged.connect(self._on_rule_toggled)
         self.apply_btn.clicked.connect(self._apply)
 
+        self.timer = QTimer(self)
+        self.timer.setInterval(REFRESH_MS)
+        self.timer.timeout.connect(self._tick)
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self.refresh()
+        self.timer.start()
+
+    def hideEvent(self, event) -> None:
+        self.timer.stop()
+        super().hideEvent(event)
 
     def rebuild_targets(self) -> None:
         self.target_combo.rebuild()
+
+    def _tick(self) -> None:
+        # Don't clobber unsaved rule edits, and don't stack fetches.
+        if not self._busy and not self.apply_btn.isEnabled():
+            self.refresh()
 
     def _run(self, fn, on_done) -> None:
         job = Job(fn, self)
@@ -118,12 +154,16 @@ class SuricataPage(QWidget):
         job.start()
 
     def refresh(self) -> None:
+        if self._busy:
+            return
+        self._busy = True
         remote = self.target_combo.current_remote()
         self.status.setText("loading…")
         self._run(lambda: (suricata_ctl.fetch_alerts(remote), suricata_ctl.fetch_rules_text(remote)),
                   self._loaded)
 
     def _loaded(self, result, error: str) -> None:
+        self._busy = False
         if error or result is None:
             self.status.setText("")
             self.error_banner.set_error(error or "no data", prefix="⚠ Suricata unreachable: ")
@@ -144,10 +184,13 @@ class SuricataPage(QWidget):
         self.summary.setText(f"<b>{s['total']}</b> alerts &nbsp; ({sev})<br>"
                              f"<b>Top signatures:</b> {sigs}<br><b>Top sources:</b> {ips}")
         needle = self.alert_filter.text().strip().lower()
-        rows = [a for a in reversed(self._alerts)
-                if not needle or needle in f"{a.signature} {a.src_ip} {a.url} {a.category}".lower()]
-        self.alert_table.setRowCount(len(rows))
-        for r, a in enumerate(rows):
+        keep = _SEV_FILTERS[self.sev_combo.currentIndex()][1]
+        self._shown_alerts = [a for a in reversed(self._alerts)
+                              if (keep is None or a.severity_label in keep)
+                              and (not needle
+                                   or needle in f"{a.signature} {a.src_ip} {a.url} {a.category}".lower())]
+        self.alert_table.setRowCount(len(self._shown_alerts))
+        for r, a in enumerate(self._shown_alerts):
             cells = [a.timestamp[:19].replace("T", " "), a.severity_label, a.signature,
                      f"{a.src_ip}:{a.src_port}", f"{a.dest_ip}:{a.dest_port}", a.url]
             for c, text in enumerate(cells):
@@ -155,6 +198,13 @@ class SuricataPage(QWidget):
                 if c == 1:
                     item.setForeground(QColor(_SEV_COLOR.get(a.severity_label, GREY)))
                 self.alert_table.setItem(r, c, item)
+
+    def _on_alert_selected(self) -> None:
+        rows = self.alert_table.selectionModel().selectedRows()
+        if not rows or rows[0].row() >= len(self._shown_alerts):
+            return
+        a = self._shown_alerts[rows[0].row()]
+        self.alert_detail.setPlainText("\n".join(f"{label}: {value}" for label, value in a.detail_lines()))
 
     def _render_rules(self) -> None:
         needle = self.rule_filter.text().strip().lower()

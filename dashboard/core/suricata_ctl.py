@@ -40,10 +40,28 @@ class SuricataAlert:
     action: str
     url: str
     user_agent: str
+    proto: str = ""
+    app_proto: str = ""
+    hostname: str = ""
+    http_method: str = ""
 
     @property
     def severity_label(self) -> str:
         return SEVERITY_LABELS.get(self.severity, f"sev {self.severity}")
+
+    def detail_lines(self) -> list[tuple[str, str]]:
+        """(label, value) pairs for a detail pane, blanks omitted."""
+        rows = [
+            ("Signature", f"{self.signature}  (sid {self.sid}, sev {self.severity})"),
+            ("Category", self.category), ("Action", self.action),
+            ("Source", f"{self.src_ip}:{self.src_port}"),
+            ("Target", f"{self.dest_ip}:{self.dest_port}"),
+            ("Protocol", " / ".join(p for p in (self.proto, self.app_proto) if p)),
+            ("Host", self.hostname),
+            ("Request", f"{self.http_method} {self.url}".strip()),
+            ("User agent", self.user_agent), ("Time", self.timestamp),
+        ]
+        return [(k, v) for k, v in rows if v]
 
 
 def parse_alerts(text: str) -> list[SuricataAlert]:
@@ -67,7 +85,9 @@ def parse_alerts(text: str) -> list[SuricataAlert]:
             dest_port=int(e.get("dest_port") or 0), signature=str(a.get("signature", "")),
             sid=int(a.get("signature_id") or 0), category=str(a.get("category", "")),
             severity=int(a.get("severity") or 3), action=str(a.get("action", "")),
-            url=str(http.get("url", "")), user_agent=str(http.get("http_user_agent", ""))))
+            url=str(http.get("url", "")), user_agent=str(http.get("http_user_agent", "")),
+            proto=str(e.get("proto", "")), app_proto=str(e.get("app_proto", "")),
+            hostname=str(http.get("hostname", "")), http_method=str(http.get("http_method", ""))))
     return out
 
 
