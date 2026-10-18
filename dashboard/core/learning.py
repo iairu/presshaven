@@ -278,6 +278,12 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "An attack is a story, not a number: the timeline shows which requests added points and when the "
         "session crossed the honeypot threshold.",
     ),
+    "suricata": PageGuide(
+        "Network IDS view: recent Suricata alerts, top signatures and sources, and the rule set with per-rule switches.",
+        "Run a scanner-style pattern, then look for its signature on the Alerts tab.",
+        "Suricata watches packets, the Lua analyzer watches requests. Switching a rule off and re-running the "
+        "same attack shows which layer actually caught it.",
+    ),
     "services": PageGuide(
         "Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.",
         "Press Start on the ids project, then on siem, and watch the logs scroll.",
