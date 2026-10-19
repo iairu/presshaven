@@ -56,7 +56,8 @@ from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capa
 from core.resource_stats import collect_pool_usage, host_stats
 from core.state import AppState
 from ui.browser_widget import BrowserWidget
-from ui.common import clear_all_attacks, danger_button
+from ui.common import (clear_all_attacks, danger_button,
+                       gdpr_screen_characteristics, request_gdpr_consent)
 from ui.flow_layout import FlowLayout, labeled
 
 # Name of the proxy's session cookie (init.lua: session.cookie_name).
@@ -390,6 +391,12 @@ class PoolTestPage(QWidget):
         self._exporting = False
         self._cancelled = False
         self._job: _Job | None = None
+        # Consent-gated GDPR token for the current export run (set when the
+        # operator agrees before exporting). Each window gets a DISTINCT token
+        # so their one-way gdpr_signatures stay distinct and segmentation is
+        # preserved -- see _apply_gdpr_cookie() and ids/GDPR.md.
+        self._gdpr = None
+        self._gdpr_chars: dict = {}
         # Report run timeline: seconds since its start (0 = no run going).
         self._t0 = 0.0
         self._samples: list[Sample] = []
@@ -1076,6 +1083,16 @@ class PoolTestPage(QWidget):
         ) != QMessageBox.StandardButton.Yes:
             return
 
+        # GDPR consent gate: the run fires automated attack traffic from each
+        # window, so the operator must agree first. On agreement each window's
+        # traffic carries its OWN consented gdpr_token (distinct per window, so
+        # segmentation is preserved); Cancel aborts the export. See ids/GDPR.md.
+        proceed, gdpr = request_gdpr_consent(self, self._base_url())
+        if not proceed:
+            return
+        self._gdpr = gdpr
+        self._gdpr_chars = gdpr_screen_characteristics()
+
         self._exporting, self._cancelled = True, False
         self._poll.stop()
         total = 9
@@ -1101,6 +1118,9 @@ class PoolTestPage(QWidget):
             w.setEnabled(True)
         self._exporting = False
         self._poll.start()
+        if self._gdpr is not None:
+            self._gdpr.cleanup()  # remove the temp key material
+            self._gdpr = None
 
         if self._cancelled and not error:
             self._show_export_result("Report export cancelled.")
@@ -1138,6 +1158,24 @@ class PoolTestPage(QWidget):
         except Exception:  # noqa: BLE001 -- best effort; the unpoison below still runs
             pass
         redis_inspect.clear_local_threat_state(remote)
+
+    def _apply_gdpr_cookie(self, index: int) -> None:
+        """Set window `index`'s consented gdpr_token cookie (distinct per window)
+        into its browser's cookie store, so that window's traffic is treated as
+        GDPR-consented. No-op when the operator did not agree for this export."""
+        if self._gdpr is None or index >= len(self._all_browsers):
+            return
+        chars = dict(self._gdpr_chars)
+        chars["win"] = index  # keep each window's one-way signature distinct
+        value = self._gdpr.cookie_value(chars)
+        if not value:
+            return
+        url = QUrl(self._base_url())
+        cookie = QNetworkCookie(self._gdpr.cookie_name.encode(), value.encode())
+        cookie.setDomain(url.host())
+        cookie.setPath("/")
+        cookie.setSecure(url.scheme() == "https")
+        self._all_browsers[index].profile.cookieStore().setCookie(cookie, url)
 
     def _pattern_queue(self, window: int) -> list:
         """Patterns for one window: its primary and secondary choice, then the
@@ -1636,6 +1674,16 @@ class PoolTestPage(QWidget):
         self._load_all(["about:blank"] * len(self.browsers))
         self._spin(500)
         self._wc_keys = {}
+
+        # If the operator agreed to GDPR for this export, seed each window with
+        # its OWN consented gdpr_token now that its cookie jar is clean, before
+        # any attack traffic goes out. Distinct per window so each keeps a
+        # distinct gdpr_signature (segmentation stays intact). A later "clear
+        # cookies / site data" tamper step legitimately drops it -- that window
+        # has then revoked consent for the rest of the run, which is realistic.
+        if self._gdpr is not None:
+            for i in range(len(self.browsers)):
+                self._apply_gdpr_cookie(i)
 
         try:
             ready = self._blocking(lambda: redis_inspect.pool_state(remote)).get("ready", [])

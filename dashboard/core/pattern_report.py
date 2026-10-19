@@ -390,13 +390,21 @@ class ReportWorker(QThread):
 
     def __init__(self, target: Target, base_url: str, decay_window_s: int = 120,
                  decay_samples: int = 7, increase_rounds: int = 3, parent=None,
-                 presets: list[PatternPreset] | None = None, selection: str = ""):
+                 presets: list[PatternPreset] | None = None, selection: str = "",
+                 gdpr=None, gdpr_characteristics: dict | None = None):
         super().__init__(parent)
         # The presets to report on (the page's category selection); all by default.
         self._presets = list(presets) if presets else list(PATTERN_PRESETS)
         self._selection = selection
         self._target = target
         self._base_url = base_url.rstrip("/")
+        # Consent-gated GDPR token (core.gdpr_token.GdprConsent) and the
+        # characteristics to sign. When set (the operator agreed before export),
+        # every automated request this run fires carries a fresh gdpr_token
+        # cookie, so the run exercises the consent-gated routing. None = the
+        # operator declined / GDPR is off on the proxy -> session cookie only.
+        self._gdpr = gdpr
+        self._gdpr_chars = gdpr_characteristics or {"s": "0x0"}
         self._decay_window_s = decay_window_s
         self._decay_samples = decay_samples
         self._increase_rounds = increase_rounds
@@ -695,6 +703,7 @@ class ReportWorker(QThread):
         url = self._base_url + (path or preset.path)
         argv = ["curl", "-sk", "-g", "-i", "-X", preset.method, url,
                 "-H", f"X-Internal-Test-Auth: {secret}"]
+        argv += self._gdpr_cookie_args()  # consented gdpr_token, when agreed
         for name, value in preset.headers.items():
             argv += ["-H", f"{name}: {value}"]
         if preset.body:
@@ -822,11 +831,19 @@ class ReportWorker(QThread):
                     time.sleep(min(0.5, max(0.0, deadline - time.time())))
         return samples
 
+    def _gdpr_cookie_args(self) -> list:
+        """``["-b", "gdpr_token=..."]`` when the operator agreed to GDPR for this
+        export (fresh token per call), else ``[]``."""
+        if not self._gdpr:
+            return []
+        return self._gdpr.curl_args(self._gdpr_chars)
+
     def _benign_score(self, secret: str) -> int | None:
         argv = ["curl", "-sk", "-i", "-o", "-",
                 "-H", f"X-Internal-Test-Auth: {secret}",
-                "-H", "User-Agent: Mozilla/5.0 (report-decay-probe)",
-                self._base_url + "/"]
+                "-H", "User-Agent: Mozilla/5.0 (report-decay-probe)"]
+        argv += self._gdpr_cookie_args()  # consented gdpr_token, when agreed
+        argv.append(self._base_url + "/")
         try:
             res = subprocess.run(argv, capture_output=True, text=True, timeout=20)
         except (subprocess.TimeoutExpired, OSError):

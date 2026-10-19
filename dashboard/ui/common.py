@@ -7,12 +7,62 @@ from __future__ import annotations
 from typing import Callable
 
 from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QComboBox, QLabel, QLayout, QMessageBox, QPushButton, QWidget
 
 from core.colors import RED
 from core.docker_ctl import Target, target_for
+from core.gdpr_token import GdprConsent
 from core.redis_inspect import flush_threat_state
 from ui import theme
+
+
+def gdpr_screen_characteristics() -> dict:
+    """The identifying characteristics the dashboard signs when it consents to
+    GDPR, mirroring reverse_proxy_enhanced/gdpr_client.js -- for this demo, just
+    the primary screen's size. Falls back to "0x0" if no screen is available."""
+    screen = QGuiApplication.primaryScreen()
+    if screen is not None:
+        size = screen.size()
+        return {"s": f"{size.width()}x{size.height()}"}
+    return {"s": "0x0"}
+
+
+def request_gdpr_consent(parent: QWidget | None, base_url: str):
+    """Ask the operator to agree to GDPR before an export runs automated tests.
+
+    Returns ``(proceed, consent)``:
+      * Cancel  -> ``(False, None)``: the caller aborts the export.
+      * Agree   -> ``(True, GdprConsent)`` when the proxy's GDPR subsystem is
+                   reachable and enabled, so the test traffic carries a consented
+                   gdpr_token; or ``(True, None)`` when it is disabled/unreachable
+                   (nothing to consent to -- the caller proceeds untokened and is
+                   told so).
+
+    See ids/GDPR.md and core/gdpr_token.py.
+    """
+    reply = QMessageBox.question(
+        parent, "GDPR consent",
+        "Exporting this report runs automated test traffic against the proxy.\n\n"
+        "Agree to let that traffic carry a consented, encrypted gdpr_token "
+        "(derived from this machine's screen size plus a timestamp, encrypted "
+        "with the proxy's public key) so the run exercises the consent-gated "
+        "honeypot routing? The proxy only ever keeps a one-way hash of it.\n\n"
+        "Choose Cancel to not export.",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+        QMessageBox.StandardButton.Yes,
+    )
+    if reply != QMessageBox.StandardButton.Yes:
+        return False, None
+    consent = GdprConsent.acquire(base_url)
+    if consent is None:
+        QMessageBox.information(
+            parent, "GDPR not available",
+            "The proxy's GDPR subsystem is disabled or could not be reached, so "
+            "the report will run without a consent token (the ordinary session "
+            "cookie remains the only identifier).")
+        return True, None
+    return True, consent
 
 
 def confirm(parent: QWidget | None, title: str, text: str) -> bool:

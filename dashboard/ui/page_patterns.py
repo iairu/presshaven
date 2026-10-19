@@ -66,7 +66,8 @@ from core.state import AppState
 from core.learning import explain_event, lesson_for
 from core.pattern_log_parser import COLOR_HIGH, COLOR_LOW, COLOR_MED, SCORE_MAX, LineBuffer, PatternEvent, parse_line
 from ui import theme
-from ui.common import ErrorBanner, clear_all_attacks, danger_button
+from ui.common import (ErrorBanner, clear_all_attacks, danger_button,
+                       gdpr_screen_characteristics, request_gdpr_consent)
 from ui.flow_layout import FlowLayout, labeled
 from ui.responsive import ResponsiveSplitter
 from ui.browser_widget import BrowserWidget
@@ -555,6 +556,7 @@ class PatternsPage(QWidget):
         # Report-export state (set up in _export_report, torn down on finish).
         self._report_worker: ReportWorker | None = None
         self._report_tmpdir: str | None = None
+        self._report_gdpr = None  # GdprConsent for the current export, if agreed
         self._report_out_path: str = ""
 
         # In-page progress row for report export, kept OUT of the embedded
@@ -1143,6 +1145,15 @@ class PatternsPage(QWidget):
             return
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
+
+        # GDPR consent gate: the export runs automated test traffic, so the
+        # operator must agree before it starts. On agreement the traffic carries
+        # a consented gdpr_token (see ids/GDPR.md); Cancel aborts the export.
+        proceed, gdpr = request_gdpr_consent(self, self._base_url())
+        if not proceed:
+            return
+        self._report_gdpr = gdpr  # cleaned up in _on_report_thread_finished
+
         self._report_out_path = path
 
         # Per-run temp dir for the browser screenshots the PDF embeds.
@@ -1159,7 +1170,9 @@ class PatternsPage(QWidget):
         self._saved_zoom = self.browser.view.zoomFactor()
 
         worker = ReportWorker(self._target(), self._base_url(), presets=presets,
-                              selection=selection_label(*self._selection()))
+                              selection=selection_label(*self._selection()),
+                              gdpr=self._report_gdpr,
+                              gdpr_characteristics=gdpr_screen_characteristics())
         worker.progress.connect(self._on_report_progress)
         # Queued (worker is a QThread, this slot lives on the GUI thread) --
         # screenshot capture MUST run here where the QWebEngineView lives.
@@ -1394,6 +1407,9 @@ class PatternsPage(QWidget):
         if self._report_tmpdir is not None:
             shutil.rmtree(self._report_tmpdir, ignore_errors=True)
             self._report_tmpdir = None
+        if getattr(self, "_report_gdpr", None) is not None:
+            self._report_gdpr.cleanup()  # remove the temp key material
+            self._report_gdpr = None
         # Restore the page zoom (the pane width is restored after each capture).
         if getattr(self, "_saved_zoom", None) is not None:
             self.browser.view.setZoomFactor(self._saved_zoom)
