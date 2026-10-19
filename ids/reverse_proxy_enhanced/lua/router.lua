@@ -205,7 +205,41 @@ function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
 
     -- Honeypot pools are assigned per session (see assign_honeypot_pool).
     local pool_owner = session_data.id or session_id or remote_ip
-    
+
+    -- Stage 1a: consent-gated gdpr_signature match (see lua/gdpr_handler.lua).
+    -- The access_by_lua pipeline sets ngx.ctx.gdpr_honeypot_match when THIS
+    -- request carried a valid, fresh gdpr_token whose one-way signature is
+    -- still bound (unexpired) to a honeypot. That means a user who cleared
+    -- their cookies AND localStorage -- shedding both the SERVERID session and
+    -- the stored consent -- has re-consented and reproduced the SAME signature
+    -- from the SAME browser. Re-route (and re-bind) them to the honeypot
+    -- regardless of this request's own score, ABOVE the install-wizard and
+    -- score stages so a known-bad browser can't launder itself clean. Runs
+    -- even for an already-honeypot_bound session so the gdpr binding (whose
+    -- own expiry is prolonged on every match) keeps them diverted rather than
+    -- letting Stage 2's decayed-score re-check hand them back to production.
+    -- ngx.ctx is read defensively so router_rules unit tests (which stub a
+    -- ctx-less ngx) are unaffected.
+    if ngx.ctx and ngx.ctx.gdpr_honeypot_match then
+        assign_honeypot_pool(routing_decision, {
+            risk_score      = math.max(pattern_result.score or 0, 60),
+            honeypot_reason = "gdpr_signature_match",
+        }, remote_ip, pool_owner)
+
+        ngx.log(ngx.WARN, "[ROUTING] 🔏 GDPR SIGNATURE MATCH -> HONEYPOT | Pool: ",
+                routing_decision.session_data.honeypot_pool, " | IP: ", remote_ip,
+                " | URI: ", ngx.var.request_uri)
+
+        _G.utils.log_security_event("routing_to_honeypot", {
+            reason     = "gdpr_signature_match",
+            ip         = remote_ip,
+            pool       = routing_decision.session_data.honeypot_pool,
+            session_id = session_data.id,
+        })
+
+        return routing_decision
+    end
+
     -- Stage 1b: WordPress installer wizard fast path (uninstalled instance).
     -- install.php is normally treated as a strong attack signal (Stage 3's
     -- threshold check, and Stage 7's admin-attempts counter below both fire

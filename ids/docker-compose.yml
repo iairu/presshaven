@@ -1904,6 +1904,13 @@ services:
       # scores persist indefinitely (no decay); half-life tunes the fade rate.
       - THREAT_DECAY_ENABLED=${THREAT_DECAY_ENABLED:-true}
       - SCORE_DECAY_HALF_LIFE_SECONDS=${SCORE_DECAY_HALF_LIFE_SECONDS:-300}
+      # Consent-gated gdpr_signature identity (lua/gdpr_handler.lua, ids/GDPR.md).
+      # GDPR_PRIVATE_KEY is the ONLY secret (base64 DER RSA private key); the
+      # public key served to browsers is derived from it. Never reaches clients.
+      - GDPR_ENABLED=${GDPR_ENABLED:-true}
+      - GDPR_PRIVATE_KEY=${GDPR_PRIVATE_KEY:-}
+      - GDPR_TIMESTAMP_WINDOW=${GDPR_TIMESTAMP_WINDOW:-300}
+      - GDPR_BINDING_TTL=${GDPR_BINDING_TTL:-3600}
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
     #   interval: 30s

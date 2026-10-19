@@ -1,0 +1,248 @@
+-- gdpr_handler.lua - Adapter half of the consent-gated gdpr_signature identity
+--
+-- Does everything gdpr_rules.lua (pure) deliberately can't: loads the RSA
+-- private key, RSA-OAEP-decrypts the gdpr_token cookie, cjson-decodes the
+-- plaintext, SHA-256-hashes the canonical characteristics into the one-way
+-- gdpr_signature, and reads/writes the honeypot-signature bindings in Redis.
+-- See gdpr_rules.lua's header for the full design and privacy rationale.
+--
+-- Everything here fails OPEN: a missing key, an undecryptable/forged token, a
+-- Redis hiccup or any crypto error must never break a normal page load, it
+-- just means "no GDPR signal this request" and the SERVERID session remains
+-- the only identifier. The whole subsystem also disables itself cleanly when
+-- GDPR_ENABLED=false or no GDPR_PRIVATE_KEY is configured.
+
+local cjson    = require "cjson.safe"
+local sha256   = require "resty.sha256"
+local str      = require "resty.string"
+local gdpr_rules = require "gdpr_rules"
+
+local _M = {}
+
+-- Per-worker state, built lazily on first use (ensure_init). The private key
+-- object, the derived public key (served to clients), and the deployment-local
+-- secret the signature is salted with are all cached here so the key is parsed
+-- once per worker, not per request.
+local _init_done = false
+local _enabled   = false
+local _priv      = nil   -- resty.openssl.pkey object (private)
+local _pub_b64   = nil   -- SPKI DER, base64 -- what the browser imports
+local _sig_secret = nil  -- salt mixed into the signature hash (see below)
+local _pkey_mod  = nil   -- resty.openssl.pkey module (lazy-required)
+
+local function cfg()
+    return _G.config and _G.config.gdpr or nil
+end
+
+-- Parse the key and derive the public key + signature salt. Guarded so a bad
+-- key disables the subsystem instead of erroring on every request.
+local function ensure_init()
+    if _init_done then
+        return
+    end
+    _init_done = true
+
+    local c = cfg()
+    if not c or not c.enabled or not c.private_key_b64 or c.private_key_b64 == "" then
+        ngx.log(ngx.INFO, "[GDPR] Disabled (no GDPR_PRIVATE_KEY, or GDPR_ENABLED=false)")
+        return
+    end
+
+    local der = ngx.decode_base64(c.private_key_b64)
+    if not der then
+        ngx.log(ngx.ERR, "[GDPR] GDPR_PRIVATE_KEY is not valid base64 -- GDPR disabled")
+        return
+    end
+
+    local ok, pkey = pcall(require, "resty.openssl.pkey")
+    if not ok then
+        ngx.log(ngx.ERR, "[GDPR] lua-resty-openssl not installed -- GDPR disabled: ", tostring(pkey))
+        return
+    end
+    _pkey_mod = pkey
+
+    local priv, err = pkey.new(der, { format = "DER", type = "pr" })
+    if not priv then
+        ngx.log(ngx.ERR, "[GDPR] Failed to load RSA private key -- GDPR disabled: ", tostring(err))
+        return
+    end
+    _priv = priv
+
+    -- Export the matching public key as SPKI DER (exactly what the browser's
+    -- WebCrypto importKey("spki", ...) expects) and base64 it for transport.
+    local pub_der, perr = priv:tostring("public", "DER")
+    if not pub_der then
+        ngx.log(ngx.ERR, "[GDPR] Failed to derive public key -- GDPR disabled: ", tostring(perr))
+        _priv = nil
+        return
+    end
+    _pub_b64 = ngx.encode_base64(pub_der)
+
+    -- Deployment-local salt so the one-way signature can't be precomputed from
+    -- the (very low-entropy, for this demo just a screen size) characteristics
+    -- with a generic rainbow table -- two deployments with different keys
+    -- produce different signatures for the same browser. Derived from the
+    -- private key so it needs no extra secret and is stable across restarts
+    -- (as long as the key is). Never leaves the server.
+    local h = sha256:new()
+    h:update("gdpr-sig-salt|")
+    h:update(c.private_key_b64)
+    _sig_secret = str.to_hex(h:final())
+
+    _enabled = true
+    ngx.log(ngx.INFO, "[GDPR] Enabled (RSA key loaded, timestamp_window=",
+        c.timestamp_window, "s, binding_ttl=", c.binding_ttl, "s)")
+end
+
+--- Is the subsystem live (key loaded, not disabled)?
+function _M.is_enabled()
+    ensure_init()
+    return _enabled
+end
+
+--- Base64 SPKI public key for the client, or nil when disabled.
+function _M.public_key_b64()
+    ensure_init()
+    return _pub_b64
+end
+
+--- JSON config the client bootstrap (/__gdpr/config) needs. Pure config, no
+--- secrets: the public key is, by design, public.
+function _M.client_config_json()
+    ensure_init()
+    local c = cfg() or {}
+    local window = tonumber(c.timestamp_window) or 300
+    return cjson.encode({
+        enabled    = _enabled,
+        publicKey  = _pub_b64 or "",
+        cookieName = gdpr_rules.COOKIE_NAME,
+        -- How long a freshly stamped token stays valid server-side; the client
+        -- re-stamps well inside this so the cookie it sends is never stale.
+        windowSeconds  = window,
+        refreshSeconds = math.max(30, math.floor(window / 2)),
+    })
+end
+
+-- Decrypt the raw cookie value to plaintext, or nil on any failure.
+local function decrypt_token(cookie_val)
+    if not _enabled or type(cookie_val) ~= "string" or cookie_val == "" then
+        return nil
+    end
+    local ct = ngx.decode_base64(cookie_val)
+    if not ct then
+        return nil
+    end
+    local ok, pt = pcall(function()
+        return _priv:decrypt(ct, _pkey_mod.PADDINGS.RSA_PKCS1_OAEP_PADDING,
+            { oaep_md = "sha256", mgf1_md = "sha256" })
+    end)
+    if not ok or type(pt) ~= "string" or #pt == 0 or #pt > gdpr_rules.MAX_PLAINTEXT_LEN then
+        return nil
+    end
+    return pt
+end
+
+-- One-way signature of the canonical characteristics, salted with the
+-- deployment-local secret. SHA-256; the raw characteristics are never stored.
+local function compute_signature(canonical)
+    local h = sha256:new()
+    h:update(_sig_secret)
+    h:update("|")
+    h:update(canonical)
+    return str.to_hex(h:final())
+end
+
+--- Process this request's gdpr_token cookie.
+--- @return table  {
+---   consent   = boolean,      -- did the client send a (non-empty) token?
+---   signature = string|nil,   -- one-way signature, only when valid+fresh
+---   status    = string,       -- "disabled"|"no_consent"|"undecryptable"
+---                             --  |"bad_json"|<gdpr_rules reason>|"ok"
+--- }
+function _M.process_request()
+    ensure_init()
+    if not _enabled then
+        return { consent = false, status = "disabled" }
+    end
+
+    local cookie = ngx.var["cookie_" .. gdpr_rules.COOKIE_NAME]
+    -- Empty / absent cookie == no consent (or consent revoked): nothing to do,
+    -- the SERVERID session stays the only identifier. This is also exactly how
+    -- a revocation reaches us -- the client simply stops sending the token.
+    if not cookie or cookie == "" then
+        return { consent = false, status = "no_consent" }
+    end
+
+    local pt = decrypt_token(cookie)
+    if not pt then
+        return { consent = true, status = "undecryptable" }
+    end
+
+    local payload = cjson.decode(pt)
+    if type(payload) ~= "table" then
+        return { consent = true, status = "bad_json" }
+    end
+
+    local canonical, reason = gdpr_rules.validate(payload, ngx.time(), cfg().timestamp_window)
+    if not canonical then
+        -- A sent-but-invalid token (e.g. expired timestamp) is treated as a
+        -- non-match, per spec: we just don't compute a signature from it.
+        return { consent = true, status = reason }
+    end
+
+    return { consent = true, signature = compute_signature(canonical), status = "ok" }
+end
+
+--- Is `signature` currently bound to a honeypot and unexpired? On a match the
+--- binding's TTL is PROLONGED (so an active returning user never ages out),
+--- which is the whole "expiry prolongs itself on every match" behaviour; an
+--- absent key is an expired-or-never-bound signature == non-match.
+--- @return boolean matched
+--- @return table|nil binding  {pool, reason, bound_at} when matched.
+function _M.is_signature_honeypot_bound(signature)
+    if not _enabled or type(signature) ~= "string" or signature == "" then
+        return false
+    end
+    local red, err = _G.redis_pool.get_connection()
+    if not red then
+        ngx.log(ngx.ERR, "[GDPR] Redis unavailable for signature lookup: ", tostring(err))
+        return false
+    end
+    local key = gdpr_rules.SIG_REDIS_PREFIX .. signature
+    local val = red:get(key)
+    if val and val ~= ngx.null then
+        -- Prolong the binding from this match.
+        red:expire(key, cfg().binding_ttl)
+        _G.redis_pool.close_connection(red)
+        return true, cjson.decode(val) or {}
+    end
+    _G.redis_pool.close_connection(red)
+    return false
+end
+
+--- Bind `signature` to a honeypot (or refresh an existing binding). Called
+--- whenever a request that carried a valid signature ends up routed to the
+--- honeypot, for ANY reason -- that's how a known-bad browser's signature gets
+--- remembered so a later cookie/localStorage wipe + re-consent lands back in
+--- the honeypot. The key's TTL is the binding expiry.
+function _M.bind_signature_to_honeypot(signature, pool, reason)
+    if not _enabled or type(signature) ~= "string" or signature == "" then
+        return
+    end
+    local red, err = _G.redis_pool.get_connection()
+    if not red then
+        ngx.log(ngx.ERR, "[GDPR] Redis unavailable for signature bind: ", tostring(err))
+        return
+    end
+    local key = gdpr_rules.SIG_REDIS_PREFIX .. signature
+    red:setex(key, cfg().binding_ttl, cjson.encode({
+        pool     = pool,
+        reason   = reason or "unknown",
+        bound_at = ngx.time(),
+    }))
+    _G.redis_pool.close_connection(red)
+    ngx.log(ngx.WARN, "[GDPR] Signature bound to honeypot pool ", tostring(pool),
+        " (reason=", tostring(reason), ", ttl=", cfg().binding_ttl, "s)")
+end
+
+return _M

@@ -149,6 +149,38 @@ _G.config = {
     },
 
     -- -----------------------------------------------------------------------
+    -- gdpr: consent-gated second identifier that runs ALONGSIDE the SERVERID
+    -- session cookie (never replacing it). See lua/gdpr_rules.lua and
+    -- lua/gdpr_handler.lua for the full design; ids/GDPR.md for the overview.
+    --
+    --   enabled          – GDPR_ENABLED (default true). false disables the
+    --                      whole subsystem cleanly (no token processing, the
+    --                      client script becomes inert).
+    --   private_key_b64  – GDPR_PRIVATE_KEY: base64 of the RSA private key in
+    --                      DER (PKCS#8). The PUBLIC key handed to browsers is
+    --                      derived from it at start-up, so there is only one
+    --                      secret to manage and the two can never drift. The
+    --                      private key NEVER reaches the client. Blank = the
+    --                      subsystem disables itself (fails safe, not open).
+    --   timestamp_window – GDPR_TIMESTAMP_WINDOW (default 300s): how far from
+    --                      "now" a token's embedded timestamp may be. The
+    --                      client re-stamps well inside this; a captured,
+    --                      replayed token stops matching once it ages out.
+    --   binding_ttl      – GDPR_BINDING_TTL (default 3600s): how long a
+    --                      honeypot<->signature binding lives in Redis. It is
+    --                      PROLONGED on every match, so an active returning
+    --                      user never ages out, but an abandoned one does --
+    --                      and nothing identifiable is stored either way (only
+    --                      the one-way signature, as a Redis key with this TTL).
+    -- -----------------------------------------------------------------------
+    gdpr = {
+        enabled = (os.getenv("GDPR_ENABLED") or "true"):lower() ~= "false",
+        private_key_b64 = os.getenv("GDPR_PRIVATE_KEY") or "",
+        timestamp_window = tonumber(os.getenv("GDPR_TIMESTAMP_WINDOW")) or 300,
+        binding_ttl = tonumber(os.getenv("GDPR_BINDING_TTL")) or 3600,
+    },
+
+    -- -----------------------------------------------------------------------
     -- threat: Risk-scoring and routing parameters.
     --
     --   ip_whitelist       – CIDR ranges or exact IPs that receive a negative

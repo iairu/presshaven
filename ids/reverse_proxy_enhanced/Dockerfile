@@ -24,6 +24,11 @@ RUN cp /etc/ssl/certs/ca-certificates.crt /usr/local/openresty/ca-certificates.c
 # Install OpenResty packages using opm
 RUN /usr/local/openresty/bin/opm get ledgetech/lua-resty-http
 
+# NOTE: lua/gdpr_handler.lua's RSA-OAEP decrypt uses lua-resty-openssl
+# (resty.openssl.pkey), which ships BUNDLED in this base image under
+# /usr/local/openresty/lualib and is already on the default lua_package_path --
+# no opm install needed. See ids/GDPR.md.
+
 # Create directories
 RUN mkdir -p /var/log/nginx /etc/nginx/lua /etc/ssl/certs /var/cache/nginx/static
 
