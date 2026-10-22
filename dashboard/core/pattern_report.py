@@ -71,8 +71,9 @@ from core import honeypot_layer, redis_inspect
 from core import resource_stats as rs
 from core.docker_ctl import Target
 from core.env_upload import EnvUploadError, load_project_env
-from core.patterns import PATTERN_PRESETS, PatternPreset
+from core.patterns import PATTERN_PRESETS, PatternPreset, is_gdpr_restore
 from core.pattern_log_parser import parse_line
+from core.signature_sim import extract_all_signatures
 
 # Default when SCORE_DECAY_HALF_LIFE_SECONDS is unset in .env -- matches
 # lua/init.lua's own `... or 300` fallback.
@@ -191,6 +192,49 @@ class DecaySample:
 
 
 @dataclass
+class RestoreProbe:
+    """One request sent AFTER the local state was cleared, to see where the
+    proxy now routes it. ``with_token`` is whether it carried a freshly minted
+    gdpr_token (re-consent, same characteristics -> same signature) or not
+    (the consent-withheld control)."""
+    label: str
+    with_token: bool
+    route: str = ""           # X-Route-Target ("honeypot"/"production")
+    reason: str = ""          # router.lua routing reason ("gdpr_signature_match" when restored)
+    score: int | None = None  # X-Risk-Score (should be benign -- the probe doesn't attack)
+    http_status: str = ""
+    error: str = ""
+
+
+@dataclass
+class SessionRestore:
+    """The "session cleared from localStorage, restored by gdpr_signature"
+    demonstration (core.patterns.GDPR_RESTORE_PRESET): attack until the window
+    is bound to a honeypot, wipe the local state (cookies + localStorage ->
+    session + fingerprint + IP reputation dropped) WITHOUT touching the one-way
+    signature binding, then re-consent with the same browser characteristics
+    and watch the proxy re-derive the same signature and re-route to the same
+    honeypot. A consent-withheld control proves the signature -- not leftover
+    reputation -- is what restored the route."""
+    ran: bool = False
+    # Why the section was skipped entirely (no GDPR consent for this export, or
+    # the attack never got diverted so there was nothing bound to restore).
+    skipped_reason: str = ""
+    attack_cve: str = ""
+    attack_name: str = ""
+    attack_route: str = ""           # where the attack series ended up ("honeypot" when bound)
+    attack_reason: str = ""
+    attack_detected_at: int | None = None  # 1-based request the attack was first diverted on
+    attack_requests: int = 0
+    signature: str = ""              # the one-way gdpr_signature the proxy logged (for display)
+    characteristics: dict = field(default_factory=dict)  # the signed browser characteristics
+    probes: list = field(default_factory=list)   # list[RestoreProbe]
+    # True when the re-consent probe came back honeypot via gdpr_signature_match
+    # -- i.e. the signature alone restored the session.
+    restored: bool = False
+
+
+@dataclass
 class ReportData:
     """Everything the PDF renderer needs -- populated entirely by the worker
     thread, consumed on the GUI thread."""
@@ -221,6 +265,9 @@ class ReportData:
     # host IP (see ReportWorker.run) -- surfaced in the PDF so the decay curve's
     # starting value is explained.
     decay_seed_cve: str = ""
+    # The "session cleared from localStorage, restored by gdpr_signature"
+    # demonstration (only populated when the export carried GDPR consent).
+    session_restore: SessionRestore = field(default_factory=SessionRestore)
     # redis_inspect.pool_state() at the end of the run ({} when unavailable):
     # whether pool_manager was growing the honeypot pool or the router was
     # reusing pools because the host was low on resources.
@@ -394,7 +441,12 @@ class ReportWorker(QThread):
                  gdpr=None, gdpr_characteristics: dict | None = None):
         super().__init__(parent)
         # The presets to report on (the page's category selection); all by default.
-        self._presets = list(presets) if presets else list(PATTERN_PRESETS)
+        # The gdpr_signature restore "pattern" (core.patterns.GDPR_RESTORE_PRESET)
+        # is not a curl pattern -- it drives its own attack->clear->re-consent
+        # demonstration (_session_restore, run once when consent is given), so it
+        # is filtered out of the per-pattern battery here.
+        chosen = list(presets) if presets else list(PATTERN_PRESETS)
+        self._presets = [p for p in chosen if not is_gdpr_restore(p)]
         self._selection = selection
         self._target = target
         self._base_url = base_url.rstrip("/")
@@ -467,7 +519,8 @@ class ReportWorker(QThread):
             # decay on a still-clean IP is the only way the session score is
             # actually free to fade.
             n_patterns = len(self._presets)
-            DECAY_END = 0.22      # measured first, on a clean IP (see note above)
+            DECAY_END = 0.20      # measured first, on a clean IP (see note above)
+            RESTORE_END = 0.28    # the gdpr_signature session-restore demo (only with consent)
             PATTERN_END = 0.88    # per-pattern sections: the bulk (N x ~17s capture)
             # increase fills PATTERN_END..1.0
 
@@ -489,13 +542,25 @@ class ReportWorker(QThread):
                     f"Threat decay: sample {i}/{n}"))
             data.decay_peak = data.decay_samples[0].score if data.decay_samples else 0
 
+            # --- gdpr_signature session restoration (only with consent) ---
+            # Attack until the window is bound to a honeypot, wipe the local
+            # state, re-consent, and confirm the signature re-routes it. Needs a
+            # gdpr_token to derive a signature at all, so it is skipped (quickly,
+            # with a recorded reason) when the operator declined consent.
+            self._emit(DECAY_END, "Session restoration via gdpr_signature")
+            data.session_restore = self._session_restore(
+                secret,
+                on_progress=lambda cf: self._emit(
+                    DECAY_END + cf * (RESTORE_END - DECAY_END),
+                    "Session restoration via gdpr_signature"))
+
             # --- per-pattern sections (reset before each) ---
-            span = PATTERN_END - DECAY_END
+            span = PATTERN_END - RESTORE_END
             for idx, preset in enumerate(self._presets):
                 if self._cancel:
                     return
                 slice_w = span / n_patterns
-                base = DECAY_END + idx * slice_w
+                base = RESTORE_END + idx * slice_w
                 self._emit(base, f"Pattern {preset.cve} -- {preset.name}")
                 self._reset(secret)
                 cap_msg = (f"Recording resource usage around {preset.cve} "
@@ -614,6 +679,146 @@ class ReportWorker(QThread):
             if outcome.score is not None and self._DECAY_SEED_MIN <= outcome.score <= self._DECAY_SEED_MAX:
                 break
         return outcome, chosen
+
+    def _restore_attack_preset(self) -> PatternPreset:
+        """A pattern that reliably gets diverted to a honeypot, so attacking with
+        it binds the window's gdpr_signature. Prefer a CVE pattern from the
+        selection, then any CVE preset, then the first available."""
+        ordered = self._presets + [p for p in PATTERN_PRESETS if p not in self._presets]
+        for p in ordered:
+            if p.cve.upper().startswith("CVE-"):
+                return p
+        return ordered[0] if ordered else PATTERN_PRESETS[0]
+
+    def _recent_signature(self, since_ts: float) -> str:
+        """The most recent one-way gdpr_signature the proxy logged since
+        ``since_ts`` (``[GDPR] Received gdpr_signature=<hex>``), or "" if none --
+        best-effort, for display only (the binding works whether or not we can
+        read the hex back)."""
+        secs = max(1, int(time.time() - since_ts) + 2)
+        argv, cwd = self._target.build(
+            "logs", "--since", f"{secs}s", "--timestamps", "reverse_proxy")
+        try:
+            res = subprocess.run(argv, capture_output=True, text=True, timeout=15, cwd=cwd)
+        except (subprocess.TimeoutExpired, OSError):
+            return ""
+        sigs = extract_all_signatures(res.stdout)
+        return sigs[-1][0] if sigs else ""
+
+    def _clear_local(self, secret: str) -> None:
+        """Drop THIS host's session, fingerprint-recovery pointer, pool
+        assignment and IP reputation -- exactly what clearing the browser's
+        cookies and localStorage (and the next visit minting a fresh session)
+        drops -- WITHOUT a full Redis flush, so the gdpr_honeypot_sig:<sig>
+        binding survives to do the restoring. clear_local_threat_state wipes the
+        Redis side (session:* / fp_session:* / honeypot_pool_session:* for this
+        private IP and its threat_ips entry, never gdpr_honeypot_sig:*);
+        _reset_reputation flushes the proxy's in-process threat_intel shared dict
+        so a benign request really would route to production from here. NOT
+        _reset(): that FLUSHALLs and would delete the very binding under test."""
+        try:
+            redis_inspect.clear_local_threat_state(self._target.remote)
+        except redis_inspect.RedisInspectError:
+            pass  # best-effort
+        self._reset_reputation(secret)
+        time.sleep(0.3)
+
+    def _probe_route(self, secret: str, label: str, with_token: bool) -> "RestoreProbe":
+        """Send one benign GET / and record where the proxy routed it. When
+        ``with_token`` is set it carries a freshly minted gdpr_token (same
+        characteristics -> same signature = re-consent); otherwise it carries
+        none (the consent-withheld control)."""
+        probe = RestoreProbe(label=label, with_token=with_token)
+        argv = ["curl", "-sk", "-g", "-i", "-X", "GET", self._base_url + "/",
+                "-H", f"X-Internal-Test-Auth: {secret}"]
+        if with_token:
+            argv += self._gdpr_cookie_args()
+        t0 = time.time()
+        try:
+            res = subprocess.run(argv, capture_output=True, text=True, timeout=20)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            probe.error = str(e)
+            return probe
+        tmp = PatternOutcome(label="", cve="", severity="", method="GET", path="/")
+        self._fill_from_headers(tmp, res.stdout)
+        self._fill_from_logs(tmp, t0)
+        probe.route = tmp.route
+        probe.reason = tmp.reason
+        probe.score = tmp.score
+        probe.http_status = tmp.http_status
+        return probe
+
+    def _session_restore(self, secret: str, on_progress=None) -> "SessionRestore":
+        """The attack -> clear -> re-consent demonstration (see SessionRestore).
+
+        Runs only with GDPR consent (no token => no signature => nothing to
+        bind). Starts from a fully clean slate, attacks until the window is
+        diverted to a honeypot (binding its signature), reads the signature from
+        the proxy log, clears the local state while keeping the binding, then
+        probes twice: re-consent with the same characteristics (should be
+        re-routed to the honeypot via gdpr_signature_match) and a consent-
+        withheld control (should route to production), proving the one-way
+        signature -- not leftover reputation -- is what restored the route."""
+        def prog(cf: float) -> None:
+            if on_progress is not None:
+                try:
+                    on_progress(max(0.0, min(1.0, cf)))
+                except Exception:  # noqa: BLE001 -- progress is cosmetic
+                    pass
+
+        sr = SessionRestore(characteristics=dict(self._gdpr_chars))
+        if not self._gdpr:
+            sr.skipped_reason = (
+                "No GDPR consent was given for this export, so no gdpr_token is "
+                "sent and no signature is derived -- there is nothing to bind or "
+                "restore. Agree to GDPR when exporting to include this.")
+            return sr
+
+        # Clean slate: no session, no reputation, no stale signature binding.
+        self._unpoison(secret)
+        prog(0.1)
+
+        # 1) Attack until the window is diverted to a honeypot (binds the signature).
+        preset = self._restore_attack_preset()
+        sr.attack_cve, sr.attack_name = preset.cve, preset.name
+        attack_t0 = time.time()
+        outcome = self._run_series(preset, secret)
+        sr.attack_route = outcome.route
+        sr.attack_reason = outcome.reason
+        sr.attack_detected_at = outcome.detected_at
+        sr.attack_requests = outcome.requests_sent
+        sr.signature = self._recent_signature(attack_t0)
+        prog(0.5)
+
+        if outcome.route.lower() != "honeypot":
+            sr.skipped_reason = (
+                f"The attack preset {preset.cve} was not diverted to a honeypot "
+                "within its request series, so no signature was bound to one -- "
+                "nothing to restore. (Routing fails open; the honeypot pool may "
+                "still be warming up.)")
+            return sr
+        sr.ran = True
+
+        # 2) Clear the local state (session + fingerprint + reputation) while the
+        #    one-way signature binding survives.
+        self._clear_local(secret)
+        prog(0.6)
+
+        # 3) Re-consent with the same browser characteristics: same signature, so
+        #    the proxy should re-route to the bound honeypot.
+        sr.probes.append(self._probe_route(
+            secret, "Re-consent (same browser characteristics)", with_token=True))
+        sr.restored = sr.probes[-1].route.lower() == "honeypot"
+        prog(0.8)
+
+        # 4) Control: clear again, then visit WITHOUT consent (no token -> no
+        #    signature). With the reputation gone this proves the signature, not
+        #    leftover state, is what restored the route.
+        self._clear_local(secret)
+        sr.probes.append(self._probe_route(
+            secret, "Cleared, consent withheld (no gdpr_token)", with_token=False))
+        prog(1.0)
+        return sr
 
     def _reset(self, secret: str) -> None:
         """Redis FLUSHALL + /internal-threat-reset -- see module docstring."""

@@ -475,6 +475,44 @@ _CATEGORY_OVERRIDES: dict[str, dict] = {
 PATTERN_PRESETS = [replace(p, **_CATEGORY_OVERRIDES.get(p.cve, {})) for p in PATTERN_PRESETS]
 
 
+# ---- the non-attack "session restoration" pattern --------------------------
+#
+# A pattern that carries no attack payload: it clears the window's cookies AND
+# localStorage (dropping the SERVERID session AND the stored GDPR consent flag),
+# then re-consents, so the proxy re-derives the SAME one-way gdpr_signature from
+# the unchanged browser characteristics and restores the visitor -- re-routing
+# them to the honeypot their signature was already bound to (ids/GDPR.md's
+# re-recognition property). It is shown in both pages' pattern dropdowns and
+# demonstrated in both exported PDFs, but it is deliberately NOT part of
+# PATTERN_PRESETS: the attack runs iterate that list and would otherwise try to
+# send it as an HTTP request. Callers add it to the dropdown explicitly and
+# special-case it via is_gdpr_restore().
+GDPR_RESTORE_CVE = "GDPR-SIGNATURE-RESTORE"
+
+GDPR_RESTORE_PRESET = PatternPreset(
+    name="Session cleared from localStorage, restored by gdpr_signature",
+    cve=GDPR_RESTORE_CVE,
+    severity="INFO",
+    description="Clears the window's cookies and localStorage -- dropping the "
+                "SERVERID session and the stored GDPR consent -- then re-consents. "
+                "The browser characteristics are unchanged, so the proxy re-derives "
+                "the same one-way gdpr_signature and re-routes the visitor to the "
+                "honeypot it was already bound to, restoring the session with "
+                "nothing identifying stored server-side.",
+    method="GET",
+    path="/",
+    kind="generic",
+    component="core",
+    surface="frontend",
+)
+
+
+def is_gdpr_restore(preset) -> bool:
+    """True for the special session-restoration pattern (GDPR_RESTORE_PRESET),
+    which is a browser action, not an HTTP attack."""
+    return getattr(preset, "cve", "") == GDPR_RESTORE_CVE
+
+
 def filter_presets(presets, kind: str = "", component: str = "", surface: str = "") -> list[PatternPreset]:
     """Presets matching every non-empty category ("" = any)."""
     return [p for p in presets

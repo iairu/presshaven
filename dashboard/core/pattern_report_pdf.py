@@ -1014,12 +1014,12 @@ def _pool_state_html(state: dict) -> str:
 
 
 def _categorization_html(data: ReportData) -> str:
-    """Section 4: the same results regrouped by test category, so strengths and
+    """Section 5: the same results regrouped by test category, so strengths and
     gaps show up per kind of attack instead of per preset."""
     outcomes = [o for o in data.per_pattern if not o.error]
     if not outcomes:
         return ""
-    parts = ['<h2 style="color:#222;"><a name="sec4"></a>4. Test categorization</h2>',
+    parts = ['<h2 style="color:#222;"><a name="sec5"></a>5. Test categorization</h2>',
              '<p style="color:#555;">The individual tests regrouped. <b>Diverted</b> means the '
              'user was routed to the honeypot on some request of the test; <b>On request 1</b> '
              'counts tests caught immediately. Tests without their own request series are sent '
@@ -1040,6 +1040,88 @@ def _categorization_html(data: ReportData) -> str:
     return "".join(parts)
 
 
+def _probe_route_cell(p) -> str:
+    if p.error:
+        return _badge("error", _GREY)
+    return _route_badge(p.route)
+
+
+def _session_restore_html(data: ReportData) -> str:
+    """Section 4: the "session cleared from localStorage, restored by
+    gdpr_signature" demonstration (ReportData.session_restore)."""
+    sr = data.session_restore
+    parts = ['<h2 style="color:#222;"><a name="sec4"></a>4. Session restoration via '
+             'gdpr_signature</h2>']
+    parts.append('<p style="color:#555;">This scenario mirrors ids/GDPR.md\'s '
+                 're-recognition story. When a visitor consents to GDPR, the proxy derives a '
+                 'one-way <b>gdpr_signature</b> from their browser characteristics (here the '
+                 'screen size) plus the client IP it appends server-side &ndash; the raw '
+                 'characteristics never leave the proxy, and only the one-way signature is '
+                 'ever stored. When such a visitor is diverted to a honeypot, that honeypot is '
+                 'bound to their signature. If they later clear <b>all</b> local state (cookies '
+                 '<i>and</i> localStorage &ndash; dropping the SERVERID session, the '
+                 'fingerprint that would recover it, and the stored consent) and re-consent, '
+                 'the proxy re-derives the <b>same</b> signature and re-routes them to the same '
+                 'honeypot &ndash; restoring the session with nothing identifying held '
+                 'server-side.</p>')
+    if not sr.ran:
+        reason = sr.skipped_reason or "This scenario was not run."
+        parts.append(f'<p style="color:#c62828;">Not demonstrated: {_esc(reason)}</p>')
+        return "".join(parts)
+
+    chars = ", ".join(f"{_esc(k)}={_esc(str(v))}" for k, v in sr.characteristics.items()) or "(none)"
+    parts.append(f'<p style="color:#555;">Signed browser characteristics: <b>{chars}</b> '
+                 '(the proxy also folds in the client IP, server-side, before hashing).</p>')
+
+    detected = (f"request {sr.attack_detected_at} of {sr.attack_requests}"
+                if sr.attack_detected_at else f"{sr.attack_requests} request(s)")
+    sig = _esc(sr.signature) if sr.signature else "(derived in-proxy; not read back from the log)"
+    parts.append('<h3 style="color:#222;">Step 1 &ndash; Attack binds the signature to a '
+                 'honeypot</h3>')
+    parts.append(f'<p>Attacking with <b>{_esc(sr.attack_cve)}</b> ({_esc(sr.attack_name)}) '
+                 f'diverted the window to the honeypot on {detected} '
+                 f'({_route_badge(sr.attack_route)}'
+                 + (f', reason <code>{_esc(sr.attack_reason)}</code>' if sr.attack_reason else '')
+                 + '). The one-way signature now bound to that honeypot:</p>'
+                 f'<p style="font-family:monospace; word-break:break-all; color:#444;">{sig}</p>')
+
+    parts.append('<h3 style="color:#222;">Step 2 &ndash; Clear all local state (keep only the '
+                 'one-way binding)</h3>')
+    parts.append('<p style="color:#555;">The session, the fingerprint-recovery pointer, the '
+                 'honeypot pool assignment and the host IP\'s accumulated reputation are all '
+                 'dropped &ndash; exactly what clearing the browser\'s cookies and localStorage '
+                 'drops &ndash; while the <code>gdpr_honeypot_sig</code> binding is left intact. '
+                 'From here a fresh, benign visitor routes to production.</p>')
+
+    parts.append('<h3 style="color:#222;">Step 3 &ndash; Re-visit the cleared window</h3>')
+    rows = []
+    for p in sr.probes:
+        reason = f'<code>{_esc(p.reason)}</code>' if p.reason else '&ndash;'
+        score = str(p.score) if p.score is not None else '?'
+        rows.append(f'<tr><td>{_esc(p.label)}</td>'
+                    f'<td align="center">{"yes" if p.with_token else "no"}</td>'
+                    f'<td align="center">{_probe_route_cell(p)}</td>'
+                    f'<td align="center">{reason}</td>'
+                    f'<td align="center">{score}</td></tr>')
+    parts.append('<table cellspacing="0" cellpadding="4" border="1" '
+                 'style="border-collapse:collapse; color:#444;">'
+                 '<tr><th>Re-visit</th><th>Re-consented?</th><th>Routed to</th>'
+                 '<th>Reason</th><th>Risk score</th></tr>' + "".join(rows) + '</table>')
+
+    if sr.restored:
+        parts.append('<p style="color:#1b5e20;"><b>Restored.</b> The re-consenting visitor '
+                     '&ndash; same browser characteristics, fresh session, cleared storage '
+                     '&ndash; was re-routed to the honeypot purely because the proxy re-derived '
+                     'the same one-way signature, while the consent-withheld control (no token, '
+                     'so no signature) routed to production. The signature, not any leftover '
+                     'state, restored the session.</p>')
+    else:
+        parts.append('<p style="color:#c62828;">The re-consent probe did not come back to the '
+                     'honeypot (routing fails open; the binding may have expired or the pool was '
+                     'unavailable). The table above shows what each re-visit was routed to.</p>')
+    return "".join(parts)
+
+
 def _toc_html(data: ReportData) -> str:
     """Table of contents: the report sections, with every pattern listed under
     section 1 (internal links; the anchors are emitted by _outcome_block)."""
@@ -1050,8 +1132,9 @@ def _toc_html(data: ReportData) -> str:
     items.append('</ol></li>')
     items.append('<li><b><a href="#sec2">2. Threat increase &ndash; repeated patterns</a></b></li>')
     items.append('<li><b><a href="#sec3">3. Threat decay</a></b></li>')
+    items.append('<li><b><a href="#sec4">4. Session restoration via gdpr_signature</a></b></li>')
     if data.per_pattern:
-        items.append('<li><b><a href="#sec4">4. Test categorization</a></b></li>')
+        items.append('<li><b><a href="#sec5">5. Test categorization</a></b></li>')
     return '<h2 style="color:#222;">Contents</h2><ul style="list-style-type:none;">' + "".join(items) + '</ul>'
 
 
@@ -1165,6 +1248,9 @@ def render_pdf(data: ReportData, out_path: str) -> None:
         parts.append(_decay_stats_html(data))
     else:
         parts.append('<p style="color:#c62828;">No decay samples were collected.</p>')
+
+    # 4. session restoration via gdpr_signature
+    parts.append(_session_restore_html(data))
 
     parts.append(_categorization_html(data))
     parts.append('</div>')

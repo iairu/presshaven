@@ -57,8 +57,9 @@ from PyQt6.QtGui import QDesktopServices, QPixmap
 from core import honeypot_layer
 from core.docker_ctl import target_for
 from core.env_upload import EnvUploadError, load_project_env
-from core.patterns import (COMPONENTS, PATTERN_PRESETS, KINDS, SURFACES, PatternPreset,
-                           build_curl_argv, filter_presets, group_presets, selection_label)
+from core.patterns import (COMPONENTS, GDPR_RESTORE_PRESET, PATTERN_PRESETS, KINDS, SURFACES,
+                           PatternPreset, build_curl_argv, filter_presets, group_presets,
+                           is_gdpr_restore, selection_label)
 from core import pattern_report_pdf
 from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
@@ -76,6 +77,11 @@ from ui.page_learn import pattern_lesson_html
 from ui.process_runner import LogPanel
 
 _METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"]
+
+# Clears the page origin's localStorage and sessionStorage (what "clear site
+# data" wipes alongside cookies); mirrors the helper in ui/page_pool_test.py.
+_CLEAR_STORAGE_JS = ("(function(){var n=0;try{n+=localStorage.length;localStorage.clear();}catch(e){}"
+                     "try{n+=sessionStorage.length;sessionStorage.clear();}catch(e){}return String(n);})()")
 
 # --- PDF-report screenshot capture tuning (see _capture_browser) ---
 # Render the site smaller (zoom out) so a screenshot shows more of the page at
@@ -122,7 +128,8 @@ def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
 
 
 def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
-                           kind: str = "", component: str = "", surface: str = "") -> None:
+                           kind: str = "", component: str = "", surface: str = "",
+                           include_restore: bool = False) -> None:
     """(Re)fill a combo with the pattern presets. In the database proxy
     honeypot layer, grey out (disable) the CVEs that the single-eshop /
     two-database honeypot cannot isolate (db_isolated=False). In the default
@@ -151,6 +158,12 @@ def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
             _add_group_heading(combo, heading)
         for preset in presets:
             _add_preset_item(combo, preset, grey_out)
+    # The gdpr_signature session-restoration demonstration is not a CVE in the
+    # battery (it is not in PATTERN_PRESETS), so it is appended on its own, under
+    # a heading, when the caller asks for it (the main pattern selector).
+    if include_restore:
+        _add_group_heading(combo, "GDPR signature")
+        _add_preset_item(combo, GDPR_RESTORE_PRESET, grey_out=False)
     # Keep the previous selection if it's still enabled, else show the first
     # enabled row (never a greyed CVE or a heading).
     index = combo.findData(previous) if previous is not None else -1
@@ -417,7 +430,7 @@ class PatternsPage(QWidget):
         toolbar.addWidget(self.reset_btn)
 
         self.pattern_combo = QComboBox()
-        _populate_preset_combo(self.pattern_combo)
+        _populate_preset_combo(self.pattern_combo, include_restore=True)
         # Test-category filters for the pattern list (built below, next to it).
         self.kind_filter = self._category_filter(
             "Type", KINDS, "Generic attacks are classes and tools (XSS, SQL injection, "
@@ -693,7 +706,7 @@ class PatternsPage(QWidget):
         """Narrow the pattern list to the selected test categories."""
         kind, component, surface = self._selection()
         _populate_preset_combo(self.pattern_combo, kind=kind, component=component,
-                               surface=surface)
+                               surface=surface, include_restore=True)
         count = len(self._selected_presets())
         if not self._multi_queue:
             self.multi_run_btn.setText(f"Multi-run (curl, {count})")
@@ -884,7 +897,12 @@ class PatternsPage(QWidget):
         plain GET instead, since a browser navigation has no way to carry
         those."""
         preset: PatternPreset = self.pattern_combo.currentData()
-        if preset is None or not self._runnable(preset):
+        if preset is None:
+            return
+        if is_gdpr_restore(preset):
+            self._demo_session_restore()
+            return
+        if not self._runnable(preset):
             return
         self._send_curl(preset)
 
@@ -967,13 +985,42 @@ class PatternsPage(QWidget):
         the visitor's-eye view of that path. Does NOT send the preset's
         headers/body (Run pattern (curl) above is the one that does)."""
         preset: PatternPreset = self.pattern_combo.currentData()
-        if preset is None or not self._runnable(preset):
+        if preset is None:
+            return
+        if is_gdpr_restore(preset):
+            self._demo_session_restore()
+            return
+        if not self._runnable(preset):
             return
         self.pattern_ran.emit(f"{preset.cve} — {preset.name} (browser)")
         base_url = self._base_url()
         self.result_label.setText(f"Navigating to {preset.path} (browser)...")
         self.result_label.setStyleSheet("color: #888888;")
         self.browser.navigate(base_url + preset.path)
+
+    def _demo_session_restore(self) -> None:
+        """Interactive counterpart to the gdpr_signature restore pattern: wipe
+        this window's cookies AND localStorage (dropping the SERVERID session
+        and the stored GDPR consent), then reload so the consent banner
+        reappears for re-consent. The browser characteristics are unchanged, so
+        on re-consent the proxy re-derives the SAME one-way signature and
+        re-routes to the honeypot the window was bound to. The full
+        attack -> bind -> clear -> restore proof (with a consent-withheld
+        control) is in the exported PDF, section 4."""
+        self.pattern_ran.emit(f"{GDPR_RESTORE_PRESET.cve} — {GDPR_RESTORE_PRESET.name}")
+        self.browser.clear_cookies()
+        try:
+            self.browser.view.page().runJavaScript(_CLEAR_STORAGE_JS)
+        except Exception:  # noqa: BLE001 -- storage clear is best-effort
+            pass
+        self.browser.reload_home()
+        self.result_label.setText(
+            "Cleared this window's cookies and localStorage (session + stored consent "
+            "dropped). Re-agree when the GDPR banner reappears: the proxy re-derives the "
+            "same gdpr_signature and re-routes to the honeypot it was bound to. Export the "
+            "report (with GDPR agreed) for the full attack → clear → restore proof "
+            "(section 4).")
+        self.result_label.setStyleSheet("color: #5cb85c;")
 
     def _runnable(self, preset: PatternPreset) -> bool:
         """Guard: the greyed-out (db_isolated=False) presets aren't selectable
