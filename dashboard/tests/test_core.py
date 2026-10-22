@@ -142,6 +142,7 @@ class SignatureSimTests(unittest.TestCase):
 
     def setUp(self):
         from core import signature_sim
+        self.sim = signature_sim
         self.extract = staticmethod(signature_sim.extract_signature).__func__
 
     def test_pulls_signature_and_session_from_a_proxy_log_line(self):
@@ -161,6 +162,17 @@ class SignatureSimTests(unittest.TestCase):
 
     def test_no_gdpr_line_yields_empty(self):
         self.assertEqual(self.extract("[REQUEST] nothing to see here\n   "), ("", ""))
+
+    def test_extract_all_counts_repeated_lines(self):
+        # The dashboard's cookieless requests reuse one fingerprint session and a
+        # given window size reproduces the same signature, so run_flow recognises
+        # a new run by the LINE COUNT growing, not by either value changing.
+        log = ("[GDPR] Received gdpr_signature=same | Session: s-1\n"
+               "[GDPR] Received gdpr_signature=same | Session: s-1\n"
+               "[GDPR] Received gdpr_signature=same | Session: s-1\n")
+        pairs = self.sim.extract_all_signatures(log)
+        self.assertEqual(pairs, [("same", "s-1")] * 3)
+        self.assertEqual(self.extract(log), ("same", "s-1"))
 
 
 class CertSubjectTests(unittest.TestCase):
