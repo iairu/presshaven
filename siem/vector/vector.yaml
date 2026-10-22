@@ -107,6 +107,25 @@ transforms:
             del(.route_reason)
           }
         }
+        # nginx's upstream_cache_status (nginx.conf's log_format security):
+        # HIT / MISS / BYPASS / EXPIRED / STALE / UPDATING / REVALIDATED for a
+        # request that consulted proxy_cache (the static-asset locations serve
+        # CSS/JS/fonts/images through `proxy_cache static_cache`), or "-" when
+        # no cache was involved at all -- the whole point of this field is to
+        # make the cache-served ("cache-bound") requests visible and filterable
+        # in Kibana, since the URIs were always logged but whether they were
+        # answered from cache was not. A separate parse (like the blocks above)
+        # so lines from a proxy that predates the field still get everything else.
+        cache, cache_err = parse_regex(.message, r'cache_status="(?P<cache_status>[^"]*)"')
+        if cache_err == null {
+          . = merge(., cache)
+          # nginx writes "-" (and could write "") when the request never
+          # touched proxy_cache; normalize to an explicit, aggregatable value
+          # rather than a stray dash so a "cache status" breakdown reads cleanly.
+          if .cache_status == "-" || .cache_status == "" {
+            .cache_status = "none"
+          }
+        }
 
         # Separate a real user navigation (a page requested directly) from the
         # background sub-resources a browser then fetches automatically --

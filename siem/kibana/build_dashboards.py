@@ -226,6 +226,14 @@ _WEB_Q = 'log_type:"nginx_security"'
 # decision_trace(), parsed in siem/vector/vector.yaml). Lines from a proxy
 # that predates them simply don't match.
 _DECISION_Q = f'{_WEB_Q} and decay_state:*'
+# Requests that went through nginx's proxy_cache -- the static-asset locations
+# (CSS/JS/fonts/images) served via `proxy_cache static_cache`. cache_status is
+# "none" when no cache was involved at all; anything else (HIT/MISS/EXPIRED/
+# STALE/REVALIDATED/UPDATING/BYPASS) means the request was cache-bound. The
+# URIs were always logged; this field (siem/vector/vector.yaml's cache_status
+# parse, from nginx.conf's $upstream_cache_status) is what finally makes the
+# cache-bound ones visible and filterable in Kibana.
+_CACHE_Q = f'{_WEB_Q} and cache_status:* and not cache_status:"none"'
 
 # session_id-bearing nginx_security requests -- the per-request risk-scored
 # traffic each user session is made of (§3.5/§6). client_sophistication_
@@ -318,8 +326,10 @@ VISUALIZATIONS = [
               "the sub-resources a browser then fetches on its own — CSS, JS, images, fonts — plus "
               "XHR/REST calls, so one page load doesn't read as dozens of hits. "
               "**Top URIs** marks each URI as `attack_pattern` (it matched an attack pattern or "
-              "CVE signature) or `safe`. See *Threat Decisions & Decay* for why a request was routed "
-              "where it was."),
+              "CVE signature) or `safe`. **Cache Status** and **Cache-Bound URIs** show which "
+              "static assets nginx answered from its `proxy_cache` (HIT) versus fetched upstream "
+              "(MISS) — every URI is listed either way. See *Threat Decisions & Decay* for why a "
+              "request was routed where it was."),
     _viz("viz-web-total-requests", "User Requests (page views)", "metric",
          [_count_metric_agg("Page views")], query=f'{_WEB_Q} and request_kind:"navigation"'),
     _viz("viz-web-background-requests", "Background Requests (assets / XHR)", "metric",
@@ -355,6 +365,18 @@ VISUALIZATIONS = [
     _viz("viz-web-methods", "HTTP Methods", "tagcloud",
          [_count_metric_agg(), _terms_agg("method.keyword", size=10)],
          query=_WEB_Q, params_extra=_TAGCLOUD),
+    # Cache visibility: every URI is logged, but whether it was answered from
+    # nginx's proxy_cache was not until cache_status was added. HIT/EXPIRED/
+    # STALE/REVALIDATED = served from cache; MISS/UPDATING = cache consulted,
+    # fetched upstream; BYPASS = cache skipped; none = not a cached location.
+    _viz("viz-web-cache-pie", "Cache Status (static assets)", "pie",
+         [_count_metric_agg(), _terms_agg("cache_status.keyword", size=8, label="Cache status")],
+         query=_WEB_Q, params_extra=_PIE),
+    _viz("viz-web-cached-uris", "Cache-Bound URIs (served through proxy_cache)", "table",
+         [_count_metric_agg("Requests"),
+          _terms_agg("uri.keyword", agg_id="2", size=25, schema="bucket", label="URI"),
+          _terms_agg("cache_status.keyword", agg_id="3", size=8, schema="bucket", label="Cache status")],
+         query=_CACHE_Q, params_extra=_TABLE),
 
     # -- Threat Decisions & Decay ---------------------------------------------
     _markdown("viz-decision-guide", "About: Threat Decisions & Decay",
@@ -624,7 +646,7 @@ DASHBOARDS = [
     ),
     _dashboard(
         "dashboard-web-threat-overview", "Honeypot: Web Traffic & Threat Overview",
-        "What was requested and how it was answered: volume by route, status codes, methods, and top URIs marked attack_pattern or safe.",
+        "What was requested and how it was answered: volume by route, status codes, methods, top URIs marked attack_pattern or safe, and which static assets were served from cache.",
         [
             ("viz-web-guide", 0, 0, 16, 8),
             ("viz-web-total-requests", 16, 0, 8, 4),
@@ -637,6 +659,8 @@ DASHBOARDS = [
             ("viz-web-status-codes", 0, 26, 24, 13),
             ("viz-web-top-user-agents", 24, 26, 24, 13),
             ("viz-web-request-kind-pie", 0, 39, 16, 10),
+            ("viz-web-cache-pie", 16, 39, 16, 10),
+            ("viz-web-cached-uris", 0, 49, 48, 16),
         ],
     ),
     _dashboard(
