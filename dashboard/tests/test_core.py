@@ -123,8 +123,13 @@ class ThreatLogParserTests(unittest.TestCase):
     def test_gdpr_signature_received(self):
         ev = self.parse(
             "[GDPR] Received gdpr_signature=abc123def456 | Session: s-42, client: 1.2.3.4")
-        self.assertEqual((ev.kind, ev.label, ev.detail), ("gdpr", "GDPR signature received", "abc123def456"))
+        self.assertEqual((ev.kind, ev.label), ("gdpr", "GDPR signature received"))
+        self.assertEqual(ev.detail, "Signature: abc123def456 | Session: s-42")
         self.assertEqual(ev.color, BLUE)
+
+    def test_gdpr_signature_without_session_still_parses(self):
+        ev = self.parse("[GDPR] Received gdpr_signature=abc123def456")
+        self.assertEqual((ev.kind, ev.detail), ("gdpr", "Signature: abc123def456"))
 
     def test_irrelevant_lines_are_ignored(self):
         self.assertIsNone(self.parse("[SESSION DEBUG] cookie_PHPSESSID=nil"))
