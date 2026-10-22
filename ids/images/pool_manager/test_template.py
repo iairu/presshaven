@@ -119,7 +119,7 @@ class BuildTemplate(TemplateBase):
         self.mgr._create_database_container = fake_create
         created_volumes = []
         self.mgr.docker.volumes.create = lambda name, labels=None: created_volumes.append(name)
-        self.mgr._build_template()
+        self.mgr._build_template_database()
         # Seeded with the same clone+scrub a pool would run...
         self.assertIn("template clone + scrub", self.helpers)
         # ...on a container whose volume is the template volume...
@@ -140,19 +140,112 @@ class BuildTemplate(TemplateBase):
             raise RuntimeError("clone failed")
         self.mgr._run_helper = boom
         with self.assertRaises(RuntimeError):
-            self.mgr._build_template()
+            self.mgr._build_template_database()
         # Data volume was created, but the marker (freshness flag) never was.
         self.assertIn(self.mgr._template_volume_name(), created_volumes)
         self.assertNotIn(self.mgr._template_marker_name(), created_volumes)
 
     def test_ensure_template_builds_only_once_when_fresh(self):
         builds = []
-        self.mgr._build_template = lambda: builds.append(True)
+        self.mgr._build_template_database = lambda: builds.append(True)
         self.mgr.ensure_template()                   # no volume -> builds
         self.assertEqual(len(builds), 1)
         self._template_present()                     # now a fresh one exists
         self.mgr.ensure_template()                   # -> no rebuild
         self.assertEqual(len(builds), 1)
+
+
+class WordPressBase(TemplateBase):
+    """WordPress layer: the template is a files + database volume pair, and a
+    pool copies both then rotates the DB password instead of re-running wp-cli."""
+
+    def setUp(self):
+        super().setUp()
+        manager.MODE = "wordpress"
+        self.mgr.host_paths.update({
+            "/source_files": "/h/files", "/source_db": "/h/db", "/scripts": "/h/scripts"})
+
+
+class ProvisionWordPressWithTemplate(WordPressBase):
+    def test_pool_copies_template_and_skips_wpcli(self):
+        self._template_present()
+        self.mgr.provision_wordpress(5)
+        self.assertIn("copy template", self.helpers)
+        self.assertIn("rotate password", self.helpers)     # DB password -> per-pool
+        self.assertIn("content sync", self.helpers)        # catalog still freshened
+        self.assertNotIn("WordPress seed", self.helpers)   # the ~50 s wp-cli install
+        self.assertNotIn("seed volumes", self.helpers)
+        self.assertEqual(self.registered, [5])
+        # This pool's own unique DB password was stored for the router/sync.
+        self.mgr.redis.set.assert_called_once()
+        self.assertEqual(self.mgr.redis.set.call_args.args[0], manager.PW_PREFIX + "5")
+
+    def test_falls_back_to_full_build_when_no_template(self):
+        self.mgr.ensure_template = lambda: None            # build did not finish
+        self.mgr.provision_wordpress(6)
+        self.assertIn("seed volumes", self.helpers)
+        self.assertIn("WordPress seed", self.helpers)
+        self.assertIn("content sync", self.helpers)
+        self.assertNotIn("copy template", self.helpers)
+        self.assertEqual(self.registered, [6])
+
+    def test_template_off_builds_from_scratch(self):
+        manager.USE_TEMPLATE = False
+        self._template_present()
+        self.mgr.ensure_template = lambda: self.fail("template consulted with POOL_TEMPLATE=0")
+        self.mgr.provision_wordpress(7)
+        self.assertIn("WordPress seed", self.helpers)
+        self.assertNotIn("copy template", self.helpers)
+
+
+class BuildWordPressTemplate(WordPressBase):
+    def test_ensure_template_dispatches_to_wordpress_builder(self):
+        called = []
+        self.mgr._build_template_wordpress = lambda: called.append(True)
+        self.mgr._build_template_database = lambda: self.fail("database builder in wordpress mode")
+        self.mgr.ensure_template()
+        self.assertEqual(called, [True])
+
+    def test_seeds_installs_once_and_shuts_down_cleanly(self):
+        stopped, removed = [], []
+
+        def fake_create(name, vol, pw, labels):
+            c = mock.MagicMock()
+            c.name = name
+            c.stop = lambda timeout=None: stopped.append(timeout)
+            c.remove = lambda force=False, v=False: removed.append(name)
+            self.created.append((name, vol))
+            return c
+        self.mgr._create_database_container = fake_create
+        created_volumes = []
+        self.mgr.docker.volumes.create = lambda name, labels=None: created_volumes.append(name)
+        self.mgr._build_template_wordpress()
+        # The one-time seeding a full build would run, wp-cli install included...
+        self.assertIn("seed volumes", self.helpers)
+        self.assertIn("template WordPress seed", self.helpers)
+        # ...but no per-pool steps (no password rotation to a pool, no content sync).
+        self.assertNotIn("content sync", self.helpers)
+        # Clean InnoDB shutdown so the copied data dir needs no crash recovery.
+        self.assertEqual(stopped, [90])
+        self.assertIn("honeypot_pool_template_db", removed)
+        # Both data volumes created, then the "ready" marker last.
+        self.assertEqual(created_volumes, [
+            self.mgr._template_files_volume_name(), self.mgr._template_db_volume_name(),
+            self.mgr._template_marker_name()])
+
+    def test_failed_build_leaves_no_ready_marker(self):
+        created_volumes = []
+        self.mgr.docker.volumes.create = lambda name, labels=None: created_volumes.append(name)
+        calls = []
+
+        def run(*a, **k):
+            calls.append(k.get("what"))
+            if k.get("what") == "template WordPress seed":
+                raise RuntimeError("wp-cli failed")
+        self.mgr._run_helper = run
+        with self.assertRaises(RuntimeError):
+            self.mgr._build_template_wordpress()
+        self.assertNotIn(self.mgr._template_marker_name(), created_volumes)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,9 @@ sides share.
 
 Two honeypot layers, chosen with POOL_MODE:
   wordpress (default)  pool = honeypot_eshop_N + honeypot_database_N. Pools 1-3
-                       come from docker-compose.yml.
+                       come from docker-compose.yml. New pools copy a pre-seeded
+                       template (files + database, POOL_TEMPLATE) and rotate the
+                       DB password, skipping the ~50 s wp-cli install each time.
   database             pool = honeypot_database_N only (docker-compose.db-proxy.yml:
                        one shared WordPress picks the database per request, see
                        wp-content/db.php). Pool 1 is the compose `honeypot_database`.
@@ -127,18 +129,20 @@ WAITING_ACTIVE_S = float(os.environ.get("POOL_WAITING_ACTIVE_SECONDS", "60") or 
 # sync. Off by default: enable only after verifying a pool still serves
 # correctly on your stack. Never affects the compose-declared pools 1-3.
 FAST_CLONE = os.environ.get("POOL_FAST_CLONE", "0") == "1"
-# Database layer: build each pool by copying a pre-seeded template MySQL data
-# directory instead of dumping production again, which cuts a pool build from
-# ~44 s to roughly MySQL's own start time. The template is cloned + scrubbed
-# from production exactly once (the same CLONE_SCRIPT a pool would run), then
-# shut down cleanly so its data dir copies consistently; the manager pre-builds
-# it at start-up so even the first scale-up is fast. It is rebuilt when older
-# than POOL_TEMPLATE_TTL_SECONDS (0 = keep for the manager's lifetime) so freshly
-# built pools track production's catalog; a pool built while the template is
-# (re)building clones from production directly, as does every pool when
-# POOL_TEMPLATE=0. WordPress-layer pools already seed their DB volume from a raw
-# copy and are unaffected.
-USE_TEMPLATE = MODE == "database" and os.environ.get("POOL_TEMPLATE", "1") != "0"
+# Build each pool by copying a pre-seeded template instead of redoing the slow
+# per-pool seeding, which cuts a pool build to roughly the container start time.
+# Database layer: the template is a MySQL data directory cloned + scrubbed from
+# production once (the same CLONE_SCRIPT a pool would run); a pool copies it and
+# starts MySQL -- no per-pool dump from production (~44 s saved). WordPress layer:
+# the template is a files + database volume pair seeded once, migrations and the
+# wp-cli WordPress install included; a pool copies both, rotates the DB password
+# to its own and syncs the current catalog -- skipping the ~50 s wp-cli install
+# per pool. The manager pre-builds the template at start-up so even the first
+# scale-up is fast, and rebuilds it when older than POOL_TEMPLATE_TTL_SECONDS
+# (0 = keep for the manager's lifetime) so fresh pools track production's catalog.
+# A pool built while the template is (re)building is built from scratch, as is
+# every pool when POOL_TEMPLATE=0.
+USE_TEMPLATE = os.environ.get("POOL_TEMPLATE", "1") != "0"
 TEMPLATE_TTL_S = float(os.environ.get("POOL_TEMPLATE_TTL_SECONDS", "0") or 0)
 # Pools built at the same time while sessions wait for one.
 PARALLEL_BUILDS = max(1, int(os.environ.get("POOL_PARALLEL_BUILDS", "2")))
@@ -545,7 +549,7 @@ class Manager:
     def provision_database(self, n: int) -> None:
         """Database layer: one more honeypot database. With POOL_TEMPLATE on
         (default) its data directory is copied from the pre-seeded template
-        (see _build_template) and MySQL started on the ready-made directory --
+        (see _build_template_database) and MySQL started on the ready-made directory --
         no per-pool dump from production, so a pool is ready in roughly MySQL's
         start time instead of ~44 s. With POOL_TEMPLATE=0, or while the template
         is still (re)building, it is cloned + scrubbed from production directly,
@@ -596,10 +600,19 @@ class Manager:
             self._enable_query_log(db)
         self.register_ready(n)
 
-    # ---- pool template (database layer) ----------------------------------
+    # ---- pool template (both layers) -------------------------------------
 
     def _template_volume_name(self) -> str:
+        # Database layer: the single MySQL data-directory template volume.
         return f"{PROJECT}_honeypot_pool_template_data"
+
+    def _template_db_volume_name(self) -> str:
+        # WordPress layer: the database half of the template.
+        return f"{PROJECT}_honeypot_pool_template_db"
+
+    def _template_files_volume_name(self) -> str:
+        # WordPress layer: the WordPress files half of the template.
+        return f"{PROJECT}_honeypot_pool_template_files"
 
     def _template_marker_name(self) -> str:
         # A tiny companion volume created only once the data volume is fully
@@ -634,9 +647,12 @@ class Manager:
         with self._template_lock:
             if self._template_is_fresh():
                 return
-            self._build_template()
+            if MODE == "wordpress":
+                self._build_template_wordpress()
+            else:
+                self._build_template_database()
 
-    def _build_template(self) -> None:
+    def _build_template_database(self) -> None:
         """Clone + scrub a honeypot database from production once (exactly as a
         pool would), then shut MySQL down cleanly so its data directory copies
         consistently (no crash recovery on the copies). Keeps only the volume;
@@ -680,6 +696,49 @@ class Manager:
             "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}"})
         log(f"pool template ready in {time.time() - started:.0f}s")
 
+    def _build_template_wordpress(self) -> None:
+        """Seed a WordPress files + database volume pair once -- production files,
+        a database clone, migrations and the wp-cli install -- keeping production's
+        baseline DB password, then shut MySQL down cleanly so the data directory
+        copies without crash recovery. Keeps both volumes; the container and the
+        wp-cli helper are removed. Each pool copied from this template rotates the
+        DB password to its own afterwards. The "ready" marker is created last, so
+        a build that fails part-way leaves no usable template. Runs under
+        _template_lock."""
+        db_vol, files_vol = self._template_db_volume_name(), self._template_files_volume_name()
+        marker, db_name = self._template_marker_name(), "honeypot_pool_template_db"
+        labels = {"honeypot.template": "1"}
+        log(f"building WordPress pool template ({files_vol} + {db_vol}); one-time wp-cli install")
+        started = time.time()
+        try:
+            self.docker.containers.get(db_name).remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        # Drop the marker first (so a crash now leaves the template "absent"),
+        # then any previous, possibly half-built, data volumes.
+        for vname in (marker, files_vol, db_vol):
+            for v in self.docker.volumes.list(filters={"name": vname}):
+                if v.name == vname:
+                    v.remove(force=True)
+        for vol in (files_vol, db_vol):
+            self.docker.volumes.create(name=vol, labels=labels)
+        self._seed_wordpress_volumes(files_vol, db_vol, labels)
+        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        db.start()
+        try:
+            self._wait_healthy(db, "template database")
+            # old == new: keep production's baseline password, only run migrations.
+            self._rotate_pool_db(db_name, labels, self.mysql_password, self.mysql_password,
+                                 "template migrations")
+            self._wordpress_cli_seed(db_name, files_vol, labels, self.mysql_password,
+                                     "template WordPress seed")
+            db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
+        finally:
+            db.remove(force=True)
+        self.docker.volumes.create(name=marker, labels={
+            "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}"})
+        log(f"WordPress pool template ready in {time.time() - started:.0f}s")
+
     def _enable_query_log(self, db) -> None:
         """Turn the general query log on (see QUERY_LOG_KEY). Not fatal: the
         pool still serves, the client's evidence for it is only incomplete."""
@@ -712,20 +771,75 @@ class Manager:
                          "start_period": 60 * NS, "start_interval": 1 * NS})
 
     def provision_wordpress(self, n: int) -> None:
-        """WordPress layer: a full honeypot_eshop_N + honeypot_database_N pair."""
+        """WordPress layer: a full honeypot_eshop_N + honeypot_database_N pair.
+        With POOL_TEMPLATE on (default) the files and database volumes are copied
+        from a pre-seeded template (see _build_template_wordpress), skipping the
+        one-time WordPress install (wp-cli, ~50 s) per pool; only the DB password
+        is rotated to this pool's own and the current catalog synced. While the
+        template is still (re)building, or with POOL_TEMPLATE=0, the pool is built
+        from scratch the same way init_setup prepares pools 1-3."""
         project, db_name, wp_name = PROJECT, f"honeypot_database_{n}", f"honeypot_eshop_{n}"
         db_vol, files_vol = f"{project}_{db_name}_data", f"{project}_{wp_name}_files"
         labels = {"honeypot.pool": str(n), "honeypot.pool.managed-by": "pool_manager"}
         password = secrets.token_hex(12)
+        from_template = False
+        if USE_TEMPLATE:
+            try:
+                self.ensure_template()
+                from_template = self._template_is_fresh()
+            except Exception as e:  # noqa: BLE001 -- fall back to a full build
+                log(f"pool {n}: template unavailable ({e}); building from scratch")
         self.redis.set(PW_PREFIX + str(n), password)
-        log(f"pool {n}: provisioning (volumes {db_vol}, {files_vol})")
+        log(f"pool {n}: provisioning (volumes {db_vol}, {files_vol})"
+            + (" from template" if from_template else ""))
 
+        if from_template:
+            self._provision_wordpress_from_template(n, db_name, db_vol, files_vol, labels, password)
+        else:
+            self._provision_wordpress_full(n, db_name, db_vol, files_vol, labels, password)
+        # Both paths serve the install-time catalog until this mirrors production's
+        # current one (the same sync honeypot_content_sync runs every few minutes).
+        self._sync_pool_content(n, password, labels, "content sync")
+        self._start_wordpress_container(n, db_name, wp_name, files_vol, labels, password)
+
+    def _provision_wordpress_full(self, n, db_name, db_vol, files_vol, labels, password):
+        """Build the pool's database and files from scratch: seed both volumes
+        from production, start MySQL, rotate to this pool's password + migrate,
+        then run the WordPress install (wp-cli)."""
         for vol in (db_vol, files_vol):
             self.docker.volumes.create(name=vol, labels=labels)
+        self._seed_wordpress_volumes(files_vol, db_vol, labels)       # 1
+        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        db.start()                                                    # 2
+        self._wait_healthy(db, "database")
+        self._rotate_pool_db(db_name, labels, self.mysql_password, password, "migrations")  # 3
+        self._wordpress_cli_seed(db_name, files_vol, labels, password, "WordPress seed")    # 4
 
-        # 1. seed volumes: WordPress files from production (minus the
-        #    production-only hardening plugin) and a raw copy of the database
-        #    directory, exactly as init_setup does for pools 1-3.
+    def _provision_wordpress_from_template(self, n, db_name, db_vol, files_vol, labels, password):
+        """Copy the template's files + database volumes into this pool's, start
+        MySQL on the ready-made data dir, then rotate the DB password to this
+        pool's own (the template keeps production's baseline). No wp-cli install:
+        the template already ran it."""
+        for vol in (db_vol, files_vol):
+            self.docker.volumes.create(name=vol, labels=labels)
+        # Local tar copy (tar as root restores ownership, as the raw DB seed does).
+        self._run_helper(
+            self.image, ["sh", "-c",
+                         "tar -C /src_files -cf - . | tar -C /dest_files -xf - && "
+                         "tar -C /src_db -cf - . | tar -C /dest_db -xf -"],
+            binds={self._template_files_volume_name(): ("/src_files", "ro"),
+                   self._template_db_volume_name(): ("/src_db", "ro"),
+                   files_vol: ("/dest_files", "rw"), db_vol: ("/dest_db", "rw")},
+            labels=labels, what="copy template")
+        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        db.start()
+        self._wait_healthy(db, "database")
+        self._rotate_pool_db(db_name, labels, self.mysql_password, password, "rotate password")
+
+    def _seed_wordpress_volumes(self, files_vol, db_vol, labels):
+        """WordPress files from production (minus the production-only hardening
+        plugin) and a raw copy of the database directory, as init_setup does for
+        pools 1-3."""
         self._run_helper(
             self.image, ["sh", "-c", (
                 "rsync -a /source_files/ /dest_files/ && "
@@ -737,27 +851,27 @@ class Manager:
                    files_vol: ("/dest_files", "rw"), db_vol: ("/dest_db", "rw")},
             labels=labels, what="seed volumes")
 
-        # 2. database container
-        db = self._create_database_container(
-            db_name, db_vol, self.mysql_password, labels)
-        db.start()
-        self._wait_healthy(db, "database")
-
-        # 3. rotate the DB password to this pool's own, apply migrations
+    def _rotate_pool_db(self, db_name, labels, old_password, new_password, what):
+        """Rotate the pool DB user's password old -> new and apply migrations
+        (idempotent, --force). When old == new (the template build) no ALTER
+        runs and only the migrations are applied."""
         self._run_helper(
             MYSQL_IMAGE, ["bash", "-c", MIGRATE_SCRIPT],
             binds={self.host_paths["/migrations"]: ("/migrations", "ro")},
-            labels=labels, what="migrations", entrypoint=[],
+            labels=labels, what=what, entrypoint=[],
             environment={"DB_HOST": db_name, "DB_USER": DB_USER, "DB_NAME": DB_NAME,
-                         "OLD_PASSWORD": self.mysql_password, "NEW_PASSWORD": password},
+                         "OLD_PASSWORD": old_password, "NEW_PASSWORD": new_password},
             network=self._net("honeypot_network"))
 
-        # 4. install WordPress into the pool database (same script as db_seed_N)
+    def _wordpress_cli_seed(self, db_name, files_vol, labels, password, what):
+        """Install WordPress into the database + files (same script as db_seed_N).
+        The slow step (~50 s of wp-cli); the template runs it once so pools copied
+        from it skip it."""
         self._run_helper(
             WPCLI_IMAGE, ["sh", "/seed_wordpress_db.sh"],
             binds={files_vol: ("/var/www/html", "rw"),
                    self.host_paths["/scripts"] + "/seed_wordpress_db.sh": ("/seed_wordpress_db.sh", "ro")},
-            labels=labels, what="WordPress seed", user="root",
+            labels=labels, what=what, user="root",
             environment={
                 "WORDPRESS_DB_HOST": f"{db_name}:3306", "WORDPRESS_DB_NAME": DB_NAME,
                 "WORDPRESS_DB_USER": DB_USER, "WORDPRESS_DB_PASSWORD": password,
@@ -773,18 +887,23 @@ class Manager:
             network=self._net("honeypot_network"),
             caps=["DAC_OVERRIDE", "CHOWN", "FOWNER", "SETGID", "SETUID"])
 
-        # 5. production's current catalog (pages, posts, products), the same
-        #    sync honeypot_content_sync runs every few minutes -- done now so
-        #    the pool never serves the install-time snapshot's stale content.
+    def _sync_pool_content(self, n, password, labels, what):
+        """Mirror production's current catalog (pages, posts, products) into pool
+        n once, so a diverted visitor's cart (rebuilt from product IDs) is not
+        empty and the catalog is not the install-time snapshot's."""
         self._run_helper(
             MYSQL_IMAGE, ["bash", "/scripts/replicate_content_to_honeypot.sh", "--once", str(n)],
             binds={self.host_paths["/scripts"]: ("/scripts", "ro")},
-            labels=labels, what="content sync", entrypoint=[],
+            labels=labels, what=what, entrypoint=[],
             environment={"MYSQL_PASSWORD": self.mysql_password, "POOL_DB_PASSWORD": password},
             network=self._net("honeypot_network"),
             extra_networks=[self._net("production_network")])
 
-        # 6. the WordPress container itself
+    def _start_wordpress_container(self, n, db_name, wp_name, files_vol, labels, password):
+        """The WordPress container itself. It generates wp-config from the per-pool
+        DB password it is handed (production_eshop_files/wp-config.php reads
+        WORDPRESS_DB_PASSWORD from the environment), so a template-cloned files
+        volume needs no editing."""
         wp = self.docker.containers.create(
             WORDPRESS_IMAGE, name=wp_name, labels=labels, detach=True,
             command=["sh", "-c", WP_START_SCRIPT],
