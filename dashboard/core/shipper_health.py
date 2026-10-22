@@ -139,6 +139,38 @@ def parse_index_stats(text: str) -> dict | None:
     return {"total_docs": total, "index_count": len(indices), "indices": sorted(indices)}
 
 
+# Clear every shipped document: a match_all _delete_by_query over honeypot-*.
+# Deliberately NOT a `DELETE /honeypot-*` of the indices -- Elasticsearch's
+# action.destructive_requires_name guard (on by default) refuses a wildcard
+# index delete, whereas _delete_by_query is allowed and leaves the (now empty)
+# indices and their mappings in place for Vector to keep writing to.
+# conflicts=proceed so a concurrent indexing batch doesn't abort the wipe;
+# ignore_unavailable/allow_no_indices so "nothing shipped yet" is a success,
+# not an error. Same cert path / auth as ES_INDEX_CURL above.
+ES_DELETE_ALL_CURL = (
+    "curl -s --max-time 120 -X POST --cacert config/certs/ca/ca.crt -u elastic:{password} "
+    "-H 'Content-Type: application/json' "
+    '"https://es01:9200/honeypot-*/_delete_by_query'
+    '?conflicts=proceed&refresh=true&ignore_unavailable=true&allow_no_indices=true" '
+    "-d '{{\"query\":{{\"match_all\":{{}}}}}}'")
+
+
+def parse_delete_result(text: str) -> int | None:
+    """Documents deleted, from a _delete_by_query response (its "deleted"
+    field). None when the response isn't that JSON object -- an auth error,
+    es not ready, or an error payload without a "deleted" count."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or "deleted" not in data:
+        return None
+    try:
+        return int(data["deleted"])
+    except (TypeError, ValueError):
+        return None
+
+
 def aggregator_state(containers: list[dict]) -> str:
     """One word for the SIEM-side vector_inbound container from the SIEM
     target's ps records ("unknown" when the SIEM stack is not visible)."""

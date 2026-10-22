@@ -13,7 +13,8 @@ import time
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
+    QVBoxLayout, QWidget,
 )
 from PyQt6.QtGui import QColor
 
@@ -22,13 +23,11 @@ from core.colors import GREEN, GREY, ORANGE, RED
 from core.docker_ctl import Target, targets_for
 from core.kibana_credentials import get_elastic_credentials
 from core.state import AppState
-from ui.common import ErrorBanner, Job, TargetSelector
+from ui.common import ErrorBanner, Job, TargetSelector, confirm, danger_button
 from ui.flow_layout import FlowLayout
 from ui.page_overview import StatCard
 
 REFRESH_MS = 15000
-_VERDICT_COLOR = {sh.DELIVERING: GREEN, sh.UNCONFIRMED: ORANGE, sh.FAILING: RED,
-                  sh.STOPPED: RED, sh.DISABLED: GREY}
 _AGG_COLOR = {"healthy": GREEN, "running": GREEN, "unhealthy": RED, "exited_bad": RED, "down": RED,
               "starting": ORANGE, "created": ORANGE, "unknown": GREY}
 
@@ -67,6 +66,26 @@ def _check(edge: Target, siem_targets: list[Target], state):
     return sh.combine(enabled, why, shipper, logs), agg, index_stats
 
 
+def _clear_docs(siem_targets: list[Target], state):
+    """Delete every honeypot-* document in the SIEM. Returns (deleted, error):
+    (int, None) on success, (None, message) when the SIEM isn't reachable, the
+    credentials are missing, or Elasticsearch returned something unexpected.
+    Runs docker/ssh, so off-thread."""
+    agg_target = next((t for t in siem_targets if sh.aggregator_state(t.ps()) != "unknown"), None)
+    if agg_target is None:
+        return None, "The SIEM stack is not reachable from this machine."
+    creds = get_elastic_credentials(state)
+    if creds is None:
+        return None, "No Elasticsearch credentials available (set them on the SIEM page)."
+    argv, cwd = agg_target.build("exec", "-T", "es01", "sh", "-c",
+                                 sh.ES_DELETE_ALL_CURL.format(password=creds[1]))
+    out = _run(argv, cwd)
+    deleted = sh.parse_delete_result(out)
+    if deleted is None:
+        return None, f"Unexpected response from Elasticsearch: {out[:200].strip() or '(no output)'}"
+    return deleted, None
+
+
 class PipelinePage(QWidget):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
@@ -84,27 +103,33 @@ class PipelinePage(QWidget):
         bar.addWidget(self.refresh_btn)
         self.updated = QLabel("")
         bar.addWidget(self.updated, stretch=1)
+        self.clear_btn = danger_button("Clear all documents in SIEM", self._clear_siem)
+        self.clear_btn.setToolTip(
+            "Permanently delete every honeypot-* document stored in Elasticsearch. "
+            "The indices stay and Vector keeps shipping new logs, but everything "
+            "already in the SIEM (and the Kibana history built from it) is gone.")
+        bar.addWidget(self.clear_btn)
         layout.addLayout(bar)
         self.error_banner = ErrorBanner()
         layout.addWidget(self.error_banner)
 
         cards_host = QWidget()
         cards = FlowLayout(cards_host, margin=0, h_spacing=10, v_spacing=10)
-        self.card_verdict = StatCard("Edge → SIEM delivery")
         self.card_agg = StatCard("SIEM aggregator")
         self.card_docs = StatCard("Documents in SIEM")
         self.card_errors = StatCard("Delivery errors (log tail)")
         self.card_ok = StatCard("Last healthcheck pass")
-        for c in (self.card_verdict, self.card_agg, self.card_docs, self.card_errors, self.card_ok):
+        for c in (self.card_agg, self.card_docs, self.card_errors, self.card_ok):
             cards.addWidget(c)
         layout.addWidget(cards_host)
 
         self.detail = QLabel("")
         self.detail.setWordWrap(True)
         layout.addWidget(self.detail)
-        note = QLabel("“Delivering” from the log means the healthcheck passed and no delivery error has been "
-                      "logged since (Vector does not log every batch). The Documents card is the direct check: "
-                      "it queries Elasticsearch for the honeypot-* indices and shows whether they are growing.")
+        note = QLabel("The Documents card is the direct end-to-end check: it queries Elasticsearch for the "
+                      "honeypot-* indices and shows whether they are growing. The delivery-error and "
+                      "last-healthcheck cards (and the log lines below) are the shipper's own indirect "
+                      "signals — Vector does not log every batch, so a quiet log alone does not prove delivery.")
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {GREY}; font-size: 8pt;")
         layout.addWidget(note)
@@ -153,9 +178,50 @@ class PipelinePage(QWidget):
         job.done.connect(finished)
         job.start()
 
+    def _clear_siem(self) -> None:
+        if self._busy:
+            return
+        if not confirm(
+            self, "Clear all documents in SIEM",
+            "This permanently deletes every honeypot-* document currently stored in "
+            "Elasticsearch — all shipped logs, alerts and events, and the Kibana history "
+            "built from them.\n\n"
+            "The indices themselves stay and Vector keeps shipping new logs, so the "
+            "pipeline is unaffected, but the data already in the SIEM cannot be recovered.\n\n"
+            "Delete all documents now?",
+        ):
+            return
+        # Hold off the periodic re-check (and a second click) while the wipe runs.
+        self._busy = True
+        self.clear_btn.setEnabled(False)
+        self.clear_btn.setText("Clearing…")
+        siem = targets_for("siem", self.state)
+        job = Job(lambda: _clear_docs(siem, self.state), self)
+        self._jobs.add(job)
+
+        def finished(result, error):
+            self._busy = False
+            self.clear_btn.setEnabled(True)
+            self.clear_btn.setText("Clear all documents in SIEM")
+            self._jobs.discard(job)
+            job.deleteLater()
+            if error or result is None:
+                QMessageBox.warning(self, "Clear all documents failed", error or "no data")
+                return
+            deleted, derr = result
+            if derr:
+                QMessageBox.warning(self, "Clear all documents failed", derr)
+            else:
+                QMessageBox.information(
+                    self, "Documents cleared",
+                    f"Deleted {deleted:,} document(s) from the SIEM.")
+                self._last_docs = None  # forget the previous count so growth re-baselines
+            self.refresh()
+        job.done.connect(finished)
+        job.start()
+
     def _render(self, h: sh.ShipperHealth, agg: str, index_stats: dict | None) -> None:
         self.updated.setText(f"checked {time.strftime('%H:%M:%S')}")
-        self.card_verdict.set_value(h.verdict, accent=_VERDICT_COLOR.get(h.verdict, GREY))
         self.card_agg.set_value(agg.replace("_", " "), "vector_inbound", _AGG_COLOR.get(agg, GREY))
         self._render_docs(index_stats)
         self.card_errors.set_value(str(h.error_count), "none in the tail" if not h.error_count else
