@@ -1,0 +1,50 @@
+/* Honeypot IDS knowledge base — small, theme-aware polish on top of Material.
+   Colors are derived from the hex/comb app icon so light and dark both read
+   as "the same product". Nothing here overrides Material's own layout. */
+
+:root {
+  --hp-honey: #e5a531;
+  --hp-honey-deep: #8a5a12;
+  --hp-probe: #2472c8;
+}
+
+/* The landing "cards" grid (Material's built-in .grid.cards, restyled a touch). */
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.6rem;
+  transition: border-color 125ms, box-shadow 125ms, transform 125ms;
+}
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--hp-honey);
+  box-shadow: 0 0 0.6rem rgba(229, 165, 49, 0.25);
+  transform: translateY(-1px);
+}
+
+/* A honeycomb accent bar under page H1s, so the whole KB feels like one thing. */
+.md-typeset h1 {
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--hp-honey), transparent) 1;
+  padding-bottom: 0.3rem;
+}
+
+/* Keep wide reference tables (Redis schema, CVE list) readable instead of
+   squeezing every column — let them scroll horizontally on narrow screens. */
+.md-typeset table:not([class]) {
+  display: table;
+}
+
+/* Status chips used in a few places via <span class="chip ...">. */
+.md-typeset .chip {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.md-typeset .chip.ok      { background: #1f8a4c22; color: #1f8a4c; }
+.md-typeset .chip.warn    { background: #e5a53122; color: var(--hp-honey-deep); }
+.md-typeset .chip.danger  { background: #d6364722; color: #b3202f; }
+[data-md-color-scheme="slate"] .md-typeset .chip.ok     { color: #4cd787; }
+[data-md-color-scheme="slate"] .md-typeset .chip.warn   { color: var(--hp-honey); }
+[data-md-color-scheme="slate"] .md-typeset .chip.danger { color: #ff6b7a; }
