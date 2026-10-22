@@ -19,6 +19,9 @@ Two honeypot layers, chosen with POOL_MODE:
   database             pool = honeypot_database_N only (docker-compose.db-proxy.yml:
                        one shared WordPress picks the database per request, see
                        wp-content/db.php). Pool 1 is the compose `honeypot_database`.
+                       New pools copy a pre-seeded template data directory
+                       (POOL_TEMPLATE) rather than dumping production each time,
+                       so a scale-up is ready in roughly MySQL's start time.
 Compose-declared pools are only adopted here (registered in Redis once healthy).
 Pools above them are created and destroyed through the Docker API. Their containers deliberately carry no
 com.docker.compose.* labels, so `docker compose up --remove-orphans` leaves
@@ -124,6 +127,19 @@ WAITING_ACTIVE_S = float(os.environ.get("POOL_WAITING_ACTIVE_SECONDS", "60") or 
 # sync. Off by default: enable only after verifying a pool still serves
 # correctly on your stack. Never affects the compose-declared pools 1-3.
 FAST_CLONE = os.environ.get("POOL_FAST_CLONE", "0") == "1"
+# Database layer: build each pool by copying a pre-seeded template MySQL data
+# directory instead of dumping production again, which cuts a pool build from
+# ~44 s to roughly MySQL's own start time. The template is cloned + scrubbed
+# from production exactly once (the same CLONE_SCRIPT a pool would run), then
+# shut down cleanly so its data dir copies consistently; the manager pre-builds
+# it at start-up so even the first scale-up is fast. It is rebuilt when older
+# than POOL_TEMPLATE_TTL_SECONDS (0 = keep for the manager's lifetime) so freshly
+# built pools track production's catalog; a pool built while the template is
+# (re)building clones from production directly, as does every pool when
+# POOL_TEMPLATE=0. WordPress-layer pools already seed their DB volume from a raw
+# copy and are unaffected.
+USE_TEMPLATE = MODE == "database" and os.environ.get("POOL_TEMPLATE", "1") != "0"
+TEMPLATE_TTL_S = float(os.environ.get("POOL_TEMPLATE_TTL_SECONDS", "0") or 0)
 # Pools built at the same time while sessions wait for one.
 PARALLEL_BUILDS = max(1, int(os.environ.get("POOL_PARALLEL_BUILDS", "2")))
 # Scale down pools no request has reached for this long (seconds; 0 = never).
@@ -209,6 +225,7 @@ class Manager:
         self.forced_removed: list[int] = []   # removed so far by an unfinished forced scale-down
         self.health: dict[int, bool] = {}     # last published health per ready pool
         self._local = threading.local()    # per build thread: phase timings
+        self._template_lock = threading.Lock()   # one template (re)build at a time
 
     # ---- discovery -------------------------------------------------------
 
@@ -526,31 +543,142 @@ class Manager:
             self.provision_wordpress(n)
 
     def provision_database(self, n: int) -> None:
-        """Database layer: one more honeypot database, cloned from production and
-        scrubbed, the same way honeypot_db_init prepares the first one. All
-        honeypot databases share production's credentials (the isolation is the
-        separate database host, see wp-content/db.php)."""
+        """Database layer: one more honeypot database. With POOL_TEMPLATE on
+        (default) its data directory is copied from the pre-seeded template
+        (see _build_template) and MySQL started on the ready-made directory --
+        no per-pool dump from production, so a pool is ready in roughly MySQL's
+        start time instead of ~44 s. With POOL_TEMPLATE=0, or while the template
+        is still (re)building, it is cloned + scrubbed from production directly,
+        the same way honeypot_db_init prepares the first one. All honeypot
+        databases share production's credentials (the isolation is the separate
+        database host, see wp-content/db.php), so the template's baked-in users
+        and grants are the right ones for every pool copied from it."""
         db_name = f"honeypot_database_{n}"
         db_vol = f"{PROJECT}_{db_name}_data"
         labels = {"honeypot.pool": str(n), "honeypot.pool.managed-by": "pool_manager"}
-        log(f"pool {n}: provisioning database {db_name} (volume {db_vol})")
+        from_template = False
+        if USE_TEMPLATE:
+            try:
+                self.ensure_template()
+                from_template = self._template_is_fresh()
+            except Exception as e:  # noqa: BLE001 -- fall back to a direct clone
+                log(f"pool {n}: template unavailable ({e}); cloning from production")
+        log(f"pool {n}: provisioning database {db_name} (volume {db_vol})"
+            + (" from template" if from_template else ""))
         self.docker.volumes.create(name=db_vol, labels=labels)
-        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
-        db.start()
-        self._wait_healthy(db, "database")
-        self._run_helper(
-            MYSQL_IMAGE, ["bash", "-c", CLONE_SCRIPT],
-            binds={self.host_paths["/migrations"]: ("/migrations", "ro"),
-                   self.host_paths["/migrations_override/01_clean-honeypot-data.sql"]:
-                       ("/migrations/01_clean-honeypot-data.sql", "ro")},
-            labels=labels, what="clone + scrub", network=self._net("honeypot_network"),
-            extra_networks=[self._net("production_network")],
-            environment={"HP": db_name, "PROD": "production_database",
-                         "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
-                         "MYSQL_DATABASE": DB_NAME})
+        db = None
+        if from_template:
+            # Copy the template's MySQL data directory into this pool's volume
+            # (local I/O; tar as root restores ownership, as the WordPress-layer
+            # seed step already does for a raw DB dir), then start MySQL on it.
+            self._run_helper(
+                self.image, ["sh", "-c", "tar -C /src -cf - . | tar -C /dest -xf -"],
+                binds={self._template_volume_name(): ("/src", "ro"), db_vol: ("/dest", "rw")},
+                labels=labels, what="copy template")
+            db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+            db.start()
+            self._wait_healthy(db, "database")
+        else:
+            db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+            db.start()
+            self._wait_healthy(db, "database")
+            self._run_helper(
+                MYSQL_IMAGE, ["bash", "-c", CLONE_SCRIPT],
+                binds={self.host_paths["/migrations"]: ("/migrations", "ro"),
+                       self.host_paths["/migrations_override/01_clean-honeypot-data.sql"]:
+                           ("/migrations/01_clean-honeypot-data.sql", "ro")},
+                labels=labels, what="clone + scrub", network=self._net("honeypot_network"),
+                extra_networks=[self._net("production_network")],
+                environment={"HP": db_name, "PROD": "production_database",
+                             "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
+                             "MYSQL_DATABASE": DB_NAME})
         if self.redis.exists(QUERY_LOG_KEY):
             self._enable_query_log(db)
         self.register_ready(n)
+
+    # ---- pool template (database layer) ----------------------------------
+
+    def _template_volume_name(self) -> str:
+        return f"{PROJECT}_honeypot_pool_template_data"
+
+    def _template_marker_name(self) -> str:
+        # A tiny companion volume created only once the data volume is fully
+        # built, so a half-built template reads as absent (Docker volume labels
+        # are immutable, so the data volume cannot carry a "done" flag set last).
+        return f"{PROJECT}_honeypot_pool_template_ready"
+
+    def _template_built_at(self) -> float | None:
+        """Epoch the template finished building (from the marker volume's
+        label), or None when there is no complete template."""
+        name = self._template_marker_name()
+        for v in self.docker.volumes.list(filters={"name": name}):
+            if v.name == name:
+                try:
+                    return float((v.attrs.get("Labels") or {}).get("honeypot.template.built", 0))
+                except (TypeError, ValueError):
+                    return 0.0
+        return None
+
+    def _template_is_fresh(self) -> bool:
+        """A usable template volume exists and is within POOL_TEMPLATE_TTL_SECONDS."""
+        built = self._template_built_at()
+        if built is None:
+            return False
+        return TEMPLATE_TTL_S <= 0 or time.time() - built < TEMPLATE_TTL_S
+
+    def ensure_template(self) -> None:
+        """Build the template volume if it is missing or past its TTL. Only one
+        build runs at a time; concurrent builds wait, then copy from it."""
+        if not USE_TEMPLATE:
+            return
+        with self._template_lock:
+            if self._template_is_fresh():
+                return
+            self._build_template()
+
+    def _build_template(self) -> None:
+        """Clone + scrub a honeypot database from production once (exactly as a
+        pool would), then shut MySQL down cleanly so its data directory copies
+        consistently (no crash recovery on the copies). Keeps only the volume;
+        the container is removed. The "ready" marker is created last, so a build
+        that fails part-way leaves no usable template. Runs under
+        _template_lock."""
+        vol, marker, name = (self._template_volume_name(), self._template_marker_name(),
+                             "honeypot_pool_template")
+        labels = {"honeypot.template": "1"}
+        log(f"building pool template {vol} (one-time clone + scrub from production)")
+        started = time.time()
+        try:
+            self.docker.containers.get(name).remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        # Drop the marker first (so a crash now leaves the template "absent"),
+        # then any previous, possibly half-built, data volume.
+        for vname in (marker, vol):
+            for v in self.docker.volumes.list(filters={"name": vname}):
+                if v.name == vname:
+                    v.remove(force=True)
+        self.docker.volumes.create(name=vol, labels=labels)
+        db = self._create_database_container(name, vol, self.mysql_password, labels)
+        db.start()
+        try:
+            self._wait_healthy(db, "template database")
+            self._run_helper(
+                MYSQL_IMAGE, ["bash", "-c", CLONE_SCRIPT],
+                binds={self.host_paths["/migrations"]: ("/migrations", "ro"),
+                       self.host_paths["/migrations_override/01_clean-honeypot-data.sql"]:
+                           ("/migrations/01_clean-honeypot-data.sql", "ro")},
+                labels=labels, what="template clone + scrub", network=self._net("honeypot_network"),
+                extra_networks=[self._net("production_network")],
+                environment={"HP": name, "PROD": "production_database",
+                             "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
+                             "MYSQL_DATABASE": DB_NAME})
+            db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
+        finally:
+            db.remove(force=True)
+        self.docker.volumes.create(name=marker, labels={
+            "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}"})
+        log(f"pool template ready in {time.time() - started:.0f}s")
 
     def _enable_query_log(self, db) -> None:
         """Turn the general query log on (see QUERY_LOG_KEY). Not fatal: the
@@ -975,17 +1103,32 @@ class Manager:
             f"budget {MAX_MEMORY_MB:g} MB / {MAX_CPUS:g} CPUs (0 = none), "
             f"{POOL_MEM_MB} MB / {POOL_CPUS:g} CPUs per pool, {PARALLEL_BUILDS} parallel builds, "
             f"idle timeout {IDLE_TIMEOUT_S:g} s (0 = never)"
-            + (", fast clone ON" if FAST_CLONE else "") + ")")
+            + (", fast clone ON" if FAST_CLONE else "")
+            + (", pool template ON" if USE_TEMPLATE else "") + ")")
         try:
             self.remove_partial_pools()
         except Exception as e:  # noqa: BLE001
             log(f"removing half-built pools failed: {e}")
+        if USE_TEMPLATE:
+            # Pre-build the template now (in the background, so adopting the
+            # compose pools is not held up) -- then even the first scale-up
+            # copies it instead of waiting out a dump from production.
+            threading.Thread(target=self._prebuild_template, daemon=True).start()
         while True:
             try:
                 self.reconcile()
             except Exception as e:  # noqa: BLE001
                 log(f"reconcile error: {e}")
             time.sleep(POLL_SECONDS)
+
+    def _prebuild_template(self) -> None:
+        """Startup helper: build the template once, non-fatally. If it fails
+        (e.g. production not up yet), pools clone from production until a later
+        build succeeds."""
+        try:
+            self.ensure_template()
+        except Exception as e:  # noqa: BLE001
+            log(f"pool template pre-build failed ({e}); pools will clone from production")
 
 
 # Hands a newly ready (or newly idle) pool to the session that has waited

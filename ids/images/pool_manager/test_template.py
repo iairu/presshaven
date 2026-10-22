@@ -1,0 +1,159 @@
+"""Unit tests for the database-layer pool template (fast scale-up): a pool is
+built by copying a pre-seeded template MySQL data directory instead of dumping
+production again. Docker and Redis are stubbed, so no services are needed.
+
+  python -m unittest test_template
+"""
+import os
+import sys
+import unittest
+from unittest import mock
+
+# manager.py imports docker/redis at module level; stub both so this runs where
+# the SDKs aren't installed (same approach as test_manager_reconcile).
+sys.modules.setdefault("docker", mock.MagicMock())
+sys.modules.setdefault("redis", mock.MagicMock())
+os.environ.setdefault("REDIS_PASSWORD", "x")
+os.environ.setdefault("MYSQL_PASSWORD", "x")
+os.environ.setdefault("MYSQL_ROOT_PASSWORD", "x")
+
+import manager  # noqa: E402
+
+
+def _fake_volume(name, built):
+    v = mock.MagicMock()
+    v.name = name
+    v.attrs = {"Labels": {"honeypot.template.built": str(built)}}
+    return v
+
+
+class TemplateBase(unittest.TestCase):
+    def setUp(self):
+        manager.MODE = "database"
+        manager.USE_TEMPLATE = True
+        manager.TEMPLATE_TTL_S = 0
+        with mock.patch.object(manager.Manager, "__init__", lambda s: None):
+            self.mgr = manager.Manager()
+        self.mgr.mysql_password = "pw"
+        self.mgr.host_paths = {
+            "/migrations": "/h/migrations",
+            "/migrations_override/01_clean-honeypot-data.sql": "/h/clean.sql"}
+        self.mgr.image = "pool_manager:test"
+        self.mgr._template_lock = manager.threading.Lock()
+        self.mgr.docker = mock.MagicMock()
+        self.mgr.docker.volumes.list.return_value = []   # no template yet
+        self.mgr.redis = mock.MagicMock()
+        self.mgr.redis.exists.return_value = False       # query log off
+        # Record the helper runs ("what" label) and container builds.
+        self.helpers = []
+        self.mgr._run_helper = lambda *a, **k: self.helpers.append(k.get("what"))
+        self.mgr._wait_healthy = lambda c, w: None
+        self.created = []
+        self.registered = []
+        self.mgr.register_ready = lambda n, owned=False: self.registered.append(n)
+
+        def fake_create(name, vol, pw, labels):
+            c = mock.MagicMock()
+            c.name = name
+            self.created.append((name, vol))
+            return c
+        self.mgr._create_database_container = fake_create
+
+    def _template_present(self, age_seconds=10.0):
+        # Freshness is read from the "ready" marker volume, created last.
+        marker = self.mgr._template_marker_name()
+        self.mgr.docker.volumes.list.return_value = [
+            _fake_volume(marker, manager.time.time() - age_seconds)]
+
+
+class ProvisionWithTemplate(TemplateBase):
+    def test_pool_copies_template_and_skips_the_production_clone(self):
+        self._template_present()
+        self.mgr.provision_database(7)
+        self.assertIn("copy template", self.helpers)
+        self.assertNotIn("clone + scrub", self.helpers)
+        self.assertEqual(self.registered, [7])
+        # The pool's own data volume is created and MySQL started on it.
+        self.assertIn(("honeypot_database_7",
+                       f"{manager.PROJECT}_honeypot_database_7_data"), self.created)
+
+    def test_falls_back_to_production_clone_when_no_template(self):
+        # volumes.list stays empty: ensure_template would build one, so stub it
+        # out to simulate a build that did not finish (template still absent).
+        self.mgr.ensure_template = lambda: None
+        self.mgr.provision_database(8)
+        self.assertIn("clone + scrub", self.helpers)
+        self.assertNotIn("copy template", self.helpers)
+        self.assertEqual(self.registered, [8])
+
+    def test_template_off_always_clones_from_production(self):
+        manager.USE_TEMPLATE = False
+        self._template_present()
+        called = []
+        self.mgr.ensure_template = lambda: called.append(True)
+        self.mgr.provision_database(9)
+        self.assertEqual(called, [])                 # never consulted
+        self.assertIn("clone + scrub", self.helpers)
+        self.assertNotIn("copy template", self.helpers)
+
+    def test_stale_template_is_not_used(self):
+        manager.TEMPLATE_TTL_S = 60
+        self._template_present(age_seconds=120)      # older than the TTL
+        self.mgr.ensure_template = lambda: None       # pretend a rebuild is pending
+        self.mgr.provision_database(10)
+        self.assertNotIn("copy template", self.helpers)
+        self.assertIn("clone + scrub", self.helpers)
+
+
+class BuildTemplate(TemplateBase):
+    def test_builds_scrubs_and_shuts_down_cleanly(self):
+        stopped, removed = [], []
+
+        def fake_create(name, vol, pw, labels):
+            c = mock.MagicMock()
+            c.name = name
+            c.stop = lambda timeout=None: stopped.append(timeout)
+            c.remove = lambda force=False, v=False: removed.append(name)
+            self.created.append((name, vol))
+            return c
+        self.mgr._create_database_container = fake_create
+        created_volumes = []
+        self.mgr.docker.volumes.create = lambda name, labels=None: created_volumes.append(name)
+        self.mgr._build_template()
+        # Seeded with the same clone+scrub a pool would run...
+        self.assertIn("template clone + scrub", self.helpers)
+        # ...on a container whose volume is the template volume...
+        self.assertIn(("honeypot_pool_template", self.mgr._template_volume_name()),
+                      self.created)
+        # ...then shut down cleanly (so copies need no crash recovery) and removed.
+        self.assertEqual(stopped, [90])
+        self.assertIn("honeypot_pool_template", removed)
+        # The "ready" marker is created last and only after the data volume.
+        self.assertEqual(created_volumes,
+                         [self.mgr._template_volume_name(), self.mgr._template_marker_name()])
+
+    def test_failed_build_leaves_no_ready_marker(self):
+        created_volumes = []
+        self.mgr.docker.volumes.create = lambda name, labels=None: created_volumes.append(name)
+
+        def boom(*a, **k):
+            raise RuntimeError("clone failed")
+        self.mgr._run_helper = boom
+        with self.assertRaises(RuntimeError):
+            self.mgr._build_template()
+        # Data volume was created, but the marker (freshness flag) never was.
+        self.assertIn(self.mgr._template_volume_name(), created_volumes)
+        self.assertNotIn(self.mgr._template_marker_name(), created_volumes)
+
+    def test_ensure_template_builds_only_once_when_fresh(self):
+        builds = []
+        self.mgr._build_template = lambda: builds.append(True)
+        self.mgr.ensure_template()                   # no volume -> builds
+        self.assertEqual(len(builds), 1)
+        self._template_present()                     # now a fresh one exists
+        self.mgr.ensure_template()                   # -> no rebuild
+        self.assertEqual(len(builds), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
