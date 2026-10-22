@@ -30,8 +30,9 @@ the browser itself reproduces deterministically.
                                          ▼
 3. proxy (lua/gdpr_handler.lua), per request, in memory only:
      plaintext   = RSA-OAEP-SHA256-decrypt(gdpr_token, PRIVATE key)   ← key never leaves server
+     payload.ip  = $remote_addr        ← client IP the browser can't supply, appended server-side
      if timestamp within GDPR_TIMESTAMP_WINDOW:
-         canonical = characteristics with timestamp stripped (sorted, stable)
+         canonical = characteristics (incl. the appended ip) with timestamp stripped (sorted, stable)
          signature = SHA256( deployment-salt | canonical )            ← ONE-WAY, no PII kept
          if  Redis has  gdpr_honeypot_sig:<signature>  (unexpired):
                  prolong its TTL  →  route to honeypot (router Stage 1a)
@@ -91,10 +92,12 @@ the browser itself reproduces deterministically.
 
 ## Demo limitation (by design)
 
-For this demo the only characteristic is the **screen size**, which is
-low-entropy: many unrelated visitors share a resolution and therefore a
-signature. That is acceptable for demonstrating the mechanism — the signature is
-salted per-deployment and the honeypot binding is explicit and expiring — but a
-real deployment would combine several higher-entropy characteristics before the
-signature became meaningfully distinguishing. The screen size is the single
-input purely to keep the demo legible.
+For this demo the browser supplies a single characteristic, the **screen
+size**, to which the proxy adds the **client IP** server-side before signing.
+Both are low-entropy: many unrelated visitors share a resolution, and an IP is
+shared behind NAT and changes as a visitor moves between networks (so the same
+browser then re-signs under a new signature). That is acceptable for
+demonstrating the mechanism — the signature is salted per-deployment and the
+honeypot binding is explicit and expiring — but a real deployment would combine
+several higher-entropy characteristics before the signature became meaningfully
+distinguishing. These two inputs are used purely to keep the demo legible.

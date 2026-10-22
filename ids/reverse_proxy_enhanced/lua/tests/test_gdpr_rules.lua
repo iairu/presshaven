@@ -45,6 +45,14 @@ check("key order does not change the result",
       == r.canonical_characteristics({ b = "2", a = "1" }))
 check("numeric values are kept",
       r.canonical_characteristics({ dpr = 2, t = NOW }) == "dpr=2")
+-- The proxy appends the client IP (gdpr_handler.lua) as a plain field before
+-- this runs; it must sort in alongside the screen size, not be special-cased.
+check("server-appended client IP joins the characteristics",
+      r.canonical_characteristics({ s = "1920x1080", ip = "203.0.113.7", t = NOW })
+      == "ip=203.0.113.7&s=1920x1080")
+check("same browser, different IP -> different canonical",
+      r.canonical_characteristics({ s = "1920x1080", ip = "203.0.113.7" })
+      ~= r.canonical_characteristics({ s = "1920x1080", ip = "198.51.100.4" }))
 check("non-scalar values ignored", r.canonical_characteristics({ x = {}, t = NOW }) == nil)
 check("only-a-timestamp yields nil", r.canonical_characteristics({ t = NOW }) == nil)
 check("non-table yields nil", r.canonical_characteristics("nope") == nil)

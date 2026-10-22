@@ -11,6 +11,13 @@
 --   and sends it as a cookie on every request. The private key never leaves
 --   the proxy (GDPR_PRIVATE_KEY, .env).
 --
+--   One more characteristic the browser cannot supply -- the client IP as the
+--   proxy sees it ($remote_addr) -- is appended to the decoded payload
+--   server-side, by gdpr_handler.lua, right before the signature is derived, so
+--   it flows through canonical_characteristics() below like any other field.
+--   The same browser from a different network therefore produces a different
+--   signature; this module stays unaware of where the field came from.
+--
 --   The proxy decrypts the token in memory only long enough to (1) check the
 --   timestamp is inside a freshness window and (2) strip the timestamp and
 --   hash the REST into a one-way "gdpr_signature". The raw characteristics are

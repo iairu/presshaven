@@ -183,6 +183,22 @@ function _M.process_request()
         return { consent = true, status = "bad_json" }
     end
 
+    -- Append the client's IP, as the proxy sees it, as one more identifying
+    -- characteristic BEFORE the signature is derived. The browser can't know
+    -- its own public address, so rather than round-trip it to the client and
+    -- have it signed there, we add it here where $remote_addr is authoritative.
+    -- It feeds gdpr_rules.canonical_characteristics exactly like the screen size
+    -- (so the SAME browser from a DIFFERENT IP now yields a DIFFERENT signature),
+    -- and because it's assigned (not merged) after the decode it also OVERRIDES
+    -- any "ip" a crafted token tried to pre-seed -- the value stays server-side
+    -- truth. $remote_addr is the same client notion every other subsystem uses
+    -- (session_handler, pattern_analyzer, router). nil/empty-guarded so a
+    -- missing var can never turn an otherwise valid token into an unsignable one.
+    local client_ip = ngx.var.remote_addr
+    if type(client_ip) == "string" and client_ip ~= "" then
+        payload.ip = client_ip
+    end
+
     local canonical, reason = gdpr_rules.validate(payload, ngx.time(), cfg().timestamp_window)
     if not canonical then
         -- A sent-but-invalid token (e.g. expired timestamp) is treated as a
