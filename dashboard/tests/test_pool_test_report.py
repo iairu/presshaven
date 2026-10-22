@@ -880,6 +880,49 @@ class ResponseRealismTests(unittest.TestCase):
         self.assertTrue(any("404" in e for e in ex))
 
 
+class SignatureRestoreTests(unittest.TestCase):
+    """signature_restorations(): windows the gdpr_signature put back on their
+    honeypot pool after a full wipe + re-consent."""
+
+    def test_full_wipe_then_reconsent_restored_to_same_pool(self):
+        from core.pool_test_report import ClearEvent, signature_restorations
+        e = ClearEvent(1.0, 0, 2, "all", SID[0], before_pool=3, after_session="d" * 32,
+                       after_pool=3, after_route="HONEYPOT",
+                       after_reason="gdpr_signature_match", resolved=True, reconsented=True)
+        out = signature_restorations([e])
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0].window, out[0].pool, out[0].reason),
+                         (0, 3, "gdpr_signature_match"))
+        self.assertEqual((out[0].before_session, out[0].after_session), (SID[0], "d" * 32))
+
+    def test_not_counted_without_reconsent(self):
+        from core.pool_test_report import ClearEvent, signature_restorations
+        # Cleared all, same pool/fresh session, but consent was not re-given.
+        e = ClearEvent(1.0, 0, 2, "all", SID[0], before_pool=3, after_session="d" * 32,
+                       after_pool=3, after_route="HONEYPOT", resolved=True, reconsented=False)
+        self.assertEqual(signature_restorations([e]), [])
+
+    def test_not_counted_when_never_diverted(self):
+        from core.pool_test_report import ClearEvent, signature_restorations
+        # Re-consented, but the window had no pool before (before_pool None).
+        e = ClearEvent(1.0, 0, 2, "all", SID[0], before_pool=None, after_session="d" * 32,
+                       after_pool=None, after_route="PRODUCTION", resolved=True, reconsented=True)
+        self.assertEqual(signature_restorations([e]), [])
+
+    def test_not_counted_when_landed_on_a_different_pool(self):
+        from core.pool_test_report import ClearEvent, signature_restorations
+        e = ClearEvent(1.0, 0, 2, "all", SID[0], before_pool=3, after_session="d" * 32,
+                       after_pool=5, after_route="HONEYPOT", resolved=True, reconsented=True)
+        self.assertEqual(signature_restorations([e]), [])
+
+    def test_fingerprint_recovery_same_session_not_a_signature_restore(self):
+        from core.pool_test_report import ClearEvent, signature_restorations
+        # Kept its session (recovered by fingerprint), so the signature did not do it.
+        e = ClearEvent(1.0, 0, 2, "cookies", SID[0], before_pool=3, after_session=SID[0],
+                       after_pool=3, after_route="HONEYPOT", resolved=True, reconsented=True)
+        self.assertEqual(signature_restorations([e]), [])
+
+
 class PersonalIssueTests(unittest.TestCase):
     def test_host_stats_parsing(self):
         from core.resource_stats import parse_host_stats

@@ -24,7 +24,7 @@ from core.pool_test_report import (load_problems, REASSIGN_FAILED, REASSIGNED, R
                                    PoolTestData, ScalingSummary, Verdict, _quantile, analyze,
                                    CART_CHANGED, CART_CLEARED, CART_NONE, CART_RESTORED, CART_SAME,
                                    CART_UNREADABLE, cart_marks, cart_resets, latency_loads, load_failures_by_step, load_stats,
-                                   scaling_summary, score_causes,
+                                   scaling_summary, score_causes, signature_restorations,
                                    usage_at)
 
 _STATUS_COLOR = {EXCLUSIVE: _GREEN, SHARED_EXPECTED: _ORANGE, INCOMPLETE: _GREY, MERGED: _RED,
@@ -388,8 +388,11 @@ def _cleared_html(data: PoolTestData) -> str:
         if any(e.forges_cookie() and not e.rejections_checked for e in forged):
             summary += ' The rejection log could not be read from Redis.'
     summary += '</p>'
-    # A window already diverted that lost its session walks back to production.
-    escaped = [e for e in clears if e.resolved and e.before_pool is not None and not e.same_session()]
+    # A window already diverted that lost its session walks back to production
+    # -- unless its gdpr_signature put it straight back on the same pool (see
+    # _signature_restore_html), which is not an escape.
+    escaped = [e for e in clears if e.resolved and e.before_pool is not None
+               and not e.same_session() and e.after_pool != e.before_pool]
     accepted = [e for e in forged if e.accepted_forgery()]
     alerts = ''
     if accepted:
@@ -410,6 +413,59 @@ def _cleared_html(data: PoolTestData) -> str:
                             '</tr></thead>', rows, 4)
             + '<p style="color:#555; font-size:9pt;">Step: the tampering happened just before that step of '
             '<i>Step by step</i>.</p>')
+
+
+def _signature_restore_html(data: PoolTestData) -> str:
+    """How a window's consent-gated gdpr_signature put it back on its honeypot
+    pool after a full wipe. The run seeds each window with its own consented
+    gdpr_token; when a window later clears all its site data (SERVERID and the
+    token gone) it re-consents, sending a fresh token. Only the one-way
+    signature of that token ever reaches the proxy, and it is unchanged (same
+    screen, same per-window tag), so a window already bound to a honeypot is
+    routed straight back to the same pool -- with a brand-new session id, which
+    is what proves the signature did it and not a surviving cookie."""
+    if data.clear_seed is None:
+        return ""
+    # A segmentation export always gates on GDPR consent, so every cookie-clear
+    # re-consents; the section is relevant whenever a clear happened at all.
+    if not any(e.reconsented for e in data.cleared):
+        return ""
+    intro = ('<h2 style="color:#222;">Session restoration by gdpr_signature</h2>'
+             '<p style="color:#555;">Each window was seeded with its own consented '
+             '<i>gdpr_token</i> (distinct per window, so each keeps a distinct one-way '
+             '<i>gdpr_signature</i>). When a window cleared <b>all</b> its site data its SERVERID '
+             'session went with it; the window then re-consented, sending a fresh token. The proxy '
+             'only ever sees the token\'s signature &ndash; derived server-side and bound to the '
+             'honeypot pool the window was diverted to &ndash; so it routes the window straight back '
+             'to that pool (<i>honeypot_reason = gdpr_signature_match</i>) and issues a new session '
+             'id. Same pool, fresh session: the signature restored it, not a cookie that survived '
+             'the wipe.</p>')
+    restored = signature_restorations(data.cleared)
+    if not restored:
+        return (intro + '<p style="color:#777;">No window that had been diverted cleared all its site '
+                'data this run, so the signature restoration was not exercised. (Selecting the '
+                '&ldquo;GDPR signature&rdquo; pattern forces the clear-all tamper on to make it '
+                'likely.)</p>')
+    rows = []
+    for r in restored:
+        label = data.frames[r.window].label if r.window < len(data.frames) else f"Window {r.window + 1}"
+        rows.append(
+            f'<tr><td><b>{_esc(label)}</b></td><td align="center">{r.step + 1}</td>'
+            f'<td align="center">pool {r.pool}</td>'
+            f'<td style="font-size:8pt;">{_short(r.before_session)} &rarr; {_short(r.after_session)}</td>'
+            f'<td>{_badge(_esc(r.reason or "gdpr_signature_match"), _GREEN)}</td></tr>')
+    verdict = (f'<p style="color:#2e7d32;"><b>{len(restored)} window(s) restored by their '
+               'gdpr_signature</b> after a full wipe &ndash; each back on the same honeypot pool it '
+               'had been diverted to, with a new session id.</p>')
+    return (intro + verdict
+            + '<table width="100%" cellspacing="0" cellpadding="4" border="1" '
+            'style="border-collapse:collapse; color:#333;">'
+            '<thead><tr><th width="22%">Window</th><th width="12%">Step</th>'
+            '<th width="18%">Restored to</th><th width="28%">Session before &rarr; after</th>'
+            '<th width="20%">Router reason</th></tr></thead>'
+            + "".join(rows) + '</table>'
+            + '<p style="color:#555; font-size:9pt;">Step: the clear-all happened just before that step '
+            'of <i>Step by step</i>, where the window was read back on its pool again.</p>')
 
 
 def _runs_html(data: PoolTestData) -> str:
@@ -665,6 +721,7 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     parts.append('<h2 style="color:#222;">Windows</h2>')
     parts.append(_frames_table(data))
     parts.append(_cleared_html(data))
+    parts.append(_signature_restore_html(data))
     scaling, _next_fig = _scaling_html(data, doc, family, 2)
     parts.append(scaling)
     parts.append(_round_robin_html(data))

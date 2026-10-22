@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
 
 from core import honeypot_layer, redis_inspect
 from core.docker_ctl import target_for
-from core.patterns import PATTERN_PRESETS
+from core.patterns import PATTERN_PRESETS, GDPR_RESTORE_PRESET, is_gdpr_restore
 from core import pool_evidence
 from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
@@ -542,6 +542,12 @@ class PoolTestPage(QWidget):
         layers; a report run on the database layer picks which reach the
         honeypot database, see core.pool_test_report.window_plan)."""
         self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"]
+        # Plus the GDPR-signature demonstration: selecting it keeps the per-window
+        # attacks (chosen by window_plan) but makes the run force the "clear all
+        # site data" tamper on, so at least one diverted window clears and
+        # re-consents -- and the exported report documents how its gdpr_signature
+        # restored it (see export_report / signature_restorations()).
+        self._presets.append(GDPR_RESTORE_PRESET)
         self.preset_combo.blockSignals(True)
         self.preset_combo.clear()
         for p in self._presets:
@@ -1106,6 +1112,12 @@ class PoolTestPage(QWidget):
         preset = self._preset()
         if preset is None:
             return
+        # The GDPR-signature demonstration needs a full wipe to happen mid-run,
+        # so force the session-tamper schedule on: a diverted window then clears
+        # all its site data and re-consents, and the report shows its signature
+        # putting it back on its pool. The windows still run their real attacks.
+        if is_gdpr_restore(preset) and not self.clear_check.isChecked():
+            self.clear_check.setChecked(True)
         path, _ = QFileDialog.getSaveFileName(
             self, "Save pool test report", "pool_test_report.pdf", "PDF files (*.pdf)")
         if not path:
@@ -1286,6 +1298,15 @@ class PoolTestPage(QWidget):
             deadline = time.monotonic() + 3.0      # deleteAllCookies() is asynchronous
             while self._session_ids[window] and time.monotonic() < deadline:
                 self._spin(100)
+            # Full wipe, then re-consent: a visitor who clears their site data
+            # and agrees to the banner again sends a fresh gdpr_token. Its
+            # one-way signature is unchanged (same screen, same per-window tag),
+            # so if this window was already bound to a honeypot the proxy routes
+            # it straight back there on the next load -- the report's
+            # gdpr_signature section records it (see signature_restorations()).
+            if self._gdpr is not None:
+                self._apply_gdpr_cookie(window)
+                event.reconsented = True
         return event
 
     def _forge_session_data(self, event: ClearEvent) -> None:
@@ -1356,6 +1377,7 @@ class PoolTestPage(QWidget):
             step = results[e.step]
             d = step.decisions[e.window] if e.window < len(step.decisions) else Decision()
             e.after_session, e.after_pool, e.after_route = d.session_id, d.pool, d.route
+            e.after_reason = d.reason
             e.resolved = True
             if e.window < len(step.actions):
                 step.actions[e.window] = (f"{e.action_note()}; then "
@@ -1734,8 +1756,10 @@ class PoolTestPage(QWidget):
         # its OWN consented gdpr_token now that its cookie jar is clean, before
         # any attack traffic goes out. Distinct per window so each keeps a
         # distinct gdpr_signature (segmentation stays intact). A later "clear
-        # cookies / site data" tamper step legitimately drops it -- that window
-        # has then revoked consent for the rest of the run, which is realistic.
+        # cookies / site data" tamper step drops it along with the session; the
+        # window then re-consents (sends a fresh token with the same signature),
+        # so a window already bound to a honeypot is routed straight back to its
+        # pool -- see _clear_browser_data and signature_restorations().
         if self._gdpr is not None:
             for i in range(len(self.browsers)):
                 self._apply_gdpr_cookie(i)

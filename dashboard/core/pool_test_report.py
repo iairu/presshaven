@@ -358,7 +358,12 @@ class ClearEvent:
     after_session: str = ""       # the window's session once the step settled
     after_pool: int | None = None
     after_route: str = ""
+    after_reason: str = ""        # the step's honeypot_reason (e.g. gdpr_signature_match)
     resolved: bool = False        # the step after it was read back
+    # A full wipe followed by GDPR re-consent: the window agreed to the banner
+    # again, so a fresh gdpr_token (same one-way signature) went back out. Set
+    # only when the operator agreed to GDPR for this export; see signature_restorations().
+    reconsented: bool = False
     # Forgeries: the value planted, the session id it claimed, its SHA-1 (what
     # the proxy logs instead of the value) and the proxy's rejection record
     # ({"status", "scored", "score", ...}) found for it in Redis.
@@ -493,6 +498,40 @@ def session_resets(cleared: list[ClearEvent] | None) -> set[tuple[int, int]]:
     different session: its pool history starts over there."""
     return {(e.step, e.window) for e in cleared or []
             if e.resolved and e.after_session and not e.same_session()}
+
+
+@dataclass
+class SignatureRestore:
+    """A window the gdpr_signature put back onto its honeypot pool after a full
+    wipe: it cleared its cookies (session and SERVERID gone), re-consented to
+    GDPR, and the proxy recognised the one-way signature of the fresh token --
+    still bound to the window's pool -- and routed it straight back there."""
+    window: int
+    step: int                     # index into PoolTestData.steps where it was read back
+    pool: int                     # the honeypot pool it returned to (== the one it left)
+    reason: str                   # the router's honeypot_reason (gdpr_signature_match)
+    variant: str                  # the clear that preceded it ("cookies" or "all")
+    before_session: str           # the session it had before clearing
+    after_session: str            # the fresh session it was given on re-consent
+
+
+def signature_restorations(cleared: list[ClearEvent] | None) -> list[SignatureRestore]:
+    """Windows whose gdpr_signature restored them after a full clear. Each one
+    was on a honeypot pool, cleared its cookies (so its SERVERID session was
+    gone), re-consented, and came back on the SAME pool with a FRESH session id:
+    proof it was the one-way signature of the re-sent token, not a surviving
+    cookie, that restored the binding. A window that cleared without ever having
+    been diverted, or came back on a different pool, is not counted."""
+    out: list[SignatureRestore] = []
+    for e in cleared or []:
+        if (e.reconsented and e.clears_cookies() and e.resolved
+                and e.before_pool is not None and e.after_pool == e.before_pool
+                and (not e.before_session or e.after_session != e.before_session)):
+            out.append(SignatureRestore(
+                window=e.window, step=e.step, pool=e.after_pool,
+                reason=e.after_reason or "gdpr_signature_match", variant=e.variant,
+                before_session=e.before_session, after_session=e.after_session))
+    return out
 
 
 # How a window's cart compares with its baseline in one step (see cart_marks()).
