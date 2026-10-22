@@ -21,6 +21,11 @@ parse_line() checks in this order and returns on the first match):
     informational context for the "Bad IP reputation" signal that follows.
   - "[PATTERN ANALYZER] (emoji) <label> (+N) [| detail]" -- individual
     scoring signals (URI patterns, headers, CVE match, automation, etc.).
+  - "[GDPR] Received gdpr_signature=<hex> | Session: <id>" -- nginx.conf,
+    the consent-gated one-way signature derived for a request that carried a
+    valid consent token (see lua/gdpr_handler.lua / ids/GDPR.md). Shown as its
+    own "gdpr" card so the received signature is visible in the Attack
+    Simulation page's Pattern analyzer view, not just the raw log.
 Anything else returns None (not every log line is pattern-analyzer-relevant
 -- SESSION DEBUG, HEALTH, docker_logs source noise, etc. are deliberately
 not shown in the diagram).
@@ -114,6 +119,11 @@ _FINAL_DECISION_RE = re.compile(
 _FINAL_SCORE_RE = re.compile(_ANALYZER_TAG + r".*FINAL SCORE:\s*(-?\d+)/(\d+)\s*\(([^)]+)\)")
 _ROUTING_RE = re.compile(r"\[ROUTING\]\s*(.+?)\s*(HONEYPOT|PRODUCTION)\b(.*)$")
 _KNOWN_THREAT_RE = re.compile(_ANALYZER_TAG + r".*Known threat IP detected:\s*(\S+)\s*\|\s*Reason:\s*(.+)$")
+# nginx.conf's per-request "[GDPR] Received gdpr_signature=<hex> | Session: ..."
+# -- the one-way consent signature derived for this request. The trailing
+# "| Session: ..." (and nginx's own ", client: ..." context, already stripped
+# in _parse_line_body) is dropped so only the signature itself is shown.
+_GDPR_SIGNATURE_RE = re.compile(r"\[GDPR\]\s*Received gdpr_signature=(\S+)")
 _SIGNAL_RE = re.compile(_ANALYZER_TAG + r"\s*(?:[^\x00-\x7f]+\s*)?(.+?)\s*\(\+(\d+)\)(.*)$")
 
 _EMOJI_PREFIX_RE = re.compile(r"^[^\x00-\x7f\s]+\s*")
@@ -209,6 +219,10 @@ def _parse_line_body(line: str) -> PatternEvent | None:
     if m:
         ip, reason = m.group(1), m.group(2)
         return PatternEvent("info", f"Known threat IP: {ip}", reason.strip(), COLOR_INFO)
+
+    m = _GDPR_SIGNATURE_RE.search(line)
+    if m:
+        return PatternEvent("gdpr", "GDPR signature received", m.group(1), COLOR_INFO)
 
     m = _SIGNAL_RE.search(line)
     if m:

@@ -16,7 +16,7 @@ REPO_ROOT = DASHBOARD_DIR.parent
 sys.path.insert(0, str(DASHBOARD_DIR))
 
 from core import cert_ctl, pattern_log_parser  # noqa: E402
-from core.colors import GREEN, RED  # noqa: E402
+from core.colors import BLUE, GREEN, RED  # noqa: E402
 from core.env_file import EnvFile, seed_from_example  # noqa: E402
 from core.line_buffer import LineBuffer  # noqa: E402
 
@@ -119,6 +119,12 @@ class ThreatLogParserTests(unittest.TestCase):
         ev = self.parse(line)
         self.assertEqual(ev.timestamp, "2026-08-09T10:32:37.684747138Z")
         self.assertEqual(ev.score, 0)
+
+    def test_gdpr_signature_received(self):
+        ev = self.parse(
+            "[GDPR] Received gdpr_signature=abc123def456 | Session: s-42, client: 1.2.3.4")
+        self.assertEqual((ev.kind, ev.label, ev.detail), ("gdpr", "GDPR signature received", "abc123def456"))
+        self.assertEqual(ev.color, BLUE)
 
     def test_irrelevant_lines_are_ignored(self):
         self.assertIsNone(self.parse("[SESSION DEBUG] cookie_PHPSESSID=nil"))
