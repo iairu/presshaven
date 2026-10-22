@@ -23,7 +23,7 @@ from core.colors import GREEN, GREY, ORANGE, RED
 from core.docker_ctl import Target, targets_for
 from core.kibana_credentials import get_elastic_credentials
 from core.state import AppState
-from ui.common import ErrorBanner, Job, TargetSelector, confirm, danger_button
+from ui.common import ErrorBanner, Job, TargetSelector, confirm, copy_logs, danger_button, export_logs
 from ui.flow_layout import FlowLayout
 from ui.page_overview import StatCard
 
@@ -40,8 +40,10 @@ def _run(argv, cwd) -> str:
 
 
 def _check(edge: Target, siem_targets: list[Target], state):
-    """(ShipperHealth, aggregator state, index stats or None) -- runs
-    docker/ssh, so off-thread."""
+    """(ShipperHealth, aggregator state, index stats or None, raw shipper log
+    tail) -- runs docker/ssh, so off-thread. The raw tail is kept for the
+    Copy/Export logs buttons; the health view above only surfaces the relevant
+    lines from it."""
     enabled, why = edge.siem_shipping()
     shipper = next((c for c in edge.ps() if c.get("Service") == sh.SHIPPER_SERVICE), None)
     logs = ""
@@ -63,7 +65,7 @@ def _check(edge: Target, siem_targets: list[Target], state):
             argv, cwd = agg_target.build("exec", "-T", "es01", "sh", "-c",
                                          sh.ES_INDEX_CURL.format(password=creds[1]))
             index_stats = sh.parse_index_stats(_run(argv, cwd))
-    return sh.combine(enabled, why, shipper, logs), agg, index_stats
+    return sh.combine(enabled, why, shipper, logs), agg, index_stats, logs
 
 
 def _clear_docs(siem_targets: list[Target], state):
@@ -93,6 +95,7 @@ class PipelinePage(QWidget):
         self._busy = False
         self._jobs: set[Job] = set()
         self._last_docs: int | None = None
+        self._log_tail = ""   # raw shipper log tail from the last check, for Copy/Export
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -101,6 +104,12 @@ class PipelinePage(QWidget):
         bar.addWidget(self.target_combo)
         self.refresh_btn = QPushButton("Check now")
         bar.addWidget(self.refresh_btn)
+        self.copy_btn = QPushButton("Copy logs")
+        self.copy_btn.setToolTip("Copy the shipper's log tail (the lines summarised below) to the clipboard")
+        bar.addWidget(self.copy_btn)
+        self.export_btn = QPushButton("Export logs…")
+        self.export_btn.setToolTip("Save the shipper's log tail to a file")
+        bar.addWidget(self.export_btn)
         self.updated = QLabel("")
         bar.addWidget(self.updated, stretch=1)
         self.clear_btn = danger_button("Clear all documents in SIEM", self._clear_siem)
@@ -143,6 +152,8 @@ class PipelinePage(QWidget):
         self.timer.setInterval(REFRESH_MS)
         self.timer.timeout.connect(self.refresh)
         self.refresh_btn.clicked.connect(self.refresh)
+        self.copy_btn.clicked.connect(self._copy_logs)
+        self.export_btn.clicked.connect(self._export_logs)
         self.target_combo.currentIndexChanged.connect(self.refresh)
 
     def showEvent(self, event) -> None:
@@ -174,9 +185,20 @@ class PipelinePage(QWidget):
                 self.error_banner.set_error(error or "no data", prefix="⚠ Pipeline check failed: ")
                 return
             self.error_banner.set_error(None)
-            self._render(*result)
+            health, agg, index_stats, log_tail = result
+            self._log_tail = log_tail or ""
+            self._render(health, agg, index_stats)
         job.done.connect(finished)
         job.start()
+
+    def _copy_logs(self) -> None:
+        if copy_logs(self, self._log_tail, "shipper logs"):
+            self.updated.setText(f"logs copied {time.strftime('%H:%M:%S')}")
+
+    def _export_logs(self) -> None:
+        name = f"vector_outbound_{time.strftime('%Y%m%d_%H%M%S')}.log"
+        if export_logs(self, self._log_tail, name, "shipper logs"):
+            self.updated.setText(f"logs exported {time.strftime('%H:%M:%S')}")
 
     def _clear_siem(self) -> None:
         if self._busy:

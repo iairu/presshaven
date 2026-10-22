@@ -8,7 +8,9 @@ from typing import Callable
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QGuiApplication
-from PyQt6.QtWidgets import QComboBox, QLabel, QLayout, QMessageBox, QPushButton, QWidget
+from PyQt6.QtWidgets import (
+    QComboBox, QFileDialog, QLabel, QLayout, QMessageBox, QPushButton, QWidget,
+)
 
 from core.colors import RED
 from core.docker_ctl import Target, target_for
@@ -105,6 +107,37 @@ def muted_label(text: str) -> QLabel:
     label.setStyleSheet("color: #888888;")
     label.setWordWrap(True)
     return label
+
+
+def copy_logs(parent: QWidget | None, text: str, what: str = "logs") -> bool:
+    """Put `text` on the system clipboard. Returns True on success; shows an
+    info box and returns False when there is nothing to copy. Paired with
+    export_logs so a page's "Copy" and "Export" always act on the same text."""
+    if not text.strip():
+        QMessageBox.information(parent, "Copy logs", f"No {what} to copy yet.")
+        return False
+    QGuiApplication.clipboard().setText(text)
+    return True
+
+
+def export_logs(parent: QWidget | None, text: str, default_name: str, what: str = "logs",
+                file_filter: str = "Log files (*.log);;Text files (*.txt);;All files (*)") -> bool:
+    """Save `text` to a file the user picks (same shape as the Live Events CSV
+    export). Returns True on success; False if there is nothing to export or the
+    user cancelled."""
+    if not text.strip():
+        QMessageBox.information(parent, "Export logs", f"No {what} to export yet.")
+        return False
+    path, _ = QFileDialog.getSaveFileName(parent, "Export logs", default_name, file_filter)
+    if not path:
+        return False
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text if text.endswith("\n") else text + "\n")
+    except OSError as e:
+        QMessageBox.warning(parent, "Export failed", str(e))
+        return False
+    return True
 
 
 def clear_layout(layout: QLayout) -> None:

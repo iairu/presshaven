@@ -10,6 +10,8 @@ All container access goes through core/suricata_ctl.py (docker compose exec,
 local or SSH) on a background thread so a slow remote never freezes the UI."""
 from __future__ import annotations
 
+import time
+
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
@@ -21,7 +23,7 @@ from core import suricata_ctl
 from core.colors import GREY, ORANGE, RED
 from core.docker_ctl import targets_for
 from core.state import AppState
-from ui.common import ErrorBanner, Job, TargetSelector, confirm
+from ui.common import ErrorBanner, Job, TargetSelector, confirm, copy_logs, export_logs
 
 _SEV_COLOR = {"critical": RED, "high": ORANGE}
 REFRESH_MS = 8000
@@ -48,6 +50,12 @@ class SuricataPage(QWidget):
         bar.addWidget(self.target_combo)
         self.refresh_btn = QPushButton("Refresh")
         bar.addWidget(self.refresh_btn)
+        self.copy_btn = QPushButton("Copy logs")
+        self.copy_btn.setToolTip("Copy the alerts currently shown (after any filter) to the clipboard")
+        bar.addWidget(self.copy_btn)
+        self.export_btn = QPushButton("Export logs…")
+        self.export_btn.setToolTip("Save the alerts currently shown (after any filter) to a file")
+        bar.addWidget(self.export_btn)
         self.status = QLabel("")
         bar.addWidget(self.status, stretch=1)
         layout.addLayout(bar)
@@ -114,6 +122,8 @@ class SuricataPage(QWidget):
         tabs.addTab(rules_tab, "Rules")
 
         self.refresh_btn.clicked.connect(self.refresh)
+        self.copy_btn.clicked.connect(self._copy_logs)
+        self.export_btn.clicked.connect(self._export_logs)
         self.target_combo.currentIndexChanged.connect(self.refresh)
         self.alert_filter.textChanged.connect(self._render_alerts)
         self.sev_combo.currentIndexChanged.connect(self._render_alerts)
@@ -205,6 +215,31 @@ class SuricataPage(QWidget):
             return
         a = self._shown_alerts[rows[0].row()]
         self.alert_detail.setPlainText("\n".join(f"{label}: {value}" for label, value in a.detail_lines()))
+
+    def _alerts_as_text(self) -> str:
+        """The alerts currently shown (respecting the filter and severity
+        selector), as a tab-separated table -- what Copy/Export logs act on.
+        Empty string when nothing is shown, so the helpers can say so."""
+        if not self._shown_alerts:
+            return ""
+        header = ["Time", "Severity", "Signature", "SID", "Category", "Source", "Target", "URL"]
+        rows = ["\t".join(header)]
+        for a in self._shown_alerts:
+            rows.append("\t".join((
+                a.timestamp[:19].replace("T", " "), a.severity_label, a.signature,
+                str(a.sid), a.category, f"{a.src_ip}:{a.src_port}",
+                f"{a.dest_ip}:{a.dest_port}", a.url)))
+        return "\n".join(rows)
+
+    def _copy_logs(self) -> None:
+        if copy_logs(self, self._alerts_as_text(), "alerts"):
+            self.status.setText(f"{len(self._shown_alerts)} alert(s) copied")
+
+    def _export_logs(self) -> None:
+        name = f"suricata_alerts_{time.strftime('%Y%m%d_%H%M%S')}.tsv"
+        if export_logs(self, self._alerts_as_text(), name, "alerts",
+                       "Tab-separated (*.tsv);;Text files (*.txt);;All files (*)"):
+            self.status.setText(f"{len(self._shown_alerts)} alert(s) exported")
 
     def _render_rules(self) -> None:
         needle = self.rule_filter.text().strip().lower()
