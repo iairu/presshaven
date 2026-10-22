@@ -12,6 +12,7 @@ anything itself except the small `ps`/reachability synchronous helpers.
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -27,6 +28,44 @@ PROJECT_LABELS = {pid: project_for(pid).label for pid in PROJECT_IDS}
 
 # Label on every container and volume ids/images/pool_manager creates.
 RUNTIME_POOL_LABEL = "honeypot.pool.managed-by=pool_manager"
+
+# A runtime pool's serving container: honeypot_eshop_N (wordpress layer) or
+# honeypot_database_N (database layer). pool_manager names these directly via
+# the Docker API, so -- unlike compose-created containers -- they have no
+# project-prefixed name. The short-lived helper containers it spawns during a
+# scale-up (template copy, clone+scrub, wp-cli seed) carry the same pool label
+# but get random Docker-assigned names and are removed on completion, so this
+# pattern deliberately keeps only the actual pools out of a mid-provision poll.
+_POOL_SERVING_NAME_RE = re.compile(r"^honeypot_(?:eshop|database)_\d+$")
+# Extracts the code out of `docker ps`'s "Exited (N) ..." status, since its
+# JSON (unlike `docker compose ps`'s) carries no separate ExitCode field.
+_EXIT_CODE_RE = re.compile(r"Exited \((\d+)\)")
+
+
+def _pool_record(raw: dict) -> dict | None:
+    """Reshape one `docker ps --format json` record for a runtime honeypot
+    pool onto the field names `docker compose ps --format json` uses -- the
+    vocabulary container_status.classify()/status_detail() and the Health
+    diagram read. Returns None for anything that isn't a pool's serving
+    container (e.g. a transient provisioning helper). `docker ps` gives
+    HealthStatus (compose calls it Health) and no ExitCode (parsed from
+    Status here); CreatedAt is the same Go time format compose emits, so
+    the Health page's uptime parsing handles it unchanged."""
+    name = (raw.get("Names") or "").split(",")[0].strip()
+    if not _POOL_SERVING_NAME_RE.match(name):
+        return None
+    status = raw.get("Status", "")
+    code = _EXIT_CODE_RE.search(status)
+    return {
+        "Service": name,   # unique per pool -> its own node, not collapsed with another
+        "Name": name,
+        "State": raw.get("State", ""),
+        "Health": raw.get("HealthStatus", ""),
+        "Status": status,
+        "ExitCode": code.group(1) if code else "0",
+        "CreatedAt": raw.get("CreatedAt", ""),
+        "Image": raw.get("Image", ""),
+    }
 
 
 # The edge stack's log shipper to the SIEM (profiles: [elk]) and the .env
@@ -262,7 +301,44 @@ class Target:
                 containers.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
+        # Pools the pool_manager spins up at runtime carry no
+        # com.docker.compose.* labels (see build_purge()), so the
+        # `docker compose ps` above never lists them -- fold them in by
+        # their own label so the Global Visualization draws a node per pool.
+        if self.project == "edge":
+            containers.extend(self._runtime_pool_containers(timeout))
         return containers
+
+    def _runtime_pool_containers(self, timeout: float = 15.0) -> list[dict]:
+        """Runtime honeypot pools (honeypot_eshop_N / honeypot_database_N),
+        found by their pool_manager label and reshaped onto compose-ps field
+        names so they merge cleanly with ps(). Compose-declared pools (1-3)
+        don't carry this label, so the two sets are disjoint -- no node is
+        drawn twice. Returns [] on any failure, same contract as ps()."""
+        label = shlex.quote(f"label={RUNTIME_POOL_LABEL}")
+        argv, cwd = self.build_shell(
+            f"docker ps -a --filter {label} --format '{{{{json .}}}}'")
+        try:
+            result = subprocess.run(
+                argv, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return []
+        if result.returncode != 0:
+            return []
+        pools = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rec = _pool_record(raw)
+            if rec is not None:
+                pools.append(rec)
+        return pools
 
     def remote_compose_file_exists(self, timeout: float = 8.0) -> bool:
         """For remote targets only: does remote_compose_dir() actually

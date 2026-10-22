@@ -268,6 +268,51 @@ class PurgeTests(unittest.TestCase):
         self.assertEqual(argv[-3:], ["down", "-v", "--remove-orphans"])
 
 
+class RuntimePoolRecordTests(unittest.TestCase):
+    """_pool_record maps a `docker ps --format json` record for a runtime
+    honeypot pool onto the compose-ps field names ps() / the Health diagram
+    read, and filters out anything that isn't a pool's serving container."""
+
+    def _raw(self, name, state="running", health="healthy",
+             status="Up 2 minutes (healthy)"):
+        return {"Names": name, "State": state, "HealthStatus": health,
+                "Status": status, "CreatedAt": "2026-10-22 09:00:00 +0000 UTC",
+                "Image": "honeypot/eshop:latest"}
+
+    def test_running_eshop_pool_is_reshaped(self):
+        from core.docker_ctl import _pool_record
+        rec = _pool_record(self._raw("honeypot_eshop_4"))
+        self.assertEqual(rec["Service"], "honeypot_eshop_4")
+        self.assertEqual(rec["Name"], "honeypot_eshop_4")
+        self.assertEqual(rec["State"], "running")
+        self.assertEqual(rec["Health"], "healthy")   # docker ps's HealthStatus
+        self.assertEqual(rec["ExitCode"], "0")
+        self.assertEqual(rec["CreatedAt"], "2026-10-22 09:00:00 +0000 UTC")
+
+    def test_database_pool_is_reshaped(self):
+        from core.docker_ctl import _pool_record
+        rec = _pool_record(self._raw("honeypot_database_5", status="Up 1 minute"))
+        self.assertEqual(rec["Service"], "honeypot_database_5")
+
+    def test_exit_code_parsed_from_status(self):
+        from core.docker_ctl import _pool_record
+        rec = _pool_record(self._raw("honeypot_eshop_4", state="exited",
+                                     health="", status="Exited (137) 3 seconds ago"))
+        self.assertEqual(rec["ExitCode"], "137")
+
+    def test_provisioning_helper_is_skipped(self):
+        # Short-lived scale-up helpers carry the same pool label but get
+        # random Docker-assigned names -- they must not surface as pools.
+        from core.docker_ctl import _pool_record
+        self.assertIsNone(_pool_record(self._raw("eager_banana")))
+        self.assertIsNone(_pool_record(self._raw("honeypot_eshop_4_helper")))
+
+    def test_first_name_wins_when_comma_joined(self):
+        from core.docker_ctl import _pool_record
+        rec = _pool_record(self._raw("honeypot_eshop_4,some-alias"))
+        self.assertEqual(rec["Service"], "honeypot_eshop_4")
+
+
 if __name__ == "__main__":
     unittest.main()
 
