@@ -136,6 +136,33 @@ class ThreatLogParserTests(unittest.TestCase):
         self.assertIsNone(self.parse("   "))
 
 
+class SignatureSimTests(unittest.TestCase):
+    """core/signature_sim.extract_signature -- the pure log-scraping half of
+    the Signature Simulation page's flow."""
+
+    def setUp(self):
+        from core import signature_sim
+        self.extract = staticmethod(signature_sim.extract_signature).__func__
+
+    def test_pulls_signature_and_session_from_a_proxy_log_line(self):
+        log = ("reverse_proxy-1  | 2026-08-09T10:32:37.6Z [REQUEST] IP: 1.2.3.4\n"
+               "reverse_proxy-1  | 2026-08-09T10:32:37.7Z [GDPR] Received "
+               "gdpr_signature=abc123 | Session: s-42, client: 1.2.3.4\n")
+        self.assertEqual(self.extract(log), ("abc123", "s-42"))
+
+    def test_takes_the_most_recent_line_when_several_are_present(self):
+        log = ("[GDPR] Received gdpr_signature=old | Session: s-1\n"
+               "[GDPR] Received gdpr_signature=new | Session: s-2\n")
+        self.assertEqual(self.extract(log), ("new", "s-2"))
+
+    def test_signature_without_a_session(self):
+        self.assertEqual(self.extract("[GDPR] Received gdpr_signature=lonely"),
+                         ("lonely", ""))
+
+    def test_no_gdpr_line_yields_empty(self):
+        self.assertEqual(self.extract("[REQUEST] nothing to see here\n   "), ("", ""))
+
+
 class CertSubjectTests(unittest.TestCase):
     def test_edge_cert_subject_does_not_name_the_honeypot(self):
         # The blind pentest identified the deception from O=HoneypotOrg.

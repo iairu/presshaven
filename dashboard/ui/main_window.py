@@ -31,6 +31,7 @@ from core.container_status import classify
 from ui.page_backups import BackupsPage
 from ui.page_certs import CertsPage
 from ui.page_patterns import PatternsPage
+from ui.page_signature_sim import SignatureSimPage
 from ui.page_detection import DetectionPage
 from ui.page_extras import ExtrasPage
 from ui.page_health import HealthPage
@@ -70,7 +71,7 @@ _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
     "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
-    "kibana", "patterns", "pool_test", "log_search", "extras", "settings", "learn",
+    "kibana", "patterns", "signature_sim", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
@@ -88,6 +89,7 @@ PAGE_LABELS = {
     "backups": "Backup & Recovery",
     "kibana": "SIEM Analytics",
     "patterns": "Attack Simulation",
+    "signature_sim": "Signature Simulation",
     "pool_test": "Segmentation Validation",
     "log_search": "Forensics Analysis",
     "extras": "Reporting",
@@ -101,7 +103,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "signature_sim", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
@@ -219,6 +221,7 @@ class MainWindow(QMainWindow):
         # Every pattern run drops a time-aligned marker onto the Resources
         # graphs so its resource impact is visible.
         self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
+        self.signature_sim_page = SignatureSimPage(state)
         self.pool_test_page = PoolTestPage(state)
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
@@ -244,6 +247,7 @@ class MainWindow(QMainWindow):
             ("backups", self.backups_page),
             ("kibana", self.kibana_page),
             ("patterns", self.patterns_page),
+            ("signature_sim", self.signature_sim_page),
             ("pool_test", self.pool_test_page),
             ("log_search", self.log_search_page),
             ("extras", self.extras_page),

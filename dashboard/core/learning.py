@@ -354,6 +354,13 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Each card on the Pattern analyzer tab is one signal that added points. Watch the "
         "score cross the threshold and the route flip to HONEYPOT.",
     ),
+    "signature_sim": PageGuide(
+        "Watch one browser characteristic become the proxy's consent-gated one-way gdpr_signature, end to end.",
+        "Resize the visitor browser window, press 'Agree & derive signature', then resize and run again.",
+        "The browser signs its screen size plus a timestamp; the proxy appends the client IP it sees and "
+        "hashes it. Only the signature leaves the proxy, and the same browser from the same size reproduces "
+        "the same signature — that is how a returning visitor is re-recognised without storing anything about them.",
+    ),
     "log_search": PageGuide(
         "Forensic search across raw logs from every workload.",
         "Search for the CVE ID of a pattern you just ran.",
