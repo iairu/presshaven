@@ -135,8 +135,18 @@ redis_clear_replicating() {
         || log "pool $1: could not clear replicating flag in Redis (will self-expire via its 30s TTL)"
 }
 
+# --default-character-set=binary on BOTH the dump and the restore (below) is
+# load-bearing, not cosmetic. Some postmeta rows hold PHP-serialized blobs
+# (e.g. WooCommerce's _product_attributes), whose strings are byte-length
+# prefixed: s:16:"Ethiopia · Guji". Without a pinned charset the dump/restore
+# pipe round-trips through the client's default connection charset and
+# re-encodes multibyte bytes (· = C2 B7 -> C3 82 C2 B7), so the stored byte
+# count no longer matches the s:16: prefix and PHP's unserialize() fails. On a
+# product that means get_variation_attributes() returns nothing, no variation
+# dropdowns render, and "Add to cart" is blocked. binary transfers the stored
+# bytes verbatim, keeping the prefix valid.
 prod_mysql() {
-    mysql -h "$PROD_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N "$@"
+    mysql -h "$PROD_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary -N "$@"
 }
 
 prod_mysqldump() {
@@ -148,6 +158,7 @@ prod_mysqldump() {
     # tablespaces" before this, immediately aborting prod_mysqldump() with no
     # actual table data ever dumped.
     mysqldump -h "$PROD_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+        --default-character-set=binary \
         --single-transaction --no-create-info --skip-add-drop-table \
         --skip-triggers --skip-add-locks --skip-comments --compact \
         --no-tablespaces "$@"
@@ -239,7 +250,7 @@ replicate_to_pool() {
     log "pool $pool_num ($db_host): replication starting"
     redis_set_replicating "$pool_num"
 
-    if mysql -h "$db_host" -u"$MYSQL_USER" -p"$db_pass" "$MYSQL_DATABASE" < "$WORKDIR/content_sync.sql"; then
+    if mysql -h "$db_host" -u"$MYSQL_USER" -p"$db_pass" --default-character-set=binary "$MYSQL_DATABASE" < "$WORKDIR/content_sync.sql"; then
         log "pool $pool_num ($db_host): replication complete"
     else
         log "pool $pool_num ($db_host): replication FAILED -- pool DB left as-is, will retry next cycle"

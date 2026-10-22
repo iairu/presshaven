@@ -1306,18 +1306,24 @@ wait_for() {
 }
 wait_for "$PROD"; wait_for "$HP"
 HAS_SCHEMA=$(mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE' AND table_name='wp_options'" 2>/dev/null || echo 0)
+# --default-character-set=binary on both ends of the pipe transfers stored
+# bytes verbatim. Without it the dump/restore round-trips through the client's
+# connection charset and re-encodes multibyte bytes in PHP-serialized postmeta
+# (WooCommerce _product_attributes: · = C2 B7 -> C3 82 C2 B7), breaking the
+# byte-length prefix (s:16:) so unserialize() fails -- no variation dropdowns,
+# "Add to cart" blocked. Mirrors replicate_content_to_honeypot.sh.
 if [ "$HAS_SCHEMA" = 0 ]; then
-  mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --no-tablespaces --skip-add-locks "$MYSQL_DATABASE" \
-    | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"
+  mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --single-transaction --no-tablespaces --skip-add-locks "$MYSQL_DATABASE" \
+    | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE"
 fi
 for m in $(ls /migrations/*.sql 2>/dev/null | sort); do
   mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
 done
 # Production's own site name (see honeypot_db_init): a renamed honeypot gave
 # itself away to every diverted user.
-mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --no-create-info --replace --skip-add-locks \
+mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --no-create-info --replace --skip-add-locks \
   --no-tablespaces --skip-triggers --where="option_name='blogname'" "$MYSQL_DATABASE" wp_options \
-  | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" || true
+  | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE" || true
 """
 
 MIGRATE_SCRIPT = r"""
