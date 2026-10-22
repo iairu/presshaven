@@ -36,7 +36,7 @@ import time
 from datetime import datetime
 
 from PyQt6.QtCore import QEventLoop, QObject, Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo
+from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEngineScript
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtNetwork import QNetworkCookie
 from PyQt6.QtWidgets import (
@@ -62,6 +62,57 @@ from ui.flow_layout import FlowLayout, labeled
 
 # Name of the proxy's session cookie (init.lua: session.cookie_name).
 SESSION_COOKIE = "SERVERID"
+
+# Injected into every validation browser (see _install_gdpr_banner_suppressor)
+# to auto-dismiss the proxy's in-page GDPR consent banner.
+#
+# This run consents to GDPR out-of-band: the dashboard injects each window's OWN
+# distinct, consented gdpr_token cookie (_apply_gdpr_cookie), so the proxy
+# already treats the window as consented. The banner that gdpr_client.js shows
+# doesn't know about that and would otherwise sit on top of every page for the
+# whole run. We deliberately do NOT click its "Agree": that handler makes
+# gdpr_client.js mint its OWN token from just the screen size -- identical for
+# every window on this one display -- which would overwrite the distinct
+# per-window cookie and collapse the very segmentation this page demonstrates.
+# So we simply take the banner down whenever it appears; the window stays
+# consented through the injected token, and the popup never lingers.
+_GDPR_BANNER_SUPPRESS_JS = """
+(function () {
+  "use strict";
+  var BANNER_ID = "gdpr-consent-banner";
+  function removeBanner() {
+    var b = document.getElementById(BANNER_ID);
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+  function observe() {
+    if (!document.documentElement) return;
+    new MutationObserver(removeBanner).observe(
+      document.documentElement, { childList: true, subtree: true });
+  }
+  removeBanner();
+  observe();
+  document.addEventListener("DOMContentLoaded", function () {
+    removeBanner();
+    observe();
+  });
+})();
+"""
+
+
+def _install_gdpr_banner_suppressor(profile) -> None:
+    """Add the banner-suppressor to `profile` so it runs on every page load in
+    that browser (at document creation, before gdpr_client.js inserts its
+    banner). Idempotent: skipped if this profile already carries it."""
+    scripts = profile.scripts()
+    if scripts.find("gdpr-banner-suppressor"):
+        return
+    script = QWebEngineScript()
+    script.setName("gdpr-banner-suppressor")
+    script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+    script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+    script.setRunsOnSubFrames(False)
+    script.setSourceCode(_GDPR_BANNER_SUPPRESS_JS)
+    scripts.insert(script)
 
 # (label, Accept-Language) per frame -- what makes the fingerprints differ.
 FRAMES = [
@@ -528,6 +579,10 @@ class PoolTestPage(QWidget):
         ua, lang = frame_identity(browser.profile.httpUserAgent(), i)
         browser.profile.setHttpUserAgent(ua)
         browser.profile.setHttpAcceptLanguage(lang)
+        # Auto-dismiss the proxy's GDPR consent banner in this window; the run
+        # consents out-of-band via a distinct per-window token (see
+        # _GDPR_BANNER_SUPPRESS_JS / _apply_gdpr_cookie).
+        _install_gdpr_banner_suppressor(browser.profile)
         store = browser.profile.cookieStore()
         store.cookieAdded.connect(lambda c, n=i: self._on_cookie(n, c))
         store.cookieRemoved.connect(lambda c, n=i: self._on_cookie_removed(n, c))
