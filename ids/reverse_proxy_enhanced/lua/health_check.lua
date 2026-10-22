@@ -44,8 +44,25 @@ local HEALTH_CHECK_TIMEOUT = 8000 -- milliseconds
 local UNHEALTHY_THRESHOLD = 5
 local HEALTHY_THRESHOLD = 2
 
+-- User-Agent every internal backend probe stamps on its request (this
+-- module's /robots.txt check + prewarm, and wp_install_state.lua's
+-- /wp-admin/install.php probe, which reuses this constant). These probes run
+-- on a timer against every pool, so from Suricata's point of view they all
+-- originate at the reverse_proxy's single IP and, without this marker, pile
+-- up into false "High Rate HTTP Requests" (install.php + robots.txt counted)
+-- and "Rapid Vulnerability Scanning" (install.php matches wp-admin) alerts.
+-- The Suricata rules exclude exactly this string, so the probes keep running
+-- but stop being counted.
+--   !! This literal is mirrored in ids/suricata_rules/local.rules
+--      (sid:1000056 and sid:1000060). Change it in both places or the
+--      exclusion silently stops matching. It is deliberately NOT the public
+--      resty.http default UA: keying the exclusion off a guessable default
+--      would let an attacker evade those two rules by spoofing it.
+local HEALTHCHECK_USER_AGENT = "honeypot-internal-healthprobe"
+
 _M.HEALTH_CHECK_INTERVAL = HEALTH_CHECK_INTERVAL
 _M.HEALTH_CHECK_TIMEOUT = HEALTH_CHECK_TIMEOUT
+_M.HEALTHCHECK_USER_AGENT = HEALTHCHECK_USER_AGENT
 
 -- Shared dictionary for health status
 local health_status = ngx.shared.threat_intel -- Reuse existing dict
@@ -66,6 +83,7 @@ function _M.check_backend(backend_name, backend_url)
     -- Try to connect to backend
     local res, err = httpc:request_uri(health_endpoint, {
         method = "HEAD",
+        headers = { ["User-Agent"] = HEALTHCHECK_USER_AGENT },
         keepalive_timeout = 60000,
         keepalive_pool = 100
     })
@@ -208,6 +226,7 @@ function _M.prewarm_backend_connections(backend_name, backend_url, num_connectio
     for i = 1, num_connections do
         local res, err = httpc:request_uri(probe_endpoint, {
             method = "HEAD",
+            headers = { ["User-Agent"] = HEALTHCHECK_USER_AGENT },
             keepalive_timeout = 120000,
             keepalive_pool = 512
         })

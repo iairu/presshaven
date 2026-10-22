@@ -309,7 +309,15 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Script File Upload Attempt"; f
 # What's left genuinely is a rate check on dynamic/page requests, which is
 # what "High Rate HTTP Requests" as a DoS signal is actually meant to
 # catch.
-alert http any any -> $HOME_NET $HTTP_PORTS (msg:"High Rate HTTP Requests"; flow:established,to_server; pcre:!"/\.(css|js|jpe?g|png|gif|svg|webp|webm|mp4|mp3|pdf|woff2?|ttf|eot|otf|ico)(\?.*)?$/Ui"; detection_filter:track by_src, count 50, seconds 60; classtype:attempted-dos; sid:1000056; rev:2;)
+# rev:3 -- also excludes the reverse_proxy's own internal backend probes.
+# health_check.lua (HEAD /robots.txt, every 15s, plus a burst of prewarm
+# connections) and wp_install_state.lua (GET /wp-admin/install.php) probe
+# every pool on a timer; Suricata sees them all leave the proxy's single IP,
+# so from nothing but healthy infrastructure they used to cross 50 req/60s by
+# src and fire this DoS alert. They carry a dedicated User-Agent
+# (health_check.lua's HEALTHCHECK_USER_AGENT) that real client traffic never
+# has, so matching it here drops only the probes -- the checks keep running.
+alert http any any -> $HOME_NET $HTTP_PORTS (msg:"High Rate HTTP Requests"; flow:established,to_server; pcre:!"/\.(css|js|jpe?g|png|gif|svg|webp|webm|mp4|mp3|pdf|woff2?|ttf|eot|otf|ico)(\?.*)?$/Ui"; content:!"honeypot-internal-healthprobe"; http_user_agent; detection_filter:track by_src, count 50, seconds 60; classtype:attempted-dos; sid:1000056; rev:3;)
 
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"WordPress Login Brute Force"; flow:established,to_server; content:"wp-login.php"; http_uri; detection_filter:track by_src, count 10, seconds 60; classtype:web-application-attack; sid:1000057; rev:1;)
 
@@ -335,7 +343,16 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Honeypot Trigger - Multiple Vu
 
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Honeypot Trigger - Automated Tool Detection"; flow:established,to_server; pcre:"/(sqlmap|nikto|nmap|wpscan|gobuster|dirb|burpsuite|nuclei|whatweb)/i"; classtype:web-application-attack; priority:1; sid:1000059; rev:1;)
 
-alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Honeypot Trigger - Rapid Vulnerability Scanning"; flow:established,to_server; pcre:"/\/(wp-admin|wp-login|wp-config|xmlrpc\.php)/i"; detection_filter:track by_src, count 5, seconds 60; classtype:web-application-attack; priority:1; sid:1000060; rev:1;)
+# rev:2 -- excludes the reverse_proxy's own install-state probe. Every
+# HEALTH_CHECK_INTERVAL, wp_install_state.lua GETs /wp-admin/install.php on
+# each pool to learn whether setup is done (see router.lua's install.php
+# routing). That URI matches the wp-admin branch of the pcre below, so across
+# all pools the proxy's single IP crossed 5 hits/60s and false-fired this
+# "rapid scanning" alert with no attacker present. The probe carries a
+# dedicated User-Agent (health_check.lua's HEALTHCHECK_USER_AGENT) real
+# clients never send, so excluding it drops only the probe, not genuine
+# wp-admin/wp-login/xmlrpc scanning by an actual visitor.
+alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Honeypot Trigger - Rapid Vulnerability Scanning"; flow:established,to_server; pcre:"/\/(wp-admin|wp-login|wp-config|xmlrpc\.php)/i"; content:!"honeypot-internal-healthprobe"; http_user_agent; detection_filter:track by_src, count 5, seconds 60; classtype:web-application-attack; priority:1; sid:1000060; rev:2;)
 
 #--------------------------------------------------------------------------
 # Session Management Integration Rules

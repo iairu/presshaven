@@ -47,6 +47,12 @@ local http = require "resty.http"
 -- backend that was never actually down.
 local health_check_ok, health_check = pcall(require, "health_check")
 local PROBE_TIMEOUT = (health_check_ok and health_check.HEALTH_CHECK_TIMEOUT) or 8000
+-- Same internal-probe marker health_check.lua stamps its probes with, so this
+-- GET on /wp-admin/install.php is excluded from Suricata's "Rapid
+-- Vulnerability Scanning" / "High Rate HTTP Requests" rules rather than
+-- false-tripping them every probe interval. See health_check.lua's
+-- HEALTHCHECK_USER_AGENT comment (and ids/suricata_rules/local.rules).
+local PROBE_USER_AGENT = (health_check_ok and health_check.HEALTHCHECK_USER_AGENT) or "honeypot-internal-healthprobe"
 
 local _M = {}
 
@@ -75,6 +81,7 @@ function _M.refresh(backend_name, backend_url)
 
     local res, err = httpc:request_uri(backend_url .. "/wp-admin/install.php", {
         method = "GET",
+        headers = { ["User-Agent"] = PROBE_USER_AGENT },
         keepalive_timeout = 60000,
         keepalive_pool = 100
     })
