@@ -23,10 +23,3 @@ All dashboards are consolidated under a single SIEM instance. This configuration
 ## Deployment Architecture
 
 In a single-host deployment, all components (reverse proxy, Nginx Lua pipeline, Suricata, Kibana/Elasticsearch, Redis) run on the same host. The routing pipeline (`pattern_analyzer`, `router`, `pool_router`) diverts suspicious traffic to local honeypot pools, while security events are logged locally and visualized via Kibana on the same host.
-
-
-## Single-Host Notes
-
-- Simplifies deployment by running honeypot, detection, and SIEM components on one host.
-- Suitable for evaluation, lab environments, and small-scale deployments.
-- May require additional tuning for resource constraints and performance.

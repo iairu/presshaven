@@ -86,3 +86,22 @@ This split is what makes the core logic unit-testable without spinning up OpenRe
     Academic and technical literature related to the system.
 
 </div>
+
+## Honest Assessment
+
+### Advantages
+- **Comprehensive detection**: 14+ seeded CVEs, 70+ Suricata SIDs, generic attack patterns across all OWASP WSTG categories.
+- **Explainable architecture**: Pure/adapter split makes every decision auditable and unit-testable.
+- **Per-attacker isolation**: Elastic honeypot pools provide full-fidelity deception environments.
+- **Privacy-preserving**: GDPR consent-gated identity never stores raw characteristics.
+- **Full telemetry**: Every request scored, logged, and optionally shipped to SIEM.
+
+### Limitations & Improvement Opportunities
+- **Same-host testing gap**: Suricata IP reputation gating unverified against genuine external traffic.
+- **Decay complexity**: 4 tunable parameters with non-obvious interactions.
+- **Honeytoken coverage**: Only 5 token types.
+- **Rule-based detection**: No ML — may miss novel patterns.
+- **Redis dependency**: Single point of failure for session state and pool assignments.
+- **Pool scaling limits**: Resource-budget-capped; sustained load may force pool sharing.
+- **Dashboard drift**: Offline vs live dashboard state can diverge; caught by tests but requires manual sync.
+- **No automated dashboard health monitoring**: Stale dashboards require manual re-generation.

@@ -66,3 +66,18 @@ bash testing/scenario_*.sh
     How to perform blind penetration testing evaluation of the honeypot.
 
 </div>
+
+## Honest Assessment
+
+### Advantages
+- **Pure/adapter split**: 18 pure Lua modules unit-testable under a plain Lua interpreter without OpenResty.
+- **Comprehensive coverage**: Every `*_rules.lua` module has a corresponding test file.
+- **Dashboard validation**: `test_kibana_dashboards.py` catches NDJSON drift between offline and live states.
+- **Blind pentest protocol**: `INTERNAL_TEST_SECRET` gating prevents exposing routing/risk-score oracles.
+
+### Limitations & Improvement Opportunities
+- **No end-to-end integration tests**: Tests cover pure modules and dashboard integrity, but not the full Nginx → Lua → Redis → WordPress pipeline.
+- **Blind pentest requires manual setup**: Scenario scripts and `INTERNAL_TEST_SECRET` configuration are manual steps.
+- **No automated regression testing**: Test suite must be run manually; no CI/CD integration documented.
+- **Sophistication classifier not tested**: `sophistication_analyzer.lua` has no dedicated test file.
+- **Honeytoken handler not tested**: `honeytoken_handler.lua` has no dedicated test file (only `honeytoken_rules.lua` is tested).

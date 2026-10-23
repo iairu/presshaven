@@ -70,3 +70,23 @@ The system distinguishes between:
     Advanced behavioral analysis and anomaly detection signals.
 
 </div>
+
+## Honest Assessment
+
+### Advantages
+- **Multi-layered detection**: 11+ stages from URI patterns through Suricata correlation, each contributing to a single accumulated score.
+- **Explainable scoring**: Every score contribution is logged with WSTG category, pattern name, and CVE ID. The `decision_trace()` function provides flat strings for Kibana.
+- **Severity-graded Suricata integration**: Severity 1 alerts contribute +50 (enough to nearly cross the threshold alone), while low-priority scans contribute +10.
+- **Decay system**: Stale/false-positive alerts age out naturally via exponential decay, preventing permanent IP reputation poisoning.
+- **Shared-address (NAT) protection**: IP reputation is capped on shared addresses so one flagged user doesn't divert everyone behind the same NAT.
+- **Sophistication classification**: Distinguishes scripted tools from AI-assisted agents from manual operators — relevant for thesis research datasets.
+
+### Limitations & Improvement Opportunities
+- **Same-host testing gap**: Suricata's `src_ip` misattribution in loopback testing means Stage 6 IP reputation gating has never been verified against genuine external traffic.
+- **Honeypot threshold tuning**: Raised from 50 to 80 after tuning; aggressive but legitimate REST API clients still require careful tuning.
+- **Generic pattern false positives**: The original `SUSPICIOUS_PATTERNS` had bugs where `.` matched any character (e.g., "s-tar-ter-kit" matched ".tar"). Fixed, but new patterns must be carefully authored.
+- **Decay complexity**: Operators must tune 4 parameters (`score_decay_half_life_seconds`, `decay_offense_slowdown`, `permaflag_offenses`, `permaflag_score`). Misconfiguration can cause scores to never decay or decay too fast.
+- **Honeytoken coverage**: Only 5 token types — additional types (database URLs, SSH keys, API tokens) would improve coverage.
+- **Prompt-injection probe**: Forward-looking signal that adds half the filter's risk score; effectiveness depends on `prompt_injection_filter.lua` pattern coverage.
+- **No machine learning**: Deliberate choice for explainability, but may miss novel attack patterns that don't match existing signatures.
+- **Suricata rule maintenance**: 70+ SIDs allocated; adding new CVEs requires both Lua pattern updates and Suricata rule updates.

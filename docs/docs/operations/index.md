@@ -100,3 +100,27 @@ A second, privacy-preserving identifier runs alongside the signed SERVERID sessi
     Troubleshooting guides and operational runbooks.
 
 </div>
+
+## Honest Assessment
+
+### Advantages
+- **Explainable, auditable detection**: Every score contribution is logged with its reason, WSTG category, and matched pattern names. The `decision_trace()` function in `router_rules.lua` provides flat strings for Kibana consumption.
+- **Pure/adapter split**: Core logic is unit-testable without OpenResty — 18 test files cover the pure modules.
+- **Per-attacker isolation**: Each hostile session gets its own honeypot pool, preventing cross-contamination.
+- **Elastic pools**: New pools are cloned from a pre-built template in roughly MySQL's start time instead of a ~44s from-scratch rebuild.
+- **No tarpit**: Identical proxy latency on both routes prevents timing-based detection.
+- **Privacy-preserving identity**: GDPR consent-gated signature is one-way hashed; raw characteristics are never stored.
+- **Honeytoken injection**: Fake credentials planted in honeypot responses provide high-confidence compromise signals.
+
+### Limitations & Improvement Opportunities
+- **Same-host testing gap**: Suricata's `src_ip` misattribution in loopback testing means Stage 6 IP reputation gating has never been verified against genuine external traffic.
+- **Session score laundering (historical)**: Fixed by score accumulation, but the decay system adds complexity — operators must tune `score_decay_half_life_seconds`, `decay_offense_slowdown`, `permaflag_offenses`, and `permaflag_score`.
+- **Shared-address (NAT) protection**: IP reputation is capped at 10 per request on shared addresses, meaning a carrier-grade NAT user is never diverted for a neighbour's alerts. This is by design but reduces detection effectiveness in NAT-heavy environments.
+- **Admin-ajax.php false positives (historical)**: Fixed, but the endpoint still requires dedicated, appropriately-scoped analysis that adds pipeline complexity.
+- **Pool scaling**: Pool manager auto-scaling is resource-budget-limited; under sustained load, sessions may share pools (the only case where two users share a pool).
+- **Honeypot threshold tuning**: Raised from 50 to 80 after tuning; aggressive but legitimate REST API clients (WooCommerce mobile app, Stripe webhooks) still require careful tuning.
+- **No automated dashboard health monitoring**: Stale dashboards require manual re-generation via `build_dashboards.py`.
+- **Honeytoken coverage**: Only 5 token types (API key, DB creds, admin password, S3 URL, JWT secret) — additional types would improve coverage.
+- **Sophistication classifier**: Rule-based, not ML — deliberate choice for explainability, but may miss novel attack patterns.
+- **Redis dependency**: All session state, pool assignments, and threat intelligence depend on Redis availability; Redis downtime degrades the system to pool 1 fallback.
+- **GDPR subsystem**: Requires RSA key configuration; when `GDPR_PRIVATE_KEY` is blank, the subsystem disables itself (fails safe, not open).

@@ -17,16 +17,7 @@ The following Honeypot dashboards are managed by `siem/kibana/build_dashboards.p
 
 Each dashboard is built via `_dashboard(dash_id, title, description, layout)` and registered as `("dashboard", did, body)` objects in the NDJSON output file `saved_objects/honeypot-dashboards.ndjson`.
 
-## Key Visualizations
-
-- **IDS Alerts Dashboard**: Suricata alerts mapped to risk scores and abuse categories. Displays alerts parsed by `suruicata_rules.extract_alert()` with severity-graded scoring.
-- **Web Threat Overview**: Cross-dashboard threat posture summary combining CVE matches, pattern detections, and reputation scores.
-- **Threat Decisions**: Decision automation and threat decay visualization — shows `decay_policy.lua` escalation-aware decay and permaflag states.
-- **Session Analysis**: Session stitching and attacker lifecycle — displays session anomaly data from `session_rules.analyze_session_anomalies()` and sophistication classifications from `sophistication_analyzer.classify_session()`.
-- **Attack Patterns**: Recurring attack patterns — shows WSTG category coverage from `pattern_rules.SUSPICIOUS_PATTERNS` and CVE matches from `vulnerability_rules.detect_vulnerability_pattern()`.
-- **Threat Intelligence**: Intel feeds and reputation context — displays AbuseIPDB reportability mapping and threat_ips data from `init.lua` seed entries and runtime Suricata ingestion.
-
-## Pattern Report Timeline
+## Pattern Report Timeline Dashboard
 
 A dedicated pattern report timeline dashboard (`pattern-report-request-timeline-dashboard`) is used in embed mode to capture screenshots of request timelines for specific patterns.
 
@@ -36,6 +27,29 @@ A dedicated pattern report timeline dashboard (`pattern-report-request-timeline-
 2. Imports the necessary saved objects using the Kibana API.
 3. Loads the specific timeline dashboard in **embed mode** for a given time window.
 4. Waits for a rendering signal (checking for a "render complete" flag in the visualization) before capturing a screenshot of the panel for the specific pattern.
+
+## Dashboard Python Module Reference
+
+| Module | Purpose | Key Functions |
+| :--- | :--- | :--- |
+| `siem/kibana/build_dashboards.py` | Generates dashboard objects and visualizations into NDJSON; can interact with live Kibana via Saved Objects API | `_dashboard()`, dashboard registration as `("dashboard", did, body)` objects |
+| `siem/kibana/export_dashboards.py` | Exports live dashboard objects from Kibana to local NDJSON file | Exports by dashboard ID list: `dashboard-ids-alerts`, `dashboard-web-threat-overview`, `dashboard-threat-decisions`, `dashboard-session-analysis`, `dashboard-attack-patterns`, `dashboard-threat-intel` |
+| `dashboard/core/kibana_timeline.py` | Defines structure and payload for request timeline visualization | `DASHBOARD_ID = "pattern-report-request-timeline-dashboard"`, `_dashboard_body()`, import-ready NDJSON string generation |
+| `dashboard/ui/kibana_timeline_capture.py` | Client-side workflow for live dashboard capture | Autologin, Kibana API import, embed-mode loading, render-complete signal detection, screenshot capture |
+
+## Honest Assessment
+
+**Strengths:**
+- Offline generation is idempotent and doesn't require a live Kibana instance.
+- Export workflow preserves manual panel edits made in the live Kibana UI.
+- Timeline capture enables per-pattern visual evidence collection.
+
+**Limitations & Improvement Opportunities:**
+- Dashboard generation and export are separate scripts with potential drift — the `test_kibana_dashboards.py` test exists specifically to catch this.
+- The timeline capture workflow depends on Kibana auth setup (autologin scripts) which may be fragile.
+- Dashboard layout is defined in Python code, not as editable JSON — changes require code edits and re-generation.
+- No automated dashboard health monitoring — stale dashboards require manual re-generation.
+- The `pattern-report-request-timeline-dashboard` is a separate, independently-managed artifact that must be imported before the first data capture.
 
 ## Dashboard Management
 

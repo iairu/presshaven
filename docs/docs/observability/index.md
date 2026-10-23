@@ -63,3 +63,35 @@ Events logged include:
     Visual dashboards for monitoring honeypot activity.
 
 </div>
+
+## Honest Assessment
+
+### Advantages
+- **Multi-layer observability**: Logs, SIEM dashboards, Kibana visualizations, timeline capture, and AbuseIPDB reporting.
+- **Structured security events**: `_G.utils.log_security_event()` produces JSON events parsed by Vector and forwarded to Elasticsearch.
+- **Empty-table fix**: `cjson.empty_array_mt` tagging prevents Elasticsearch mapping conflicts.
+- **Suricata integration**: `eve.json` structured parsing eliminates the fast.log regex bug class.
+- **Offline dashboard generation**: Idempotent, doesn't require live Kibana.
+
+### Limitations & Improvement Opportunities
+- **Dashboard drift**: Offline vs live dashboard state can diverge; `test_kibana_dashboards.py` catches this but requires manual sync.
+- **Timeline capture fragility**: Depends on Kibana auth setup (autologin scripts) which may be unreliable.
+- **No automated dashboard health monitoring**: Stale dashboards require manual re-generation.
+- **Vector configuration**: Docker labels mapping-conflict workaround adds complexity.
+- **Same-host testing gap**: Suricata alerts may not correlate with nginx `remote_addr` in loopback testing.
+
+## Honest Assessment
+
+### Advantages
+- **Multi-layer observability**: Logs, SIEM dashboards, Kibana visualizations, timeline capture, and AbuseIPDB reporting.
+- **Structured security events**: `_G.utils.log_security_event()` produces JSON events parsed by Vector and forwarded to Elasticsearch.
+- **Empty-table fix**: `cjson.empty_array_mt` tagging prevents Elasticsearch mapping conflicts.
+- **Suricata integration**: `eve.json` structured parsing eliminates the fast.log regex bug class.
+- **Offline dashboard generation**: Idempotent, does not require live Kibana.
+
+### Limitations & Improvement Opportunities
+- **Dashboard drift**: Offline vs live dashboard state can diverge; `test_kibana_dashboards.py` catches this but requires manual sync.
+- **Timeline capture fragility**: Depends on Kibana auth setup (autologin scripts) which may be unreliable.
+- **No automated dashboard health monitoring**: Stale dashboards require manual re-generation.
+- **Vector configuration**: Docker labels mapping-conflict workaround adds complexity.
+- **Same-host testing gap**: Suricata alerts may not correlate with nginx `remote_addr` in loopback testing.
