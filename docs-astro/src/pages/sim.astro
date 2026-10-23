@@ -1,0 +1,120 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Request Simulator" description="Interactive honeypot request scoring simulator">
+  <div class="container">
+    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">🎮 Request Scoring Simulator</h1>
+    <p style="color: var(--muted); margin-bottom: 2rem;">
+      Enter a request and see how the detection pipeline scores it. This simulates
+      <code>pattern_analyzer.analyze_request()</code> and <code>router.decide_route()</code>.
+    </p>
+
+    <div class="demo-box">
+      <h3>Request Input</h3>
+      <div style="margin: 1rem 0;">
+        <label style="display: block; margin-bottom: 0.5rem; color: var(--muted);">URI</label>
+        <input type="text" id="uri" value="/wp-admin/admin-ajax.php?action=upload-plugin" style="width: 100%; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);" />
+      </div>
+      <div style="margin: 1rem 0;">
+        <label style="display: block; margin-bottom: 0.5rem; color: var(--muted);">User-Agent</label>
+        <input type="text" id="ua" value="curl/7.81.0" style="width: 100%; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);" />
+      </div>
+      <div style="margin: 1rem 0;">
+        <label style="display: block; margin-bottom: 0.5rem; color: var(--muted);">Query String</label>
+        <input type="text" id="args" value="file[path]=../../wp-config.php" style="width: 100%; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);" />
+      </div>
+      <div style="margin: 1rem 0;">
+        <label style="display: block; margin-bottom: 0.5rem; color: var(--muted);">IP Address</label>
+        <input type="text" id="ip" value="203.0.113.42" style="width: 100%; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);" />
+      </div>
+      <button class="btn" onclick="scoreRequest()">Score Request</button>
+    </div>
+
+    <div class="demo-box" id="results" style="display: none;">
+      <h3>Scoring Results</h3>
+      <div id="score-output"></div>
+    </div>
+
+    <div class="section">
+      <h2>📊 Scoring Reference</h2>
+      <table>
+        <tr><th>Signal</th><th>Score</th><th>Source</th></tr>
+        <tr><td>Static asset</td><td>0 (skipped)</td><td>pattern_rules.is_static_asset()</td></tr>
+        <tr><td>Generic suspicious pattern</td><td>+15 each</td><td>pattern_rules.SUSPICIOUS_PATTERNS</td></tr>
+        <tr><td>Specific URI check (directory traversal)</td><td>+20</td><td>pattern_rules.analyze_uri_patterns()</td></tr>
+        <tr><td>Specific URI check (SQL drop)</td><td>+30</td><td>pattern_rules.analyze_uri_patterns()</td></tr>
+        <tr><td>Specific URI check (wp-config.bak)</td><td>+80</td><td>pattern_rules.analyze_uri_patterns()</td></tr>
+        <tr><td>Flagged user-agent</td><td>+50</td><td>pattern_rules.analyze_headers()</td></tr>
+        <tr><td>Missing user-agent</td><td>+10</td><td>pattern_rules.analyze_headers()</td></tr>
+        <tr><td>CVE-2023-28121 header</td><td>+50</td><td>pattern_rules.analyze_headers()</td></tr>
+        <tr><td>CVE pattern match</td><td>+40 per CVE</td><td>pattern_rules.analyze_cve_patterns()</td></tr>
+        <tr><td>Bad IP reputation</td><td>+variable</td><td>pattern_analyzer.check_ip_reputation()</td></tr>
+        <tr><td>High request rate</td><td>+20</td><td>pattern_analyzer.session_request_rate_high()</td></tr>
+        <tr><td>Missing referer on POST</td><td>+5</td><td>pattern_rules.analyze_headers()</td></tr>
+        <tr><td>Automation (curl)</td><td>+5</td><td>pattern_rules.score_automation_user_agent()</td></tr>
+        <tr><td>Automation (wpscan)</td><td>+30</td><td>pattern_rules.score_automation_user_agent()</td></tr>
+        <tr><td>Prompt injection</td><td>+risk/2</td><td>prompt_injection_filter.detect()</td></tr>
+        <tr><td><strong>Honeypot threshold</strong></td><td><strong>80</strong></td><td>router.lua Stage 3</td></tr>
+        <tr><td><strong>Max risk score</strong></td><td><strong>100</strong></td><td>pattern_analyzer (capped)</td></tr>
+      </table>
+    </div>
+
+    <script>
+      function scoreRequest() {
+        const uri = document.getElementById('uri').value;
+        const ua = document.getElementById('ua').value;
+        const args = document.getElementById('args').value;
+        const ip = document.getElementById('ip').value;
+
+        let score = 0;
+        const patterns = [];
+        const details = [];
+
+        // Stage 1: URI pattern analysis
+        const uriLower = uri.toLowerCase();
+        if (uriLower.includes('../')) { score += 20; patterns.push('directory_traversal'); }
+        if (uriLower.includes('wp-config.php')) { score += 30; patterns.push('wp_config_access'); }
+        if (uriLower.includes('install.php')) { score += 30; patterns.push('install_php'); }
+        if (uriLower.includes('xmlrpc.php')) { score += 15; patterns.push('wp_xmlrpc'); }
+        if (uriLower.includes('wp-json/wp/v2/users')) { score += 25; patterns.push('wp_user_enumeration'); }
+
+        // CVE patterns
+        if (uriLower.includes('wcal_action=checkout_link')) { score += 40; patterns.push('CVE-2023-2986'); }
+        if (uriLower.includes('cwmpupdateoptions')) { score += 40; patterns.push('CVE-2025-2266'); }
+        if (uriLower.includes('mwb_wgm_preview_mail')) { score += 40; patterns.push('CVE-2025-47577'); }
+        if (uriLower.includes('dnd-wc-upload-file')) { score += 40; patterns.push('CVE-2025-4403'); }
+        if (uriLower.includes('pc_added_uploaded_image')) { score += 40; patterns.push('CVE-2025-10142'); }
+        if (uriLower.includes('file[path]')) { score += 40; patterns.push('CVE-2024-50508'); }
+        if (args.includes('file[path]')) { score += 40; patterns.push('CVE-2024-50508 (args)'); }
+
+        // Header analysis
+        const uaLower = ua.toLowerCase();
+        if (uaLower.includes('curl')) { score += 5; patterns.push('curl_ua'); }
+        if (uaLower.includes('sqlmap')) { score += 50; patterns.push('flagged_ua_sqlmap'); }
+        if (uaLower.includes('wpscan')) { score += 30; patterns.push('flagged_ua_wpscan'); }
+        if (uaLower.includes('nikto')) { score += 85; patterns.push('flagged_ua_nikto'); }
+        if (!ua) { score += 10; patterns.push('missing_ua'); }
+
+        // Upload endpoint
+        if (uriLower.includes('upload-plugin')) { score += 20; patterns.push('suspicious_admin_action'); }
+        if (uriLower.includes('admin-ajax.php') && args.includes('file')) { score += 30; patterns.push('upload_param'); }
+
+        // Cap at 100
+        score = Math.min(score, 100);
+
+        const suspicious = score >= 80;
+        const output = document.getElementById('score-output');
+        output.innerHTML = `
+          <div style="font-size: 2rem; font-weight: 700; color: ${suspicious ? '#ff6584' : '#6c63ff'}; margin-bottom: 1rem;">
+            Score: ${score} / 80 ${suspicious ? '(SUSPICIOUS → HONEYPOT)' : '(below threshold → PRODUCTION)'}
+          </div>
+          <p><strong>Patterns matched:</strong> ${patterns.length > 0 ? patterns.join(', ') : 'none'}</p>
+          <p><strong>Routing decision:</strong> ${suspicious ? ' diverted to honeypot pool' : ' forwarded to production'}</p>
+          <p class="technical">This is a simplified simulation. The real pipeline includes IP reputation, session decay, automation timing, and prompt-injection analysis.</p>
+        `;
+
+        document.getElementById('results').style.display = 'block';
+      }
+    </script>
+  </div>
+</Layout>

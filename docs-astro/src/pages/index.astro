@@ -1,0 +1,117 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Knowledge Hub" description="Honeypot IDS System — an integrated knowledge hub with interactive demos">
+  <div class="hero">
+    <h1>🐝 Honeypot IDS Knowledge Hub</h1>
+    <p>
+      A high-interaction deception platform that <span class="hype">captures, scores, and isolates</span>
+      attackers in real time. Explore the architecture, dive into the detection pipeline,
+      run interactive simulations, and understand every function — all in one place.
+    </p>
+    <a href="/docs" class="btn">Explore Docs</a>
+    <a href="/sim" class="btn secondary">Run Simulator</a>
+    <a href="/demo" class="btn secondary">Live Demo</a>
+  </div>
+
+  <div class="container">
+    <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="stat"><div class="num">14+</div><div class="label">Seeded CVEs</div></div>
+      <div class="stat"><div class="num">70+</div><div class="label">Suricata SIDs</div></div>
+      <div class="stat"><div class="num">11</div><div class="label">Routing Stages</div></div>
+      <div class="stat"><div class="num">18</div><div class="label">Unit Test Files</div></div>
+    </div>
+
+    <div class="section">
+      <h2>🎯 What This System Does</h2>
+      <p>
+        A WordPress/WooCommerce storefront that looks and behaves like a real shop — but sits behind an
+        OpenResty (Nginx + Lua) reverse proxy that scores every request in real time and transparently
+        diverts suspicious sessions into isolated, full-fidelity honeypot clones. Legitimate customers
+        never notice; attackers get a convincing, exploitable target while every move is recorded.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>🚀 Quick Navigation</h2>
+      <div class="grid">
+        <a href="/docs/detection" class="card">
+          <h3>🔍 Detection</h3>
+          <p>Multi-layered detection pipeline: URI patterns, CVE matching, Suricata IDS, IP reputation, automation detection, sophistication classification, honeytokens.</p>
+        </a>
+        <a href="/docs/observability" class="card">
+          <h3>📊 Observability</h3>
+          <p>Vector → Elasticsearch → Kibana pipeline. 7 dashboards + pattern report timeline. Structured security events.</p>
+        </a>
+        <a href="/docs/operations" class="card">
+          <h3>⚙️ Operations</h3>
+          <p>Two-host and single-host deployment, production hardening, troubleshooting runbooks, pool management.</p>
+        </a>
+        <a href="/docs/testing" class="card">
+          <h3>🧪 Testing</h3>
+          <p>18 pure-Lua unit test files, dashboard validation, blind pentest evaluation protocol.</p>
+        </a>
+        <a href="/docs/architecture" class="card">
+          <h3>🏗️ Architecture</h3>
+          <p>Request pipeline, two-host split, Lua module architecture, pooling system.</p>
+        </a>
+        <a href="/docs/reference" class="card">
+          <h3>📖 Reference</h3>
+          <p>Glossary, known issues, roadmap, changelog, literature, complete function reference.</p>
+        </a>
+        <a href="/sim" class="card">
+          <h3>🎮 Simulator</h3>
+          <p>Interactive request scoring simulator. See how the detection pipeline scores real requests.</p>
+        </a>
+        <a href="/demo" class="card">
+          <h3>🔬 Live Demo</h3>
+          <p>Live honeypot demonstration with real-time detection visualization.</p>
+        </a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🏗️ Architecture Overview</h2>
+      <div class="demo-box">
+        <h3>Request Pipeline</h3>
+        <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
+  → router.decide_route() (11 stages) → pool_router.get_or_assign_pool()
+  → session_handler.update_session() → Redis session_store
+  → Suricata eve.json → init_worker.lua → threat_intel shared dict
+  → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📋 Honest Assessment</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>✅ Strengths</h3>
+          <ul style="color: var(--muted); padding-left: 1.2rem;">
+            <li>Multi-layered detection (11+ stages)</li>
+            <li>Explainable, auditable scoring</li>
+            <li>Per-attacker isolation</li>
+            <li>Elastic honeypot pools</li>
+            <li>No tarpit (identical latency)</li>
+            <li>Privacy-preserving GDPR identity</li>
+            <li>Honeytoken injection</li>
+            <li>18 unit test files</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>⚠️ Limitations</h3>
+          <ul style="color: var(--muted); padding-left: 1.2rem;">
+            <li>Same-host Suricata testing gap</li>
+            <li>Decay system complexity (4 params)</li>
+            <li>Honeytoken coverage (5 types)</li>
+            <li>No ML (rule-based only)</li>
+            <li>Redis single point of failure</li>
+            <li>Pool scaling limits</li>
+            <li>No end-to-end integration tests</li>
+            <li>Dashboard drift risk</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>

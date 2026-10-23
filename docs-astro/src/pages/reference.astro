@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Reference" description="Reference materials">
+  <div class="container">
+    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">📖 Reference</h1>
+    <div class="grid">
+      <a href="/docs/reference" class="card"><h3>Glossary</h3><p>Definitions of key terms and concepts.</p></a>
+      <a href="/docs/reference" class="card"><h3>Known Issues</h3><p>Documented issues and workarounds.</p></a>
+      <a href="/docs/reference" class="card"><h3>Roadmap</h3><p>Future development plans.</p></a>
+      <a href="/docs/reference" class="card"><h3>Changelog</h3><p>History of changes.</p></a>
+      <a href="/docs/reference" class="card"><h3>Literature</h3><p>Academic and technical references.</p></a>
+    </div>
+    <div class="section">
+      <h2>Key Terms</h2>
+      <table>
+        <tr><th>Term</th><th>Definition</th></tr>
+        <tr><td>Honeypot</td><td>Decoy system designed to attract and engage attackers</td></tr>
+        <tr><td>IDS</td><td>Intrusion Detection System — Suricata network IDS</td></tr>
+        <tr><td>SIEM</td><td>Security Information and Event Management — Elasticsearch/Kibana</td></tr>
+        <tr><td>CVE</td><td>Common Vulnerabilities and Exposures identifier</td></tr>
+        <tr><td>WSTG</td><td>OWASP Web Security Testing Guide category system</td></tr>
+        <tr><td>SID</td><td>Suricata rule identifier</td></tr>
+        <tr><td>Risk Score</td><td>Accumulated threat score (0–100) from detection pipeline</td></tr>
+        <tr><td>Honeypot Threshold</td><td>Minimum score (default 80) triggering honeypot routing</td></tr>
+        <tr><td>Decay</td><td>Exponential reduction of stored risk scores over time</td></tr>
+        <tr><td>Permaflag</td><td>Score stops decaying entirely (repeat offender)</td></tr>
+        <tr><td>Honeytoken</td><td>Fake credential planted in honeypot responses</td></tr>
+        <tr><td>GDPR Signature</td><td>Privacy-preserving one-way hash of browser characteristics</td></tr>
+        <tr><td>Pool</td><td>Isolated honeypot environment per user session</td></tr>
+        <tr><td>Pure Module</td><td>Lua module with no ngx.* dependency, unit-testable</td></tr>
+        <tr><td>Adapter Module</td><td>Lua module performing I/O, delegating to pure modules</td></tr>
+      </table>
+    </div>
+  </div>
+</Layout>

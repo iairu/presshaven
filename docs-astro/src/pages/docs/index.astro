@@ -1,0 +1,76 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+<Layout title="Documentation" description="Technical documentation for the Honeypot IDS System">
+  <div class="container">
+    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">📚 Documentation Hub</h1>
+    <p style="color: var(--muted); margin-bottom: 2rem;">
+      Technical documentation derived from the running system and current source code.
+      Every page is cross-linked and includes function-level references extracted from Lua module comments.
+    </p>
+
+    <div class="grid">
+      <a href="/docs/detection" class="card">
+        <h3>🔍 Detection</h3>
+        <p>Multi-layered detection pipeline: URI patterns, CVE matching, Suricata IDS, IP reputation, automation detection, sophistication classification, honeytokens.</p>
+        <p class="technical">5 pages · 731 lines · 14 modules documented</p>
+      </a>
+      <a href="/docs/observability" class="card">
+        <h3>📊 Observability</h3>
+        <p>Vector → Elasticsearch → Kibana pipeline. 7 dashboards + pattern report timeline. Structured security events.</p>
+        <p class="technical">3 pages · 263 lines · 7 dashboards</p>
+      </a>
+      <a href="/docs/operations" class="card">
+        <h3>⚙️ Operations</h3>
+        <p>Two-host and single-host deployment, production hardening, troubleshooting runbooks, pool management.</p>
+        <p class="technical">5 pages · 310 lines · 2 topologies</p>
+      </a>
+      <a href="/docs/testing" class="card">
+        <h3>🧪 Testing</h3>
+        <p>18 pure-Lua unit test files, dashboard validation, blind pentest evaluation protocol.</p>
+        <p class="technical">2 pages · 138 lines · 18 test files</p>
+      </a>
+      <a href="/docs/architecture" class="card">
+        <h3>🏗️ Architecture</h3>
+        <p>Request pipeline, two-host split, Lua module architecture, pooling system, GDPR identity.</p>
+        <p class="technical">5 pages · Full function reference</p>
+      </a>
+      <a href="/docs/reference" class="card">
+        <h3>📖 Reference</h3>
+        <p>Glossary, known issues, roadmap, changelog, literature, complete function reference.</p>
+        <p class="technical">6 pages · 264 lines</p>
+      </a>
+    </div>
+
+    <div class="section">
+      <h2>🔍 Detection Deep Dive</h2>
+      <table>
+        <tr><th>Layer</th><th>Module</th><th>Detects</th></tr>
+        <tr><td>URI/argument patterns</td><td><code>pattern_rules.lua</code></td><td>SQLi, XSS, command injection, traversal, file inclusion, sensitive file access, recon probes</td></tr>
+        <tr><td>CVE matching</td><td><code>vulnerability_rules.lua</code></td><td>14+ seeded CVEs (WooCommerce Payments, Gift Voucher, CWMP, Bricks Builder, etc.)</td></tr>
+        <tr><td>Network IDS</td><td><code>suricata_rules.lua</code></td><td>Suricata eve.json alerts — severity-graded scoring (severity 1 → +50)</td></tr>
+        <tr><td>Header analysis</td><td><code>pattern_rules.lua</code></td><td>Flagged user-agents (+50), missing UA (+10), CVE-specific headers (+50)</td></tr>
+        <tr><td>IP reputation</td><td><code>pattern_analyzer.lua</code></td><td>Suricata alerts + AbuseIPDB, with shared-address (NAT) protection</td></tr>
+        <tr><td>Automation</td><td><code>pattern_analyzer.lua</code></td><td>UA fingerprinting + rapid-request timing streaks (3+ within 0.5s)</td></tr>
+        <tr><td>Upload analysis</td><td><code>upload_rules.lua</code></td><td>Dangerous extensions, bypass techniques, CVE-specific endpoints, polyglot files</td></tr>
+        <tr><td>Admin access</td><td><code>admin_rules.lua</code></td><td>Brute-force scoring, credential stuffing, direct file access, user enumeration</td></tr>
+        <tr><td>Session anomalies</td><td><code>session_rules.lua</code></td><td>IP/UA change, flagged agents, rapid requests</td></tr>
+        <tr><td>Sophistication</td><td><code>sophistication_analyzer.lua</code></td><td>Scripted / ai_assisted / manual / unknown classification</td></tr>
+        <tr><td>Honeytokens</td><td><code>honeytoken_handler.lua</code></td><td>Injected fake credentials detected in inbound requests</td></tr>
+        <tr><td>GDPR identity</td><td><code>gdpr_rules.lua</code></td><td>Privacy-preserving consent-gated second identifier</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>⚙️ Operations</h2>
+      <p>The system supports two deployment topologies:</p>
+      <ul style="color: var(--muted); padding-left: 1.5rem; margin: 1rem 0;">
+        <li><strong>Two-host</strong> — Edge host (reverse proxy, honeypot, Suricata) + SIEM host (Elasticsearch, Kibana). Dashboards split by functional domain.</li>
+        <li><strong>Single-host</strong> — All components on one host. Suitable for evaluation, labs, and small-scale deployments.</li>
+      </ul>
+      <p style="color: var(--muted);">
+        Production hardening covers TLS, firewall rules, authentication, session cookie signing, threat decay configuration, AbuseIPDB setup, and internal test secret gating.
+      </p>
+    </div>
+  </div>
+</Layout>
