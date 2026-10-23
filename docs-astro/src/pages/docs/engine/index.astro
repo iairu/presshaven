@@ -107,8 +107,9 @@ cp site/* ../production_eshop_files/wp-content/themes/omega-storefront/assets/fe
   </ul>
 
   <h2 id="backups">Backups</h2>
-  <p>The <code>backup_service</code> container snapshots the databases and the WordPress files into
-  <code>ids/backups/</code>. Keep the following rules in mind:</p>
+  <p>The <code>backup_service</code> container snapshots the production database and the production
+  WordPress files into <code>ids/backups/</code>. It starts five minutes after boot, runs daily, and keeps
+  seven days by default (<code>BACKUP_RETENTION_DAYS</code>). Pool data is disposable; production data is not.</p>
   <ul>
     <li>Back up the production database before reseeding or applying migrations; pool data is disposable, production data is not.</li>
     <li>Back up <code>.env</code> and the certificate material separately from the data, and store them encrypted.</li>

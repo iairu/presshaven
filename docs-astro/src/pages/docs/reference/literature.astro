@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference' },
   { title: 'Glossary', href: '/docs/reference/glossary' },
   { title: 'Known Issues', href: '/docs/reference/known-issues' },
@@ -15,6 +18,12 @@ const toc = [
 ];
 ---
 <DocsLayout title="Primary Literature" description="Academic and technical literature related to the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Academic" href="#academic" icon="book" tag="Foundations" description="Honeypot and deception literature, IDS taxonomies, the OWASP WSTG and the rule-based detection rationale." />
+    <DocCard title="Technical" href="#technical" icon="code" tag="Stack" description="Suricata, AbuseIPDB categories, Kibana saved objects, Lua patterns, OpenResty and Redis scripting." />
+    <DocCard title="Related work" href="#related" icon="globe" tag="Context" description="Honeypot platforms, threat intelligence sharing, session deception and privacy-preserving security." />
+  </CardGrid>
+
   <h2 id="academic">Academic References</h2>
   <ul>
     <li><strong>Honeypot-based intrusion detection literature</strong> — Foundational concepts for honeypot systems, deception technology, and intrusion detection.</li>

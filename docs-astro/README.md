@@ -1,43 +1,39 @@
-# Astro Starter Kit: Minimal
+# Honeypot IDS — Knowledge Hub
 
-```sh
-npm create astro@latest -- --template minimal
+The Astro site in this directory is the documentation hub for the Honeypot IDS System.
+It documents the architecture, detection pipeline, honeypot engine, observability stack,
+operations and testing strategy of the project in `../`.
+
+Repository: <https://github.com/iairu/honeypot-ids>
+
+## Commands
+
+```bash
+npm install
+npm run dev       # local dev server
+npm run build     # static output in dist/
+npm run preview   # preview the production build
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
+## Structure
 
 ```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+src/
+  components/     Icon, DocCard and CardGrid used across docs pages
+  layouts/        Layout.astro (hub) and DocsLayout.astro (documentation shell)
+  pages/          Homepage, docs routes and the quick reference page
+  styles/         global.css — design tokens, docs prose, cards, diagrams
+public/           favicon assets
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+Documentation pages are plain `.astro` files under `src/pages/docs/`. Use `DocCard` and
+`CardGrid` for navigation or summary blocks inside a page. Inline SVG graphics use
+`currentColor` or the shared `diagram-*` classes in `global.css`, so they follow the theme
+without hard-coded colours.
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## Conventions
 
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+- Keep the existing grayscale + neon green palette; do not introduce new colour families.
+- Prefer existing tokens (`var(--color-accent-green)`, `var(--color-border)`, …) over hex values.
+- Documentation cards belong inside `.md-typeset` pages and should link to a real page.
+- Site-wide links to the source repository point at `https://github.com/iairu/honeypot-ids`.

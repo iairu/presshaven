@@ -64,7 +64,7 @@ const navigation = [
   },
 ];
 ---
-<Layout title="Knowledge Hub" description="Honeypot IDS System — architecture, detection, observability and operations documentation">
+<Layout title="Home" description="Honeypot IDS System — architecture, detection, observability and operations documentation">
   <!-- ============================================================
        Hero
        ============================================================ -->
@@ -199,7 +199,7 @@ const navigation = [
 
             <div class="home-console__foot">
               <span><span class="ok">●</span> pipeline healthy</span>
-              <span>11 stages · &lt; 1 ms decision</span>
+              <span>11 stages · in request path</span>
             </div>
           </div>
         </div>
@@ -307,7 +307,7 @@ const navigation = [
               <text class="diagram-text--sm" x="206" y="286" text-anchor="middle">session + pools</text>
               <path class="diagram-line--dash" d="M206 236V256" />
 
-              <path class="diagram-line--dash" d="M206 300V330H504V165H536" />
+              <path class="diagram-line--dash" d="M206 300V330H536" />
               <text class="diagram-text--sm diagram-text--accent" x="282" y="344">VECTOR → ELASTICSEARCH → KIBANA</text>
               <circle class="diagram-dot" cx="206" cy="300" r="2.4" />
             </svg>
@@ -386,7 +386,7 @@ const navigation = [
   → router.decide_route() (11 stages)
   → pool_router.get_or_assign_pool()
   → session_handler.update_session() → Redis
-  → Postgres/MySQL choice: production or honeypot
+  → WordPress backend: production or honeypot
   → Suricata eve.json → init_worker.lua
   → threat_intel shared dict
   → abuseipdb_client.report_ip_async()</code></pre>
