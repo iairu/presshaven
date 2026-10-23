@@ -1005,6 +1005,21 @@ class CatalogBuilder:
             )
             if cve not in record["aliases"]:
                 record["aliases"].append(cve)
+            # Every CVE gets its lesson here, not only CVEs that happen to have
+            # an Attack Simulation preset (add_preset used to be the only path).
+            lesson = lesson_for(cve)
+            if lesson is not None and record["lesson"] is None:
+                record["lesson"] = {
+                    "attack_class": lesson.attack_class,
+                    "owasp": lesson.owasp,
+                    "attack": lesson.attack,
+                    "how_it_works": lesson.how_it_works,
+                    "defence": lesson.defence,
+                }
+                if not record["owasp"]:
+                    record["owasp"] = lesson.owasp
+                if not record["mitre"]:
+                    record["mitre"] = lesson.attack
             fallback_wstg = (CVE_WSTG.get(cve) or ATTACK_VECTOR_WSTG.get(vuln.get("attack_vector", ""))
                              or ATTACK_CLASS_WSTG.get((lesson_for(cve).attack_class if lesson_for(cve) else ""), ""))
             if fallback_wstg:

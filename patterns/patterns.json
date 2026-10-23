@@ -659,8 +659,8 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
-      "mitre": "",
+      "owasp": "A04 Insecure Design",
+      "mitre": "T1505.003 Web Shell",
       "cve": "CVE-2024-8425",
       "attack_vector": "file_upload_rce",
       "detection": [
@@ -704,7 +704,13 @@
         }
       ],
       "preset": null,
-      "lesson": null,
+      "lesson": {
+        "attack_class": "Unrestricted file upload leading to RCE",
+        "owasp": "A04 Insecure Design",
+        "attack": "T1505.003 Web Shell",
+        "how_it_works": "The gift voucher preview handler accepts an unauthenticated attachment upload, so a PHP file can be dropped on the server and executed.",
+        "defence": "Require authentication, allow-list file types, disable PHP execution in uploads."
+      },
       "reportable": true,
       "enabled": true,
       "tags": [

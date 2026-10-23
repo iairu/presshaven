@@ -26,8 +26,8 @@ from PyQt6.QtGui import QColor, QFontDatabase, QGuiApplication
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView,
     QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
-    QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget,
+    QScrollArea, QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from ui import theme
@@ -65,7 +65,7 @@ def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
     since = 0
     for ch in text:
         out.append(ch)
-        if ch.isspace() or ch in "/&?=,|_.":
+        if ch.isspace() or ch in "/&?=,|_.%":
             since = 0
         else:
             since += 1
@@ -159,25 +159,32 @@ class PatternDatabasePage(QWidget):
         self.reset_btn = QPushButton("Reset filters")
         row2.addWidget(self.reset_btn)
         row2.addStretch(1)
+        filters_layout.addLayout(row2)
+
+        # Actions get their own row: keeping five buttons on the filter row
+        # made the page's minimum width ~1170px, which forced a horizontal
+        # scrollbar on a 1024px laptop. The catalogue itself and the actions
+        # are independent, so a third row is the cheap responsive fix.
+        row3 = QHBoxLayout()
         self.count_label = QLabel("")
         self.count_label.setStyleSheet("color: #888888;")
-        row2.addWidget(self.count_label)
-
+        row3.addWidget(self.count_label)
+        row3.addStretch(1)
         self.reload_btn = QPushButton("Reload catalogue")
         self.reload_btn.setToolTip("Re-read patterns/patterns.json from disk")
-        row2.addWidget(self.reload_btn)
+        row3.addWidget(self.reload_btn)
         self.export_btn = QPushButton("Export filtered…")
         self.export_btn.setToolTip("Save the currently filtered catalogue as JSON")
-        row2.addWidget(self.export_btn)
-        self.add_btn = QPushButton("Add pattern…")
+        row3.addWidget(self.export_btn)
+        self.add_btn = QPushButton("Add pattern")
         self.add_btn.setEnabled(False)
         self.add_btn.setToolTip("Scaffolded for the upcoming pattern-plugin registry")
-        row2.addWidget(self.add_btn)
-        self.import_btn = QPushButton("Import…")
+        row3.addWidget(self.add_btn)
+        self.import_btn = QPushButton("Import")
         self.import_btn.setEnabled(False)
         self.import_btn.setToolTip("Scaffolded for the upcoming pattern-plugin registry")
-        row2.addWidget(self.import_btn)
-        filters_layout.addLayout(row2)
+        row3.addWidget(self.import_btn)
+        filters_layout.addLayout(row3)
         outer.addWidget(filters)
 
         # ---- table + detail side panel ----------------------------------
@@ -209,6 +216,7 @@ class PatternDatabasePage(QWidget):
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
         self.detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.detail_host = QWidget()
         self.detail_layout = QVBoxLayout(self.detail_host)
         self.detail_layout.setContentsMargins(14, 12, 14, 12)
@@ -245,6 +253,9 @@ class PatternDatabasePage(QWidget):
         self.plugin_badge.setStyleSheet(
             f"QLabel {{ color: {c['accent']}; border: 1px solid {c['accent']}; "
             f"padding: 3px 8px; font-weight: 700; letter-spacing: 1px; font-size: 8pt; }}")
+        self.detail_scroll.setStyleSheet(
+            f"QScrollArea {{ background: {c['bg_alt']}; "
+            f"border: 1px solid {c['border']}; }}")
         self.hint.setStyleSheet(f"color: {c['fg_muted']};")
         self.count_label.setStyleSheet(f"color: {c['fg_muted']};")
         self.reload_btn.setToolTip("Re-read patterns/patterns.json from disk")
@@ -419,6 +430,12 @@ class PatternDatabasePage(QWidget):
         old labels: a deferred delete lets the previous detail paint for one
         frame and makes fast row changes look like overlapping sections."""
         host = QWidget()
+        host.setObjectName("PatternDetailBody")
+        host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        host.setStyleSheet(
+            f"#PatternDetailBody {{ background: {theme.scheme_colors()['bg_alt']}; }}")
+        host.setMinimumWidth(0)
+        host.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout = QVBoxLayout(host)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(9)
@@ -475,6 +492,8 @@ class PatternDatabasePage(QWidget):
             body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             body.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
             body.setStyleSheet(f"color: {c['accent']};")
+            body.setMinimumWidth(0)
+            body.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             _wrap_anywhere(body)
             self.detail_layout.addWidget(self._section("Trigger", body,
                                                        subtitle=pattern.get("trigger_type", "")))
@@ -616,6 +635,9 @@ class PatternDatabasePage(QWidget):
         raw = QPlainTextEdit()
         raw.setReadOnly(True)
         raw.setMaximumHeight(170)
+        raw.setMinimumWidth(0)
+        raw.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        raw.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         raw.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         raw.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         raw.setPlainText(json.dumps(pattern, indent=2, ensure_ascii=False))
@@ -626,6 +648,8 @@ class PatternDatabasePage(QWidget):
     def _badge_row(self, pattern: dict) -> QWidget:
         c = theme.scheme_colors()
         row = QWidget()
+        row.setMinimumWidth(0)
+        row.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
@@ -635,11 +659,9 @@ class PatternDatabasePage(QWidget):
             (pattern.get("severity", "").upper(), _SEVERITY_COLOR.get(pattern.get("severity", ""), GREY), "#111111"),
             (pattern.get("surface", "").title(), c["bg_alt"], c["fg_muted"]),
         ]
-        component = pattern.get("component", "")
-        if pattern.get("plugin"):
-            chips.append((f"{component}: {pattern['plugin']}", c["bg_alt"], c["fg"]))
-        elif component:
-            chips.append((component.title(), c["bg_alt"], c["fg"]))
+        # Component/plugin lives in the facts block: its full name is long
+        # enough to push the badge row past the panel edge on narrower
+        # windows, and a clipped chip is worse than no chip.
         for text, bg, fg in chips:
             if not text:
                 continue
@@ -654,6 +676,7 @@ class PatternDatabasePage(QWidget):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setMinimumWidth(0)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         style = f"color: {color}; font-size: {size}pt;"
         if mono:
@@ -665,10 +688,12 @@ class PatternDatabasePage(QWidget):
     def _section(self, title: str, body: QWidget, subtitle: str = "") -> QFrame:
         c = theme.scheme_colors()
         frame = QFrame()
+        frame.setMinimumWidth(0)
+        frame.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         frame.setStyleSheet(
             f"QFrame {{ background: {c['bg_alt']}; border: 1px solid {c['border']}; }}")
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(9, 7, 9, 8)
+        layout.setContentsMargins(9, 7, 11, 8)
         layout.setSpacing(3)
         heading = QLabel(title + (f"  ·  {subtitle}" if subtitle else ""))
         heading.setStyleSheet(

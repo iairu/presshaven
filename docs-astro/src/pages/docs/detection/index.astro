@@ -2,6 +2,9 @@
 import DocsLayout from '../../../layouts/DocsLayout.astro';
 import CardGrid from '../../../components/CardGrid.astro';
 import DocCard from '../../../components/DocCard.astro';
+import { loadPatternCatalog } from '../../../lib/pattern-catalog';
+
+const patternCounts = loadPatternCatalog().counts ?? {};
 const sidebar = [
   { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection', active: true },
@@ -70,7 +73,7 @@ const toc = [
       icon="search"
       tag="One catalogue"
       description="Every CVE, generic signature, upload and header rule, scanner tool and Suricata SID, with provenance, scores and attack lessons."
-      meta="133 patterns · 15 CVEs · 70 SIDs"
+      meta={`${patternCounts.total ?? 0} patterns · ${patternCounts.cves ?? 0} CVEs · ${patternCounts.suricata_sids ?? 0} SIDs`}
     />
     <DocCard
       title="Advanced Signals"

@@ -1,13 +1,8 @@
 ---
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { loadPatternCatalog } from '../../../lib/pattern-catalog';
 
-// Resolve from the docs-astro package root, not import.meta.url: Vite moves
-// this module into dist/.prerender/chunks during the build, which would make a
-// URL-relative path point outside the repository.
-const catalogPath = resolve(process.cwd(), '..', 'patterns', 'patterns.json');
-const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+const catalog = loadPatternCatalog();
 const patterns = catalog.patterns ?? [];
 const counts = catalog.counts ?? {};
 const sources = catalog.sources ?? {};
@@ -439,9 +434,8 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           });
         });
         detail.querySelector('.pd-detail__close')?.addEventListener('click', closePattern);
-        if (window.matchMedia('(max-width: 1023px)').matches) {
-          detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        // The drawer is already fixed and visible on narrow screens; calling
+        // scrollIntoView on it would move the page underneath the overlay.
       }
 
       function closePattern() {
@@ -472,7 +466,8 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       });
 
       applyFilters();
-      const requested = new URL(window.location.href).searchParams.get('pattern');
+      const requestedRaw = new URL(window.location.href).searchParams.get('pattern');
+      const requested = requestedRaw ? requestedRaw.toLowerCase() : '';
       if (requested && byId[requested]) {
         openPattern(requested, false);
         currentRow(requested)?.scrollIntoView({ block: 'nearest' });

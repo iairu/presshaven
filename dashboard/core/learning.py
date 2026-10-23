@@ -607,8 +607,17 @@ PATTERN_LESSONS: dict[str, PatternLesson] = {
 }
 
 
+# CVE aliases that share an Attack Simulation preset's lesson. Keeping these
+# out of PATTERN_LESSONS itself preserves "every lesson key has a preset" --
+# CVE-2024-8425 is the same Gift Voucher handler as CVE-2025-47577 but has no
+# separate preset of its own.
+PATTERN_LESSON_ALIASES = {
+    "CVE-2024-8425": "CVE-2025-47577",
+}
+
+
 def lesson_for(cve: str) -> PatternLesson | None:
-    return PATTERN_LESSONS.get(cve)
+    return PATTERN_LESSONS.get(PATTERN_LESSON_ALIASES.get(cve, cve))
 
 
 # ---- pattern-analyzer event explanations ----
