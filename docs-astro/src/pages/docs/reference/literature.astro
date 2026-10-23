@@ -12,42 +12,64 @@ const sidebar = [
   { title: 'Literature', href: '/docs/reference/literature', active: true },
 ];
 const toc = [
-  { id: 'academic', text: 'Academic References', level: 2 },
-  { id: 'technical', text: 'Technical References', level: 2 },
-  { id: 'related', text: 'Related Work', level: 2 },
+  { id: 'academic', text: 'Academic & Standards', level: 2 },
+  { id: 'technical', text: 'Technical Documentation', level: 2 },
+  { id: 'threat', text: 'Threat Intelligence & Honeytokens', level: 2 },
+  { id: 'repo', text: 'In-Repository Design Documents', level: 2 },
 ];
 ---
-<DocsLayout title="Primary Literature" description="Academic and technical literature related to the system" section="Reference" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Primary Literature" description="Concrete academic, standards and technical references, and the in-repository design documents this system is built on" section="Reference" sidebar={sidebar} toc={toc}>
   <CardGrid columns={3}>
-    <DocCard title="Academic" href="#academic" icon="book" tag="Foundations" description="Honeypot and deception literature, IDS taxonomies, the OWASP WSTG and the rule-based detection rationale." />
-    <DocCard title="Technical" href="#technical" icon="code" tag="Stack" description="Suricata, AbuseIPDB categories, Kibana saved objects, Lua patterns, OpenResty and Redis scripting." />
-    <DocCard title="Related work" href="#related" icon="globe" tag="Context" description="Honeypot platforms, threat intelligence sharing, session deception and privacy-preserving security." />
+    <DocCard title="Academic & standards" href="#academic" icon="book" tag="Foundations" description="Canonical honeypot books, the OWASP WSTG and the MITRE ATT&CK framework behind the detection model." />
+    <DocCard title="Technical docs" href="#technical" icon="code" tag="Stack" description="Suricata, OpenResty / Nginx Lua, Redis scripting, Elasticsearch and Kibana — the runtime this is built on." />
+    <DocCard title="In-repo design" href="#repo" icon="file" tag="Primary sources" description="The design documents in this repository that every page here is grounded in." />
   </CardGrid>
 
-  <h2 id="academic">Academic References</h2>
+  <p>References are grouped by kind. External works are cited by author and title so they can be
+  located directly; the in-repository design documents are the primary sources this documentation is
+  grounded in, each given by its path in
+  <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener">the source repository</a>.</p>
+
+  <h2 id="academic">Academic & Standards</h2>
   <ul>
-    <li><strong>Honeypot-based intrusion detection literature</strong> — Foundational concepts for honeypot systems, deception technology, and intrusion detection.</li>
-    <li><strong>Intrusion detection and deception taxonomy</strong> — Classification frameworks for honeypot types and detection methodologies.</li>
-    <li><strong>OWASP Web Security Testing Guide (WSTG) v4.2</strong> — The category system used throughout the detection pipeline.</li>
-    <li><strong>COUNTERARGUMENTS.md Q7</strong> — Documentation on the deliberate choice of explainable rule-based detection over black-box ML.</li>
+    <li><strong>Lance Spitzner — <em>Honeypots: Tracking Hackers</em></strong> (Addison-Wesley, 2002). The foundational treatment of honeypots, the interaction-level taxonomy and the value-of-deception argument.</li>
+    <li><strong>Niels Provos &amp; Thorsten Holz — <em>Virtual Honeypots: From Botnet Tracking to Intrusion Detection</em></strong> (Addison-Wesley, 2007). Low- vs high-interaction honeypots, honeyd and virtualised deployment — the lineage this per-session-pool design sits in.</li>
+    <li><strong>OWASP Web Security Testing Guide (WSTG) v4.2.</strong> The <code>WSTG-INPV</code> / <code>ATHN</code> / <code>AUTHZ</code> / <code>CONF</code> / <code>INFO</code> category system used to label detection stages and Suricata SIDs. <a href="https://owasp.org/www-project-web-security-testing-guide/" target="_blank" rel="noopener">owasp.org/www-project-web-security-testing-guide</a>.</li>
+    <li><strong>MITRE ATT&amp;CK framework.</strong> Adversary tactics and techniques vocabulary for describing the attack surface the decoys present. <a href="https://attack.mitre.org/" target="_blank" rel="noopener">attack.mitre.org</a>.</li>
+    <li><strong>OWASP Top 10.</strong> The injection, access-control and misconfiguration classes the generic pattern rules target. <a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener">owasp.org/www-project-top-ten</a>.</li>
+    <li><strong>Rule-based vs ML detection.</strong> This system deliberately favours explainable, rule-based scoring over black-box ML; the trade-off (auditability and no training data vs novel-attack recall) is discussed in the <a href="/docs/detection">detection overview</a>'s honest assessment.</li>
   </ul>
 
-  <h2 id="technical">Technical References</h2>
+  <h2 id="technical">Technical Documentation</h2>
   <ul>
-    <li><strong>Suricata rule documentation</strong> — Suricata IDS configuration, rule syntax, and eve.json log format.</li>
-    <li><strong>AbuseIPDB category mapping</strong> — AbuseIPDB report category IDs (15=Hacking, 21=Web App Attack, 18=Brute-Force, 19=Bad Web Bot).</li>
-    <li><strong>Kibana saved objects API</strong> — Used by build_dashboards.py and export_dashboards.py.</li>
-    <li><strong>Lua pattern syntax</strong> — Lua pattern matching documentation relevant to pattern_rules.lua and the hyphen-escaping bug fix.</li>
-    <li><strong>OpenResty / Nginx Lua</strong> — Runtime environment for the reverse proxy and detection pipeline.</li>
-    <li><strong>Redis Lua scripting</strong> — Atomic pool assignment via EVAL in pool_router_rules.ASSIGN_SCRIPT.</li>
+    <li><strong>Suricata documentation.</strong> Rule syntax, SID allocation and the <code>eve.json</code> event format parsed by <code>suricata_rules.lua</code>. <a href="https://docs.suricata.io/" target="_blank" rel="noopener">docs.suricata.io</a>.</li>
+    <li><strong>OpenResty / Nginx Lua module.</strong> The <code>ngx.*</code> runtime, <code>access_by_lua</code> phase and shared dictionaries the reverse proxy and detection pipeline run in. <a href="https://openresty.org/en/" target="_blank" rel="noopener">openresty.org</a>.</li>
+    <li><strong>Lua 5.1 reference manual — patterns.</strong> Lua pattern matching (not PCRE) as used in <code>pattern_rules.lua</code>; the "magic character" escaping rules behind the hyphen-escaping fix. <a href="https://www.lua.org/manual/5.1/manual.html#5.4.1" target="_blank" rel="noopener">lua.org/manual/5.1</a>.</li>
+    <li><strong>Redis — scripting &amp; <code>EVAL</code>.</strong> Atomic pool assignment via a Lua script (<code>pool_router_rules.ASSIGN_SCRIPT</code>) and the session/state store. <a href="https://redis.io/docs/latest/develop/interact/programmability/eval-intro/" target="_blank" rel="noopener">redis.io scripting</a>.</li>
+    <li><strong>Elasticsearch &amp; Kibana.</strong> The SIEM index/visualisation layer; the Kibana Saved Objects API drives <code>build_dashboards.py</code> / <code>export_dashboards.py</code>. <a href="https://www.elastic.co/guide/index.html" target="_blank" rel="noopener">elastic.co/guide</a>.</li>
+    <li><strong>Vector (vector.dev).</strong> The log-shipping agent in the two-host, mTLS-secured pipeline (<code>Vector → Elasticsearch</code>). <a href="https://vector.dev/docs/" target="_blank" rel="noopener">vector.dev/docs</a>.</li>
+    <li><strong>Docker Compose.</strong> The per-session pool orchestration, static pools and the two deployment overlays (<code>docker-compose.yml</code> vs <code>docker-compose.db-proxy.yml</code>). <a href="https://docs.docker.com/compose/" target="_blank" rel="noopener">docs.docker.com/compose</a>.</li>
   </ul>
 
-  <h2 id="related">Related Work</h2>
+  <h2 id="threat">Threat Intelligence & Honeytokens</h2>
   <ul>
-    <li><strong>Honeypot platforms and IDS/SIEM integration</strong> — Comparative studies of honeypot platforms and their SIEM integration approaches.</li>
-    <li><strong>Threat intelligence sharing</strong> — AbuseIPDB, MISP, and other threat intelligence platforms.</li>
-    <li><strong>Session management and deception</strong> — Techniques for session tracking, fingerprinting, and honeypot pool isolation.</li>
-    <li><strong>GDPR and privacy-preserving security</strong> — Consent-gated identity and one-way signature approaches.</li>
-    <li><strong>Honeytoken / CanaryToken research</strong> — Academic literature on honeytoken injection and detection strategies.</li>
+    <li><strong>AbuseIPDB API &amp; report categories.</strong> The category IDs used for report-back (15 = Hacking, 18 = Brute-Force, 19 = Bad Web Bot, 21 = Web App Attack). <a href="https://docs.abuseipdb.com/" target="_blank" rel="noopener">docs.abuseipdb.com</a>.</li>
+    <li><strong>Thinkst Canarytokens.</strong> The honeytoken / canary-token technique this project's five seeded token types (API key, DB credentials, admin password, S3 URL, JWT secret) follow. <a href="https://canarytokens.org/" target="_blank" rel="noopener">canarytokens.org</a>.</li>
+    <li><strong>MISP — threat-intelligence sharing.</strong> Context for the roadmap's feed-integration direction beyond AbuseIPDB. <a href="https://www.misp-project.org/" target="_blank" rel="noopener">misp-project.org</a>.</li>
+    <li><strong>GDPR (Regulation (EU) 2016/679).</strong> The consent and data-minimisation basis for the one-way, consent-gated <a href="/docs/detection/signature">device signature</a>.</li>
+  </ul>
+
+  <h2 id="repo">In-Repository Design Documents</h2>
+  <p>These are the primary sources for everything documented on this site — every number and flag here
+  traces back to one of them:</p>
+  <ul>
+    <li><strong><code>ARCHITECTURE.md</code></strong> — overall system architecture and the request path.</li>
+    <li><strong><code>ids/GDPR.md</code></strong> — the consent-gated device-signature protocol (client token, server-side IP append, salt-and-hash).</li>
+    <li><strong><code>patterns/README.md</code></strong> — the generated pattern catalogue (<code>patterns/patterns.json</code>) that feeds both the dashboard and <a href="/docs/detection/patterns">these docs</a>.</li>
+    <li><strong><code>ids/db_proxy/README.md</code></strong> and <strong><code>ids/db_proxy/COVERAGE.md</code></strong> — the database-layer deception overlay and its attack-coverage scope. See <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
+    <li><strong><code>ids/testing/BLIND_PENTEST_PROTOCOL.md</code></strong> — the blind-evaluation protocol, rubric and task list behind the <a href="/docs/testing/blind-pentest">Blind Pentest</a> page.</li>
+    <li><strong><code>ids/eshop_seed/README.md</code></strong> — the decoy WooCommerce content seeded into honeypot pools.</li>
+    <li><strong><code>siem/README.md</code></strong> and <strong><code>ids/vector/certs/README.md</code></strong> — the SIEM pipeline and its mTLS certificate setup.</li>
+    <li><strong><code>dashboard/README.md</code></strong> — the PyQt6 control dashboard and its Knowledge Base.</li>
   </ul>
 </DocsLayout>

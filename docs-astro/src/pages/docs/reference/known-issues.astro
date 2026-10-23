@@ -12,36 +12,59 @@ const sidebar = [
   { title: 'Literature', href: '/docs/reference/literature' },
 ];
 const toc = [
-  { id: 'issues', text: 'Known Issues', level: 2 },
-  { id: 'corrections', text: 'Corrections', level: 2 },
-  { id: 'reporting', text: 'Reporting', level: 2 },
+  { id: 'operational', text: 'Operational Issues', level: 2 },
+  { id: 'design', text: 'By-Design Limitations', level: 2 },
+  { id: 'tells', text: 'Honeypot Tells', level: 2 },
+  { id: 'historical', text: 'Historical (Fixed)', level: 2 },
+  { id: 'reporting', text: 'Reporting a New Issue', level: 2 },
 ];
 ---
-<DocsLayout title="Known Issues & Corrections" description="Known issues and their corrections or workarounds" section="Reference" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Known Issues & Corrections" description="Current issues, by-design limitations, honeypot tells and the historical bugs already fixed" section="Reference" sidebar={sidebar} toc={toc}>
   <CardGrid columns={3}>
-    <DocCard title="Dashboard drift" icon="chart" tag="Current" description="Offline and live dashboard state can diverge. Rebuild to NDJSON or export the live objects." meta="Workaround" />
-    <DocCard title="Same-host Suricata" icon="network" tag="Current" description="Loopback capture can attribute alerts to container-internal addresses, so reputation may not fire locally." meta="Test externally" />
-    <DocCard title="Timeline auth" icon="eye" tag="Current" description="Embed-mode capture needs a Kibana login; configure autologin or use a manual session." meta="Setup" />
-    <DocCard title="fast.log parser" icon="file" tag="Historical" description="Eight capture groups into seven variables shifted fields silently. Replaced by structured eve.json." meta="Fixed" />
-    <DocCard title="admin-ajax false positives" icon="alert" tag="Historical" description="A blanket admin-ajax rule flagged normal traffic. It is now excluded and analysed separately." meta="Fixed" />
-    <DocCard title="Session laundering" icon="fingerprint" tag="Historical" description="A single clean request could reset a risky session. Score accumulation now prevents it." meta="Fixed" />
+    <DocCard title="Dashboard drift" icon="chart" tag="Operational" description="Offline and live dashboard state can diverge. Rebuild to NDJSON or export the live objects." meta="Workaround" />
+    <DocCard title="Same-host Suricata" icon="network" tag="Operational" description="Loopback capture can attribute alerts to container-internal addresses, so reputation may not fire locally." meta="Test externally" />
+    <DocCard title="DB layer scope" icon="database" tag="By design" description="The database honeypot layer swaps only the database, so it cannot isolate file-upload or code-execution attacks." meta="Choose the layer" />
+    <DocCard title="Honeypot tells" icon="eye" tag="Deception" description="A blind pentest read the cookie name and TLS cert subject as honeypot evidence. The header oracle is now gated." meta="Run 1" />
+    <DocCard title="fast.log parser" icon="file" tag="Fixed" description="Eight capture groups into seven variables shifted fields silently. Replaced by structured eve.json." meta="Historical" />
+    <DocCard title="Session laundering" icon="fingerprint" tag="Fixed" description="A single clean request could reset a risky session. Score accumulation now prevents it." meta="Historical" />
   </CardGrid>
 
-  <h2 id="issues">Known Issues</h2>
+  <h2 id="operational">Operational Issues</h2>
   <ul>
-    <li><strong>Dashboard generation drift:</strong> Offline vs live dashboard state can diverge. Workaround: Re-run build_dashboards.py --ndjson or export_dashboards.py.</li>
-    <li><strong>Timeline capture requires Kibana auth:</strong> Configure autologin scripts or manual login.</li>
-    <li><strong>Suricata same-host testing misattributes src_ip:</strong> Suricata runs with network_mode: host. In same-host test setups, alert src_ip may be container-internal. Workaround: is_private_ip() filters RFC1918/loopback at ingestion.</li>
-    <li><strong>Fast.log regex parsing bug (historical):</strong> 8 capture groups into 7 variables shifted all fields. Fixed by switching to structured eve.json.</li>
-    <li><strong>Admin-ajax.php false positives (historical):</strong> Blanket-flagged every admin-ajax.php request. Fixed: excluded from is_admin_access(), gets dedicated analysis.</li>
-    <li><strong>Session score laundering (historical):</strong> Single clean request reset CVE-triggered sessions. Fixed by score accumulation in router.lua.</li>
-    <li><strong>is_vulnerable_plugin_request() hyphen-escaping bug (historical):</strong> Un-escaped plugin slug broke match for hyphenated slugs. Fixed via lua_pattern_utils.escape_pattern().</li>
-    <li><strong>ngx.null sentinel crash (historical):</strong> red:get() returns ngx.null userdata for missing key. Fixed with if not raw or raw == ngx.null idiom.</li>
+    <li><strong>Dashboard generation drift:</strong> offline vs live dashboard state can diverge. Workaround: re-run <code>build_dashboards.py --ndjson</code> or <code>export_dashboards.py</code>.</li>
+    <li><strong>Timeline capture requires Kibana auth:</strong> embed-mode capture needs a Kibana login; configure an autologin script or use a manual session.</li>
+    <li><strong>Suricata same-host testing misattributes <code>src_ip</code>:</strong> Suricata runs with <code>network_mode: host</code>, so in same-host test setups an alert's <code>src_ip</code> may be container-internal. <code>is_private_ip()</code> filters RFC 1918 / loopback at ingestion, which means reputation may not fire for a purely local attacker — test from an external address to exercise it.</li>
   </ul>
 
-  <h2 id="corrections">Corrections</h2>
-  <p>Corrections to documentation should be recorded here with issue references and resolution notes.</p>
+  <h2 id="design">By-Design Limitations</h2>
+  <ul>
+    <li><strong>Database honeypot layer isolates data-layer attacks only.</strong> With the <a href="/docs/engine/layers">database layer</a> there is one eshop and only the database is swapped, so a file upload or a code-execution exploit has no separate backend to land in. Use the reverse-proxy layer when those attack classes matter.</li>
+    <li><strong>The device signature is a recovery path, not a precise fingerprint.</strong> The <a href="/docs/detection/signature">GDPR signature</a> is derived from the screen size plus the server-observed IP, so it changes when either changes; it is designed to re-divert a returning attacker, not to uniquely track a device.</li>
+    <li><strong>Rule-based detection, by choice.</strong> Detection is explainable and rule-based rather than ML, so a genuinely novel attack with no matching pattern or behavioural signal can pass as low-risk until a rule is added.</li>
+  </ul>
 
-  <h2 id="reporting">Reporting</h2>
-  <p>New known issues should be added with severity, affected versions, and workarounds.</p>
+  <h2 id="tells">Honeypot Tells</h2>
+  <p>The <a href="/docs/testing/blind-pentest">blind pentest</a> (Run 1) confirmed a blind tester could identify
+  the deployment as a deception environment from the server's own responses. Status of each tell:</p>
+  <ul>
+    <li><strong><code>X-Route-Target</code> / <code>X-Risk-Score</code> headers:</strong> a live routing/score oracle returned to the client. <strong>Fixed</strong> — now emitted only for a request carrying a valid <code>X-Internal-Test-Auth</code> header, gated behind <code>INTERNAL_TEST_SECRET</code> (fail closed when unset).</li>
+    <li><strong><code>HONEYPOT_SESSION</code> cookie name:</strong> hardcoded in <code>init.lua</code>. Not changed — renaming touches session plumbing for every real client — and left as a documented limitation.</li>
+    <li><strong><code>O=HoneypotOrg, CN=localhost</code> TLS certificate subject:</strong> produced by the committed cert-generation script, so it regenerates identically on a clean deploy. Use a realistic subject for any evaluation that must stay covert.</li>
+    <li><strong>Decoy content artifacts:</strong> fabricated XML-RPC methods and an internal hostname leak in REST <code>guid</code> fields were flagged; tracked for the thesis write-up.</li>
+  </ul>
+
+  <h2 id="historical">Historical (Fixed)</h2>
+  <ul>
+    <li><strong>Fast.log regex parsing:</strong> eight capture groups into seven variables shifted every field. Fixed by switching to structured <code>eve.json</code>.</li>
+    <li><strong><code>admin-ajax.php</code> false positives:</strong> a blanket rule flagged every request. Fixed: excluded from <code>is_admin_access()</code> and given dedicated analysis.</li>
+    <li><strong>Session score laundering:</strong> a single clean request reset CVE-triggered sessions. Fixed by score accumulation in <code>router.lua</code>.</li>
+    <li><strong><code>is_vulnerable_plugin_request()</code> hyphen escaping:</strong> an un-escaped plugin slug broke matching for hyphenated slugs. Fixed via <code>lua_pattern_utils.escape_pattern()</code>.</li>
+    <li><strong><code>ngx.null</code> sentinel crash:</strong> <code>red:get()</code> returns <code>ngx.null</code> userdata for a missing key. Fixed with the <code>if not raw or raw == ngx.null</code> idiom.</li>
+  </ul>
+
+  <h2 id="reporting">Reporting a New Issue</h2>
+  <p>Record a new issue with its severity, the affected component or file, and a workaround if one exists; move
+  it to <em>Historical</em> with a one-line resolution once fixed. Documentation corrections belong here too,
+  with a reference to the page and the correction made. The source repository is at
+  <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener">github.com/iairu/honeypot-ids</a>.</p>
 </DocsLayout>

@@ -12,39 +12,51 @@ const sidebar = [
   { title: 'Literature', href: '/docs/reference/literature' },
 ];
 const toc = [
+  { id: 'shipped', text: 'Recently Shipped', level: 2 },
   { id: 'near', text: 'Near-Term', level: 2 },
   { id: 'mid', text: 'Mid-Term', level: 2 },
   { id: 'long', text: 'Long-Term', level: 2 },
 ];
 ---
-<DocsLayout title="Roadmap" description="Future development plans and roadmap for the system" section="Reference" sidebar={sidebar} toc={toc}>
-  <CardGrid columns={3}>
+<DocsLayout title="Roadmap" description="What has recently shipped, and the near-, mid- and long-term direction" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={4}>
+    <DocCard title="Shipped" href="#shipped" icon="check" tag="Done" description="Pool autoscaling, consent-gated device signature, the database-proxy honeypot layer and the generated pattern catalogue." meta="Delivered" />
     <DocCard title="Near-term" href="#near" icon="zap" tag="Next" description="More seeded CVEs, finer behavioural signals, dashboard work and generic pattern refinement." meta="Detection quality" />
-    <DocCard title="Mid-term" href="#mid" icon="route" tag="Later" description="Threat-feed integrations, webhook alerting, pool autoscaling and richer GDPR identity." meta="Operations" />
-    <DocCard title="Long-term" href="#long" icon="target" tag="Research" description="Hybrid ML approaches, multi-tenant scaling, more honeytoken types and external-traffic correlation." meta="Direction" />
+    <DocCard title="Mid-term" href="#mid" icon="route" tag="Later" description="Threat-feed integrations, webhook alerting and a pattern-plugin authoring workflow." meta="Operations" />
+    <DocCard title="Long-term" href="#long" icon="target" tag="Research" description="Hybrid ML approaches, multi-tenant scaling, more honeytoken types and adaptive responses." meta="Direction" />
   </CardGrid>
+
+  <h2 id="shipped">Recently Shipped</h2>
+  <p>Items that earlier editions of this page listed as future work and that are now implemented:</p>
+  <ul>
+    <li><strong>Pool autoscaling</strong> — the pool manager builds pools per waiting session plus spares, within a memory / CPU / count budget (<code>POOL_MAX</code>, <code>POOL_MAX_MEMORY_MB</code>, <code>POOL_MAX_CPUS</code>), and retires idle pools. See <a href="/docs/engine#pools">Honeypot Engine</a>.</li>
+    <li><strong>Consent-gated device signature</strong> — the one-way <code>gdpr_signature</code> re-recognises a returning visitor after a cookie and storage wipe without storing any PII. See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</li>
+    <li><strong>Database-proxy honeypot layer</strong> — an alternative, lighter deception layer that swaps the database per request instead of running separate decoy backends. See <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
+    <li><strong>Generated pattern catalogue</strong> — one machine-readable <code>patterns/patterns.json</code> feeds both the dashboard's Pattern Database page and the <a href="/docs/detection/patterns">documentation</a>, so the two cannot drift.</li>
+  </ul>
 
   <h2 id="near">Near-Term</h2>
   <ul>
-    <li>Additional CVE seeding and detection coverage — expand vulnerability_rules.lua and cve_patterns with newly published WordPress plugin vulnerabilities.</li>
-    <li>Enhanced behavioral analytics — extend sophistication_analyzer.lua with additional signals and finer-grained confidence thresholds.</li>
+    <li>Additional CVE seeding and detection coverage — expand <code>vulnerability_rules.lua</code> and <code>cve_patterns</code> with newly published WordPress plugin vulnerabilities.</li>
+    <li>Enhanced behavioural analytics — extend <code>sophistication_analyzer.lua</code> with additional signals and finer-grained confidence thresholds.</li>
     <li>Dashboard feature improvements — new panel types and improved Kibana visualizations.</li>
-    <li>pattern_rules generic pattern refinement — reduce false positives on legitimate REST API clients.</li>
+    <li><code>pattern_rules</code> generic-pattern refinement — reduce false positives on legitimate REST API clients.</li>
   </ul>
 
   <h2 id="mid">Mid-Term</h2>
   <ul>
-    <li>Automated threat intelligence feed integration — expand AbuseIPDB bulk feed and integrate additional threat feeds.</li>
-    <li>Expanded reporting and alerting automation — webhook-based alerts, Slack/PagerDuty integration.</li>
-    <li>Pool manager auto-scaling improvements — better resource budget management.</li>
-    <li>GDPR consent-gated identity enhancements — additional browser characteristics.</li>
+    <li>Automated threat-intelligence feed integration — expand the AbuseIPDB bulk feed and integrate additional threat feeds.</li>
+    <li>Expanded reporting and alerting automation — webhook-based alerts and Slack / PagerDuty integration.</li>
+    <li>Pattern-plugin authoring workflow — add, edit, remove and enable patterns against the catalogue's stable IDs without the dashboard and docs lists drifting apart.</li>
+    <li>Device-signature enrichment — additional browser characteristics beyond screen size, still consent-gated and one-way.</li>
   </ul>
 
   <h2 id="long">Long-Term</h2>
   <ul>
-    <li>ML-based anomaly detection — deliberate choice for explainable rule-based detection (COUNTERARGUMENTS.md Q7), future hybrid approaches possible.</li>
+    <li>ML-based anomaly detection — a deliberate current choice favours explainable rule-based detection; future hybrid approaches remain possible.</li>
     <li>Multi-environment scaling and multi-tenant support.</li>
-    <li>Honeytoken expansion — additional types beyond 5 current (API key, DB creds, admin password, S3 URL, JWT secret).</li>
-    <li>Automated eve.json correlation verification for genuine external traffic.</li>
+    <li>Honeytoken expansion — additional types beyond the current set (API key, database credentials, admin password, S3 URL, JWT secret).</li>
+    <li>Adaptive, content-level responses to attacker input (the LLM-driven dynamic-response design is not implemented today).</li>
+    <li>Automated <code>eve.json</code> correlation verification for genuine external traffic.</li>
   </ul>
 </DocsLayout>
