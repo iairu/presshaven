@@ -1,0 +1,172 @@
+---
+import { searchIndex } from '../data/search-index.js';
+
+const quickLinks = [
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Detection', href: '/docs/detection' },
+  { title: 'Observability', href: '/docs/observability' },
+  { title: 'Operations', href: '/docs/operations' },
+  { title: 'Testing', href: '/docs/testing' },
+  { title: 'Reference', href: '/docs/reference' },
+];
+---
+<div id="search-modal" class="md-search-modal">
+  <div class="md-search-modal__overlay" onclick="closeSearch()"></div>
+  <div class="md-search-modal__panel">
+    <div class="md-search-modal__input">
+      <svg class="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="search-input" type="text" placeholder="Search documentation..." autocomplete="off" />
+      <span id="search-count" class="md-search-modal__count" hidden></span>
+      <kbd>ESC</kbd>
+    </div>
+    <div id="search-results" class="md-search-modal__results">
+      <div class="md-search-empty">
+        <p>Type to search, or jump to a section</p>
+        <div class="md-search-quicklinks">
+          {quickLinks.map((link) => (
+            <a href={link.href}>{link.title}</a>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script define:vars={{ pages: searchIndex }}>
+  const modal = document.getElementById('search-modal');
+  const searchInput = document.getElementById('search-input');
+  const searchResults = document.getElementById('search-results');
+  const searchCount = document.getElementById('search-count');
+  const emptyStateHtml = searchResults ? searchResults.innerHTML : '';
+
+  function openSearch() {
+    modal.classList.add('open');
+    searchInput.value = '';
+    searchResults.innerHTML = emptyStateHtml;
+    if (searchCount) searchCount.hidden = true;
+    searchInput.focus();
+  }
+  function closeSearch() {
+    modal.classList.remove('open');
+  }
+  window.openSearch = openSearch;
+  window.closeSearch = closeSearch;
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+    if (e.key === 'Escape') closeSearch();
+  });
+
+  let matches = [];
+  let selectedIndex = 0;
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+
+  function highlight(text, terms) {
+    let safe = escapeHtml(text);
+    terms.forEach((term) => {
+      if (!term) return;
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      safe = safe.replace(new RegExp('(' + escaped + ')', 'ig'), '<mark>$1</mark>');
+    });
+    return safe;
+  }
+
+  function snippetFor(content, terms) {
+    const lower = content.toLowerCase();
+    let hitAt = -1;
+    for (const term of terms) {
+      const idx = lower.indexOf(term);
+      if (idx !== -1) { hitAt = idx; break; }
+    }
+    if (hitAt === -1) return content.slice(0, 80);
+    const start = Math.max(0, hitAt - 30);
+    const end = Math.min(content.length, hitAt + 50);
+    return (start > 0 ? '…' : '') + content.slice(start, end) + (end < content.length ? '…' : '');
+  }
+
+  function renderMatches(terms) {
+    if (matches.length === 0) {
+      searchResults.innerHTML = '<div class="md-search-empty"><p>No results found</p></div>';
+      return;
+    }
+    searchResults.innerHTML = matches.map((m, i) => `
+      <a href="${m.url}" class="md-search-result${i === selectedIndex ? ' selected' : ''}" data-index="${i}">
+        <div class="md-search-result__head">
+          <span class="title">${highlight(m.title, terms)}</span>
+          <span class="result-tag">${escapeHtml(m.section)}</span>
+        </div>
+        <div class="snippet">${highlight(snippetFor(m.content, terms), terms)}</div>
+        <div class="path">${m.url}</div>
+      </a>
+    `).join('');
+  }
+
+  function runSearch(value) {
+    const q = value.toLowerCase().trim();
+    if (!q) {
+      matches = [];
+      searchResults.innerHTML = emptyStateHtml;
+      if (searchCount) searchCount.hidden = true;
+      return;
+    }
+    const terms = q.split(/\s+/).filter(Boolean);
+    const scored = [];
+    for (const p of pages) {
+      const titleLower = p.title.toLowerCase();
+      const contentLower = p.content.toLowerCase();
+      const matchesAllTerms = terms.every((t) => titleLower.includes(t) || contentLower.includes(t));
+      if (!matchesAllTerms) continue;
+      let score = 0;
+      if (titleLower === q) score += 100;
+      else if (titleLower.startsWith(q)) score += 50;
+      else if (titleLower.includes(q)) score += 25;
+      terms.forEach((t) => {
+        if (titleLower.includes(t)) score += 10;
+        if (contentLower.includes(t)) score += 2;
+      });
+      scored.push({ page: p, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    matches = scored.map((s) => s.page);
+    selectedIndex = 0;
+    if (searchCount) {
+      searchCount.hidden = false;
+      searchCount.textContent = matches.length + (matches.length === 1 ? ' result' : ' results');
+    }
+    renderMatches(terms);
+  }
+
+  function currentTerms() {
+    return searchInput.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  }
+
+  searchInput?.addEventListener('input', (e) => runSearch(e.target.value));
+  searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, matches.length - 1);
+      renderMatches(currentTerms());
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      renderMatches(currentTerms());
+    } else if (e.key === 'Enter' && matches[selectedIndex]) {
+      window.location.href = matches[selectedIndex].url;
+    }
+  });
+
+  searchResults?.addEventListener('mousemove', (e) => {
+    const row = e.target.closest('.md-search-result');
+    if (!row) return;
+    const idx = Number(row.dataset.index);
+    if (idx === selectedIndex || Number.isNaN(idx)) return;
+    selectedIndex = idx;
+    Array.from(searchResults.querySelectorAll('.md-search-result')).forEach((el) => {
+      el.classList.toggle('selected', Number(el.dataset.index) === selectedIndex);
+    });
+  });
+</script>

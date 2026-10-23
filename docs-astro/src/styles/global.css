@@ -1188,6 +1188,12 @@ pre:hover .code-copy-btn { opacity: 1; }
   font-size: 0.95rem;
 }
 .md-search-modal__input input::placeholder { color: var(--color-text-muted); }
+.md-search-modal__count {
+  flex-shrink: 0;
+  font-family: var(--font-family-mono);
+  font-size: 0.66rem;
+  color: var(--color-text-muted);
+}
 .md-search-modal__input kbd {
   font-family: var(--font-family-mono);
   font-size: 0.62rem;
@@ -1210,9 +1216,44 @@ pre:hover .code-copy-btn { opacity: 1; }
   border-left-color: var(--color-accent-green);
   text-decoration: none;
 }
+.md-search-result__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
 .md-search-result .title { font-size: 0.82rem; font-weight: 500; color: var(--color-text-primary); }
-.md-search-result .path { font-size: 0.66rem; color: var(--color-text-muted); font-family: var(--font-family-mono); margin-top: 0.1rem; }
+.md-search-result .result-tag {
+  flex-shrink: 0;
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent-green-dim);
+}
+.md-search-result .snippet {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-search-result .path { font-size: 0.64rem; color: var(--color-text-muted); font-family: var(--font-family-mono); margin-top: 0.2rem; }
+.md-search-result mark {
+  background: var(--color-accent-green-subtle);
+  color: var(--color-accent-green);
+  border-radius: 2px;
+}
 .md-search-empty { padding: 1.2rem; text-align: center; color: var(--color-text-muted); font-size: 0.78rem; }
+.md-search-empty p { margin: 0 0 0.7rem; }
+.md-search-quicklinks { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.md-search-quicklinks a {
+  font-size: 0.7rem;
+  font-family: var(--font-family-mono);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  padding: 0.25rem 0.55rem;
+  text-decoration: none;
+}
+.md-search-quicklinks a:hover { border-color: var(--color-accent-green-dim); color: var(--color-text-primary); }
 
 /* ============================================================
    Site footer

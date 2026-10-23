@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import SearchModal from '../components/SearchModal.astro';
 interface Props {
   title: string;
   description?: string;
@@ -77,19 +78,7 @@ const nextPage = nextProp ?? (path === '/docs' ? docsOrder[0] : autoNext);
   </head>
   <body class="bg-bg-primary text-text-primary font-sans antialiased min-h-screen">
     <!-- Search Modal -->
-    <div id="search-modal" class="md-search-modal">
-      <div class="md-search-modal__overlay" onclick="closeSearch()"></div>
-      <div class="md-search-modal__panel">
-        <div class="md-search-modal__input">
-          <svg class="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input id="search-input" type="text" placeholder="Search documentation..." autocomplete="off" />
-          <kbd>ESC</kbd>
-        </div>
-        <div id="search-results" class="md-search-modal__results">
-          <div class="md-search-empty">Type to search...</div>
-        </div>
-      </div>
-    </div>
+    <SearchModal />
 
     <!-- Top header: brand + search + primary links -->
     <header class="md-header">
@@ -212,102 +201,6 @@ const nextPage = nextProp ?? (path === '/docs' ? docsOrder[0] : autoNext);
     </footer>
 
     <script>
-      const modal = document.getElementById('search-modal');
-      const searchInput = document.getElementById('search-input');
-      const searchResults = document.getElementById('search-results');
-
-      function openSearch() {
-        modal.classList.add('open');
-        searchInput.value = '';
-        searchResults.innerHTML = '<div class="md-search-empty">Type to search...</div>';
-        searchInput.focus();
-      }
-      function closeSearch() {
-        modal.classList.remove('open');
-      }
-      window.openSearch = openSearch;
-      window.closeSearch = closeSearch;
-      document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
-        if (e.key === 'Escape') closeSearch();
-      });
-
-      const pages = [
-        { title: 'Knowledge Hub', url: '/', content: 'honeypot ids detection observability landing' },
-        { title: 'Documentation', url: '/docs', content: 'docs index detection observability operations' },
-        { title: 'Getting Started', url: '/docs/getting-started', content: 'installation setup quickstart dashboard commands' },
-        { title: 'Architecture', url: '/docs/architecture', content: 'request pipeline two-host lua modules services' },
-        { title: 'Honeypot Engine', url: '/docs/engine', content: 'wordpress woocommerce pooling seeding backups state per-session segmentation' },
-        { title: 'Honeypot Layers', url: '/docs/engine/layers', content: 'honeypot layer reverse proxy database db.php deception compose docker-compose.db-proxy' },
-        { title: 'Detection Overview', url: '/docs/detection', content: 'detection pipeline scoring CVE suricata' },
-        { title: 'Detection Capabilities', url: '/docs/detection/capabilities', content: 'pattern matching CVE suricata scoring function reference' },
-        { title: 'Seeded CVEs', url: '/docs/detection/cves', content: 'CVE-2023-28121 CVE-2025-4403 vulnerability' },
-        { title: 'Suricata Network IDS', url: '/docs/detection/suricata', content: 'suricata eve.json alerts SID severity' },
-        { title: 'Pattern Database', url: '/docs/detection/patterns', content: 'pattern catalogue CVE generic signature suricata WSTG source IDs export plugin' },
-        { title: 'Advanced Signals', url: '/docs/detection/advanced', content: 'risk scoring decay policy' },
-        { title: 'Device & GDPR Signature', url: '/docs/detection/signature', content: 'gdpr signature device fingerprint consent privacy one-way hash returning visitor recovery' },
-        { title: 'Observability', url: '/docs/observability', content: 'siem kibana dashboards logs' },
-        { title: 'SIEM & Log Pipeline', url: '/docs/observability/siem', content: 'vector elasticsearch kibana logs' },
-        { title: 'Kibana Dashboards', url: '/docs/observability/kibana', content: 'dashboards visualizations timeline' },
-        { title: 'Operations', url: '/docs/operations', content: 'deployment hardening runbooks' },
-        { title: 'Two-Host', url: '/docs/operations/two-host', content: 'two host deployment topology' },
-        { title: 'Single-Host', url: '/docs/operations/single-host', content: 'single host deployment' },
-        { title: 'Hardening', url: '/docs/operations/hardening', content: 'security production hardening' },
-        { title: 'Runbooks', url: '/docs/operations/runbooks', content: 'troubleshooting incident response' },
-        { title: 'Testing', url: '/docs/testing', content: 'unit tests blind pentest' },
-        { title: 'Blind Pentest', url: '/docs/testing/blind-pentest', content: 'pentest evaluation protocol' },
-        { title: 'Reference', url: '/docs/reference', content: 'glossary known issues roadmap' },
-        { title: 'Glossary', url: '/docs/reference/glossary', content: 'terms definitions' },
-        { title: 'Known Issues', url: '/docs/reference/known-issues', content: 'bugs workarounds' },
-        { title: 'Roadmap', url: '/docs/reference/roadmap', content: 'future plans' },
-        { title: 'Changelog', url: '/docs/reference/changelog', content: 'history changes' },
-        { title: 'Literature', url: '/docs/reference/literature', content: 'academic technical references' },
-        { title: 'Reference Hub', url: '/reference', content: 'quick reference glossary tables' },
-      ];
-
-      let matches = [];
-      let selectedIndex = 0;
-
-      function renderMatches() {
-        if (matches.length === 0) {
-          searchResults.innerHTML = '<div class="md-search-empty">No results found</div>';
-          return;
-        }
-        searchResults.innerHTML = matches.map((m, i) => `
-          <a href="${m.url}" class="md-search-result${i === selectedIndex ? ' selected' : ''}" data-index="${i}">
-            <div class="title">${m.title}</div>
-            <div class="path">${m.url}</div>
-          </a>
-        `).join('');
-      }
-
-      function runSearch(value) {
-        const q = value.toLowerCase().trim();
-        if (!q) {
-          matches = [];
-          searchResults.innerHTML = '<div class="md-search-empty">Type to search...</div>';
-          return;
-        }
-        matches = pages.filter(p => p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q));
-        selectedIndex = 0;
-        renderMatches();
-      }
-
-      searchInput?.addEventListener('input', (e) => runSearch(e.target.value));
-      searchInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          selectedIndex = Math.min(selectedIndex + 1, matches.length - 1);
-          renderMatches();
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          selectedIndex = Math.max(selectedIndex - 1, 0);
-          renderMatches();
-        } else if (e.key === 'Enter' && matches[selectedIndex]) {
-          window.location.href = matches[selectedIndex].url;
-        }
-      });
-
       // TOC scroll spy
       const tocLinks = Array.from(document.querySelectorAll('#toc-nav a'));
       const headingFor = (link) => {
