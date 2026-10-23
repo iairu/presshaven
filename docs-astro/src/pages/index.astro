@@ -13,6 +13,71 @@ const stats = [
   { num: '7', label: 'Kibana Dashboards' },
 ];
 
+// Mirrors the real dashboard's nav structure 1:1 (dashboard/ui/main_window.py
+// NAV_GROUPS / NAV_OVERFLOW / PAGE_LABELS) and page summaries
+// (dashboard/core/learning.py PAGE_GUIDES) — nothing here is invented.
+// widgets are small qualitative capability tags (not invented live metrics) —
+// each pulled from the page's real purpose above, plus a few verified counts
+// already used elsewhere on this page (14+ CVEs, 70+ SIDs, 7 dashboards, etc).
+const dashNav = [
+  {
+    group: 'Overview',
+    items: [
+      { id: 'overview', label: 'Overview', icon: 'gauge', summary: "Operations landing page: current risk score, both stacks' health, and a live feed of notable security events.", widgets: [['Risk score', 'Live'], ['Stacks', '2 tracked'], ['Events', 'Live feed']] },
+    ],
+    overflow: [],
+  },
+  {
+    group: 'Monitor',
+    items: [
+      { id: 'live_events', label: 'Live Events', icon: 'activity', summary: "Real-time stream of the proxy's detection decisions, filterable and exportable, without needing the SIEM.", widgets: [['Stream', 'Real-time'], ['Filter', 'Yes'], ['Export', 'CSV/JSON']] },
+      { id: 'health', label: 'Global Visualization', icon: 'sitemap', summary: 'Topology map of every workload with live health, enforcement path and honeypot pool status.', widgets: [['View', 'Topology'], ['Health', 'Live'], ['Pools', 'Shown']] },
+      { id: 'kibana', label: 'SIEM Analytics', icon: 'chart', summary: 'SIEM dashboards for flows, alerts and security events, correlated across both stacks.', widgets: [['Dashboards', '7'], ['Stacks', 'Correlated'], ['Scope', 'Flows + alerts']] },
+    ],
+    overflow: [
+      { id: 'pipeline', label: 'Log Pipeline', icon: 'route', summary: "Is the edge shipper really delivering logs to the SIEM? Shipping config, shipper, log errors and aggregator in one check.", widgets: [['Transport', 'mTLS'], ['Shipper', 'Vector'], ['Checks', 'Config + errors']] },
+      { id: 'resources', label: 'Workload Telemetry', icon: 'cpu', summary: 'Per-workload CPU, memory and network telemetry, annotated with attack-simulation markers.', widgets: [['Metrics', 'CPU/mem/net'], ['Scope', 'Per workload'], ['Markers', 'Attack sim']] },
+      { id: 'log_search', label: 'Forensics Analysis', icon: 'search', summary: 'Forensic search across raw logs from every workload.', widgets: [['Scope', 'All workloads'], ['Mode', 'Raw search'], ['Range', 'Selectable']] },
+    ],
+  },
+  {
+    group: 'Threat Operations',
+    items: [
+      { id: 'patterns', label: 'Attack Simulation', icon: 'zap', summary: 'Replay real WordPress CVE patterns against the edge and observe detection, scoring and diversion.', widgets: [['Library', '14+ CVEs'], ['Replay', 'One click'], ['Outcome', 'Scored live']] },
+      { id: 'sessions', label: 'Attacker Sessions', icon: 'fingerprint', summary: "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.", widgets: [['Scope', 'Per session'], ['Score', 'Trend shown'], ['Routing', 'Divert trace']] },
+      { id: 'suricata', label: 'Network IDS (Suricata)', icon: 'shieldAlert', summary: 'Network IDS view: recent Suricata alerts, top signatures and sources, and the rule set with per-rule switches.', widgets: [['Rules', '70+ SIDs'], ['Alerts', 'Live feed'], ['Toggles', 'Per rule']] },
+      { id: 'detection', label: 'Detection Policy', icon: 'crosshair', summary: 'Tune how evidence builds and fades: score decay, IP-reputation weight and shared-address handling.', widgets: [['Decay', 'Tunable'], ['IP rep', 'Weighted'], ['Shared IP', 'Configurable']] },
+    ],
+    overflow: [
+      { id: 'pattern_database', label: 'Pattern Database', icon: 'clipboard', summary: 'Browse every detection pattern in one place: CVEs, generic signatures, upload and header rules, scanner tools and Suricata SIDs, with provenance and an attack lesson for each.', widgets: [['CVE rules', '14+'], ['IDS rules', '70+ SIDs'], ['Provenance', 'Per entry']] },
+      { id: 'signature_sim', label: 'Signature Simulation', icon: 'eye', summary: "Watch one browser characteristic become the proxy's consent-gated one-way gdpr_signature, end to end.", widgets: [['Token', 'RSA-OAEP'], ['Signature', 'One-way'], ['Consent', 'Required']] },
+      { id: 'pool_scaling', label: 'Pool Scaling', icon: 'layers', summary: 'Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.', widgets: [['Pools', 'Static + runtime'], ['Budget', 'Capped'], ['Scaling', 'On demand']] },
+      { id: 'pool_test', label: 'Segmentation Validation', icon: 'target', summary: 'Validate per-session segmentation: several isolated user sessions, each diverted to its own honeypot pool.', widgets: [['Sessions', 'Parallel'], ['Pools', 'Isolated'], ['Check', 'Segmentation']] },
+      { id: 'redis', label: 'Pool State Store', icon: 'database', summary: "Inspect the proxy's live state store: sessions, risk scores, IP reputation and pool bindings.", widgets: [['Store', 'Live state'], ['Scores', 'Per session'], ['Bindings', 'Pool-mapped']] },
+    ],
+  },
+  {
+    group: 'Manage',
+    items: [
+      { id: 'services', label: 'Workloads', icon: 'server', summary: 'Workload inventory and lifecycle control for the IDS edge and SIEM stacks, with live container logs.', widgets: [['Stacks', 'Edge + SIEM'], ['Control', 'Start/stop'], ['Logs', 'Live tail']] },
+      { id: 'settings', label: 'Connectors & Config', icon: 'wrench', summary: 'Target connectors (local or SSH), stack configuration, detection policy values and console preferences.', widgets: [['Connectors', 'Local + SSH'], ['Policy', 'Tunable'], ['Prefs', 'Console-wide']] },
+    ],
+    overflow: [
+      { id: 'certificates', label: 'PKI & Certificates', icon: 'key', summary: 'Issue and rotate the TLS certificates securing the edge proxy and SIEM endpoints.', widgets: [['Scope', 'Edge + SIEM'], ['Rotation', 'On demand'], ['Trust', 'Self-issued']] },
+      { id: 'backups', label: 'Backup & Recovery', icon: 'archive', summary: 'Snapshot and restore workload data volumes for incident recovery.', widgets: [['Snapshots', 'On demand'], ['Scope', 'Per workload'], ['Restore', 'Point-in-time']] },
+    ],
+  },
+  {
+    group: 'Reporting',
+    items: [
+      { id: 'learn', label: 'Knowledge Base', icon: 'book', summary: 'Glossary, guided labs and a threat brief for every attack-simulation preset.', widgets: [['Glossary', 'Searchable'], ['Labs', 'Guided'], ['Briefs', 'Per preset']] },
+    ],
+    overflow: [
+      { id: 'extras', label: 'Reporting', icon: 'file', summary: 'Report generation: implementation chapter, architecture overview and pattern / CVE matrix.', widgets: [['Chapters', 'Multi-part'], ['Matrix', 'Pattern/CVE'], ['Export', 'PDF/MD']] },
+    ],
+  },
+];
+
 const navigation = [
   {
     href: '/docs/detection',
@@ -72,15 +137,15 @@ const navigation = [
     <div class="home-hero__bg" aria-hidden="true">
       <svg class="hero-grid" viewBox="0 0 1200 700" preserveAspectRatio="none">
         <defs>
-          <pattern id="home-hero-grid" width="64" height="64" patternUnits="userSpaceOnUse">
-            <path d="M64 0H0V64" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.45" />
-          </pattern>
           <radialGradient id="home-hero-fade" cx="50%" cy="28%" r="72%">
             <stop offset="0%" style="stop-color: var(--color-bg-primary); stop-opacity: 0" />
             <stop offset="100%" style="stop-color: var(--color-bg-primary); stop-opacity: 0.92" />
           </radialGradient>
         </defs>
-        <rect width="1200" height="700" fill="url(#home-hero-grid)" />
+        <path d="M-40 180 Q 300 80 640 190 T 1260 140" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.5" />
+        <path d="M-40 300 Q 320 230 660 320 T 1260 260" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.4" />
+        <path d="M-40 430 Q 340 380 680 450 T 1260 390" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.32" />
+        <path d="M-40 560 Q 360 520 700 580 T 1260 530" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.24" />
         <rect width="1200" height="700" fill="url(#home-hero-fade)" />
       </svg>
       <svg class="hero-radar" viewBox="0 0 400 400" fill="none">
@@ -106,101 +171,119 @@ const navigation = [
       </svg>
     </div>
 
-    <div class="container home-hero__inner">
-      <div class="home-hero__copy">
-        <h1>
-          <span class="hero-gradient home-hero__title-brand">Honeypot IDS</span>
-          <span class="home-hero__title-label">Knowledge Hub</span>
-        </h1>
-        <p class="home-hero__lead">
-          A high-interaction deception platform that <strong>scores every request in real time</strong> and
-          quietly diverts suspicious sessions into isolated honeypot clones. Real customers never notice;
-          attackers get a convincing shop while every move is recorded.
-        </p>
-        <div class="home-cta">
-          <a href="/docs/getting-started" class="btn-sheared">
-            <Icon name="terminal" class="w-4 h-4" />
-            Get started
-          </a>
-          <a href="/docs/architecture" class="btn-sheared secondary">
-            <Icon name="layers" class="w-4 h-4" />
-            Architecture
-          </a>
-          <a href={github} target="_blank" rel="noopener" class="btn-sheared ghost">
-            <Icon name="github" class="w-4 h-4" />
-            Source
-          </a>
-        </div>
-        <div class="home-chips">
-          <span><Icon name="shield" class="w-3.5 h-3.5" /> No tarpit</span>
-          <span><Icon name="fingerprint" class="w-3.5 h-3.5" /> Session-bound</span>
-          <span><Icon name="lock" class="w-3.5 h-3.5" /> GDPR aware</span>
-          <span><Icon name="branch" class="w-3.5 h-3.5" /> Pure / adapter split</span>
-        </div>
-      </div>
-
-      <div class="home-hero__visual">
-        <div class="home-console">
-          <div class="home-console__bar" aria-hidden="true">
-            <i></i><i></i><i></i>
-            <span class="title">edge / live scoring</span>
+      <div class="container home-hero__inner">
+        <div class="home-hero__copy">
+          <h1>
+            <span class="hero-gradient home-hero__title-brand">Honeypot IDS</span>
+            <span class="home-hero__title-label">Knowledge Hub</span>
+          </h1>
+          <p class="home-hero__lead">
+            A high-interaction deception platform that <strong>scores every request in real time</strong> and
+            quietly diverts suspicious sessions into isolated honeypot clones. Real customers never notice;
+            attackers get a convincing shop while every move is recorded.
+          </p>
+          <div class="home-cta">
+            <a href="/docs/getting-started" class="btn-sheared">
+              <Icon name="terminal" class="w-4 h-4" />
+              Get started
+            </a>
+            <a href="/docs/architecture" class="btn-sheared secondary">
+              <Icon name="layers" class="w-4 h-4" />
+              Architecture
+            </a>
+            <a href={github} target="_blank" rel="noopener" class="btn-sheared ghost">
+              <Icon name="github" class="w-4 h-4" />
+              Source
+            </a>
           </div>
-          <div class="home-console__body">
-            <svg class="home-radar" viewBox="0 0 340 240" fill="none" role="img" aria-label="Radar view of inbound request signals">
-              <defs>
-                <pattern id="console-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M20 0H0V20" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.16" />
-                </pattern>
-              </defs>
-              <rect width="340" height="240" fill="url(#console-grid)" />
-              <circle class="ring-faint" cx="170" cy="120" r="104" />
-              <circle class="ring" cx="170" cy="120" r="68" />
-              <circle class="ring" cx="170" cy="120" r="34" />
-              <line class="cross" x1="48" y1="120" x2="292" y2="120" />
-              <line class="cross" x1="170" y1="6" x2="170" y2="234" />
-              <g class="sweep">
-                <path class="sweep-wedge" d="M170 120L170 16A104 104 0 0 1 258 52Z" />
-                <line class="sweep-line" x1="170" y1="120" x2="170" y2="16" />
-              </g>
-              <circle class="blip" cx="232" cy="82" r="3" />
-              <circle class="blip" cx="124" cy="96" r="2.2" />
-              <circle class="blip" cx="210" cy="164" r="2.6" />
-              <circle class="blip--dim" cx="98" cy="158" r="2" />
-              <circle class="blip--dim" cx="262" cy="132" r="1.8" />
-              <text x="12" y="18">INBOUND</text>
-              <text x="328" y="18" text-anchor="end">T-60s</text>
-              <text x="12" y="232">EDGE NODE</text>
-            </svg>
+          <div class="home-chips">
+            <span><Icon name="shield" class="w-3.5 h-3.5" /> No tarpit</span>
+            <span><Icon name="fingerprint" class="w-3.5 h-3.5" /> Session-bound</span>
+            <span><Icon name="lock" class="w-3.5 h-3.5" /> GDPR aware</span>
+            <span><Icon name="branch" class="w-3.5 h-3.5" /> Pure / adapter split</span>
+          </div>
+        </div>
 
-            <div class="home-console__rows">
-              <div class="home-console__row">
-                <span class="k">URI</span>
-                <span class="v">/wp-json/wp/v2/users <em>+ cve</em></span>
-                <span class="s">score 92</span>
-                <div class="home-console__meter"><i style="width: 92%"></i></div>
-              </div>
-              <div class="home-console__row">
-                <span class="k">ROUTE</span>
-                <span class="v">honeypot_pool_04 <em>· sticky</em></span>
-                <span class="s">divert</span>
-                <div class="home-console__meter"><i style="width: 78%"></i></div>
-              </div>
-              <div class="home-console__row">
-                <span class="k">EVENT</span>
-                <span class="v">vector → elasticsearch</span>
-                <span class="s s--muted">logged</span>
-                <div class="home-console__meter"><i style="width: 100%"></i></div>
+        <div class="home-hero__visual">
+          <div class="home-dash" data-dash>
+            <div class="home-dash__bar" aria-hidden="true">
+              <i></i><i></i><i></i>
+              <span class="title">Honeypot IDS · Security Operations Console</span>
+            </div>
+            <div class="home-dash__body">
+              <nav class="home-dash__nav" aria-label="Dashboard navigation (interactive preview)">
+                {dashNav.map((section) => (
+                  <div class="home-dash__group">
+                    <div class="home-dash__group-head">
+                      <p class="home-dash__group-label">{section.group}</p>
+                      {section.overflow.length > 0 && (
+                        <div class="home-dash__more">
+                          <button
+                            type="button"
+                            class="home-dash__more-toggle"
+                            data-overflow-toggle
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-label={`More ${section.group} pages`}
+                          >
+                            <span aria-hidden="true">⋮</span>
+                          </button>
+                          <div class="home-dash__overflow" hidden>
+                            {section.overflow.map((item) => (
+                              <button
+                                type="button"
+                                class="home-dash__item"
+                                data-page={item.id}
+                                data-group={section.group}
+                                data-label={item.label}
+                                data-summary={item.summary}
+                                data-widgets={JSON.stringify(item.widgets)}
+                              >
+                                <Icon name={item.icon} class="w-3.5 h-3.5" />
+                                <span>{item.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {section.items.map((item) => (
+                      <button
+                        type="button"
+                        class={`home-dash__item${item.id === 'overview' ? ' is-active' : ''}`}
+                        data-page={item.id}
+                        data-group={section.group}
+                        data-label={item.label}
+                        data-summary={item.summary}
+                        data-widgets={JSON.stringify(item.widgets)}
+                      >
+                        <Icon name={item.icon} class="w-3.5 h-3.5" />
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </nav>
+
+              <div class="home-dash__pane">
+                <p class="home-dash__crumb" data-dash-crumb>Overview</p>
+                <h3 class="home-dash__title" data-dash-title>Overview</h3>
+                <p class="home-dash__desc" data-dash-desc>Operations landing page: current risk score, both stacks' health, and a live feed of notable security events.</p>
+                <div class="home-dash__widgets" data-dash-widgets>
+                  <div class="home-dash__widget"><p class="label">Risk score</p><p class="value">Live</p></div>
+                  <div class="home-dash__widget"><p class="label">Stacks</p><p class="value">2 tracked</p></div>
+                  <div class="home-dash__widget"><p class="label">Events</p><p class="value">Live feed</p></div>
+                </div>
               </div>
             </div>
 
-            <div class="home-console__foot">
-              <span><span class="ok">●</span> pipeline healthy</span>
-              <span>11 stages · in request path</span>
+            <div class="home-dash__foot">
+              <span><span class="ok">●</span> 22 pages</span>
+              <span>5 groups · click a page to explore</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
   </section>
 
   <!-- ============================================================
@@ -796,3 +879,62 @@ const navigation = [
     </div>
   </section>
 </Layout>
+
+<script>
+  const dash = document.querySelector('[data-dash]');
+  if (dash) {
+    const crumb = dash.querySelector('[data-dash-crumb]');
+    const title = dash.querySelector('[data-dash-title]');
+    const desc = dash.querySelector('[data-dash-desc]');
+    const widgets = dash.querySelector('[data-dash-widgets]');
+    const widgetTiles = widgets ? Array.from(widgets.querySelectorAll('.home-dash__widget')) : [];
+    const items = Array.from(dash.querySelectorAll('[data-page]'));
+    const toggles = Array.from(dash.querySelectorAll('[data-overflow-toggle]'));
+
+    function closeOverflow(except) {
+      toggles.forEach((btn) => {
+        if (btn === except) return;
+        btn.setAttribute('aria-expanded', 'false');
+        const panel = btn.nextElementSibling;
+        if (panel) panel.hidden = true;
+      });
+    }
+
+    items.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        items.forEach((i) => i.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        if (crumb) crumb.textContent = btn.dataset.group || '';
+        if (title) title.textContent = btn.dataset.label || '';
+        if (desc) desc.textContent = btn.dataset.summary || '';
+        try {
+          const pairs = JSON.parse(btn.dataset.widgets || '[]');
+          widgetTiles.forEach((tile, i) => {
+            const pair = pairs[i];
+            if (!pair) return;
+            const label = tile.querySelector('.label');
+            const value = tile.querySelector('.value');
+            if (label) label.textContent = pair[0];
+            if (value) value.textContent = pair[1];
+          });
+        } catch {}
+        closeOverflow(null);
+      });
+    });
+
+    toggles.forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const panel = btn.nextElementSibling;
+        const isOpen = btn.getAttribute('aria-expanded') === 'true';
+        closeOverflow(btn);
+        if (panel) panel.hidden = isOpen;
+        btn.setAttribute('aria-expanded', String(!isOpen));
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!dash.contains(event.target)) closeOverflow(null);
+    });
+  }
+</script>
