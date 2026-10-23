@@ -1,0 +1,70 @@
+---
+interface Props {
+  name: string;
+  class?: string;
+  size?: number;
+  strokeWidth?: number;
+}
+
+const { name, class: className = 'w-5 h-5', size = 24, strokeWidth = 1.7 } = Astro.props;
+
+// Every glyph inherits its colour from the surrounding text (currentColor),
+// so a single icon works on the dark canvas, on cards and inside links.
+const icons: Record<string, string> = {
+  radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><path d="M12 12l6.4-6.4"/>',
+  shield: '<path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9.5-4.1-1.9-7-5.3-7-9.5V6l7-3z"/><path d="M9.2 12.2l1.9 1.9 3.8-4"/>',
+  activity: '<path d="M3 12h3.5l2.2-6 4.1 12 2.3-6H21"/>',
+  network: '<rect x="9" y="3" width="6" height="5"/><rect x="3" y="16" width="6" height="5"/><rect x="15" y="16" width="6" height="5"/><path d="M12 8v4M6 16v-2h12v2"/>',
+  server: '<rect x="3" y="4" width="18" height="6"/><rect x="3" y="14" width="18" height="6"/><path d="M7 7h.01M7 17h.01"/>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+  book: '<path d="M4 5.5A2.5 2.5 0 016.5 3H20v16H6.5A2.5 2.5 0 004 21.5z"/><path d="M4 5.5v16"/>',
+  wrench: '<path d="M14.5 6.5a4.5 4.5 0 01-6 6L4 17l3 3 4.5-4.5a4.5 4.5 0 016-6l-3 3-3-3z"/>',
+  flask: '<path d="M9 3h6M10 3v6L4.8 18a2 2 0 001.7 3h11a2 2 0 001.7-3L14 9V3"/><path d="M7.5 15h9"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 4l3 3M14 6l3 3"/>',
+  eye: '<path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
+  file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  github: '<path fill="currentColor" stroke="none" d="M12 .8a11.2 11.2 0 00-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.6 1.2 3.2.9.1-.8.4-1.3.7-1.6-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-2.9 0 0 .9-.3 3.1 1.1a10.6 10.6 0 015.6 0c2.2-1.4 3.1-1.1 3.1-1.1.6 1.5.2 2.6.1 2.9.7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.2-5.1 5.5.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.2 11.2 0 0012 .8z"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  check: '<path d="M4.5 12.5l5 5L20 7"/>',
+  alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  cpu: '<rect x="6" y="6" width="12" height="12"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  branch: '<circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.2v9.6M6 12h7a3 3 0 003-3V10.2"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
+  lock: '<rect x="4.5" y="10" width="15" height="10"/><path d="M8 10V7a4 4 0 018 0v3"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  route: '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h6a4 4 0 014 4v2M17 18h-6a4 4 0 01-4-4v-2"/>',
+  box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
+  zap: '<path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/>',
+  gauge: '<path d="M4 17a8 8 0 1116 0"/><path d="M12 17l4-5"/><circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/>',
+  crosshair: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
+  clipboard: '<rect x="5" y="4" width="14" height="17"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/>',
+  sitemap: '<rect x="9" y="2.5" width="6" height="5"/><rect x="2.5" y="16.5" width="6" height="5"/><rect x="15.5" y="16.5" width="6" height="5"/><path d="M12 7.5v4.5M5.5 16.5V12h13v4.5"/>',
+  shieldAlert: '<path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9.5-4.1-1.9-7-5.3-7-9.5V6l7-3z"/><path d="M12 8v4M12 15.5h.01"/>',
+  pulse: '<path d="M2 12h4l2.5-5 4 10 2.5-5H22"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  archive: '<rect x="3" y="4" width="18" height="5"/><path d="M5 9v11h14V9M9.5 13h5"/>',
+  fingerprint: '<path d="M12 4a8 8 0 00-8 8v3M12 4a8 8 0 018 8v2M8.5 20a12 12 0 01-1-5 4.5 4.5 0 019 0c0 2 .2 3.7.6 5M12 11.5v3c0 1.4.2 2.7.5 4"/>',
+};
+
+const body = icons[name] ?? icons.crosshair;
+---
+<svg
+  class={className}
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width={strokeWidth}
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <Fragment set:html={body} />
+</svg>

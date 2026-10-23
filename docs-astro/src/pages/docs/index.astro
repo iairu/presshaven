@@ -1,48 +1,143 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import CardGrid from '../../components/CardGrid.astro';
+import DocCard from '../../components/DocCard.astro';
+
 const sidebar = [
-  { title: 'Detection Overview', href: '/docs/detection', active: true },
-  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
-  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
-  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
-  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+  { title: 'Documentation Home', href: '/docs', active: true },
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Detection', href: '/docs/detection' },
   { title: 'Observability', href: '/docs/observability' },
-  { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem' },
-  { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
   { title: 'Operations', href: '/docs/operations' },
-  { title: 'Two-Host', href: '/docs/operations/two-host' },
-  { title: 'Single-Host', href: '/docs/operations/single-host' },
-  { title: 'Hardening', href: '/docs/operations/hardening' },
-  { title: 'Runbooks', href: '/docs/operations/runbooks' },
   { title: 'Testing', href: '/docs/testing' },
-  { title: 'Blind Pentest', href: '/docs/testing/blind-pentest' },
   { title: 'Reference', href: '/docs/reference' },
-  { title: 'Glossary', href: '/docs/reference/glossary' },
-  { title: 'Known Issues', href: '/docs/reference/known-issues' },
-  { title: 'Roadmap', href: '/docs/reference/roadmap' },
-  { title: 'Changelog', href: '/docs/reference/changelog' },
 ];
 const toc = [
-  { id: 'detection', text: 'Detection', level: 2 },
-  { id: 'observability', text: 'Observability', level: 2 },
-  { id: 'operations', text: 'Operations', level: 2 },
-  { id: 'testing', text: 'Testing', level: 2 },
-  { id: 'reference', text: 'Reference', level: 2 },
+  { id: 'start', text: 'Start Here', level: 2 },
+  { id: 'sections', text: 'Documentation Sections', level: 2 },
+  { id: 'paths', text: 'Reading Paths', level: 2 },
+  { id: 'scope', text: 'What This Documentation Covers', level: 2 },
 ];
 ---
 <DocsLayout title="Documentation" description="Technical documentation for the Honeypot IDS System" section="Docs" sidebar={sidebar} toc={toc}>
-  <h2 id="detection">Detection</h2>
-  <p>Multi-layered detection pipeline with 14+ seeded CVEs, 70+ Suricata SIDs, and 11+ detection stages. <a href="/docs/detection">Read more →</a></p>
+  <p>
+    This knowledge hub documents the Honeypot IDS System: a WordPress/WooCommerce storefront behind an
+    OpenResty reverse proxy that scores every request in Lua and diverts suspicious sessions into isolated
+    honeypot pools. The pages are written against the modules and deployment files in
+    <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener">github.com/iairu/honeypot-ids</a>.
+  </p>
 
-  <h2 id="observability">Observability</h2>
-  <p>Vector → Elasticsearch → Kibana pipeline with 7 dashboards and pattern report timeline. <a href="/docs/observability">Read more →</a></p>
+  <h2 id="start">Start Here</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Getting Started"
+      href="/docs/getting-started"
+      icon="terminal"
+      tag="New here?"
+      description="Prerequisites, the dashboard setup path, the manual Docker Compose path, and the first checks that prove the stack is alive."
+      meta="~10 min read"
+    />
+    <DocCard
+      title="Architecture"
+      href="/docs/architecture"
+      icon="layers"
+      tag="Mental model"
+      description="The pure/adapter split, the request pipeline, the eleven-stage router, pooling and the GDPR identity path."
+      meta="Start with the pipeline"
+    />
+  </CardGrid>
 
-  <h2 id="operations">Operations</h2>
-  <p>Two-host and single-host deployment, production hardening, troubleshooting runbooks. <a href="/docs/operations">Read more →</a></p>
+  <h2 id="sections">Documentation Sections</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Honeypot Engine"
+      href="/docs/engine"
+      icon="box"
+      tag="WordPress layer"
+      description="Production and pool shops, seeding, content replication, backups and the lifecycle of an isolated pool."
+      meta="5 sections"
+    />
+    <DocCard
+      title="Detection"
+      href="/docs/detection"
+      icon="radar"
+      tag="5 pages"
+      description="Pattern and header analysis, seeded CVEs, Suricata correlation, AbuseIPDB mapping and escalation-aware decay."
+      meta="14 modules · WSTG mapped"
+    />
+    <DocCard
+      title="Observability"
+      href="/docs/observability"
+      icon="chart"
+      tag="3 pages"
+      description="Structured security events, the Vector → Elasticsearch → Kibana path, dashboard generation and the request timeline."
+      meta="7 dashboards"
+    />
+    <DocCard
+      title="Operations"
+      href="/docs/operations"
+      icon="wrench"
+      tag="5 pages"
+      description="Two-host and single-host deployment, hardening, the full configuration reference and troubleshooting runbooks."
+      meta="2 topologies"
+    />
+    <DocCard
+      title="Testing"
+      href="/docs/testing"
+      icon="flask"
+      tag="2 pages"
+      description="Eighteen pure-Lua unit test files, dashboard tests, scenario scripts and the blind pentest protocol."
+      meta="18 test files"
+    />
+    <DocCard
+      title="Reference"
+      href="/docs/reference"
+      icon="book"
+      tag="6 pages"
+      description="Glossary, known issues with workarounds, roadmap, changelog, primary literature and module tables."
+      meta="Glossary · roadmap"
+    />
+  </CardGrid>
 
-  <h2 id="testing">Testing</h2>
-  <p>18 pure-Lua unit test files, dashboard validation, blind pentest evaluation. <a href="/docs/testing">Read more →</a></p>
+  <h2 id="paths">Reading Paths</h2>
+  <p>Three common ways through the material, depending on what you need to do.</p>
+  <CardGrid columns={3}>
+    <DocCard
+      title="Operate the system"
+      href="/docs/operations/two-host"
+      icon="server"
+      tag="Operator"
+      description="Deployment topologies, hardening, configuration defaults and the runbooks for services, incidents and stale dashboards."
+    />
+    <DocCard
+      title="Understand detection"
+      href="/docs/detection/capabilities"
+      icon="target"
+      tag="Analyst"
+      description="How each signal is scored, which CVEs are seeded, how Suricata feeds the score and when a reason is reportable."
+    />
+    <DocCard
+      title="Change the code"
+      href="/docs/architecture"
+      icon="code"
+      tag="Developer"
+      description="Where the pure rules live, which adapter performs the I/O and how the routing decision is composed from predicates."
+    />
+  </CardGrid>
 
-  <h2 id="reference">Reference</h2>
-  <p>Glossary, known issues, roadmap, changelog, literature, complete function reference. <a href="/docs/reference">Read more →</a></p>
+  <h2 id="scope">What This Documentation Covers</h2>
+  <ul>
+    <li><strong>Edge behaviour</strong> — request scoring, routing, session identity, pool assignment and response headers.</li>
+    <li><strong>Deception environment</strong> — the WordPress/WooCommerce layer, seeding, content sync and backups.</li>
+    <li><strong>Telemetry</strong> — security event schema, Suricata ingestion, Vector pipelines and Kibana saved objects.</li>
+    <li><strong>Operations</strong> — two-host and single-host layouts, hardening, environment variables and recovery procedures.</li>
+    <li><strong>Validation</strong> — unit suites, scenario scripts, dashboard tests and the blind pentest methodology.</li>
+  </ul>
+  <p>
+    Historical notes and corrections are tracked in the <a href="/docs/reference/changelog">changelog</a> and
+    <a href="/docs/reference/known-issues">known issues</a> pages. The complete function-level reference is kept
+    alongside the Lua modules; this hub links to the relevant module for every behaviour it describes.
+  </p>
 </DocsLayout>

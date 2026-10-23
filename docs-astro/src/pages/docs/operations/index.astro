@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Operations Overview', href: '/docs/operations', active: true },
   { title: 'Two-Host', href: '/docs/operations/two-host' },
   { title: 'Single-Host', href: '/docs/operations/single-host' },
@@ -9,6 +12,7 @@ const sidebar = [
 ];
 const toc = [
   { id: 'domains', text: 'Operational Domains', level: 2 },
+  { id: 'topologies', text: 'Deployment Topologies', level: 2 },
   { id: 'routing', text: 'Routing Decision Pipeline', level: 2 },
   { id: 'pooling', text: 'Honeypot Pool Assignment', level: 2 },
   { id: 'gdpr', text: 'GDPR Consent-Gated Identity', level: 2 },
@@ -16,7 +20,14 @@ const toc = [
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
-<DocsLayout title="Operations" description="Operational aspects of running the honeypot system" section="Operations" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Operations" description="Deployment, hardening, configuration and runbooks for the honeypot system" section="Operations" sidebar={sidebar} toc={toc}>
+  <p>
+    Operations covers the parts that decide whether detection survives a bad day: how the two stacks are
+    placed, which credentials isolate the pools, what the router does when state is missing, and how to
+    recover without guessing. The defaults below match <code>ids/.env.example</code> and are safe to start
+    from, not to leave unchanged.
+  </p>
+
   <h2 id="domains">Operational Domains</h2>
   <ul>
     <li><strong>Deployment</strong>: Two-host and single-host topologies.</li>
@@ -25,6 +36,42 @@ const toc = [
     <li><strong>Runbooks</strong>: Troubleshooting and incident procedures.</li>
     <li><strong>Routing & Pooling</strong>: Router decision pipeline, honeypot pool assignment, session management.</li>
   </ul>
+
+  <h2 id="topologies">Deployment Topologies</h2>
+  <CardGrid columns={3}>
+    <DocCard
+      title="Two-host (production shape)"
+      href="/docs/operations/two-host"
+      icon="server"
+      tag="Recommended"
+      description="Edge runs the proxy, shop, pools, Redis, Suricata and Vector. SIEM runs Elasticsearch, Kibana and the aggregator behind an outbound-only mTLS channel."
+      meta="Best isolation"
+    />
+    <DocCard
+      title="Single-host"
+      href="/docs/operations/single-host"
+      icon="box"
+      tag="Evaluation"
+      description="Every component on one machine. Simplest to run; resource budgets, load and disk guards matter much more."
+      meta="Lab and evaluation"
+    />
+    <DocCard
+      title="Hardening"
+      href="/docs/operations/hardening"
+      icon="shield"
+      tag="Before exposure"
+      description="Whitelists, session signing, decay settings, AbuseIPDB limits, diagnostic header gating and network controls."
+      meta="Checklist"
+    />
+    <DocCard
+      title="Runbooks"
+      href="/docs/operations/runbooks"
+      icon="wrench"
+      tag="During incidents"
+      description="Service restart, incident response, common failure modes and escalation with the evidence an operator needs."
+      meta="Step-by-step"
+    />
+  </CardGrid>
 
   <h2 id="routing">Routing Decision Pipeline (from router.lua)</h2>
   <p>router.lua makes the final routing decision for every inbound HTTP request: forward to production WordPress or divert to an isolated honeypot pool instance.</p>

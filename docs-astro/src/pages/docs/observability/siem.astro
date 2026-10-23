@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Observability Overview', href: '/docs/observability' },
   { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem', active: true },
   { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
@@ -10,9 +13,21 @@ const toc = [
   { id: 'timeline', text: 'Timeline Visualization', level: 2 },
   { id: 'dataflow', text: 'Data Flow', level: 2 },
   { id: 'artifacts', text: 'Key Artifacts', level: 2 },
+  { id: 'contracts', text: 'Pipeline Contracts', level: 2 },
 ];
 ---
 <DocsLayout title="SIEM & Log Pipeline" description="How logs are processed and analyzed using SIEM tools" section="Observability" sidebar={sidebar} toc={toc}>
+  <p>
+    The SIEM path is intentionally one-directional. The edge writes structured events and ships them out over
+    mTLS; the SIEM host indexes and visualises them. Nothing in the request path waits for Elasticsearch or
+    Kibana to answer.
+  </p>
+  <CardGrid columns={3}>
+    <DocCard title="Offline first" icon="archive" tag="Idempotent" description="Dashboard objects are generated from Python into NDJSON, so a rebuild does not depend on a live Kibana." meta="build_dashboards.py" />
+    <DocCard title="Live sync" icon="branch" tag="Saved Objects API" description="The same tooling can import into and export from a running Kibana instance to preserve manual edits." meta="export_dashboards.py" />
+    <DocCard title="Visual evidence" icon="eye" tag="Timeline" description="Embed-mode screenshots capture a specific pattern's request timeline for reports and the thesis appendix." meta="render-complete wait" />
+  </CardGrid>
+
   <h2 id="dashboard">Dashboard Management</h2>
   <p>Honeypot dashboards are managed through a combination of offline generation and live Kibana interactions.</p>
   <h3>1. Dashboard Building and Export</h3>
@@ -38,5 +53,14 @@ const toc = [
     <li><code>siem/kibana/export_dashboards.py</code> — Script for synchronizing live Kibana state to disk.</li>
     <li><code>dashboard/core/kibana_timeline.py</code> — Defines structure and payload for request timeline visualization.</li>
     <li><code>dashboard/ui/kibana_timeline_capture.py</code> — Handles client-side workflow for live dashboard capture.</li>
+  </ul>
+
+  <h2 id="contracts">Pipeline Contracts</h2>
+  <ul>
+    <li><strong>Events are JSON lines.</strong> <code>log_security_event()</code> emits a single JSON object per line, prefixed so Vector can filter without parsing unrelated Nginx errors.</li>
+    <li><strong>Arrays are arrays.</strong> Empty Lua tables are tagged with <code>cjson.empty_array_mt</code>, so they encode as <code>[]</code> instead of <code>{}</code> and do not trigger Elasticsearch mapping conflicts.</li>
+    <li><strong>Retries never block the edge.</strong> Vector buffers locally; a SIEM outage shows up as lag, not as failed requests.</li>
+    <li><strong>Dashboards are code.</strong> Saved objects are generated from Python and committed as NDJSON, which makes reviews and rollbacks possible.</li>
+    <li><strong>Exports preserve manual work.</strong> If a panel was edited live, export it back to NDJSON instead of rebuilding over it.</li>
   </ul>
 </DocsLayout>

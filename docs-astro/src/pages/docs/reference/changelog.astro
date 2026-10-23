@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference' },
   { title: 'Glossary', href: '/docs/reference/glossary' },
   { title: 'Known Issues', href: '/docs/reference/known-issues' },
@@ -15,10 +18,16 @@ const toc = [
 ];
 ---
 <DocsLayout title="Changelog" description="History of changes to the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Detection" href="#historical" icon="radar" tag="Pipeline" description="Pure module extraction, eve.json migration, shared decay policy and sophistication classification." meta="Rules" />
+    <DocCard title="Routing & pooling" href="#historical" icon="route" tag="Edge" description="Eleven-stage decision pipeline, atomic pool assignment, score accumulation and escalation-aware decay." meta="Sessions" />
+    <DocCard title="Security fixes" href="#historical" icon="shield" tag="Fixes" description="Header gating, plugin slug escaping, ngx.null handling, empty-array encoding and private-IP filtering." meta="Hardening" />
+  </CardGrid>
+
   <h2 id="unreleased">Unreleased</h2>
   <ul>
     <li>Documentation expansion for detection, observability, operations, testing, and reference sections — enriched with Lua code comments and architecture details.</li>
-    <li>Astro knowledge hub created with mkdocs-material styling, search, sidebar, TOC, and interactive demos.</li>
+    <li>Astro knowledge hub with mkdocs-material styling, full-text search, section navigation, table of contents and documentation cards.</li>
   </ul>
 
   <h2 id="historical">Historical</h2>

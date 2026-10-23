@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference', active: true },
   { title: 'Glossary', href: '/docs/reference/glossary' },
   { title: 'Known Issues', href: '/docs/reference/known-issues' },
@@ -17,13 +20,14 @@ const toc = [
 ---
 <DocsLayout title="Reference" description="Reference materials for the honeypot system" section="Reference" sidebar={sidebar} toc={toc}>
   <h2 id="categories">Reference Categories</h2>
-  <ul>
-    <li><strong>Glossary</strong>: Definitions of key terms and concepts.</li>
-    <li><strong>Known Issues & Corrections</strong>: Documented issues and workarounds.</li>
-    <li><strong>Roadmap</strong>: Future development plans.</li>
-    <li><strong>Changelog</strong>: History of changes.</li>
-    <li><strong>Primary Literature</strong>: Academic and technical literature.</li>
-  </ul>
+  <CardGrid columns={2}>
+    <DocCard title="Glossary" href="/docs/reference/glossary" icon="book" tag="Definitions" description="Core concepts, detection terms, architecture terms, scoring terms and operations terms in one searchable page." meta="5 sections" />
+    <DocCard title="Known Issues & Corrections" href="/docs/reference/known-issues" icon="alert" tag="Workarounds" description="Current issues, historical bugs that were fixed, and the correction process for documentation." meta="Severity + workaround" />
+    <DocCard title="Roadmap" href="/docs/reference/roadmap" icon="route" tag="Planning" description="Near-, mid- and long-term work, including the deliberate choice to keep detection rule-based for now." meta="3 horizons" />
+    <DocCard title="Changelog" href="/docs/reference/changelog" icon="clock" tag="History" description="Detection pipeline changes, routing and pooling work, and security fixes with the reasoning behind them." meta="Unreleased + historical" />
+    <DocCard title="Primary Literature" href="/docs/reference/literature" icon="book" tag="Sources" description="Academic foundations, technical references for Suricata, AbuseIPDB and Kibana, and related work." meta="Academic + technical" />
+    <DocCard title="Reference Hub" href="/reference" icon="search" tag="Quick lookup" description="A compact page of key terms and tables for when you do not want to read a full section." meta="One screen" />
+  </CardGrid>
 
   <h2 id="architecture">Architecture Reference</h2>
   <p>The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them unit-testable under a plain Lua interpreter.</p>

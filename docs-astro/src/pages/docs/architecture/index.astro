@@ -1,24 +1,72 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
-  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Architecture', href: '/docs/architecture', active: true },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Detection', href: '/docs/detection' },
   { title: 'Observability', href: '/docs/observability' },
   { title: 'Operations', href: '/docs/operations' },
   { title: 'Testing', href: '/docs/testing' },
   { title: 'Reference', href: '/docs/reference' },
-  { title: 'Architecture', href: '/docs/architecture', active: true },
 ];
 const toc = [
   { id: 'overview', text: 'Architecture Overview', level: 2 },
+  { id: 'layers', text: 'Layers and Responsibilities', level: 2 },
   { id: 'pipeline', text: 'Request Pipeline', level: 2 },
   { id: 'modules', text: 'Lua Modules', level: 2 },
   { id: 'pooling', text: 'Pooling System', level: 2 },
+  { id: 'state', text: 'State and Failure Modes', level: 2 },
   { id: 'gdpr', text: 'GDPR Identity', level: 2 },
 ];
 ---
-<DocsLayout title="Architecture" description="System architecture and request pipeline" section="Architecture" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Architecture" description="System architecture, request pipeline and the pure/adapter split" section="Architecture" sidebar={sidebar} toc={toc}>
   <h2 id="overview">Architecture Overview</h2>
-  <p>The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them unit-testable under a plain Lua interpreter.</p>
+  <p>
+    The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core
+    logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them
+    unit-testable under a plain Lua interpreter. Adapters do the I/O — Redis, Nginx, the file system,
+    AbuseIPDB — and delegate every decision back to a pure rule module.
+  </p>
+  <p>
+    The system can run as two hosts (edge and SIEM, the production shape) or as one host for evaluation.
+    Topology does not change the detection logic; it only changes where telemetry is stored.
+  </p>
+
+  <h2 id="layers">Layers and Responsibilities</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Edge proxy"
+      href="/docs/detection"
+      icon="shield"
+      tag="Request path"
+      description="OpenResty with Lua scoring, routing, session identity and pool assignment. The only component that sees client requests in plaintext."
+    />
+    <DocCard
+      title="Storefront and pools"
+      href="/docs/engine"
+      icon="box"
+      tag="Deception path"
+      description="A production WordPress/WooCommerce shop plus one cloned shop and database per honeypot session."
+    />
+    <DocCard
+      title="State"
+      href="#state"
+      icon="database"
+      tag="Redis"
+      description="Session blobs, risk scores, routing decisions and pool assignments, with worker-local caches for hot paths."
+    />
+    <DocCard
+      title="Telemetry"
+      href="/docs/observability"
+      icon="activity"
+      tag="SIEM path"
+      description="Structured security events and Suricata alerts shipped by Vector into Elasticsearch and rendered in Kibana."
+    />
+  </CardGrid>
 
   <h2 id="pipeline">Request Pipeline</h2>
   <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
@@ -26,6 +74,27 @@ const toc = [
   → session_handler.update_session() → Redis session_store
   → Suricata eve.json → init_worker.lua → threat_intel shared dict
   → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
+  <p>The pipeline is deliberately synchronous in the decision path. Configured work that must not block the
+  response — AbuseIPDB reporting, pool provisioning, content sync — is queued or handled by a worker.</p>
+
+  <h3>Routing stages</h3>
+  <p>The eleven stages are ordered from cheapest and most certain to most heuristic. A static asset is
+  released immediately; a session already bound to a pool never has to be evaluated again for stickiness.</p>
+  <table>
+    <tr><th>Stage</th><th>Condition</th><th>Route</th><th>Reason</th></tr>
+    <tr><td>1</td><td>Static asset</td><td>Production</td><td>No attack surface</td></tr>
+    <tr><td>1b</td><td>install.php on uninstalled WordPress</td><td>Production</td><td>Legitimate setup wizard</td></tr>
+    <tr><td>2</td><td>Session already honeypot-bound</td><td>Honeypot</td><td>Sticky binding</td></tr>
+    <tr><td>3</td><td>Risk score ≥ threshold</td><td>Honeypot</td><td>High risk</td></tr>
+    <tr><td>4</td><td>CVE pattern matched</td><td>Honeypot</td><td>Known exploit attempt</td></tr>
+    <tr><td>5</td><td>Vulnerable plugin URI</td><td>Honeypot</td><td>Direct plugin endpoint access</td></tr>
+    <tr><td>6</td><td>Bad IP reputation (&gt; 50)</td><td>Honeypot</td><td>Flagged source</td></tr>
+    <tr><td>7</td><td>Multiple admin attempts (≥ 3)</td><td>Honeypot</td><td>WSTG-ATHN-04</td></tr>
+    <tr><td>8</td><td>Accumulated suspicious activity (≥ 5)</td><td>Honeypot</td><td>Cumulative signals</td></tr>
+    <tr><td>9</td><td>Rapid automation (score ≥ 40)</td><td>Honeypot</td><td>WSTG-INFO-02</td></tr>
+    <tr><td>10</td><td>Suspicious file upload</td><td>Honeypot</td><td>WSTG-INPV-10</td></tr>
+    <tr><td>11</td><td>Default</td><td>Production</td><td>No rule fired</td></tr>
+  </table>
 
   <h2 id="modules">Lua Modules</h2>
   <p>The system uses 16 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
@@ -51,7 +120,30 @@ const toc = [
 
   <h2 id="pooling">Pooling System</h2>
   <p>Each user session is permanently assigned to a specific honeypot pool instance (honeypot_eshop_N + honeypot_database_N). Pools are cloned from a pre-built template. Assignment is atomic via Redis EVAL. Scale-up and scale-down are managed by pool_manager.</p>
+  <ul>
+    <li><strong>Exclusive first.</strong> A free ready pool is claimed atomically, so two sessions cannot share an exclusive assignment.</li>
+    <li><strong>Spare provisioning.</strong> Every assignment queues a wake-up, and the manager builds the next pool pair in parallel.</li>
+    <li><strong>Borrow, then move.</strong> A waiting session borrows a ready pool and is moved when its own pool finishes building.</li>
+    <li><strong>Bounded reuse.</strong> At the resource ceiling, sessions share ready pools round-robin instead of failing.</li>
+    <li><strong>Idle retirement.</strong> Assignments expire after 24 hours; pools above the spare count are removed after the idle timeout.</li>
+  </ul>
+  <p>See <a href="/docs/engine">Honeypot Engine</a> for the pool lifecycle, configuration knobs and isolation model.</p>
+
+  <h2 id="state">State and Failure Modes</h2>
+  <p>Redis holds the state that makes sessions sticky: session blobs, accumulated risk, offense counters and
+  pool assignments. Nginx also keeps 10 MB worker-local shared dictionaries for sessions and threat
+  intelligence, so hot paths avoid a round-trip when possible.</p>
+  <ul>
+    <li><strong>Redis unavailable.</strong> Session stickiness degrades; the router must prefer a safe production fallback rather than blocking the shop.</li>
+    <li><strong>Pool unhealthy.</strong> The router falls back to the next healthy pool without changing the stored assignment.</li>
+    <li><strong>Suricata silent.</strong> Application-layer scoring continues; only the network signal is lost.</li>
+    <li><strong>SIEM unreachable.</strong> The edge keeps serving. Vector buffers and retries; detection is never coupled to Kibana availability.</li>
+    <li><strong>Signing key unset.</strong> A random key is generated at startup; cookies from the previous process no longer verify. Set <code>SESSION_SIGNING_KEY</code> explicitly in production.</li>
+  </ul>
 
   <h2 id="gdpr">GDPR Identity</h2>
   <p>A privacy-preserving second identifier runs alongside the signed SERVERID session cookie. The browser RSA-OAEP-encrypts a payload of characteristics + timestamp into a gdpr_token. The proxy decrypts in memory, checks freshness, and hashes into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
+  <p>Consent gates the whole path: the token is only created after the visitor agrees, and the proxy never
+  stores the plaintext payload. The signature is useful for recovering a returning attacker session; it is
+  not a tracking identifier for legitimate visitors.</p>
 </DocsLayout>

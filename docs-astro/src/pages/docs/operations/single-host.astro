@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Operations Overview', href: '/docs/operations' },
   { title: 'Two-Host', href: '/docs/operations/two-host' },
   { title: 'Single-Host', href: '/docs/operations/single-host', active: true },
@@ -11,9 +14,21 @@ const toc = [
   { id: 'ids', text: 'Dashboard IDs', level: 2 },
   { id: 'context', text: 'SIEM Single-Host Context', level: 2 },
   { id: 'notes', text: 'Single-Host Notes', level: 2 },
+  { id: 'budget', text: 'Resource Budgeting', level: 2 },
 ];
 ---
-<DocsLayout title="Single-Host Deployment" description="How to test the system on a single host environment" section="Operations" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Single-Host Deployment" description="Run the edge and SIEM stacks on one host for evaluation" section="Operations" sidebar={sidebar} toc={toc}>
+  <p>
+    A single host runs the full lifecycle: proxy, detection, honeypot pools, Suricata, Redis, Elasticsearch
+    and Kibana. It is the simplest way to evaluate the system and the right shape for a lab, but the resource
+    math changes: every pool and the SIEM compete for the same memory and CPU.
+  </p>
+  <CardGrid columns={3}>
+    <DocCard title="One compose target" icon="box" tag="Simple" description="Start both stacks on one machine and keep all state local. No mTLS channel or remote SSH target is required." meta="Lab friendly" />
+    <DocCard title="Shared resources" icon="gauge" tag="Careful" description="Lower POOL_MAX_MEMORY_MB and POOL_MAX_CPUS, and watch the free-memory floor before enabling many pools." meta="Budget first" />
+    <DocCard title="Same test caveat" icon="alert" tag="Known limit" description="Loopback traffic can make Suricata attribute alerts to container-internal addresses, so IP reputation may not fire locally." meta="is_private_ip()" />
+  </CardGrid>
+
   <h2 id="ids">Dashboard IDs (All Consolidated)</h2>
   <p>All dashboards are consolidated under a single SIEM instance:</p>
   <ul>
@@ -35,4 +50,13 @@ const toc = [
     <li>May require additional tuning for resource constraints and performance.</li>
   </ul>
   <p>In a single-host deployment, all components (reverse proxy, Nginx Lua pipeline, Suricata, Kibana/Elasticsearch, Redis) run on the same host. The routing pipeline diverts suspicious traffic to local honeypot pools, while security events are logged locally and visualized via Kibana on the same host.</p>
+
+  <h2 id="budget">Resource Budgeting</h2>
+  <ul>
+    <li><strong>Set the pool ceiling first.</strong> <code>POOL_MAX</code> and <code>POOL_MAX_MEMORY_MB</code> are the two knobs that keep one busy session from starving Elasticsearch.</li>
+    <li><strong>Measure, then lower the reservation.</strong> The pool test measured roughly 430 MB per pool near idle while the default budget charges 1536 MB. Lower <code>POOL_RESERVE_MEM_MB</code> only after confirming a pool behaves on your host.</li>
+    <li><strong>Keep the free-memory floor.</strong> <code>POOL_MIN_FREE_MEM_MB</code>, load and disk guards are the last line of defence; do not disable them to squeeze in one more pool.</li>
+    <li><strong>Expect slower builds.</strong> With <code>POOL_PARALLEL_BUILDS</code> at 2 and the SIEM sharing the CPU, a fresh pool takes longer to become ready.</li>
+    <li><strong>Treat loopback as a test artefact.</strong> Suricata's source address may be container-internal, so validate the network path on a real external request before tuning reputation thresholds.</li>
+  </ul>
 </DocsLayout>

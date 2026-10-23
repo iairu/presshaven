@@ -1,27 +1,152 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Getting Started', href: '/docs/getting-started', active: true },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
   { title: 'Detection', href: '/docs/detection' },
   { title: 'Observability', href: '/docs/observability' },
   { title: 'Operations', href: '/docs/operations' },
   { title: 'Testing', href: '/docs/testing' },
   { title: 'Reference', href: '/docs/reference' },
-  { title: 'Architecture', href: '/docs/architecture' },
-  { title: 'Honeypot Engine', href: '/docs/engine' },
-  { title: 'Getting Started', href: '/docs/getting-started', active: true },
 ];
 const toc = [
-  { id: 'overview', text: 'Getting Started', level: 2 },
+  { id: 'paths', text: 'Choose a Path', level: 2 },
+  { id: 'prerequisites', text: 'Prerequisites', level: 2 },
+  { id: 'dashboard', text: 'Dashboard Setup', level: 2 },
+  { id: 'manual', text: 'Manual Setup', level: 2 },
+  { id: 'verify', text: 'Verify the Stack', level: 2 },
+  { id: 'cheatsheet', text: 'Command Cheat Sheet', level: 2 },
+  { id: 'next', text: 'Where to Go Next', level: 2 },
 ];
 ---
-<DocsLayout title="Getting Started" description="Installation, quickstart, and setup guides" section="Getting Started" sidebar={sidebar} toc={toc}>
-  <h2 id="overview">Getting Started</h2>
-  <p>Bring the stack up, fire your first attack, and watch it get diverted — in about five minutes.</p>
-  <ul>
-    <li><strong>Installation & Setup</strong> — Prerequisites, Docker Compose, environment variables.</li>
-    <li><strong>Quickstart</strong> — First attack in 5 minutes.</li>
-    <li><strong>The Dashboard</strong> — Desktop control panel overview.</li>
-    <li><strong>Command Cheat Sheet</strong> — Common commands and operations.</li>
-  </ul>
-  <p>Content derived from the old mkdocs documentation in <code>docs-mkdocs-old/docs/getting-started/</code>.</p>
+<DocsLayout title="Getting Started" description="Install the stack, run your first scenario and verify that routing works" section="Getting Started" sidebar={sidebar} toc={toc}>
+  <p>
+    The system ships as two Docker Compose stacks. <code>ids/</code> contains the reverse proxy, shop,
+    honeypot pools, Redis, Suricata and Vector. <code>siem/</code> contains Elasticsearch, Kibana and the
+    Vector aggregator. You can run both on one host or split them across two. The PyQt6 dashboard in
+    <code>dashboard/</code> is the recommended way to configure, deploy and operate either shape.
+  </p>
+
+  <h2 id="paths">Choose a Path</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Dashboard (recommended)"
+      href="#dashboard"
+      icon="gauge"
+      tag="Guided"
+      description="Upload the project over SSH, edit .env, start and stop stacks, tail logs, open a container shell, run scenarios and export reports."
+      meta="Handles local and remote targets"
+    />
+    <DocCard
+      title="Manual Docker Compose"
+      href="#manual"
+      icon="terminal"
+      tag="Minimal"
+      description="Copy .env.example, set passwords, and bring up the edge stack directly. The SIEM stack is optional and can be added later."
+      meta="One compose command"
+    />
+  </CardGrid>
+
+  <h2 id="prerequisites">Prerequisites</h2>
+  <h3>Docker and system packages</h3>
+  <p>Every host that runs a stack needs Docker with the Compose plugin. For a remote target you also need an SSH key that can log in and <code>rsync</code> on both sides.</p>
+  <pre><code># Arch Linux example
+sudo pacman -S --needed git python python-pip docker docker-compose openssh rsync curl jq
+
+sudo systemctl enable --now docker.service
+sudo usermod -aG docker "$USER"    # log out and back in afterwards</code></pre>
+
+  <h3>Kernel settings</h3>
+  <p>Redis warns about memory overcommit on every start without the first setting. Elasticsearch needs the larger mmap limit on the SIEM host.</p>
+  <pre><code>echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/99-honeypot.conf
+echo 'vm.max_map_count = 262144' | sudo tee -a /etc/sysctl.d/99-honeypot.conf
+sudo sysctl --system</code></pre>
+
+  <h3>Python environment for the dashboard</h3>
+  <pre><code>cd dashboard
+python3 -m venv venv
+./venv/bin/python3 -m pip install -r requirements.txt</code></pre>
+  <p>The dashboard uses PyQt6 WebEngine, which needs the usual Qt/Chromium libraries (on Arch: <code>nss</code>, <code>alsa-lib</code>, <code>mesa</code>, <code>libxkbcommon-x11</code>, <code>libxcomposite</code>, <code>libxdamage</code>, <code>libxrandr</code>, <code>libxtst</code>, <code>xcb-util-cursor</code>).</p>
+
+  <h2 id="dashboard">Dashboard Setup</h2>
+  <p>Run <code>./run.sh</code> from <code>dashboard/</code>. On first launch the wizard asks, per project (<code>ids</code> and <code>siem</code>), whether it runs locally or on a remote host, then walks through the <code>.env</code> and optional certificate generation.</p>
+  <ol>
+    <li><strong>Connectors &amp; Config</strong> — enter the host, SSH user, key and remote path, then <em>Test connection</em>.</li>
+    <li><strong>Upload</strong> — choose <em>Upload entire project to remote…</em>. The project and <code>.env</code> are copied with <code>rsync</code> and <code>scp</code>.</li>
+    <li><strong>Workloads</strong> — start, restart, stop or purge each stack, tail logs and open a container shell.</li>
+    <li><strong>Global Visualization</strong> — watch the live container topology of both stacks side by side.</li>
+    <li><strong>Knowledge Base &amp; Reporting</strong> — read the glossary, guided labs and threat briefs, then export implementation and architecture PDFs.</li>
+  </ol>
+
+  <h2 id="manual">Manual Setup</h2>
+  <p>The edge stack is enough for a first run. The shop is published at <code>https://localhost/</code> with a self-signed certificate, so expect a browser warning.</p>
+  <pre><code>cd ids
+cp .env.example .env
+$EDITOR .env                       # set real passwords first
+
+docker compose up -d --build
+docker compose ps
+docker compose logs -f reverse_proxy</code></pre>
+
+  <h3>Minimum .env values to change</h3>
+  <table>
+    <tr><th>Variable</th><th>Purpose</th></tr>
+    <tr><td><code>MYSQL_ROOT_PASSWORD</code></td><td>Root password for the production and honeypot databases.</td></tr>
+    <tr><td><code>MYSQL_PASSWORD</code></td><td>Application user password for the production database.</td></tr>
+    <tr><td><code>MYSQL_PASSWORD_POOL_2</code>, <code>MYSQL_PASSWORD_POOL_3</code></td><td>Per-pool database passwords. They must differ from the production password and from each other; pool isolation depends on this.</td></tr>
+    <tr><td><code>REDIS_PASSWORD</code></td><td>Password for the Redis session store.</td></tr>
+    <tr><td><code>SESSION_SIGNING_KEY</code></td><td>HMAC key for the signed <code>SERVERID</code> session cookie.</td></tr>
+    <tr><td><code>INTERNAL_TEST_SECRET</code></td><td>Gates the diagnostic <code>X-Route-Target</code> and <code>X-Risk-Score</code> headers. Leave unset in production so they fail closed.</td></tr>
+  </table>
+  <div class="admonition warning">
+    <div class="admonition-title">Secrets</div>
+    <p>Never commit a filled <code>.env</code>. The uploaded copy on a remote host contains database, Redis and signing credentials, so restrict its permissions and rotate values if a host is rebuilt or shared.</p>
+  </div>
+
+  <h3>Optional SIEM stack</h3>
+  <pre><code>cd siem/certs/root-ca && ./gen_elk_certs.sh
+cd ../../docker
+cp .env.example .env
+docker compose up -d</code></pre>
+  <p>Running both stacks on one host is supported for evaluation. The <a href="/docs/operations/two-host">two-host</a> and <a href="/docs/operations/single-host">single-host</a> pages describe the differences, and <a href="/docs/observability/siem">SIEM &amp; log pipeline</a> covers the data path.</p>
+
+  <h2 id="verify">Verify the Stack</h2>
+  <p>Work outward from the containers to the detection pipeline:</p>
+  <ol>
+    <li><strong>Containers are healthy.</strong> <code>docker compose ps</code> should show the proxy, production shop, pool manager, Redis, Suricata, Vector and the database services running. The first start also seeds the shop and builds the initial pools, which takes a few minutes.</li>
+    <li><strong>The shop responds.</strong> Open <code>https://localhost/</code> and browse a product. A clean request should stay on production.</li>
+    <li><strong>A scenario is detected.</strong> Run one of the scenario scripts, for example <code>bash testing/scenario_02_owasp_wstg.sh</code>. With the internal test secret configured, the response headers show the route and risk score.</li>
+    <li><strong>A pool was assigned.</strong> Inspect Redis for the session and pool keys, or use the dashboard's Redis and pool views.</li>
+    <li><strong>Events reached the SIEM.</strong> With the SIEM stack running, refresh the Kibana dashboards. Security events arrive through Vector; Suricata alerts arrive through <code>eve.json</code> ingestion.</li>
+  </ol>
+  <div class="admonition tip">
+    <div class="admonition-title">Diagnostic headers</div>
+    <p>Set <code>INTERNAL_TEST_SECRET</code> and send a matching <code>X-Internal-Test-Auth</code> header to receive <code>X-Route-Target</code> and <code>X-Risk-Score</code>. Without the secret, the headers are never emitted — a blind pentest must not get the routing oracle for free.</p>
+  </div>
+
+  <h2 id="cheatsheet">Command Cheat Sheet</h2>
+  <table>
+    <tr><th>Task</th><th>Command</th></tr>
+    <tr><td>Start the edge stack</td><td><code>cd ids &amp;&amp; docker compose up -d</code></td></tr>
+    <tr><td>Rebuild after changes</td><td><code>docker compose up -d --build</code></td></tr>
+    <tr><td>Follow proxy logs</td><td><code>docker compose logs -f reverse_proxy</code></td></tr>
+    <tr><td>Open a Redis shell</td><td><code>docker compose exec session_store redis-cli</code></td></tr>
+    <tr><td>Run all scenarios</td><td><code>bash testing/run_all_scenarios.sh</code></td></tr>
+    <tr><td>Run Lua unit tests</td><td><code>cd reverse_proxy_enhanced/lua &amp;&amp; lua tests/test_pattern_rules.lua</code></td></tr>
+    <tr><td>Run dashboard tests</td><td><code>cd dashboard &amp;&amp; python3 -m unittest discover -s tests -v</code></td></tr>
+    <tr><td>Regenerate Kibana objects</td><td><code>python3 siem/kibana/build_dashboards.py --ndjson</code></td></tr>
+    <tr><td>Export live dashboards</td><td><code>python3 siem/kibana/export_dashboards.py</code></td></tr>
+  </table>
+
+  <h2 id="next">Where to Go Next</h2>
+  <CardGrid columns={3}>
+    <DocCard title="Architecture" href="/docs/architecture" icon="layers" description="Read the request pipeline and the pure/adapter split before changing detection code." />
+    <DocCard title="Detection" href="/docs/detection" icon="radar" description="Learn how scores are accumulated, capped and decayed, and which stages can force a route." />
+    <DocCard title="Runbooks" href="/docs/operations/runbooks" icon="wrench" description="Keep the troubleshooting procedures open when running your first scenarios." />
+  </CardGrid>
 </DocsLayout>

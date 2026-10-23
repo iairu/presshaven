@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection' },
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities', active: true },
   { title: 'Seeded CVEs', href: '/docs/detection/cves' },
@@ -9,6 +12,7 @@ const sidebar = [
 ];
 const toc = [
   { id: 'summary', text: 'Capability Summary', level: 2 },
+  { id: 'signals', text: 'Signal Families', level: 2 },
   { id: 'techniques', text: 'Detection Techniques', level: 2 },
   { id: 'cve', text: 'CVE Pattern Matching', level: 2 },
   { id: 'functions', text: 'Function Reference', level: 2 },
@@ -18,6 +22,53 @@ const toc = [
 <DocsLayout title="Detection Capabilities" description="What the system can detect and how it identifies malicious activity" section="Detection" sidebar={sidebar} toc={toc}>
   <h2 id="summary">Capability Summary</h2>
   <p>The system provides detection coverage across multiple analytical layers, implemented across <code>pattern_rules.lua</code>, <code>vulnerability_rules.lua</code>, <code>suricata_rules.lua</code>, <code>abuseipdb_rules.lua</code>, <code>session_rules.lua</code>, <code>upload_rules.lua</code>, <code>admin_rules.lua</code>, and <code>sophistication_analyzer.lua</code>.</p>
+
+  <h2 id="signals">Signal Families</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Request shape"
+      icon="code"
+      tag="pattern_rules"
+      description="Generic and specific URI patterns, URL-encoding evasion, parameter pollution, request methods and header anomalies."
+      meta="+5 … +80 per match"
+    />
+    <DocCard
+      title="Known vulnerabilities"
+      icon="shieldAlert"
+      tag="vulnerability_rules"
+      description="Exact matching of seeded CVE exploit signatures against the URI, query arguments and required headers."
+      meta="+40 per CVE"
+    />
+    <DocCard
+      title="Network evidence"
+      icon="network"
+      tag="suricata_rules"
+      description="eve.json alert extraction, severity mapping, private-address filtering and time-decayed reputation."
+      meta="+10 … +50 per alert"
+    />
+    <DocCard
+      title="Session behaviour"
+      icon="activity"
+      tag="session_rules · admin_rules"
+      description="Brute force, repeated admin attempts, automation fingerprints, request-rate streaks and cumulative suspicion."
+      meta="Thresholds and streaks"
+    />
+    <DocCard
+      title="Uploads and tokens"
+      icon="key"
+      tag="upload_rules · honeytoken_rules"
+      description="AJAX upload analysis, dangerous content types and detection of injected fake credentials appearing inbound."
+      meta="High-confidence signals"
+    />
+    <DocCard
+      title="Reportability"
+      icon="clipboard"
+      tag="abuseipdb_rules"
+      description="Deterministic mapping from routing reasons to AbuseIPDB categories, with matched CVEs in the report comment."
+      meta="6 reason types"
+    />
+  </CardGrid>
+
   <table>
     <tr><th>Capability</th><th>Technique</th><th>Module</th><th>Description</th></tr>
     <tr><td>Direct CVE Matching</td><td>Lua URI/argument patterns</td><td>vulnerability_rules.lua</td><td>Exact matching of seeded CVE exploit signatures</td></tr>
@@ -51,7 +102,18 @@ const toc = [
   <p><code>pattern_rules.analyze_cve_patterns()</code> checks URI, query string, and headers against <code>_G.config.vulnerability.cve_patterns</code>. Each match scores +40. See <a href="/docs/detection/cves">Seeded CVEs</a> for the full list.</p>
 
   <h2 id="functions">Function Reference</h2>
-  <p>See the <a href="/docs/detection/capabilities">Detection Capabilities</a> page in the old docs for the complete function reference table, or refer to the Lua module comments directly.</p>
+  <table>
+    <tr><th>Function</th><th>Module</th><th>Contract</th></tr>
+    <tr><td><code>analyze_uri_patterns(uri, args)</code></td><td>pattern_rules.lua</td><td>Returns a score delta plus the list of matched pattern names.</td></tr>
+    <tr><td><code>analyze_header_patterns(headers)</code></td><td>pattern_rules.lua</td><td>Scores flagged or missing headers and CVE-specific header presence.</td></tr>
+    <tr><td><code>analyze_cve_patterns(uri, args, headers)</code></td><td>pattern_rules.lua</td><td>Matches <code>config.vulnerability.cve_patterns</code>; +40 per CVE.</td></tr>
+    <tr><td><code>detect_vulnerability_pattern(uri, args, header)</code></td><td>vulnerability_rules.lua</td><td>Returns <code>cve</code>, <code>severity</code>, <code>description</code>, <code>plugin</code> and <code>attack_vector</code>.</td></tr>
+    <tr><td><code>extract_alert(decoded)</code></td><td>suricata_rules.lua</td><td>Alert record, or <code>nil</code> for non-alert and malformed events.</td></tr>
+    <tr><td><code>severity_to_score(severity)</code></td><td>suricata_rules.lua</td><td>1 → +50, 2 → +25, anything else → +10.</td></tr>
+    <tr><td><code>is_reportable_reason(reason)</code></td><td>abuseipdb_rules.lua</td><td>True only for the six whitelisted routing reasons.</td></tr>
+    <tr><td><code>classify_session(session)</code></td><td>sophistication_analyzer.lua</td><td>Class plus confidence for scripted / AI-assisted / manual / unknown.</td></tr>
+  </table>
+  <p>Individual module pages in the repository contain the complete function-level comments and their unit tests. The <a href="/docs/testing">testing</a> section lists the test file for each module.</p>
 
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> Explainable scoring, pure/adapter split for unit testing, severity-graded Suricata integration, NAT protection, sophistication classification.</p>

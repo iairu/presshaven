@@ -1,16 +1,28 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import CardGrid from '../components/CardGrid.astro';
+import DocCard from '../components/DocCard.astro';
+import Icon from '../components/Icon.astro';
 ---
-<Layout title="Reference" description="Reference materials">
+<Layout title="Reference" description="Quick reference for the Honeypot IDS System">
+  <div class="container" style="padding-top: 2.5rem; padding-bottom: 1rem;">
+    <div class="home-eyebrow"><span class="dot"></span> Quick lookup</div>
+    <h1 style="font-size: clamp(2.2rem, 4vw, 3rem); margin: 1rem 0 0.8rem; letter-spacing: -0.04em;">Reference</h1>
+    <p style="max-width: 44rem; font-size: 1rem;">The compact version: key terms, module tables and links into the long-form pages. Use ⌘K anywhere on the site to search the full documentation.</p>
+  </div>
+
+  <div class="container" style="padding-bottom: 2rem;">
+    <CardGrid columns={3}>
+      <DocCard title="Glossary" href="/docs/reference/glossary" icon="book" tag="Terms" description="Core, detection, architecture, scoring and operations vocabulary." meta="5 sections" />
+      <DocCard title="Known Issues" href="/docs/reference/known-issues" icon="alert" tag="Workarounds" description="Current limitations and the historical bugs that were fixed." meta="Current + historical" />
+      <DocCard title="Roadmap" href="/docs/reference/roadmap" icon="route" tag="Planning" description="Near-, mid- and long-term direction, including the ML decision." meta="3 horizons" />
+      <DocCard title="Changelog" href="/docs/reference/changelog" icon="clock" tag="History" description="Detection, routing, pooling and security changes." meta="Unreleased + historical" />
+      <DocCard title="Literature" href="/docs/reference/literature" icon="book" tag="Sources" description="Academic foundations and technical references for the stack." meta="Academic + technical" />
+      <DocCard title="Source repository" href="https://github.com/iairu/honeypot-ids" icon="github" tag="GitHub" description="The private repository with the Lua modules, deployment files, dashboard and manual." meta="github.com/iairu" />
+    </CardGrid>
+  </div>
+
   <div class="container">
-    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">Reference</h1>
-    <div class="grid">
-      <a href="/docs/reference" class="card"><h3>Glossary</h3><p>Definitions of key terms and concepts.</p></a>
-      <a href="/docs/reference" class="card"><h3>Known Issues</h3><p>Documented issues and workarounds.</p></a>
-      <a href="/docs/reference" class="card"><h3>Roadmap</h3><p>Future development plans.</p></a>
-      <a href="/docs/reference" class="card"><h3>Changelog</h3><p>History of changes.</p></a>
-      <a href="/docs/reference" class="card"><h3>Literature</h3><p>Academic and technical references.</p></a>
-    </div>
     <div class="section">
       <h2>Key Terms</h2>
       <table>
@@ -21,7 +33,7 @@ import Layout from '../layouts/Layout.astro';
         <tr><td>CVE</td><td>Common Vulnerabilities and Exposures identifier</td></tr>
         <tr><td>WSTG</td><td>OWASP Web Security Testing Guide category system</td></tr>
         <tr><td>SID</td><td>Suricata rule identifier</td></tr>
-        <tr><td>Risk Score</td><td>Accumulated threat score (0–100) from detection pipeline</td></tr>
+        <tr><td>Risk Score</td><td>Accumulated threat score (0–100) from the detection pipeline</td></tr>
         <tr><td>Honeypot Threshold</td><td>Minimum score (default 80) triggering honeypot routing</td></tr>
         <tr><td>Decay</td><td>Exponential reduction of stored risk scores over time</td></tr>
         <tr><td>Permaflag</td><td>Score stops decaying entirely (repeat offender)</td></tr>
@@ -31,6 +43,31 @@ import Layout from '../layouts/Layout.astro';
         <tr><td>Pure Module</td><td>Lua module with no ngx.* dependency, unit-testable</td></tr>
         <tr><td>Adapter Module</td><td>Lua module performing I/O, delegating to pure modules</td></tr>
       </table>
+    </div>
+
+    <div class="section">
+      <h2>Default Thresholds</h2>
+      <table>
+        <tr><th>Setting</th><th>Default</th><th>Meaning</th></tr>
+        <tr><td><code>honeypot_threshold</code></td><td>80</td><td>Score at or above which a session is diverted.</td></tr>
+        <tr><td><code>max_risk_score</code></td><td>100</td><td>Hard cap on accumulated score.</td></tr>
+        <tr><td><code>score_decay_half_life_seconds</code></td><td>300</td><td>Base half-life; 0 disables decay.</td></tr>
+        <tr><td><code>decay_offense_slowdown</code></td><td>0.75</td><td>Half-life multiplier per offense.</td></tr>
+        <tr><td><code>permaflag_offenses</code></td><td>5</td><td>Offenses at or above this stop decay.</td></tr>
+        <tr><td><code>permaflag_score</code></td><td>100</td><td>Peak score that stops decay.</td></tr>
+        <tr><td><code>ip_reputation_cap</code></td><td>10</td><td>Reputation contribution on shared addresses.</td></tr>
+        <tr><td><code>POOL_SPARES</code> / <code>POOL_MAX</code></td><td>1 / 10</td><td>Warm spare pools / hard pool ceiling.</td></tr>
+        <tr><td><code>POOL_IDLE_TIMEOUT_SECONDS</code></td><td>1800</td><td>Idle window before scale-down.</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Repository</h2>
+      <p>The implementation, deployment files and long-form manual live in the private repository. The documentation links to the relevant module or script for every behaviour it describes.</p>
+      <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener" class="btn-sheared">
+        <Icon name="github" class="w-4 h-4" />
+        github.com/iairu/honeypot-ids
+      </a>
     </div>
   </div>
 </Layout>

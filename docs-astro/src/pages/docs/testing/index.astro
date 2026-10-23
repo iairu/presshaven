@@ -1,11 +1,15 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Testing Overview', href: '/docs/testing', active: true },
   { title: 'Blind Pentest', href: '/docs/testing/blind-pentest' },
 ];
 const toc = [
   { id: 'layers', text: 'Testing Layers', level: 2 },
+  { id: 'coverage-map', text: 'Coverage Map', level: 2 },
   { id: 'unit', text: 'Unit Test Coverage', level: 2 },
   { id: 'dashboard', text: 'Dashboard Tests', level: 2 },
   { id: 'secret', text: 'Internal Test Secret', level: 2 },
@@ -13,13 +17,29 @@ const toc = [
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
-<DocsLayout title="Testing" description="How to test and validate the honeypot system" section="Testing" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Testing" description="Unit, scenario and blind pentest validation for the honeypot system" section="Testing" sidebar={sidebar} toc={toc}>
+  <p>
+    The testing strategy follows the architecture: pure rules can be proven without OpenResty, adapters are
+   covered by scenario scripts against a running stack, and the blind pentest checks the whole thing from
+    the outside. The suite is intentionally boring to run — a plain Lua interpreter and Python unittest.
+  </p>
+
   <h2 id="layers">Testing Layers</h2>
   <ul>
     <li><strong>Unit / Integration Tests:</strong> Lua module logic, dashboard generation, timeline capture. Pure Lua modules (*_rules.lua) are testable under a plain Lua interpreter without OpenResty.</li>
     <li><strong>Functional Testing:</strong> End-to-end honeypot interaction and detection validation.</li>
-    <li><strong>Blind Pentest Evaluation:</strong> Simulated attacker assessments with internal-test secret gating.</li>
+    <li><strong>Blind Pentest Evaluation:</strong> Controlled attacker assessments with internal-test secret gating.</li>
   </ul>
+
+  <h2 id="coverage-map">Coverage Map</h2>
+  <CardGrid columns={3}>
+    <DocCard title="Pure rules" href="#unit" icon="code" tag="18 suites" description="Every *_rules.lua module has a matching test file covering positive matches, negatives and boundary values." meta="plain Lua" />
+    <DocCard title="Scenario scripts" href="#running" icon="terminal" tag="6 scenarios" description="WooCommerce, OWASP WSTG, WPScan, Metasploit, hardening verification and database password replacement." meta="bash" />
+    <DocCard title="Dashboard" href="#dashboard" icon="chart" tag="4 test files" description="NDJSON integrity, host settings, overview statistics and learning-page validation." meta="unittest" />
+    <DocCard title="Pool isolation" href="/docs/engine" icon="box" tag="Infrastructure" description="Verifies the 1:1 pool wiring and the live credential-level isolation between databases." meta="regression" />
+    <DocCard title="Blind pentest" href="/docs/testing/blind-pentest" icon="target" tag="External view" description="Confirms the system detects and classifies activity with no insider knowledge of the routing logic." meta="protocol" />
+    <DocCard title="Diagnostics" href="#secret" icon="lock" tag="Gated" description="Route and score headers are only available with the internal test secret, so tests get evidence without exposing an oracle." meta="fail closed" />
+  </CardGrid>
 
   <h2 id="unit">Unit Test Coverage</h2>
   <table>

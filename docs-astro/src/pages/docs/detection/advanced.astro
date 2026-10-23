@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection' },
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
   { title: 'Seeded CVEs', href: '/docs/detection/cves' },
@@ -15,7 +18,13 @@ const toc = [
   { id: 'decay', text: 'Escalation-Aware Decay', level: 2 },
 ];
 ---
-<DocsLayout title="Advanced Signals" description="Advanced behavioral analysis and anomaly detection signals" section="Detection" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Advanced Signals" description="Behavioural analysis, scoring and escalation-aware decay" section="Detection" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Pure decision modules" icon="code" tag="Testability" description="Every rule returns data; nothing in the pure half performs I/O, so the behaviour is reproducible." meta="plain Lua tests" />
+    <DocCard title="Deterministic reporting" icon="clipboard" tag="AbuseIPDB" description="Only whitelisted reasons may be reported, and the comment always names the matched CVEs." meta="auditable gate" />
+    <DocCard title="Escalation-aware decay" icon="clock" tag="Fairness" description="Repeat offenders fade more slowly; a permaflag stops decay once the session has earned it." meta="4 parameters" />
+  </CardGrid>
+
   <h2 id="vuln">Vulnerability Pattern Detection (vulnerability_rules.lua)</h2>
   <p>Responsible for direct pattern matching against URI requests to identify known vulnerability patterns or exploit kit signatures. Uses <code>lua_pattern_utils.escape_pattern</code> for safe pattern matching. The core function <code>detect_vulnerability_pattern(uri, args, wcpay_checkout_user_header)</code> analyzes request URIs to flag potential vulnerabilities.</p>
 

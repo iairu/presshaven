@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Operations Overview', href: '/docs/operations' },
   { title: 'Two-Host', href: '/docs/operations/two-host' },
   { title: 'Single-Host', href: '/docs/operations/single-host' },
@@ -11,10 +14,17 @@ const toc = [
   { id: 'restart', text: 'Service Restart', level: 2 },
   { id: 'incident', text: 'Incident Response', level: 2 },
   { id: 'issues', text: 'Common Issues', level: 2 },
+  { id: 'evidence', text: 'Evidence to Collect', level: 2 },
   { id: 'escalation', text: 'Escalation', level: 2 },
 ];
 ---
 <DocsLayout title="Troubleshooting & Runbooks" description="Troubleshooting guides and operational runbooks" section="Operations" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Restart safely" icon="activity" tag="Service" description="Stop, clear stale queues or caches only when appropriate, start, verify health and confirm dashboards." meta="Order matters" />
+    <DocCard title="Respond" icon="shieldAlert" tag="Incident" description="Detect, triage against decision traces, contain with rate limits or blocks, recover and adjust rules." meta="Four phases" />
+    <DocCard title="Diagnose" icon="search" tag="Common issues" description="Suricata silence, stale dashboards, timeline capture, same-host reputation and decay behaviour." meta="Known fixes" />
+  </CardGrid>
+
   <h2 id="restart">Service Restart Runbook</h2>
   <ol>
     <li>Stop the affected service.</li>
@@ -42,6 +52,15 @@ const toc = [
     <li><strong>Session not recovering after cookie clear:</strong> Passive fingerprint binding (fp_session in Redis) recovers sessions. Check request_fingerprint() and bind_fingerprint_to_session().</li>
     <li><strong>Decay not aging out:</strong> Check score_decay_half_life_seconds — if 0, decay returns stored peak unchanged. Check permaflag thresholds.</li>
     <li><strong>False positives on legitimate traffic:</strong> Honeypot threshold raised from 50 to 80. Consider raising ip_reputation_cap above 50 only if clients don't share addresses.</li>
+  </ul>
+
+  <h2 id="evidence">Evidence to Collect</h2>
+  <ul>
+    <li><strong>Decision trace</strong> — the stage that fired and the accumulated score for the session.</li>
+    <li><strong>Suricata alert</strong> — the SID, signature, severity and source address, with the private-IP caveat in mind.</li>
+    <li><strong>Session state</strong> — whether the session was bound, which pool, and when the binding was written.</li>
+    <li><strong>Pool state</strong> — container health, the assigned database host and whether a build was in progress.</li>
+    <li><strong>Log window</strong> — the matching Nginx security events and the SIEM documents they became.</li>
   </ul>
 
   <h2 id="escalation">Escalation</h2>

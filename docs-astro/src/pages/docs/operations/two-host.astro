@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Operations Overview', href: '/docs/operations' },
   { title: 'Two-Host', href: '/docs/operations/two-host', active: true },
   { title: 'Single-Host', href: '/docs/operations/single-host' },
@@ -11,9 +14,22 @@ const toc = [
   { id: 'ids', text: 'Dashboard IDs (Edge)', level: 2 },
   { id: 'split', text: 'SIEM Two-Host Split', level: 2 },
   { id: 'topology', text: 'Two-Host Topology', level: 2 },
+  { id: 'responsibilities', text: 'Host Responsibilities', level: 2 },
+  { id: 'verify', text: 'Verify the Split', level: 2 },
 ];
 ---
-<DocsLayout title="Two-Host Deployment" description="How to run the system across two separate hosts" section="Operations" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Two-Host Deployment" description="Run the edge stack and the SIEM stack on separate hosts" section="Operations" sidebar={sidebar} toc={toc}>
+  <p>
+    The two-host shape is the intended production layout. The edge host is internet-facing and holds the
+    only components that see client requests. The SIEM host stores and visualises telemetry, and it never
+    initiates a connection into the edge network.
+  </p>
+  <CardGrid columns={3}>
+    <DocCard title="Edge" icon="server" tag="Internet-facing" description="Reverse proxy, production shop, honeypot pools, Redis, Suricata and a local Vector shipper." meta="Request path" />
+    <DocCard title="SIEM" icon="chart" tag="Internal" description="Vector aggregator, Elasticsearch and Kibana. Receives logs over mTLS and serves dashboards to analysts." meta="Storage + views" />
+    <DocCard title="Channel" icon="lock" tag="Outbound only" description="The edge opens the connection. No inbound path from the SIEM into the edge is required for logging." meta="mTLS" />
+  </CardGrid>
+
   <h2 id="ids">Dashboard IDs (Edge)</h2>
   <p><strong>Alerts & Overview:</strong> dashboard-ids-alerts, dashboard-web-threat-overview</p>
   <p><strong>Threat Intelligence & Analysis:</strong> dashboard-threat-decisions, dashboard-session-analysis, dashboard-attack-patterns, dashboard-threat-intel</p>
@@ -31,4 +47,24 @@ const toc = [
     <li><strong>SIEM Host:</strong> Runs Kibana/Elasticsearch and consumes logs from the edge host via Vector over mTLS.</li>
   </ul>
   <p>Security events (SECURITY_EVENT: JSON in Nginx error log) are shipped by Vector to the SIEM host's Elasticsearch. Suricata on the edge host writes eve.json alerts, ingested by init_worker.lua into the threat_intel shared dict.</p>
+
+  <h2 id="responsibilities">Host Responsibilities</h2>
+  <table>
+    <tr><th>Capability</th><th>Edge host</th><th>SIEM host</th></tr>
+    <tr><td>Client-facing TLS</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Request scoring and routing</td><td>Yes</td><td>No</td></tr>
+    <tr><td>WordPress production + pools</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Session state (Redis)</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Suricata capture</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Log aggregation</td><td>Local Vector shipper</td><td>Vector aggregator</td></tr>
+    <tr><td>Indexing and dashboards</td><td>No</td><td>Yes</td></tr>
+  </table>
+
+  <h2 id="verify">Verify the Split</h2>
+  <ol>
+    <li>Confirm the edge can start with the SIEM offline; requests must still be scored and routed.</li>
+    <li>Confirm events appear in Kibana after the SIEM returns, including events buffered during the outage.</li>
+    <li>Confirm the SIEM cannot reach the edge's private services; only the outbound log channel is required.</li>
+    <li>Generate a known pattern from the edge and follow its decision trace into the corresponding Kibana document.</li>
+  </ol>
 </DocsLayout>

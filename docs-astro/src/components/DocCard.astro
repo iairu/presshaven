@@ -1,0 +1,26 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  title: string;
+  href?: string;
+  description?: string;
+  icon?: string;
+  meta?: string;
+  tag?: string;
+  class?: string;
+}
+
+const { title, href, description, icon = 'file', meta, tag, class: className } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+<Tag href={href} class:list={['doc-card', { 'doc-card--link': href }, className]}>
+  <span class="doc-card__icon"><Icon name={icon} class="w-5 h-5" /></span>
+  <span class="doc-card__body">
+    {tag && <span class="doc-card__tag">{tag}</span>}
+    <span class="doc-card__title">{title}</span>
+    {description && <span class="doc-card__desc">{description}</span>}
+    {meta && <span class="doc-card__meta">{meta}</span>}
+  </span>
+  {href && <span class="doc-card__arrow"><Icon name="arrow" class="w-4 h-4" /></span>}
+</Tag>

@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Observability Overview', href: '/docs/observability' },
   { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem' },
   { title: 'Kibana Dashboards', href: '/docs/observability/kibana', active: true },
@@ -13,6 +16,17 @@ const toc = [
 ];
 ---
 <DocsLayout title="Kibana Dashboards" description="Visual dashboards for monitoring honeypot activity" section="Observability" sidebar={sidebar} toc={toc}>
+  <p>
+    Seven saved dashboards cover alert triage, aggregate threat posture, decisioning, session behaviour,
+    attack patterns and threat intelligence. All of them are generated from Python and committed as NDJSON,
+    so the same definition can be rebuilt offline or imported into a live Kibana.
+  </p>
+  <CardGrid columns={3}>
+    <DocCard title="6 registered views" icon="chart" tag="Operational" description="Alerts, web threat overview, decisions and decay, session analysis, attack patterns and threat intelligence." meta="dashboard-* IDs" />
+    <DocCard title="Timeline capture" icon="eye" tag="Evidence" description="A dedicated embed-mode dashboard renders a pattern's request timeline before a screenshot is taken." meta="per-pattern" />
+    <DocCard title="Review friendly" icon="branch" tag="Code-managed" description="Layouts live in Python, so changes are reviewable and exportable rather than click-only state." meta="NDJSON in git" />
+  </CardGrid>
+
   <h2 id="registry">Dashboard Registry</h2>
   <table>
     <tr><th>Dashboard ID</th><th>Title</th><th>Purpose</th></tr>

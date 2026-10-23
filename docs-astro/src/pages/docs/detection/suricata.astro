@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection' },
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
   { title: 'Seeded CVEs', href: '/docs/detection/cves' },
@@ -9,6 +12,7 @@ const sidebar = [
 ];
 const toc = [
   { id: 'overview', text: 'Overview', level: 2 },
+  { id: 'rule-anatomy', text: 'Rule Anatomy', level: 2 },
   { id: 'sid', text: 'SID Allocation', level: 2 },
   { id: 'integration', text: 'Suricata Integration', level: 2 },
   { id: 'caveats', text: 'Known Caveats', level: 2 },
@@ -17,6 +21,28 @@ const toc = [
 <DocsLayout title="Suricata Network IDS" description="Network-based detection using Suricata intrusion detection system" section="Detection" sidebar={sidebar} toc={toc}>
   <h2 id="overview">Overview</h2>
   <p>Suricata rules are specifically designed to detect attack patterns targeting the WordPress honeypot, organized by CVE and OWASP WSTG categories. SIDs range from 1000001 to 1000070+.</p>
+  <CardGrid columns={3}>
+    <DocCard title="Network evidence" icon="network" tag="Passive" description="Signatures see what the application layer cannot: scanners, payloads split across requests and protocol-level abuse." meta="eve.json alerts" />
+    <DocCard title="Severity-graded" icon="gauge" tag="Scoring" description="Alert severity maps to a deterministic delta, capped at 100 and never reducing an existing score." meta="+10 / +25 / +50" />
+    <DocCard title="Private IP filter" icon="shield" tag="Hygiene" description="RFC1918 and loopback sources are discarded at ingestion so container hops never poison reputation." meta="is_private_ip()" />
+  </CardGrid>
+
+  <h2 id="rule-anatomy">Rule Anatomy</h2>
+  <p>Rules are grouped by the WSTG category they exercise. A rule carries a stable SID, a severity, and a
+  signature that becomes the human-readable reason string when an alert fires.</p>
+  <pre><code>alert http any any -&gt; $HOME_NET any (
+  msg:"HONEYPOT CVE-2023-28121 WooCommerce Payments auth bypass";
+  flow:to_server,established;
+  http.uri; content:"/wp-json/wp/v2/users";
+  http.header; content:"X-WCPAY-PLATFORM-CHECKOUT-USER";
+  classtype:attempted-admin;
+  sid:1000001; rev:1;
+)</code></pre>
+  <ul>
+    <li><strong>msg</strong> becomes <code>suricata: &lt;signature&gt;</code> in the stored reason.</li>
+    <li><strong>severity</strong> determines the score delta; the rule metadata stays human-auditable.</li>
+    <li><strong>sid</strong> is allocated from the project range and never reused after publication.</li>
+  </ul>
   <h3>OWASP WSTG Category Index</h3>
   <ul>
     <li><strong>WSTG-INFO</strong> – Information Gathering (SIDs 1000017-1000020, 1000049)</li>

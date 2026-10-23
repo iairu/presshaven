@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference' },
   { title: 'Glossary', href: '/docs/reference/glossary' },
   { title: 'Known Issues', href: '/docs/reference/known-issues' },
@@ -15,6 +18,12 @@ const toc = [
 ];
 ---
 <DocsLayout title="Roadmap" description="Future development plans and roadmap for the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Near-term" href="#near" icon="zap" tag="Next" description="More seeded CVEs, finer behavioural signals, dashboard work and generic pattern refinement." meta="Detection quality" />
+    <DocCard title="Mid-term" href="#mid" icon="route" tag="Later" description="Threat-feed integrations, webhook alerting, pool autoscaling and richer GDPR identity." meta="Operations" />
+    <DocCard title="Long-term" href="#long" icon="target" tag="Research" description="Hybrid ML approaches, multi-tenant scaling, more honeytoken types and external-traffic correlation." meta="Direction" />
+  </CardGrid>
+
   <h2 id="near">Near-Term</h2>
   <ul>
     <li>Additional CVE seeding and detection coverage — expand vulnerability_rules.lua and cve_patterns with newly published WordPress plugin vulnerabilities.</li>

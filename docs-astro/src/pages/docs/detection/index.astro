@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection', active: true },
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
   { title: 'Seeded CVEs', href: '/docs/detection/cves' },
@@ -9,6 +12,7 @@ const sidebar = [
 ];
 const toc = [
   { id: 'pipeline', text: 'Detection Pipeline', level: 2 },
+  { id: 'explore', text: 'Explore Detection', level: 2 },
   { id: 'coverage', text: 'Coverage Areas', level: 2 },
   { id: 'stages', text: 'Detection Stages', level: 2 },
   { id: 'thresholds', text: 'Thresholds & Scaling', level: 2 },
@@ -16,6 +20,12 @@ const toc = [
 ];
 ---
 <DocsLayout title="Detection" description="How the honeypot system detects and identifies attackers" section="Detection" sidebar={sidebar} toc={toc}>
+  <p>
+    Detection runs entirely inside the request path. Each non-static request is analysed by pure Lua rules,
+    scored, and either forwarded to production or diverted to the session's honeypot pool. The same rules
+    also produce the structured reasons used for logging and AbuseIPDB reporting.
+  </p>
+
   <h2 id="pipeline">Detection Pipeline Overview</h2>
   <p>The honeypot detection pipeline ingests attacker traffic and produces actionable detection signals through a layered chain, implemented as a series of pure Lua modules (no <code>ngx.*</code> dependency, unit-testable under a plain Lua interpreter) driving an adapter half that performs I/O:</p>
   <ol>
@@ -27,14 +37,75 @@ const toc = [
     <li><strong>Reporting</strong> — <code>abuseipdb_rules.lua</code> gates external AbuseIPDB reporting and enriches comments with matched CVEs.</li>
   </ol>
 
+  <h2 id="explore">Explore Detection</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Detection Capabilities"
+      href="/docs/detection/capabilities"
+      icon="target"
+      tag="What is detected"
+      description="URI, header and argument patterns, automation detection, upload analysis, honeytokens and sophistication classification."
+      meta="Technique + module tables"
+    />
+    <DocCard
+      title="Seeded CVEs"
+      href="/docs/detection/cves"
+      icon="shieldAlert"
+      tag="What is seeded"
+      description="The explicitly matched WordPress plugin CVEs, the Suricata alert path and the AbuseIPDB reason-to-category mapping."
+      meta="14+ CVEs · 6 reason types"
+    />
+    <DocCard
+      title="Suricata Network IDS"
+      href="/docs/detection/suricata"
+      icon="network"
+      tag="Network layer"
+      description="SID allocation, the OWASP WSTG category index and the eve.json parsing and severity-to-score contract."
+      meta="70+ SIDs"
+    />
+    <DocCard
+      title="Advanced Signals"
+      href="/docs/detection/advanced"
+      icon="activity"
+      tag="Scoring details"
+      description="Vulnerability patterns, threat-alert processing, reportability rules, the scoring model and escalation-aware decay."
+      meta="Decay policy"
+    />
+  </CardGrid>
+
   <h2 id="coverage">Coverage Areas</h2>
-  <ul>
-    <li><strong>Direct CVE detections</strong> via plugin-specific and generic vulnerability patterns.</li>
-    <li><strong>Generic attack patterns</strong>: SQL injection, XSS, command injection, path traversal, file inclusion, deserialization, template injection, code injection.</li>
-    <li><strong>Network IDS detections</strong> via Suricata signatures aligned to OWASP WSTG categories.</li>
-    <li><strong>Behavioral signals</strong>: brute force, scanning, automation, anomaly detection.</li>
-    <li><strong>Sophistication classification</strong> — scripted / ai_assisted / manual / unknown.</li>
-  </ul>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Direct CVE detections"
+      icon="shieldAlert"
+      description="Plugin-specific and generic WordPress vulnerability patterns matched against URI, arguments and specific headers."
+    />
+    <DocCard
+      title="Generic attack patterns"
+      icon="code"
+      description="SQL injection, XSS, command injection, path traversal, file inclusion, deserialization, template and code injection."
+    />
+    <DocCard
+      title="Network IDS detections"
+      icon="network"
+      description="Suricata signatures aligned to OWASP WSTG categories, converted into severity-graded score deltas."
+    />
+    <DocCard
+      title="Behavioural signals"
+      icon="activity"
+      description="Brute force, scanning, automation, request-rate anomalies and per-session history accumulation."
+    />
+    <DocCard
+      title="Sophistication classification"
+      icon="fingerprint"
+      description="Weighted signals classify traffic as scripted, AI-assisted, manual or unknown."
+    />
+    <DocCard
+      title="Honeytokens"
+      icon="key"
+      description="Injected fake credentials are scanned for in inbound requests; a hit confirms compromise with high confidence."
+    />
+  </CardGrid>
 
   <h2 id="stages">Detection Stages</h2>
   <table>

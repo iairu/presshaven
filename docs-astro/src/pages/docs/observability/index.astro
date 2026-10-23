@@ -1,18 +1,28 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Observability Overview', href: '/docs/observability', active: true },
   { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem' },
   { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
 ];
 const toc = [
   { id: 'layers', text: 'Observability Layers', level: 2 },
+  { id: 'sources', text: 'Telemetry Sources', level: 2 },
   { id: 'logging', text: 'Logging Architecture', level: 2 },
   { id: 'suricata', text: 'Suricata Log Ingestion', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
 <DocsLayout title="Observability" description="How the honeypot system provides observability into attacker activities" section="Observability" sidebar={sidebar} toc={toc}>
+  <p>
+    Observability has one job here: turn an ephemeral request decision into evidence that survives the
+    session. Every scoring result, routing decision and network alert can leave the edge as structured data,
+    and the SIEM side is designed so a missing Kibana never affects detection.
+  </p>
+
   <h2 id="layers">Observability Layers</h2>
   <ul>
     <li><strong>Log Ingestion</strong>: Structured logs from the reverse proxy, Lua engines, and Suricata are centralized for SIEM consumption via Nginx error logs and Vector forwarding to Elasticsearch/Kibana.</li>
@@ -20,6 +30,42 @@ const toc = [
     <li><strong>Kibana Visualizations</strong>: Interactive dashboards and pattern report timelines.</li>
     <li><strong>Alerting & Reporting</strong>: AbuseIPDB reporting and reputation-based alerting.</li>
   </ul>
+
+  <h2 id="sources">Telemetry Sources</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Security events"
+      href="#logging"
+      icon="file"
+      tag="Nginx error log"
+      description="Structured JSON lines written by log_security_event(), read by Vector and forwarded to Elasticsearch."
+      meta="SECURITY_EVENT prefix"
+    />
+    <DocCard
+      title="Suricata alerts"
+      href="#suricata"
+      icon="network"
+      tag="eve.json"
+      description="Parsed every 30 seconds by init_worker.lua for IP reputation and stored in the threat_intel shared dictionary."
+      meta="30 s interval"
+    />
+    <DocCard
+      title="Routing traces"
+      href="/docs/operations"
+      icon="route"
+      tag="Decision trace"
+      description="Flat decision strings recorded per request so an analyst can reconstruct why a session was diverted."
+      meta="stage-by-stage"
+    />
+    <DocCard
+      title="Dashboards"
+      href="/docs/observability/kibana"
+      icon="chart"
+      tag="Kibana"
+      description="Seven saved dashboards plus a dedicated pattern-report timeline used for per-pattern visual evidence."
+      meta="NDJSON managed"
+    />
+  </CardGrid>
 
   <h2 id="logging">Logging Architecture (from init.lua)</h2>
   <h3>Shared Dictionaries</h3>

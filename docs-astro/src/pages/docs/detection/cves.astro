@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Detection Overview', href: '/docs/detection' },
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
   { title: 'Seeded CVEs', href: '/docs/detection/cves', active: true },
@@ -11,10 +14,24 @@ const toc = [
   { id: 'direct', text: 'Direct CVE Matches', level: 2 },
   { id: 'suricata', text: 'Suricata Alert-Based', level: 2 },
   { id: 'abuseipdb', text: 'AbuseIPDB Mapping', level: 2 },
+  { id: 'adding', text: 'Adding a CVE', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
 <DocsLayout title="Seeded CVEs" description="The specific CVEs seeded into the honeypot to attract attackers" section="Detection" sidebar={sidebar} toc={toc}>
+  <p>
+    Two CVE paths exist. <strong>Direct matches</strong> are explicit patterns evaluated in Lua before the
+    request is routed, so they can force a honeypot diversion on their own. <strong>Suricata alerts</strong>
+    contribute severity-graded deltas from observed network traffic. Both paths feed the same risk score and
+    the same AbuseIPDB reporting decision.
+  </p>
+
+  <CardGrid columns={3}>
+    <DocCard title="14+ direct CVEs" icon="shieldAlert" tag="Lua patterns" description="WordPress plugin exploits matched against URI, arguments and required headers." meta="+40 per match" />
+    <DocCard title="Suricata evidence" icon="network" tag="Network layer" description="Severity 1 adds +50, severity 2 adds +25, everything else adds +10." meta="capped at 100" />
+    <DocCard title="Report enrichment" icon="clipboard" tag="AbuseIPDB" description="Matched CVE names are appended to the report comment for the analyst on the other side." meta="6 reason types" />
+  </CardGrid>
+
   <h2 id="direct">Direct CVE Matches (via vulnerability_rules.lua)</h2>
   <p>The following CVEs are explicitly matched via URI/argument pattern analysis in the vulnerability rules. vulnerability_rules.detect_vulnerability_pattern() returns an object with cve, severity, description, plugin, attack_vector for each matched pattern.</p>
   <table>
@@ -56,6 +73,17 @@ const toc = [
     <tr><td>suricata_confirmed_alert</td><td>15, 21</td><td>An IP confirmed via Suricata alert</td></tr>
   </table>
   <p><strong>Report Comment Format:</strong> <code>Honeypot detection: [Honeypot Reason] (CVEs: [List of Matched CVEs])</code></p>
+
+  <h2 id="adding">Adding a CVE</h2>
+  <p>Seeding a new vulnerability is deliberately boring. Pick the narrowest signature that proves the
+  exploit attempt, then add it to both the Lua rules and the matching Suricata rule where possible.</p>
+  <ol>
+    <li><strong>Confirm the request shape.</strong> Record the vulnerable endpoint, the required argument or header, and a benign request to the same endpoint that must not match.</li>
+    <li><strong>Add a Lua pattern.</strong> Extend <code>vulnerability_rules.lua</code> (or <code>cve_patterns</code> in <code>init.lua</code>) with the CVE identifier, severity, plugin, attack vector and description.</li>
+    <li><strong>Add a Suricata signature.</strong> Allocate the next SID in the appropriate range and align it with the WSTG category.</li>
+    <li><strong>Add a unit test.</strong> Cover a positive match, a negative request and the reported fields. Run the suite under plain Lua.</li>
+    <li><strong>Update the table.</strong> Add the CVE to this page so operators know what the deployment recognises.</li>
+  </ol>
 
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> 14+ seeded CVEs across multiple exploit vectors, severity-graded Suricata integration, AbuseIPDB reportability for 6 reason types.</p>

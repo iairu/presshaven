@@ -1,26 +1,135 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine', active: true },
   { title: 'Detection', href: '/docs/detection' },
   { title: 'Observability', href: '/docs/observability' },
   { title: 'Operations', href: '/docs/operations' },
   { title: 'Testing', href: '/docs/testing' },
   { title: 'Reference', href: '/docs/reference' },
-  { title: 'Architecture', href: '/docs/architecture' },
-  { title: 'Honeypot Engine', href: '/docs/engine', active: true },
 ];
 const toc = [
-  { id: 'overview', text: 'Engine Overview', level: 2 },
+  { id: 'layers', text: 'Engine Layers', level: 2 },
+  { id: 'pools', text: 'Pool Lifecycle', level: 2 },
+  { id: 'seeding', text: 'Seeding the Storefront', level: 2 },
+  { id: 'sync', text: 'Content Replication', level: 2 },
+  { id: 'backups', text: 'Backups', level: 2 },
+  { id: 'config', text: 'Pool Configuration', level: 2 },
 ];
 ---
-<DocsLayout title="Honeypot Engine" description="The WordPress layer, pool scaling, per-IP stickiness, seeding, backups" section="Engine" sidebar={sidebar} toc={toc}>
-  <h2 id="overview">Engine Overview</h2>
-  <p>The honeypot engine is the WordPress/WooCommerce layer that provides the high-interaction deception environment. It includes:</p>
+<DocsLayout title="Honeypot Engine" description="The WordPress layer, pool scaling, per-session stickiness, seeding, content sync and backups" section="Engine" sidebar={sidebar} toc={toc}>
+  <p>
+    The honeypot engine is the high-interaction deception environment. It is not a mock: every pool is a
+    real WordPress/WooCommerce installation with a real database, real plugins and a real storefront. The
+    proxy decides <em>whether</em> a session sees production or a pool; the engine makes the pool convincing
+    enough that the session stays there.
+  </p>
+
+  <h2 id="layers">Engine Layers</h2>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Production storefront"
+      href="#seeding"
+      icon="globe"
+      tag="Legitimate path"
+      description="A full WordPress + WooCommerce shop with seeded catalog, pages, posts, reviews and media. Clean traffic never leaves this layer."
+    />
+    <DocCard
+      title="Honeypot pools"
+      href="#pools"
+      icon="box"
+      tag="Deception path"
+      description="One shop container and one database per session, cloned from the configured template and isolated with per-pool credentials."
+    />
+    <DocCard
+      title="Pool manager"
+      href="#config"
+      icon="sitemap"
+      tag="Control plane"
+      description="Watches demand, builds spares in parallel, applies resource budgets and retires idle pools after the configured timeout."
+    />
+    <DocCard
+      title="Content and backup services"
+      href="#sync"
+      icon="archive"
+      tag="Maintenance"
+      description="Periodic content replication keeps pools current; the backup service snapshots databases and files for recovery."
+    />
+  </CardGrid>
+
+  <h2 id="pools">Pool Lifecycle</h2>
+  <p>Assignment happens once per session, not per request and not per IP. The session identity is a signed
+  cookie with a passive-fingerprint fallback, and the mapping is stored in Redis with a 24-hour TTL.</p>
+  <ol>
+    <li><strong>Assign.</strong> A new session asks Redis for a free ready pool. The assignment is a single atomic <code>EVAL</code> so two sessions can never receive the same exclusive pool.</li>
+    <li><strong>Provision a spare.</strong> Every assignment queues a wake-up on the pool-provision channel. The pool manager builds another shop/database pair so the next session finds a warm pool.</li>
+    <li><strong>Borrow under pressure.</strong> If none is free, the session borrows a ready pool round-robin and joins the waiting queue. When its own pool is ready, the binding moves.</li>
+    <li><strong>Reuse at the ceiling.</strong> Once the pool manager hits <code>POOL_MAX</code> or a resource guard, further sessions share existing ready pools round-robin instead of blocking.</li>
+    <li><strong>Stay sticky.</strong> Once a session is honeypot-bound, every later request goes to the same pool. Clearing cookies does not reset the binding because the fingerprint fallback recovers the session.</li>
+    <li><strong>Retire.</strong> After the idle timeout, assignments are dropped and pools above the spare count are removed. Pools declared statically in Compose are freed but never destroyed.</li>
+  </ol>
+  <div class="admonition note">
+    <div class="admonition-title">Isolation model</div>
+    <p>All honeypot containers share one flat network and can reach every honeypot database over TCP. Isolation therefore depends on each pool's MySQL user having a different password. <code>MYSQL_PASSWORD_POOL_2</code> and <code>MYSQL_PASSWORD_POOL_3</code> must differ from each other and from <code>MYSQL_PASSWORD</code>; <code>testing/test_pool_isolation.sh</code> verifies the wiring and the live credentials.</p>
+  </div>
+
+  <h2 id="seeding">Seeding the Storefront</h2>
+  <p>The catalog is generated rather than scraped. The brand, farms and reviewers are invented, and product
+  photography is procedural illustration produced by the seeding tools. Everything lives under
+  <code>ids/eshop_seed/</code>.</p>
+  <table>
+    <tr><th>Artifact</th><th>Purpose</th></tr>
+    <tr><td><code>catalog.py</code></td><td>Single source of truth: categories, 26 products, copy, variations and reviews.</td></tr>
+    <tr><td><code>art.py</code>, <code>build_assets.py</code></td><td>QPainter illustration engine and renderer for the storefront imagery.</td></tr>
+    <tr><td><code>catalog.json</code>, <code>products/</code>, <code>site/</code></td><td>Rendered, committed output so a fresh clone never needs to rebuild assets.</td></tr>
+    <tr><td><code>pages.php</code>, <code>journal.php</code></td><td>Static pages and journal posts authored into WordPress.</td></tr>
+    <tr><td><code>scripts/seed_storefront_content.php</code></td><td>Version-gated importer mounted into the production seed container. Bump <code>FH_CATALOG_VERSION</code> to re-author an existing install.</td></tr>
+  </table>
+  <p>To rebuild assets after editing <code>catalog.py</code>:</p>
+  <pre><code>QT_QPA_PLATFORM=offscreen ../../dashboard/venv/bin/python build_assets.py
+cp site/* ../production_eshop_files/wp-content/themes/omega-storefront/assets/fernhill/img/</code></pre>
+  <p>Then run <code>docker compose run --rm production_db_seed</code> to author the content into WordPress.</p>
+
+  <h2 id="sync">Content Replication</h2>
+  <p>Pools are not frozen at build time. <code>honeypot_content_sync</code> mirrors production posts, postmeta,
+  terms and attachments into every pool database on an interval controlled by
+  <code>REPLICATION_INTERVAL_SECONDS</code> (default 300 seconds).</p>
   <ul>
-    <li><strong>WordPress / WooCommerce Layer</strong> — Production and honeypot pool instances running full WordPress with WooCommerce, Elementor, and a real product catalog.</li>
-    <li><strong>Pool Scaling & Assignment</strong> — Elastic honeypot pools cloned from a pre-built template, assigned per user session.</li>
-    <li><strong>Seeding the Storefront</strong> — Product catalog, users, and content seeded for realism.</li>
-    <li><strong>Backups</strong> — Backup and restore procedures for honeypot instances.</li>
+    <li><strong>Copied:</strong> posts, postmeta, terms and attachments.</li>
+    <li><strong>Not copied:</strong> options, comments, nav-menu items and term meta. The storefront therefore keeps reviews in postmeta (<code>_fh_reviews</code>), builds navigation in code, and derives store settings from option filters in a must-use plugin.</li>
+    <li><strong>Deletes:</strong> pools never delete rows. After changing the catalog, clear a pool's old products or reseed it, then restart the sync service to mirror the new rows immediately.</li>
   </ul>
-  <p>Content derived from the old mkdocs documentation in <code>docs-mkdocs-old/docs/engine/</code>.</p>
+
+  <h2 id="backups">Backups</h2>
+  <p>The <code>backup_service</code> container snapshots the databases and the WordPress files into
+  <code>ids/backups/</code>. Keep the following rules in mind:</p>
+  <ul>
+    <li>Back up the production database before reseeding or applying migrations; pool data is disposable, production data is not.</li>
+    <li>Back up <code>.env</code> and the certificate material separately from the data, and store them encrypted.</li>
+    <li>Test a restore into a scratch stack before relying on a backup for recovery.</li>
+    <li>Do not copy a live MySQL data directory while the container is running; use the backup service or a dump.</li>
+  </ul>
+
+  <h2 id="config">Pool Configuration</h2>
+  <table>
+    <tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>POOL_SPARES</code></td><td>1</td><td>Unowned pools kept ready on top of active assignments.</td></tr>
+    <tr><td><code>POOL_MAX</code></td><td>10</td><td>Hard cap on the total number of pools.</td></tr>
+    <tr><td><code>POOL_MAX_MEMORY_MB</code></td><td>12288</td><td>Memory budget all pools may reserve. 0 disables the budget.</td></tr>
+    <tr><td><code>POOL_MAX_CPUS</code></td><td>12</td><td>CPU budget all pools may reserve.</td></tr>
+    <tr><td><code>POOL_PARALLEL_BUILDS</code></td><td>2</td><td>Pools built at the same time while sessions wait.</td></tr>
+    <tr><td><code>POOL_RESERVE_MEM_MB</code>, <code>POOL_RESERVE_CPUS</code></td><td>container limits</td><td>What each pool is charged against the budget. Lower toward measured use to fit more pools.</td></tr>
+    <tr><td><code>POOL_MIN_FREE_MEM_MB</code></td><td>2560 / 1024</td><td>Host free-memory floor for the WordPress / database layer.</td></tr>
+    <tr><td><code>POOL_MAX_LOAD_PER_CPU</code></td><td>1.5</td><td>Load guard; no new pool is built above it.</td></tr>
+    <tr><td><code>POOL_IDLE_TIMEOUT_SECONDS</code></td><td>1800</td><td>Idle window before scale-down. Values below 600 are raised to 600 because nginx caches a session's pool for 300 seconds.</td></tr>
+    <tr><td><code>POOL_WAITING_ACTIVE_SECONDS</code></td><td>60</td><td>How long a waiting session still counts as demand. Prevents abandoned sessions from consuming new pools.</td></tr>
+    <tr><td><code>POOL_FAST_CLONE</code></td><td>0</td><td>Experimental: clone the configured production database and skip slow per-pool wp-cli setup steps.</td></tr>
+  </table>
+  <p>See <a href="/docs/operations">Operations</a> for the router decision pipeline and the complete environment reference, and <a href="/docs/architecture">Architecture</a> for how the pool router sits in the request path.</p>
 </DocsLayout>

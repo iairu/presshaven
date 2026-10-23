@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference' },
   { title: 'Glossary', href: '/docs/reference/glossary', active: true },
   { title: 'Known Issues', href: '/docs/reference/known-issues' },
@@ -17,6 +20,14 @@ const toc = [
 ];
 ---
 <DocsLayout title="Glossary" description="Definitions of key terms and concepts" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Core concepts" href="#core" icon="book" tag="Start here" description="Honeypot, IDS, SIEM, CVE and WSTG — the vocabulary the rest of the documentation assumes." />
+    <DocCard title="Detection terms" href="#detection" icon="radar" tag="Signals" description="SID, risk score, threshold, decay, permaflag, offense, honeytoken and GDPR signature." />
+    <DocCard title="Architecture terms" href="#architecture" icon="layers" tag="Modules" description="Pure module, adapter module, pool, escalation and sticky routing." />
+    <DocCard title="Scoring terms" href="#scoring" icon="gauge" tag="Decisions" description="Stage 6, shared address, IP reputation cap and decision trace." />
+    <DocCard title="Operations terms" href="#operations" icon="wrench" tag="Running it" description="Hardening, runbook, blind pentest and internal test secret." />
+  </CardGrid>
+
   <h2 id="core">Core Concepts</h2>
   <table>
     <tr><th>Term</th><th>Definition</th></tr>
@@ -64,7 +75,7 @@ const toc = [
     <tr><th>Term</th><th>Definition</th></tr>
     <tr><td>Hardening</td><td>Security posture improvements for production deployment.</td></tr>
     <tr><td>Runbook</td><td>Operational troubleshooting and response procedures.</td></tr>
-    <tr><td>Blind Pentest</td><td>Simulated attacker assessment where tester has no prior knowledge.</td></tr>
+    <tr><td>Blind Pentest</td><td>External attacker assessment where the tester has no prior knowledge of the deployment or routing logic.</td></tr>
     <tr><td>Internal Test Secret</td><td>Shared secret gating diagnostic response headers to prevent exposing routing oracles.</td></tr>
   </table>
 </DocsLayout>

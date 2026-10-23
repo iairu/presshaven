@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Operations Overview', href: '/docs/operations' },
   { title: 'Two-Host', href: '/docs/operations/two-host' },
   { title: 'Single-Host', href: '/docs/operations/single-host' },
@@ -16,6 +19,18 @@ const toc = [
 ];
 ---
 <DocsLayout title="Production Hardening" description="Security hardening recommendations for production deployment" section="Operations" sidebar={sidebar} toc={toc}>
+  <p>
+    Hardening here has two goals that pull in opposite directions: make the honeypot look real enough to
+    engage an attacker, and make sure a compromised honeypot cannot become a path into production or the
+    SIEM. The pool credential split is the non-negotiable part.
+  </p>
+  <CardGrid columns={2}>
+    <DocCard title="Isolate the pools" icon="box" tag="Critical" description="Every pool database user must have a different password. The flat container network means network segmentation alone does not isolate pools." meta="test_pool_isolation.sh" />
+    <DocCard title="Gate diagnostics" icon="lock" tag="Critical" description="Leave INTERNAL_TEST_SECRET unset in production, or require X-Internal-Test-Auth before emitting route and score headers." meta="fail closed" />
+    <DocCard title="Sign the session" icon="key" tag="Important" description="Set SESSION_SIGNING_KEY explicitly. An unset key is generated per process and breaks cookie verification across restarts." meta="HMAC" />
+    <DocCard title="Limit exposure" icon="shield" tag="Important" description="Firewall the SIEM and admin surfaces, keep the edge as the only public entry point and restrict backend access to trusted proxies." meta="least privilege" />
+  </CardGrid>
+
   <h2 id="network">Network Hardening</h2>
   <ul>
     <li>Place honeypot behind a TLS-terminating reverse proxy with valid certificates.</li>

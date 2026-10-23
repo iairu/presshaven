@@ -1,174 +1,801 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Icon from '../components/Icon.astro';
+
+const github = 'https://github.com/iairu/honeypot-ids';
+
+const stats = [
+  { num: '14+', label: 'Seeded CVEs' },
+  { num: '70+', label: 'Suricata SIDs' },
+  { num: '11', label: 'Routing Stages' },
+  { num: '16', label: 'Pure Lua Modules' },
+  { num: '18', label: 'Unit Test Files' },
+  { num: '7', label: 'Kibana Dashboards' },
+];
+
+const navigation = [
+  {
+    href: '/docs/detection',
+    icon: 'radar',
+    kicker: '5 pages',
+    title: 'Detection',
+    description: 'URI and header patterns, CVE signatures, Suricata alerts, IP reputation and escalation-aware decay — every score explained.',
+    meta: '14 modules · WSTG mapped',
+  },
+  {
+    href: '/docs/observability',
+    icon: 'chart',
+    kicker: '3 pages',
+    title: 'Observability',
+    description: 'Structured security events shipped by Vector into Elasticsearch, with seven Kibana dashboards and a request timeline.',
+    meta: '7 dashboards',
+  },
+  {
+    href: '/docs/operations',
+    icon: 'wrench',
+    kicker: '5 pages',
+    title: 'Operations',
+    description: 'Two-host and single-host topologies, production hardening, configuration reference and troubleshooting runbooks.',
+    meta: '2 topologies',
+  },
+  {
+    href: '/docs/architecture',
+    icon: 'layers',
+    kicker: 'Deep dive',
+    title: 'Architecture',
+    description: 'The pure/adapter split, the eleven-stage routing decision, elastic honeypot pools and the GDPR identity path.',
+    meta: 'Full reference',
+  },
+  {
+    href: '/docs/testing',
+    icon: 'flask',
+    kicker: '2 pages',
+    title: 'Testing',
+    description: 'Eighteen pure-Lua unit test suites, dashboard validation and the blind penetration-test protocol.',
+    meta: '18 test files',
+  },
+  {
+    href: '/docs/reference',
+    icon: 'book',
+    kicker: '6 pages',
+    title: 'Reference',
+    description: 'Glossary, known issues and workarounds, roadmap, changelog, primary literature and module tables.',
+    meta: 'Glossary · roadmap',
+  },
+];
 ---
-<Layout title="Knowledge Hub" description="Honeypot IDS System — an integrated knowledge hub with interactive demos">
-  <!-- Hero Section -->
-  <section class="relative overflow-hidden">
-    <div class="absolute inset-0 bg-gradient-to-b from-accent-green/5 via-transparent to-transparent pointer-events-none"></div>
-    <div class="container mx-auto px-6 py-14 text-center relative">
-      <div class="inline-flex items-center gap-2 bg-bg-tertiary/80 border border-border-accent rounded-full px-4 py-1.5 mb-6 text-sm text-text-secondary">
-        <span class="w-2 h-2 bg-accent-green rounded-full animate-pulse"></span>
-        FIIT STU Master's Thesis Project
+<Layout title="Knowledge Hub" description="Honeypot IDS System — architecture, detection, observability and operations documentation">
+  <!-- ============================================================
+       Hero
+       ============================================================ -->
+  <section class="home-hero">
+    <div class="home-hero__bg" aria-hidden="true">
+      <svg class="hero-grid" viewBox="0 0 1200 700" preserveAspectRatio="none">
+        <defs>
+          <pattern id="home-hero-grid" width="64" height="64" patternUnits="userSpaceOnUse">
+            <path d="M64 0H0V64" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.45" />
+          </pattern>
+          <radialGradient id="home-hero-fade" cx="50%" cy="28%" r="72%">
+            <stop offset="0%" style="stop-color: var(--color-bg-primary); stop-opacity: 0" />
+            <stop offset="100%" style="stop-color: var(--color-bg-primary); stop-opacity: 0.92" />
+          </radialGradient>
+        </defs>
+        <rect width="1200" height="700" fill="url(#home-hero-grid)" />
+        <rect width="1200" height="700" fill="url(#home-hero-fade)" />
+      </svg>
+      <svg class="hero-radar" viewBox="0 0 400 400" fill="none">
+        <circle cx="200" cy="200" r="196" stroke="currentColor" stroke-width="1" opacity="0.3" />
+        <circle cx="200" cy="200" r="150" stroke="currentColor" stroke-width="1" stroke-dasharray="2 7" opacity="0.55" />
+        <circle cx="200" cy="200" r="104" stroke="currentColor" stroke-width="1" opacity="0.4" />
+        <circle cx="200" cy="200" r="58" stroke="currentColor" stroke-width="1" stroke-dasharray="2 5" opacity="0.6" />
+        <path d="M200 4v392M4 200h392" stroke="currentColor" stroke-width="1" opacity="0.25" />
+        <path d="M200 200L200 4A196 196 0 0 1 369 83Z" fill="currentColor" opacity="0.1" />
+        <line x1="200" y1="200" x2="200" y2="4" stroke="currentColor" stroke-width="1.4" opacity="0.8" />
+        <circle cx="286" cy="128" r="4" fill="currentColor" />
+        <circle cx="138" cy="258" r="3" fill="currentColor" opacity="0.7" />
+        <circle cx="252" cy="292" r="2.5" fill="currentColor" opacity="0.5" />
+      </svg>
+      <div class="hero-glow"></div>
+      <svg class="hero-corner hero-corner--tl" viewBox="0 0 100 100" fill="none">
+        <path d="M2 40V2h38M2 58V2h56" stroke="currentColor" stroke-width="1.2" />
+        <circle cx="2" cy="2" r="2" fill="currentColor" />
+      </svg>
+      <svg class="hero-corner hero-corner--br" viewBox="0 0 100 100" fill="none">
+        <path d="M2 40V2h38M2 58V2h56" stroke="currentColor" stroke-width="1.2" />
+        <circle cx="2" cy="2" r="2" fill="currentColor" />
+      </svg>
+    </div>
+
+    <div class="container home-hero__inner">
+      <div class="home-hero__copy">
+        <div class="home-eyebrow">
+          <span class="dot"></span>
+          FIIT STU Master's Thesis · v2.0
+        </div>
+        <h1>
+          <span class="hero-gradient">Honeypot IDS</span>
+          <span class="line-2">Knowledge Hub</span>
+        </h1>
+        <p class="home-hero__lead">
+          A high-interaction deception platform that <strong>scores every request in real time</strong> and
+          quietly diverts suspicious sessions into isolated honeypot clones. Real customers never notice;
+          attackers get a convincing shop while every move is recorded.
+        </p>
+        <div class="home-cta">
+          <a href="/docs/getting-started" class="btn-sheared">
+            <Icon name="terminal" class="w-4 h-4" />
+            Get started
+          </a>
+          <a href="/docs/architecture" class="btn-sheared secondary">
+            <Icon name="layers" class="w-4 h-4" />
+            Architecture
+          </a>
+          <a href={github} target="_blank" rel="noopener" class="btn-sheared ghost">
+            <Icon name="github" class="w-4 h-4" />
+            Source
+          </a>
+        </div>
+        <div class="home-chips">
+          <span><Icon name="shield" class="w-3.5 h-3.5" /> No tarpit</span>
+          <span><Icon name="fingerprint" class="w-3.5 h-3.5" /> Session-bound</span>
+          <span><Icon name="lock" class="w-3.5 h-3.5" /> GDPR aware</span>
+          <span><Icon name="branch" class="w-3.5 h-3.5" /> Pure / adapter split</span>
+        </div>
       </div>
-      <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
-        <span class="hero-gradient">Honeypot IDS</span>
-        <br />
-        <span class="text-text-primary">Knowledge Hub</span>
-      </h1>
-      <p class="text-xl text-text-secondary max-w-3xl mx-auto mb-8 leading-relaxed">
-        A high-interaction deception platform that <span class="text-text-primary font-semibold">captures, scores, and isolates</span> attackers in real time. Explore the architecture, dive into the detection pipeline,
-        run interactive simulations, and understand every function.
+
+      <div class="home-hero__visual">
+        <div class="home-console">
+          <div class="home-console__bar" aria-hidden="true">
+            <i></i><i></i><i></i>
+            <span class="title">edge / live scoring</span>
+          </div>
+          <div class="home-console__body">
+            <svg class="home-radar" viewBox="0 0 340 240" fill="none" role="img" aria-label="Radar view of inbound request signals">
+              <defs>
+                <pattern id="console-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M20 0H0V20" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.16" />
+                </pattern>
+              </defs>
+              <rect width="340" height="240" fill="url(#console-grid)" />
+              <circle class="ring-faint" cx="170" cy="120" r="104" />
+              <circle class="ring" cx="170" cy="120" r="68" />
+              <circle class="ring" cx="170" cy="120" r="34" />
+              <line class="cross" x1="48" y1="120" x2="292" y2="120" />
+              <line class="cross" x1="170" y1="6" x2="170" y2="234" />
+              <g class="sweep">
+                <path class="sweep-wedge" d="M170 120L170 16A104 104 0 0 1 258 52Z" />
+                <line class="sweep-line" x1="170" y1="120" x2="170" y2="16" />
+              </g>
+              <circle class="blip" cx="232" cy="82" r="3" />
+              <circle class="blip" cx="124" cy="96" r="2.2" />
+              <circle class="blip" cx="210" cy="164" r="2.6" />
+              <circle class="blip--dim" cx="98" cy="158" r="2" />
+              <circle class="blip--dim" cx="262" cy="132" r="1.8" />
+              <text x="12" y="18">INBOUND</text>
+              <text x="328" y="18" text-anchor="end">T-60s</text>
+              <text x="12" y="232">EDGE NODE</text>
+            </svg>
+
+            <div class="home-console__rows">
+              <div class="home-console__row">
+                <span class="k">URI</span>
+                <span class="v">/wp-json/wp/v2/users <em>+ cve</em></span>
+                <span class="s">score 92</span>
+                <div class="home-console__meter"><i style="width: 92%"></i></div>
+              </div>
+              <div class="home-console__row">
+                <span class="k">ROUTE</span>
+                <span class="v">honeypot_pool_04 <em>· sticky</em></span>
+                <span class="s">divert</span>
+                <div class="home-console__meter"><i style="width: 78%"></i></div>
+              </div>
+              <div class="home-console__row">
+                <span class="k">EVENT</span>
+                <span class="v">vector → elasticsearch</span>
+                <span class="s s--muted">logged</span>
+                <div class="home-console__meter"><i style="width: 100%"></i></div>
+              </div>
+            </div>
+
+            <div class="home-console__foot">
+              <span><span class="ok">●</span> pipeline healthy</span>
+              <span>11 stages · &lt; 1 ms decision</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Stats
+       ============================================================ -->
+  <section class="home-stats" aria-label="System at a glance">
+    <div class="container">
+      <div class="home-stats__label">
+        <span>System at a glance</span>
+        <span class="line"></span>
+        <span>last revision · v2.0</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {stats.map(stat => (
+          <div class="stat">
+            <div class="num">{stat.num}</div>
+            <div class="label">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       What this system does
+       ============================================================ -->
+  <section class="home-section">
+    <div class="home-section__bg" aria-hidden="true">
+      <svg style="left: -6rem; bottom: -7rem; width: 24rem; height: 24rem; opacity: 0.35;" viewBox="0 0 400 400" fill="none">
+        <circle cx="200" cy="200" r="190" stroke="currentColor" stroke-width="1" stroke-dasharray="2 8" />
+        <circle cx="200" cy="200" r="130" stroke="currentColor" stroke-width="1" />
+        <path d="M200 10v380M10 200h380" stroke="currentColor" stroke-width="0.8" opacity="0.6" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-split">
+        <div class="home-copy">
+          <div class="home-eyebrow home-eyebrow--section">The idea</div>
+          <h2 style="font-size: clamp(1.8rem, 3.4vw, 2.65rem); letter-spacing: -0.035em; margin: 0.8rem 0 1rem;">
+            A real storefront that quietly becomes a trap.
+          </h2>
+          <p>
+            The public shop is a full WordPress/WooCommerce storefront. In front of it sits an OpenResty
+            reverse proxy that scores every non-static request in Lua: URI and header patterns, seeded CVE
+            signatures, request rate, session history, network IDS alerts and IP reputation.
+          </p>
+          <p>
+            Legitimate traffic continues to production. Once a session crosses the threshold it is bound to
+            its own honeypot pool — a complete clone of the shop — and stays there. Carts follow the session,
+            so the diversion is invisible and nothing about normal browsing changes.
+          </p>
+          <ul class="home-points">
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Session-bound, not IP-bound.</strong> A signed cookie plus passive fingerprint recovery keeps the experience stable.</span></li>
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Elastic pools.</strong> One isolated shop and database per session, cloned from a pre-built template and recycled when idle.</span></li>
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Full telemetry.</strong> Security events and Suricata alerts flow through Vector into Elasticsearch and Kibana.</span></li>
+          </ul>
+        </div>
+
+        <div class="home-split__media">
+          <figure class="home-diagram">
+            <svg viewBox="0 0 560 360" role="img" aria-label="Request lifecycle: client to reverse proxy, then production shop or honeypot pool, with Redis and Suricata on the edge">
+              <rect class="diagram-frame" x="0.5" y="0.5" width="559" height="359" />
+              <text class="diagram-text--sm" x="18" y="24">REQUEST LIFECYCLE</text>
+              <text class="diagram-text--sm diagram-text--accent" x="542" y="24" text-anchor="end">EDGE HOST</text>
+              <line class="diagram-line" x1="16" y1="34" x2="544" y2="34" />
+
+              <rect class="diagram-node" x="24" y="140" width="88" height="50" />
+              <text class="diagram-text" x="68" y="161" text-anchor="middle">CLIENT</text>
+              <text class="diagram-text--sm" x="68" y="175" text-anchor="middle">HTTP</text>
+
+              <rect class="diagram-node diagram-node--accent" x="148" y="124" width="116" height="82" />
+              <text class="diagram-text diagram-text--accent" x="206" y="148" text-anchor="middle">OPENRESTY</text>
+              <text class="diagram-text--sm" x="206" y="163" text-anchor="middle">analyze_request()</text>
+              <text class="diagram-text--sm" x="206" y="175" text-anchor="middle">decide_route()</text>
+              <text class="diagram-text--sm" x="206" y="187" text-anchor="middle">11 stages</text>
+
+              <path class="diagram-arrow" d="M264 165H300" />
+              <path class="diagram-line--accent" d="M300 165V96H350" />
+              <path class="diagram-line--accent" d="M300 165V234H350" />
+              <path class="diagram-arrowhead" d="M350 96l-8-4v8z" />
+              <path class="diagram-arrowhead" d="M350 234l-8-4v8z" />
+              <path class="diagram-arrowhead" d="M300 165l-7-4v8z" />
+
+              <rect class="diagram-node" x="354" y="74" width="182" height="44" />
+              <text class="diagram-text" x="368" y="92">PRODUCTION SHOP</text>
+              <text class="diagram-text--sm" x="368" y="106">legitimate traffic</text>
+
+              <rect class="diagram-node" x="354" y="212" width="182" height="44" />
+              <text class="diagram-text diagram-text--accent" x="368" y="230">HONEYPOT POOL N</text>
+              <text class="diagram-text--sm" x="368" y="244">isolated shop + database</text>
+
+              <rect class="diagram-panel" x="24" y="236" width="88" height="44" />
+              <text class="diagram-text" x="68" y="253" text-anchor="middle">SURICATA</text>
+              <text class="diagram-text--sm" x="68" y="267" text-anchor="middle">eve.json</text>
+              <path class="diagram-line--dash-accent" d="M112 258H148" />
+              <path class="diagram-arrowhead" d="M148 258l-7-4v8z" />
+
+              <rect class="diagram-panel" x="148" y="256" width="116" height="40" />
+              <text class="diagram-text" x="206" y="273" text-anchor="middle">REDIS</text>
+              <text class="diagram-text--sm" x="206" y="286" text-anchor="middle">session + pools</text>
+              <path class="diagram-line--dash" d="M206 236V256" />
+
+              <path class="diagram-line--dash" d="M206 300V330H504V165H536" />
+              <text class="diagram-text--sm diagram-text--accent" x="282" y="344">VECTOR → ELASTICSEARCH → KIBANA</text>
+              <circle class="diagram-dot" cx="206" cy="300" r="2.4" />
+            </svg>
+            <figcaption>
+              <span>Scoring and diversion stay in the request path</span>
+              <em>no tarpit</em>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Quick navigation
+       ============================================================ -->
+  <section class="home-section home-section--alt">
+    <div class="home-section__bg" aria-hidden="true">
+      <svg style="right: -8rem; top: 50%; transform: translateY(-50%); width: 30rem; height: 30rem; opacity: 0.3;" viewBox="0 0 400 400" fill="none">
+        <circle cx="200" cy="200" r="196" stroke="currentColor" />
+        <circle cx="200" cy="200" r="150" stroke="currentColor" stroke-dasharray="3 7" />
+        <circle cx="200" cy="200" r="104" stroke="currentColor" />
+        <circle cx="200" cy="200" r="58" stroke="currentColor" stroke-dasharray="3 7" />
+        <path d="M4 200h392M200 4v392" stroke="currentColor" opacity="0.5" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-head home-head--center">
+        <div class="home-eyebrow home-eyebrow--section">Documentation map</div>
+        <h2>Everything, one layer at a time.</h2>
+        <p>Start at the beginning or jump straight into the layer you care about. Every page is written against the actual Lua modules and deployment files in the repository.</p>
+      </div>
+      <div class="home-nav-grid">
+        {navigation.map(item => (
+          <a href={item.href} class="card card-hover no-underline home-nav-card">
+            <span class="card-icon"><Icon name={item.icon} class="w-5 h-5" /></span>
+            <span class="card-kicker">{item.kicker}</span>
+            <h3>{item.title}</h3>
+            <p>{item.description}</p>
+            <span class="card-foot">
+              <span>{item.meta}</span>
+              <span class="go">Open <Icon name="arrow" class="w-3.5 h-3.5" /></span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Architecture
+       ============================================================ -->
+  <section class="home-section">
+    <div class="home-section__bg" aria-hidden="true">
+      <svg style="right: -4rem; top: 8%; width: 18rem; height: 26rem; opacity: 0.35;" viewBox="0 0 180 260" fill="none">
+        <path d="M10 4v252M50 4v252M90 4v252M130 4v252M170 4v252" stroke="currentColor" stroke-width="0.6" />
+        <path d="M10 40h160M10 110h160M10 180h160M10 240h160" stroke="currentColor" stroke-width="0.6" />
+        <circle cx="50" cy="40" r="3" fill="currentColor" />
+        <circle cx="130" cy="110" r="3" fill="currentColor" />
+        <circle cx="90" cy="180" r="3" fill="currentColor" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-head">
+        <div class="home-eyebrow home-eyebrow--section">Architecture</div>
+        <h2>One decision pipeline, two deployment shapes.</h2>
+        <p>All detection logic lives in pure <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies. Thin adapters perform I/O, which keeps the rules unit-testable under a plain Lua interpreter and the edge behaviour deterministic.</p>
+      </div>
+
+      <div class="home-split">
+        <div class="home-copy">
+          <div class="panel">
+            <h3>Request pipeline</h3>
+            <pre><code>Client Request → Nginx access_by_lua_block
+  → pattern_analyzer.analyze_request()
+  → router.decide_route() (11 stages)
+  → pool_router.get_or_assign_pool()
+  → session_handler.update_session() → Redis
+  → Postgres/MySQL choice: production or honeypot
+  → Suricata eve.json → init_worker.lua
+  → threat_intel shared dict
+  → abuseipdb_client.report_ip_async()</code></pre>
+          </div>
+          <ul class="home-points">
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Pure / adapter split.</strong> Decisions live in rules modules; adapters talk to Redis, Nginx and AbuseIPDB.</span></li>
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Graceful degradation.</strong> If Redis or a pool is unavailable, the router falls back instead of dropping customer traffic.</span></li>
+            <li><Icon name="check" class="w-4 h-4" /><span><strong>Two hosts, one flow.</strong> The edge can ship telemetry to a separate SIEM host over mTLS, outbound only.</span></li>
+          </ul>
+        </div>
+
+        <div class="home-split__media">
+          <figure class="home-diagram">
+            <svg viewBox="0 0 560 330" role="img" aria-label="Two-host topology: edge host running the proxy, shop, pools, Redis and Suricata, connected to a SIEM host running Vector, Elasticsearch and Kibana">
+              <rect class="diagram-frame" x="0.5" y="0.5" width="559" height="329" />
+              <text class="diagram-text--sm" x="18" y="24">TWO-HOST TOPOLOGY</text>
+              <text class="diagram-text--sm diagram-text--accent" x="542" y="24" text-anchor="end">mTLS · OUTBOUND</text>
+              <line class="diagram-line" x1="16" y1="34" x2="544" y2="34" />
+
+              <rect class="diagram-panel" x="18" y="50" width="330" height="262" />
+              <text class="diagram-text--sm diagram-text--accent" x="32" y="70">EDGE HOST</text>
+              <line class="diagram-line" x1="30" y1="78" x2="336" y2="78" />
+
+              <rect class="diagram-node" x="32" y="92" width="140" height="44" />
+              <text class="diagram-text" x="44" y="110">REVERSE PROXY</text>
+              <text class="diagram-text--sm" x="44" y="124">OpenResty + Lua</text>
+
+              <rect class="diagram-node" x="190" y="92" width="140" height="44" />
+              <text class="diagram-text" x="202" y="110">PRODUCTION SHOP</text>
+              <text class="diagram-text--sm" x="202" y="124">WordPress + Woo</text>
+
+              <rect class="diagram-node" x="32" y="154" width="140" height="44" />
+              <text class="diagram-text diagram-text--accent" x="44" y="172">HONEYPOT POOLS</text>
+              <text class="diagram-text--sm" x="44" y="186">shop + database N</text>
+
+              <rect class="diagram-node" x="190" y="154" width="140" height="44" />
+              <text class="diagram-text" x="202" y="172">REDIS</text>
+              <text class="diagram-text--sm" x="202" y="186">sessions · routes</text>
+
+              <rect class="diagram-node" x="32" y="216" width="140" height="44" />
+              <text class="diagram-text" x="44" y="234">SURICATA</text>
+              <text class="diagram-text--sm" x="44" y="248">eve.json alerts</text>
+
+              <rect class="diagram-node" x="190" y="216" width="140" height="44" />
+              <text class="diagram-text" x="202" y="234">VECTOR SHIPPER</text>
+              <text class="diagram-text--sm" x="202" y="248">security events</text>
+
+              <path class="diagram-line--dash-accent" d="M330 238H384" />
+              <path class="diagram-arrowhead" d="M384 238l-8-4v8z" />
+              <rect class="diagram-badge" x="346" y="226" width="22" height="24" />
+              <path class="diagram-line--accent" d="M352 238v-5a3 3 0 016 0v5" />
+              <rect class="diagram-line--accent" x="350.5" y="238" width="11" height="7" />
+
+              <rect class="diagram-panel" x="404" y="50" width="138" height="262" />
+              <text class="diagram-text--sm diagram-text--accent" x="418" y="70">SIEM HOST</text>
+              <line class="diagram-line" x1="416" y1="78" x2="530" y2="78" />
+
+              <rect class="diagram-node" x="418" y="100" width="110" height="46" />
+              <text class="diagram-text" x="430" y="118">VECTOR</text>
+              <text class="diagram-text--sm" x="430" y="132">aggregator</text>
+
+              <rect class="diagram-node" x="418" y="164" width="110" height="46" />
+              <text class="diagram-text" x="430" y="182">ELASTICSEARCH</text>
+              <text class="diagram-text--sm" x="430" y="196">index + retention</text>
+
+              <rect class="diagram-node diagram-node--accent" x="418" y="228" width="110" height="46" />
+              <text class="diagram-text diagram-text--accent" x="430" y="246">KIBANA</text>
+              <text class="diagram-text--sm" x="430" y="260">7 dashboards</text>
+
+              <path class="diagram-line--accent" d="M473 146v18M473 210v18" />
+              <path class="diagram-arrowhead" d="M473 164l-4-8h8zM473 228l-4-8h8z" />
+              <circle class="diagram-dot" cx="473" cy="155" r="2" />
+              <circle class="diagram-dot" cx="473" cy="219" r="2" />
+            </svg>
+            <figcaption>
+              <span>Edge detection · SIEM storage</span>
+              <em>both can share one host</em>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6" style="margin-top: 2.5rem;">
+        <div class="admonition info">
+          <div class="admonition-title">Edge host</div>
+          <p>Reverse proxy and Lua scoring, production WordPress, elastic honeypot pools, Redis session state, Suricata, and a local Vector shipper. This is the only host that sees plaintext client requests.</p>
+        </div>
+        <div class="admonition tip">
+          <div class="admonition-title">SIEM host</div>
+          <p>Vector aggregator, Elasticsearch and Kibana. Logs arrive over an outbound-only mTLS channel, so the SIEM never needs to initiate a connection into the edge network.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Detection
+       ============================================================ -->
+  <section class="home-section home-section--alt">
+    <div class="home-aside home-aside--right" aria-hidden="true">
+      <svg viewBox="0 0 400 400" fill="none">
+        <path d="M200 28l132 56v104c0 79-55 143-132 178-77-35-132-99-132-178V84l132-56z" stroke="currentColor" stroke-width="1.4" />
+        <path d="M200 62l104 44v82c0 62-43 112-104 140-61-28-104-78-104-140v-82l104-44z" stroke="currentColor" stroke-width="1" stroke-dasharray="3 7" />
+        <path d="M160 200l30 30 56-64" stroke="currentColor" stroke-width="2" />
+        <circle cx="200" cy="200" r="168" stroke="currentColor" stroke-width="0.7" opacity="0.5" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-split home-split--reverse">
+        <div class="home-split__media">
+          <figure class="home-diagram">
+            <svg viewBox="0 0 560 400" role="img" aria-label="Detection signals feeding one risk score, from URI patterns, CVE signatures, Suricata and IP reputation, then a routing decision">
+              <rect class="diagram-frame" x="0.5" y="0.5" width="559" height="399" />
+              <text class="diagram-text--sm" x="18" y="24">SIGNAL FUSION</text>
+              <text class="diagram-text--sm diagram-text--accent" x="542" y="24" text-anchor="end">0 → 100</text>
+              <line class="diagram-line" x1="16" y1="34" x2="544" y2="34" />
+
+              <rect class="diagram-node" x="24" y="56" width="150" height="40" />
+              <text class="diagram-text" x="38" y="74">URI · HEADERS</text>
+              <text class="diagram-text--sm" x="38" y="87">pattern_rules.lua</text>
+
+              <rect class="diagram-node" x="24" y="108" width="150" height="40" />
+              <text class="diagram-text" x="38" y="126">CVE SIGNATURES</text>
+              <text class="diagram-text--sm" x="38" y="139">vulnerability_rules.lua</text>
+
+              <rect class="diagram-node" x="24" y="160" width="150" height="40" />
+              <text class="diagram-text" x="38" y="178">SURICATA ALERTS</text>
+              <text class="diagram-text--sm" x="38" y="191">suricata_rules.lua</text>
+
+              <rect class="diagram-node" x="24" y="212" width="150" height="40" />
+              <text class="diagram-text" x="38" y="230">SESSION HISTORY</text>
+              <text class="diagram-text--sm" x="38" y="243">router_rules.lua</text>
+
+              <rect class="diagram-node" x="24" y="264" width="150" height="40" />
+              <text class="diagram-text" x="38" y="282">IP REPUTATION</text>
+              <text class="diagram-text--sm" x="38" y="295">threat_intel dict</text>
+
+              <path class="diagram-line--dash-accent" d="M174 76H214M174 128H214M174 180H214M174 232H214M174 284H214" />
+
+              <rect class="diagram-node diagram-node--accent" x="218" y="122" width="118" height="116" />
+              <text class="diagram-text diagram-text--accent" x="277" y="158" text-anchor="middle">RISK SCORE</text>
+              <text class="diagram-text" x="277" y="180" text-anchor="middle" style="font-size: 22px;">0 – 100</text>
+              <text class="diagram-text--sm" x="277" y="198" text-anchor="middle">accumulated + decayed</text>
+              <text class="diagram-text--sm" x="277" y="212" text-anchor="middle">explainable per signal</text>
+
+              <path class="diagram-arrow" d="M336 180H382" />
+              <path class="diagram-arrowhead" d="M382 180l-8-4v8z" />
+
+              <rect class="diagram-panel" x="386" y="112" width="150" height="56" />
+              <text class="diagram-text" x="400" y="133">ROUTE DECISION</text>
+              <text class="diagram-text--sm" x="400" y="147">threshold 80 · 11 stages</text>
+              <text class="diagram-text--sm" x="400" y="159">CVE / plugin / reputation</text>
+
+              <path class="diagram-line" d="M461 168v20" />
+              <path class="diagram-arrowhead" d="M461 196l-4-8h8z" />
+
+              <rect class="diagram-node" x="386" y="200" width="150" height="38" />
+              <text class="diagram-text" x="400" y="224">PRODUCTION</text>
+
+              <rect class="diagram-node diagram-node--accent" x="386" y="250" width="150" height="42" />
+              <text class="diagram-text diagram-text--accent" x="400" y="268">HONEYPOT POOL</text>
+              <text class="diagram-text--sm" x="400" y="282">sticky for the session</text>
+
+              <path class="diagram-line" d="M420 312h90" />
+              <text class="diagram-text--sm" x="24" y="352">DECAY · half-life 300 s · permaflag after 5 offenses</text>
+              <text class="diagram-text--sm diagram-text--accent" x="24" y="368">EVERY SCORE IS AUDITABLE</text>
+              <circle class="diagram-dot" cx="420" cy="322" r="2.4" />
+              <circle class="diagram-dot" cx="510" cy="322" r="2.4" />
+            </svg>
+            <figcaption>
+              <span>Rules produce signals; signals produce a decision</span>
+              <em>explainable by design</em>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="home-copy">
+          <div class="home-eyebrow home-eyebrow--section">Detection</div>
+          <h2 style="font-size: clamp(1.8rem, 3.4vw, 2.65rem); letter-spacing: -0.035em; margin: 0.8rem 0 1rem;">
+            Layered signals, one readable score.
+          </h2>
+          <p>
+            Detection is not a single regex. Each request passes through headers, URI patterns, seeded CVE
+            signatures, rate and reputation checks, automation detection and session history. A signal can
+            add a fixed score, contribute a severity-derived delta, or trigger a hard routing rule.
+          </p>
+          <div class="home-stages">
+            <div class="home-stage">
+              <span class="home-stage__num">01</span>
+              <span class="home-stage__body"><strong>Pattern and header analysis</strong><span>Flagged user agents, missing headers, traversal, injection and upload indicators.</span></span>
+              <span class="home-stage__tag">+5 … +80</span>
+            </div>
+            <div class="home-stage">
+              <span class="home-stage__num">02</span>
+              <span class="home-stage__body"><strong>Seeded CVE matching</strong><span>WordPress plugin exploits matched against URI, arguments and specific headers.</span></span>
+              <span class="home-stage__tag">+40 / CVE</span>
+            </div>
+            <div class="home-stage">
+              <span class="home-stage__num">03</span>
+              <span class="home-stage__body"><strong>Network IDS correlation</strong><span>Suricata alerts parsed from eve.json and converted to severity-graded deltas.</span></span>
+              <span class="home-stage__tag">+10 … +50</span>
+            </div>
+            <div class="home-stage">
+              <span class="home-stage__num">04</span>
+              <span class="home-stage__body"><strong>Escalation-aware decay</strong><span>Repeat offenders decay more slowly; permaflag stops decay entirely.</span></span>
+              <span class="home-stage__tag">half-life</span>
+            </div>
+          </div>
+          <p style="margin-top: 1.35rem;">
+            <a href="/docs/detection">Read the detection overview <Icon name="arrow" class="w-3.5 h-3.5" style="display: inline-block; vertical-align: -2px;" /></a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Operations and pools
+       ============================================================ -->
+  <section class="home-section">
+    <div class="home-aside home-aside--left" aria-hidden="true">
+      <svg viewBox="0 0 360 360" fill="none">
+        <path d="M40 80h280M40 180h280M40 280h280" stroke="currentColor" stroke-width="1" />
+        <circle cx="100" cy="80" r="5" fill="currentColor" />
+        <circle cx="180" cy="180" r="5" fill="currentColor" />
+        <circle cx="260" cy="280" r="5" fill="currentColor" />
+        <path d="M100 80v100h80v100" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 6" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-head">
+        <div class="home-eyebrow home-eyebrow--section">Operations</div>
+        <h2>Pools that scale with people, not noise.</h2>
+        <p>Assignment is per session and atomic in Redis. A spare pool is kept ready, another is provisioned as soon as a session has to borrow one, and idle pools are recycled after thirty minutes. Resource budgets stop growth before the host runs short.</p>
+      </div>
+
+      <div class="home-split">
+        <div class="home-copy">
+          <ul class="home-points" style="margin-top: 0;">
+            <li><Icon name="box" class="w-4 h-4" /><span><strong>Exclusive by default.</strong> A session gets its own shop and database pair; the mapping is stored with a 24-hour TTL.</span></li>
+            <li><Icon name="zap" class="w-4 h-4" /><span><strong>Spare provisioning.</strong> Every assignment queues a wake-up, so the next visitor usually finds a warm pool.</span></li>
+            <li><Icon name="gauge" class="w-4 h-4" /><span><strong>Bounded growth.</strong> <code>POOL_MAX</code>, memory, CPU, load and disk guards cap the fleet; beyond that sessions share pools round-robin.</span></li>
+            <li><Icon name="clock" class="w-4 h-4" /><span><strong>Scale down.</strong> Idle pools above the spare count are removed and their users reassigned on return.</span></li>
+            <li><Icon name="archive" class="w-4 h-4" /><span><strong>Content sync.</strong> Production pages, posts and products are mirrored into every pool every five minutes by default.</span></li>
+          </ul>
+          <p style="margin-top: 1.35rem;">
+            <a href="/docs/engine">Explore the honeypot engine <Icon name="arrow" class="w-3.5 h-3.5" style="display: inline-block; vertical-align: -2px;" /></a>
+          </p>
+        </div>
+
+        <div class="home-split__media">
+          <figure class="home-diagram">
+            <svg viewBox="0 0 560 340" role="img" aria-label="Pool lifecycle: a session is assigned a warm pool, a spare is provisioned, idle pools are recycled">
+              <rect class="diagram-frame" x="0.5" y="0.5" width="559" height="339" />
+              <text class="diagram-text--sm" x="18" y="24">POOL LIFECYCLE</text>
+              <text class="diagram-text--sm diagram-text--accent" x="542" y="24" text-anchor="end">POOL_MAX · 10</text>
+              <line class="diagram-line" x1="16" y1="34" x2="544" y2="34" />
+
+              <rect class="diagram-node" x="24" y="58" width="112" height="46" />
+              <text class="diagram-text" x="36" y="78">SESSION</text>
+              <text class="diagram-text--sm" x="36" y="92">signed cookie</text>
+
+              <path class="diagram-arrow" d="M136 81H190" />
+              <path class="diagram-arrowhead" d="M190 81l-8-4v8z" />
+
+              <rect class="diagram-node diagram-node--accent" x="194" y="58" width="132" height="46" />
+              <text class="diagram-text diagram-text--accent" x="208" y="78">POOL ROUTER</text>
+              <text class="diagram-text--sm" x="208" y="92">atomic Redis EVAL</text>
+
+              <path class="diagram-line--accent" d="M326 81H380" />
+              <path class="diagram-arrowhead" d="M380 81l-8-4v8z" />
+
+              <rect class="diagram-node" x="384" y="58" width="152" height="46" />
+              <text class="diagram-text" x="398" y="78">READY POOL</text>
+              <text class="diagram-text--sm" x="398" y="92">shop + database pair</text>
+
+              <path class="diagram-line--dash" d="M460 104v42" />
+              <path class="diagram-arrowhead" d="M460 146l-4-8h8z" />
+              <text class="diagram-text--sm" x="472" y="128">sticky binding</text>
+
+              <rect class="diagram-node" x="384" y="150" width="152" height="42" />
+              <text class="diagram-text" x="398" y="168">BOUND SESSION</text>
+              <text class="diagram-text--sm" x="398" y="182">same pool on every request</text>
+
+              <path class="diagram-line--dash-accent" d="M320 81V172H384" />
+              <text class="diagram-text--sm" x="330" y="164">borrow if none free</text>
+
+              <rect class="diagram-panel" x="24" y="216" width="512" height="100" />
+              <text class="diagram-text--sm diagram-text--accent" x="38" y="236">POOL FLEET</text>
+              <rect class="diagram-node" x="38" y="248" width="94" height="48" />
+              <text class="diagram-text" x="50" y="268">POOL 01</text>
+              <text class="diagram-text--sm" x="50" y="282">spare</text>
+              <rect class="diagram-node" x="146" y="248" width="94" height="48" />
+              <text class="diagram-text" x="158" y="268">POOL 02</text>
+              <text class="diagram-text--sm" x="158" y="282">assigned</text>
+              <rect class="diagram-node diagram-node--accent" x="254" y="248" width="94" height="48" />
+              <text class="diagram-text diagram-text--accent" x="266" y="268">POOL 03</text>
+              <text class="diagram-text--sm" x="266" y="282">building</text>
+              <rect class="diagram-node" x="362" y="248" width="72" height="48" />
+              <text class="diagram-text" x="374" y="268">POOL 04</text>
+              <text class="diagram-text--sm" x="374" y="282">idle</text>
+              <rect class="diagram-node" x="448" y="248" width="72" height="48" />
+              <text class="diagram-text" x="460" y="268">POOL 05</text>
+              <text class="diagram-text--sm" x="460" y="282">ready</text>
+
+              <text class="diagram-text--sm" x="38" y="312">scaledown after 30 min idle · content sync every 5 min</text>
+            </svg>
+            <figcaption>
+              <span>Assignment, spare provisioning, reuse, scale-down</span>
+              <em>isolated per session</em>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Honest assessment
+       ============================================================ -->
+  <section class="home-section home-section--alt">
+    <div class="home-aside home-aside--right" aria-hidden="true">
+      <svg viewBox="0 0 360 360" fill="none">
+        <circle cx="180" cy="180" r="150" stroke="currentColor" stroke-width="1" stroke-dasharray="3 7" />
+        <path d="M180 30v300M30 180h300" stroke="currentColor" stroke-width="1" opacity="0.6" />
+        <path d="M80 240a110 110 0 0 1 200 0" stroke="currentColor" stroke-width="2" />
+        <path d="M180 180l60-44" stroke="currentColor" stroke-width="2" />
+        <circle cx="180" cy="180" r="5" fill="currentColor" />
+        <circle cx="180" cy="240" r="3" fill="currentColor" />
+      </svg>
+    </div>
+    <div class="container home-section__inner">
+      <div class="home-head">
+        <div class="home-eyebrow home-eyebrow--section">Honest assessment</div>
+        <h2>What works, and what still does not.</h2>
+        <p>The project documents its own limits. These are the trade-offs recorded in the manuals, not marketing footnotes.</p>
+      </div>
+      <div class="home-assessment">
+        <div class="admonition tip">
+          <div class="admonition-title">Strengths</div>
+          <ul class="space-y-1 text-sm">
+            <li>Multi-layered detection with WSTG mappings</li>
+            <li>Explainable, auditable risk scoring</li>
+            <li>Per-attacker isolation via elastic pools</li>
+            <li>No tarpit — identical proxy latency</li>
+            <li>Privacy-preserving GDPR identity</li>
+            <li>Honeytoken injection for high-confidence signals</li>
+            <li>Pure / adapter split with 18 unit test files</li>
+            <li>Severity-graded Suricata integration</li>
+          </ul>
+        </div>
+        <div class="admonition warning">
+          <div class="admonition-title">Limitations</div>
+          <ul class="space-y-1 text-sm">
+            <li>Same-host Suricata testing gap</li>
+            <li>Decay system has four tuning parameters</li>
+            <li>Honeytoken coverage is limited to five types</li>
+            <li>Rule-based only — no machine learning</li>
+            <li>Redis is a single point of failure</li>
+            <li>Pool scaling is bounded by host resources</li>
+            <li>No end-to-end integration test suite</li>
+            <li>Dashboard state can drift from live Kibana</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top: 1.5rem;">
+        <a href="/docs/reference/known-issues">Read known issues and workarounds <Icon name="arrow" class="w-3.5 h-3.5" style="display: inline-block; vertical-align: -2px;" /></a>
       </p>
-      <div class="flex gap-4 justify-center flex-wrap">
-        <a href="/docs/detection" class="btn-sheared text-base px-6 py-3">Detection Docs</a>
-        <a href="/docs/observability" class="btn-sheared secondary text-base px-6 py-3">Observability</a>
-        <a href="/docs/operations" class="btn-sheared secondary text-base px-6 py-3">Operations</a>
-      </div>
     </div>
   </section>
 
-  <!-- Stats Section -->
-  <section class="container mx-auto px-6 py-6">
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      <div class="stat">
-        <div class="num">14+</div>
-        <div class="label">Seeded CVEs</div>
-      </div>
-      <div class="stat">
-        <div class="num">70+</div>
-        <div class="label">Suricata SIDs</div>
-      </div>
-      <div class="stat">
-        <div class="num">11</div>
-        <div class="label">Routing Stages</div>
-      </div>
-      <div class="stat">
-        <div class="num">18</div>
-        <div class="label">Unit Tests</div>
-      </div>
-      <div class="stat">
-        <div class="num">7</div>
-        <div class="label">Dashboards</div>
-      </div>
-      <div class="stat">
-        <div class="num">14</div>
-        <div class="label">Lua Modules</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- What This System Does -->
-  <section class="container mx-auto px-6 py-6">
-    <div class="max-w-4xl">
-      <h2 class="text-3xl font-bold mb-6 text-text-primary">What This System Does</h2>
-      <p class="text-lg text-text-secondary leading-relaxed mb-6">
-        A WordPress/WooCommerce storefront that looks and behaves like a real shop — but sits behind an
-        OpenResty (Nginx + Lua) reverse proxy that scores every request in real time and transparently
-        diverts suspicious sessions into isolated, full-fidelity honeypot clones. Legitimate customers
-        never notice; attackers get a convincing, exploitable target while every move is recorded.
-      </p>
-    </div>
-  </section>
-
-  <!-- Quick Navigation -->
-  <section class="container mx-auto px-6 py-6">
-    <h2 class="text-3xl font-bold mb-6 text-text-primary">Quick Navigation</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <a href="/docs/detection" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Detection</h3>
-        <p class="text-text-secondary text-sm">Multi-layered detection pipeline: URI patterns, CVE matching, Suricata IDS, IP reputation.</p>
-        <div class="meta mt-3">5 pages · 14 modules</div>
-      </a>
-      <a href="/docs/observability" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Observability</h3>
-        <p class="text-text-secondary text-sm">Vector → Elasticsearch → Kibana. 7 dashboards + pattern report timeline.</p>
-        <div class="meta mt-3">3 pages · 7 dashboards</div>
-      </a>
-      <a href="/docs/operations" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Operations</h3>
-        <p class="text-text-secondary text-sm">Two-host and single-host deployment, production hardening, troubleshooting runbooks.</p>
-        <div class="meta mt-3">5 pages · 2 topologies</div>
-      </a>
-      <a href="/docs/testing" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Testing</h3>
-        <p class="text-text-secondary text-sm">18 pure-Lua unit test files, dashboard validation, blind pentest protocol.</p>
-        <div class="meta mt-3">2 pages · 18 tests</div>
-      </a>
-      <a href="/docs/reference" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Reference</h3>
-        <p class="text-text-secondary text-sm">Glossary, known issues, roadmap, changelog, literature, function reference.</p>
-        <div class="meta mt-3">6 pages</div>
-      </a>
-      <a href="/sim" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Simulator</h3>
-        <p class="text-text-secondary text-sm">Interactive request scoring simulator with real-time results.</p>
-        <div class="meta mt-3">Live interactive</div>
-      </a>
-      <a href="/demo" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Live Demo</h3>
-        <p class="text-text-secondary text-sm">Live honeypot demonstration with attack scenarios.</p>
-        <div class="meta mt-3">5 scenarios</div>
-      </a>
-      <a href="/docs/architecture" class="card card-hover no-underline">
-        <h3 class="text-lg font-semibold mb-2">Architecture</h3>
-        <p class="text-text-secondary text-sm">Request pipeline, two-host split, Lua module architecture, pooling system.</p>
-        <div class="meta mt-3">Full reference</div>
-      </a>
-    </div>
-  </section>
-
-  <!-- Architecture Overview -->
-  <section class="container mx-auto px-6 py-6">
-    <h2 class="text-3xl font-bold mb-6 text-text-primary">Architecture Overview</h2>
-    <div class="demo-box">
-      <h3>Request Pipeline</h3>
-      <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
-  → router.decide_route() (11 stages) → pool_router.get_or_assign_pool()
-  → session_handler.update_session() → Redis session_store
-  → Suricata eve.json → init_worker.lua → threat_intel shared dict
-  → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-      <div class="admonition info">
-        <div class="admonition-title">Edge Host</div>
-        <p>Reverse proxy, WordPress (production + honeypot pools), Redis, Suricata, local Vector shipper. Runs the Nginx Lua pipeline.</p>
-      </div>
-      <div class="admonition tip">
-        <div class="admonition-title">SIEM Host</div>
-        <p>Log storage/analysis: Elasticsearch, Kibana, Vector aggregator. Connected via mTLS outbound-only channel.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Honest Assessment -->
-  <section class="container mx-auto px-6 py-6">
-    <h2 class="text-3xl font-bold mb-6 text-text-primary">Honest Assessment</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="admonition tip">
-        <div class="admonition-title">Strengths</div>
-        <ul class="space-y-1 text-sm">
-          <li>Multi-layered detection (11+ stages)</li>
-          <li>Explainable, auditable scoring with WSTG mappings</li>
-          <li>Per-attacker isolation via elastic pools</li>
-          <li>No tarpit — identical proxy latency</li>
-          <li>Privacy-preserving GDPR identity</li>
-          <li>Honeytoken injection for high-confidence signals</li>
-          <li>18 unit test files (pure/adapter split)</li>
-          <li>Severity-graded Suricata integration</li>
-        </ul>
-      </div>
-      <div class="admonition warning">
-        <div class="admonition-title">Limitations</div>
-        <ul class="space-y-1 text-sm">
-          <li>Same-host Suricata testing gap</li>
-          <li>Decay system complexity (4 params)</li>
-          <li>Honeytoken coverage (only 5 types)</li>
-          <li>No ML (rule-based only)</li>
-          <li>Redis single point of failure</li>
-          <li>Pool scaling limits</li>
-          <li>No end-to-end integration tests</li>
-          <li>Dashboard drift risk</li>
-        </ul>
+  <!-- ============================================================
+       CTA
+       ============================================================ -->
+  <section class="home-section" style="padding-top: 0;">
+    <div class="container home-section__inner">
+      <div class="home-cta-panel">
+        <div class="home-cta-panel__bg" aria-hidden="true">
+          <svg viewBox="0 0 1200 420" fill="none" preserveAspectRatio="xMidYMid slice" style="width: 100%; height: 100%;">
+            <circle cx="600" cy="210" r="420" stroke="currentColor" stroke-width="1" />
+            <circle cx="600" cy="210" r="310" stroke="currentColor" stroke-width="1" stroke-dasharray="4 10" />
+            <circle cx="600" cy="210" r="200" stroke="currentColor" stroke-width="1" />
+            <path d="M600 0v420M0 210h1200" stroke="currentColor" stroke-width="1" opacity="0.6" />
+            <path d="M600 210L900 40M600 210L300 380" stroke="currentColor" stroke-width="1" opacity="0.5" />
+          </svg>
+        </div>
+        <div class="home-eyebrow home-eyebrow--section" style="justify-content: center;">Start here</div>
+        <h2>Go from zero to a diverted attack.</h2>
+        <p>Follow the setup path, then read the module that made the decision. Every page links back to the exact Lua file or deployment script it describes.</p>
+        <div class="home-cta">
+          <a href="/docs/getting-started" class="btn-sheared">
+            <Icon name="terminal" class="w-4 h-4" />
+            Getting started
+          </a>
+          <a href="/docs" class="btn-sheared secondary">
+            <Icon name="book" class="w-4 h-4" />
+            Browse all docs
+          </a>
+          <a href={github} target="_blank" rel="noopener" class="btn-sheared ghost">
+            <Icon name="github" class="w-4 h-4" />
+            github.com/iairu/honeypot-ids
+          </a>
+        </div>
+        <div class="home-chips" style="justify-content: center; border-top: 0; padding-top: 1.5rem; margin-left: auto; margin-right: auto;">
+          <span><Icon name="radar" class="w-3.5 h-3.5" /> 11-stage routing</span>
+          <span><Icon name="shield" class="w-3.5 h-3.5" /> 14+ seeded CVEs</span>
+          <span><Icon name="chart" class="w-3.5 h-3.5" /> 7 dashboards</span>
+          <span><Icon name="flask" class="w-3.5 h-3.5" /> 18 test suites</span>
+        </div>
       </div>
     </div>
   </section>

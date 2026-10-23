@@ -1,6 +1,9 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
   { title: 'Reference Overview', href: '/docs/reference' },
   { title: 'Glossary', href: '/docs/reference/glossary' },
   { title: 'Known Issues', href: '/docs/reference/known-issues', active: true },
@@ -15,6 +18,15 @@ const toc = [
 ];
 ---
 <DocsLayout title="Known Issues & Corrections" description="Known issues and their corrections or workarounds" section="Reference" sidebar={sidebar} toc={toc}>
+  <CardGrid columns={3}>
+    <DocCard title="Dashboard drift" icon="chart" tag="Current" description="Offline and live dashboard state can diverge. Rebuild to NDJSON or export the live objects." meta="Workaround" />
+    <DocCard title="Same-host Suricata" icon="network" tag="Current" description="Loopback capture can attribute alerts to container-internal addresses, so reputation may not fire locally." meta="Test externally" />
+    <DocCard title="Timeline auth" icon="eye" tag="Current" description="Embed-mode capture needs a Kibana login; configure autologin or use a manual session." meta="Setup" />
+    <DocCard title="fast.log parser" icon="file" tag="Historical" description="Eight capture groups into seven variables shifted fields silently. Replaced by structured eve.json." meta="Fixed" />
+    <DocCard title="admin-ajax false positives" icon="alert" tag="Historical" description="A blanket admin-ajax rule flagged normal traffic. It is now excluded and analysed separately." meta="Fixed" />
+    <DocCard title="Session laundering" icon="fingerprint" tag="Historical" description="A single clean request could reset a risky session. Score accumulation now prevents it." meta="Fixed" />
+  </CardGrid>
+
   <h2 id="issues">Known Issues</h2>
   <ul>
     <li><strong>Dashboard generation drift:</strong> Offline vs live dashboard state can diverge. Workaround: Re-run build_dashboards.py --ndjson or export_dashboards.py.</li>
