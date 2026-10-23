@@ -6,10 +6,11 @@ interface Props {
   toc?: { id: string; text: string; level: number }[];
   sidebar?: { title: string; href: string; active?: boolean }[];
   section?: string;
+  wide?: boolean;
   prev?: { title: string; href: string };
   next?: { title: string; href: string };
 }
-const { title, description, toc = [], sidebar = [], section, prev: prevProp, next: nextProp } = Astro.props;
+const { title, description, toc = [], sidebar = [], section, wide = false, prev: prevProp, next: nextProp } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
 const tabs = [
@@ -35,6 +36,7 @@ const docsOrder = [
   { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
   { title: 'Seeded CVEs', href: '/docs/detection/cves' },
   { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Pattern Database', href: '/docs/detection/patterns' },
   { title: 'Advanced Signals', href: '/docs/detection/advanced' },
   { title: 'Observability', href: '/docs/observability' },
   { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem' },
@@ -120,7 +122,7 @@ const nextPage = nextProp ?? (path === '/docs' ? docsOrder[0] : autoNext);
     </nav>
 
     <div class="md-main">
-      <div class="md-main__inner">
+      <div class:list={['md-main__inner', { 'md-main__inner--wide': wide }]}>
         <!-- Primary sidebar -->
         <aside class="md-sidebar md-sidebar--primary">
           <div class="md-nav__title">Navigation</div>
@@ -137,7 +139,7 @@ const nextPage = nextProp ?? (path === '/docs' ? docsOrder[0] : autoNext);
 
         <!-- Content -->
         <main class="md-content">
-          <article class="md-content__inner">
+          <article class:list={['md-content__inner', { 'md-content__inner--wide': wide }]}>
             <div class="doc-breadcrumbs">
               <a href="/">Home</a>
               <span class="sep">›</span>
@@ -238,6 +240,7 @@ const nextPage = nextProp ?? (path === '/docs' ? docsOrder[0] : autoNext);
         { title: 'Detection Capabilities', url: '/docs/detection/capabilities', content: 'pattern matching CVE suricata scoring function reference' },
         { title: 'Seeded CVEs', url: '/docs/detection/cves', content: 'CVE-2023-28121 CVE-2025-4403 vulnerability' },
         { title: 'Suricata Network IDS', url: '/docs/detection/suricata', content: 'suricata eve.json alerts SID severity' },
+        { title: 'Pattern Database', url: '/docs/detection/patterns', content: 'pattern catalogue CVE generic signature suricata WSTG source IDs export plugin' },
         { title: 'Advanced Signals', url: '/docs/detection/advanced', content: 'risk scoring decay policy' },
         { title: 'Observability', url: '/docs/observability', content: 'siem kibana dashboards logs' },
         { title: 'SIEM & Log Pipeline', url: '/docs/observability/siem', content: 'vector elasticsearch kibana logs' },

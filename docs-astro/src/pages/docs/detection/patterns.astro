@@ -1,0 +1,482 @@
+---
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+
+// Resolve from the docs-astro package root, not import.meta.url: Vite moves
+// this module into dist/.prerender/chunks during the build, which would make a
+// URL-relative path point outside the repository.
+const catalogPath = resolve(process.cwd(), '..', 'patterns', 'patterns.json');
+const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+const patterns = catalog.patterns ?? [];
+const counts = catalog.counts ?? {};
+const sources = catalog.sources ?? {};
+const kinds = catalog.kinds ?? {};
+const categories = catalog.categories ?? {};
+
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Pattern Database', href: '/docs/detection/patterns', active: true },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+];
+const toc = [
+  { id: 'overview', text: 'Overview', level: 2 },
+  { id: 'browse', text: 'Browse patterns', level: 2 },
+  { id: 'plugin-ready', text: 'Patterns as plugins', level: 2 },
+  { id: 'coverage', text: 'Coverage & provenance', level: 2 },
+];
+
+const usedSources = [...new Set(patterns.flatMap(p => (p.sources ?? []).map(s => s.key)))];
+const severities = ['critical', 'high', 'medium', 'low', 'info'].filter(s => (counts.by_severity ?? {})[s]);
+const kindOptions = Object.keys(counts.by_kind ?? {}).map(k => ({ value: k, label: kinds[k] ?? k }));
+const categoryOptions = Object.keys(counts.by_category ?? {})
+  .map(k => ({ value: k, label: categories[k] ?? k }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+const sourceOptions = usedSources
+  .map(key => ({ value: key, label: sources[key]?.label ?? key }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+const payload = {
+  generated: catalog.generated,
+  patterns,
+  sources,
+  kinds,
+  categories,
+};
+const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
+---
+
+<DocsLayout
+  title="Pattern Database"
+  description="Every CVE, generic signature, upload and header rule, scanner tool and Suricata SID the edge stack can detect — with provenance, scores and attack lessons."
+  section="Detection"
+  sidebar={sidebar}
+  toc={toc}
+  wide
+>
+  <section id="overview" class="pd-intro">
+    <p class="pd-eyebrow">Detection catalogue</p>
+    <h2>Every pattern, one catalogue</h2>
+    <p>
+      This page is generated from the same <code>patterns/patterns.json</code> that the
+      PyQt dashboard reads. It merges the Lua CVE patterns, Layer&nbsp;1 and Layer&nbsp;2
+      generic signatures, header and upload analysis, the Attack Simulation presets and
+      all {counts.suricata_sids ?? 0} Suricata SIDs into one searchable inventory.
+    </p>
+    <p>
+      Select any row to open its side panel: trigger, score path, source files, WSTG /
+      OWASP / ATT&amp;CK mapping, the simulation preset that proves it, and a plain-language
+      lesson. Deep-link a pattern with <code>?pattern=&lt;id&gt;</code>.
+    </p>
+  </section>
+
+  <div class="pd-stats" aria-label="Catalogue summary">
+    <div class="pd-stat">
+      <span class="pd-stat__value">{counts.total ?? patterns.length}</span>
+      <span class="pd-stat__label">Patterns</span>
+      <span class="pd-stat__hint">Stable catalogue IDs</span>
+    </div>
+    <div class="pd-stat">
+      <span class="pd-stat__value">{counts.cves ?? 0}</span>
+      <span class="pd-stat__label">CVEs</span>
+      <span class="pd-stat__hint">Plugin + core vulnerabilities</span>
+    </div>
+    <div class="pd-stat">
+      <span class="pd-stat__value">{counts.suricata_sids ?? 0}</span>
+      <span class="pd-stat__label">Suricata SIDs</span>
+      <span class="pd-stat__hint">Network-layer evidence</span>
+    </div>
+    <div class="pd-stat">
+      <span class="pd-stat__value">{usedSources.length}</span>
+      <span class="pd-stat__label">Rule sources</span>
+      <span class="pd-stat__hint">Lua, Suricata, presets, upload</span>
+    </div>
+  </div>
+
+  <p class="pd-generated">
+    Generated {catalog.generated} from
+    <code>tools/generate_pattern_catalog.py</code>. Run it after changing a rule source;
+    <code>--check</code> fails when this page would be stale.
+  </p>
+
+  <section id="browse" class="pd-browse">
+    <div class="pd-browse__head">
+      <div>
+        <h2>Browse patterns</h2>
+        <p>Filter first, then read the side panel. The panel is a drawer on narrow screens.</p>
+      </div>
+      <span id="pd-count" class="pd-count">{patterns.length} of {patterns.length} patterns</span>
+    </div>
+
+    <div class="pd-toolbar" role="search" aria-label="Filter patterns">
+      <label class="pd-field pd-field--search">
+        <span>Search</span>
+        <input id="pd-search" type="search" placeholder="Name, ID, CVE, WSTG, source, SID…" autocomplete="off" />
+      </label>
+      <label class="pd-field">
+        <span>Type</span>
+        <select id="pd-kind">
+          <option value="">All types</option>
+          {kindOptions.map(option => <option value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <label class="pd-field">
+        <span>Category</span>
+        <select id="pd-category">
+          <option value="">All categories</option>
+          {categoryOptions.map(option => <option value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <label class="pd-field">
+        <span>Severity</span>
+        <select id="pd-severity">
+          <option value="">All severities</option>
+          {severities.map(severity => <option value={severity}>{severity}</option>)}
+        </select>
+      </label>
+      <label class="pd-field">
+        <span>Source</span>
+        <select id="pd-source">
+          <option value="">All sources</option>
+          {sourceOptions.map(option => <option value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <button id="pd-reset" class="pd-reset" type="button">Reset</button>
+    </div>
+
+    <div class="pd-browser">
+      <div class="pd-list-panel">
+        <div class="pd-list-head">
+          <span>Pattern</span>
+          <span>Type · category · severity</span>
+        </div>
+        <div id="pd-list" class="pd-list">
+          {patterns.map(pattern => (
+            <button
+              type="button"
+              class="pd-row"
+              data-pattern-id={pattern.id}
+              data-kind={pattern.kind}
+              data-category={pattern.category}
+              data-severity={pattern.severity}
+              data-sources={(pattern.sources ?? []).map(s => s.key).join(' ')}
+              aria-controls="pd-detail"
+            >
+              <span class="pd-row__main">
+                <span class="pd-row__top">
+                  <span class="pd-row__name">{pattern.name}</span>
+                  <span class="pd-row__id">{pattern.id}</span>
+                </span>
+                <span class="pd-row__meta">
+                  <span class={`pd-badge pd-badge--${pattern.severity}`}>{pattern.severity}</span>
+                  <span class="pd-badge pd-badge--muted">{pattern.kind_label}</span>
+                  <span class="pd-badge pd-badge--muted">{pattern.category_label}</span>
+                  <span class="pd-row__source">
+                    {(pattern.sources ?? []).length} source{(pattern.sources ?? []).length === 1 ? '' : 's'}
+                  </span>
+                </span>
+              </span>
+              <span class="pd-row__chev" aria-hidden="true">›</span>
+            </button>
+          ))}
+          <div id="pd-empty" class="pd-empty" hidden>
+            No patterns match those filters. Try clearing the search or choosing “All”.
+          </div>
+        </div>
+      </div>
+
+      <aside id="pd-detail" class="pd-detail" aria-live="polite" aria-label="Pattern detail">
+        <div class="pd-detail__empty">
+          <span class="pd-detail__glyph">⌁</span>
+          <h3>Select a pattern</h3>
+          <p>Its trigger, detection path, sources, Suricata evidence and attack lesson appear here.</p>
+        </div>
+      </aside>
+    </div>
+    <div id="pd-backdrop" class="pd-backdrop" hidden></div>
+
+    <noscript>
+      <p class="pd-generated">
+        The catalogue is listed above, but filtering and the detail panel need JavaScript.
+      </p>
+    </noscript>
+  </section>
+
+  <section id="plugin-ready" class="pd-callout">
+    <p class="pd-eyebrow">Next step</p>
+    <h2>Patterns as plugins</h2>
+    <p>
+      The catalogue already gives every rule the contract a plugin manager needs: a stable
+      ID, source provenance, an <code>enabled</code> state and a self-describing export
+      payload. The dashboard exposes the future add, edit, remove and toggle controls as
+      disabled scaffolding today, so the interaction model is visible without pretending
+      it already changes the Lua or Suricata rule sets.
+    </p>
+    <div class="pd-callout__grid">
+      <div><strong>Stable IDs</strong><span>Deep links and exports use the same key as the future plugin registry.</span></div>
+      <div><strong>One source</strong><span>Docs and dashboard read one generated file; no second list to drift.</span></div>
+      <div><strong>Provenance</strong><span>Every entry names the Lua function, Suricata SID or preset it came from.</span></div>
+      <div><strong>Editable shape</strong><span>Export a filtered set, inspect its JSON and feed it into the next registry.</span></div>
+    </div>
+  </section>
+
+  <section id="coverage" class="pd-coverage">
+    <h2>Coverage &amp; provenance</h2>
+    <p>
+      Counts are by catalogue source rather than by file. A single pattern can carry
+      evidence from several layers — for example a CVE pattern, its Suricata SID and the
+      Attack Simulation preset that proves the route.
+    </p>
+    <div class="pd-coverage__grid">
+      {Object.entries(counts.by_source ?? {}).map(([key, value]) => (
+        <div class="pd-coverage__item">
+          <span class="pd-coverage__value">{value}</span>
+          <span class="pd-coverage__label">{sources[key]?.label ?? key}</span>
+          <code>{sources[key]?.module ?? key}</code>
+        </div>
+      ))}
+    </div>
+    <h3>Source files</h3>
+    <ul class="pd-file-list">
+      {(catalog.source_files ?? []).map(file => <li><code>{file}</code></li>)}
+    </ul>
+    <p class="pd-generated">
+      The generated file is checked in at <code>patterns/patterns.json</code>. If a rule
+      source changes, regenerate it; the stale check compares everything except the
+      generation date.
+    </p>
+  </section>
+
+  <script type="application/json" id="pd-data" set:html={payloadJson}></script>
+  <script is:inline>
+    (() => {
+      const dataEl = document.getElementById('pd-data');
+      if (!dataEl) return;
+      const data = JSON.parse(dataEl.textContent);
+      const patterns = data.patterns || [];
+      const byId = Object.fromEntries(patterns.map(p => [p.id, p]));
+      const rows = [...document.querySelectorAll('.pd-row')];
+      const list = document.getElementById('pd-list');
+      const empty = document.getElementById('pd-empty');
+      const countEl = document.getElementById('pd-count');
+      const detail = document.getElementById('pd-detail');
+      const backdrop = document.getElementById('pd-backdrop');
+      const search = document.getElementById('pd-search');
+      const kind = document.getElementById('pd-kind');
+      const category = document.getElementById('pd-category');
+      const severity = document.getElementById('pd-severity');
+      const source = document.getElementById('pd-source');
+      const reset = document.getElementById('pd-reset');
+
+      const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+
+      const haystack = new Map(patterns.map(p => [p.id, [
+        p.id, p.name, p.description, p.cve, p.trigger, p.notes,
+        p.kind, p.kind_label, p.category, p.category_label,
+        p.severity, p.component, p.plugin, p.surface, p.attack_vector,
+        ...(p.aliases || []), ...(p.wstg || []), ...(p.tags || []),
+        ...(p.detection || []),
+        ...(p.sources || []).flatMap(s => [s.key, s.label, s.module, s.detail]),
+        ...(p.suricata || []).flatMap(s => [String(s.sid), s.message]),
+      ].join(' ').toLowerCase()]));
+
+      function currentRow(id) {
+        return rows.find(row => row.dataset.patternId === id);
+      }
+
+      function markSelected(id) {
+        rows.forEach(row => row.classList.toggle('is-selected', row.dataset.patternId === id));
+      }
+
+      function applyFilters() {
+        const needle = search.value.trim().toLowerCase();
+        const wantedKind = kind.value;
+        const wantedCategory = category.value;
+        const wantedSeverity = severity.value;
+        const wantedSource = source.value;
+        let shown = 0;
+        rows.forEach(row => {
+          const id = row.dataset.patternId;
+          const match = (!wantedKind || row.dataset.kind === wantedKind)
+            && (!wantedCategory || row.dataset.category === wantedCategory)
+            && (!wantedSeverity || row.dataset.severity === wantedSeverity)
+            && (!wantedSource || (row.dataset.sources || '').split(' ').includes(wantedSource))
+            && (!needle || (haystack.get(id) || '').includes(needle));
+          row.hidden = !match;
+          if (match) shown += 1;
+        });
+        empty.hidden = shown !== 0;
+        countEl.textContent = `${shown} of ${patterns.length} patterns`;
+      }
+
+      function fact(label, value) {
+        if (!value) return '';
+        return `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
+      }
+
+      function renderDetail(pattern) {
+        const severityClass = `pd-badge--${pattern.severity || 'info'}`;
+        const facts = [
+          fact('Type', pattern.kind_label),
+          fact('Category', pattern.category_label),
+          fact('Surface', pattern.surface),
+          fact('Component', pattern.plugin ? `${pattern.component} · ${pattern.plugin}` : pattern.component),
+          fact('Score', pattern.score == null ? 'no fixed score' : `+${pattern.score}`),
+          fact('Reportable', pattern.reportable === false ? 'no' : 'yes'),
+        ].join('');
+        const wstg = (pattern.wstg || []).map(value => `<span class="pd-badge pd-badge--outline">${esc(value)}</span>`).join(' ');
+        const detection = (pattern.detection || []).length
+          ? `<ul>${pattern.detection.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`
+          : '<p class="pd-muted">No direct detection path recorded.</p>';
+        const sources = (pattern.sources || []).length
+          ? `<ul class="pd-source-list">${pattern.sources.map(s => `
+              <li>
+                <div class="pd-source-list__head"><strong>${esc(s.label || s.key)}</strong><code>${esc(s.module || '')}</code></div>
+                <p>${esc(s.detail || '')}</p>
+              </li>`).join('')}</ul>`
+          : '<p class="pd-muted">No source recorded.</p>';
+        const signatures = (pattern.signatures || []).length
+          ? `<ul class="pd-source-list">${pattern.signatures.map(s => `
+              <li>
+                <div class="pd-source-list__head"><strong>${esc(s.layer || 'signature')}${s.name ? ` · ${esc(s.name)}` : ''}${s.score != null ? ` · +${esc(s.score)}` : ''}</strong></div>
+                <pre class="pd-code"><code>${esc(s.match || '')}</code></pre>
+              </li>`).join('')}</ul>`
+          : '';
+        const suricata = (pattern.suricata || []).length
+          ? `<ul class="pd-source-list">${pattern.suricata.map(s => `
+              <li>
+                <div class="pd-source-list__head"><strong>SID ${esc(s.sid)} <span class="pd-muted">rev ${esc(s.rev)}</span></strong><code>${esc(s.classtype || '')}</code></div>
+                <p>${esc(s.message || '')}</p>
+              </li>`).join('')}</ul>`
+          : '';
+        const lesson = pattern.lesson ? `
+          <section class="pd-section">
+            <h3>Attack lesson</h3>
+            <p class="pd-muted">${esc(pattern.lesson.attack_class || '')} · ${esc(pattern.lesson.owasp || '')} · ${esc(pattern.lesson.attack || '')}</p>
+            <h4>How it works</h4><p>${esc(pattern.lesson.how_it_works || '')}</p>
+            <h4>Defence</h4><p>${esc(pattern.lesson.defence || '')}</p>
+          </section>` : '';
+        const preset = pattern.preset ? `
+          <section class="pd-section">
+            <h3>Simulation preset</h3>
+            <p><code>${esc(pattern.preset.method || 'GET')} ${esc(pattern.preset.path || '')}</code></p>
+            ${pattern.preset.headers && Object.keys(pattern.preset.headers).length ? `
+              <h4>Headers</h4>
+              <pre class="pd-code"><code>${esc(Object.entries(pattern.preset.headers).map(([k, v]) => `${k}: ${v}`).join('\n'))}</code></pre>` : ''}
+            ${pattern.preset.body ? `<h4>Body</h4><pre class="pd-code"><code>${esc(pattern.preset.body)}</code></pre>` : ''}
+            ${(pattern.preset.sequence || []).length ? `<h4>Follow-up requests</h4><ol>${pattern.preset.sequence.map(step => `<li>${esc(step)}</li>`).join('')}</ol>` : ''}
+            ${pattern.preset.coverage_note ? `<h4>Coverage note</h4><p>${esc(pattern.preset.coverage_note)}</p>` : ''}
+            <p class="pd-muted">DB isolation: ${pattern.preset.db_isolated ? 'isolated' : 'shared filesystem / production credential risk'}</p>
+          </section>` : '';
+        const notes = pattern.notes ? `<section class="pd-section"><h3>Notes</h3><p>${esc(pattern.notes)}</p></section>` : '';
+
+        detail.innerHTML = `
+          <div class="pd-detail__top">
+            <div>
+              <p class="pd-eyebrow">Pattern detail</p>
+              <h2>${esc(pattern.name)}</h2>
+              <code class="pd-detail__id">${esc(pattern.id)}</code>
+            </div>
+            <button type="button" class="pd-detail__close" aria-label="Close pattern detail">×</button>
+          </div>
+          <div class="pd-badges">
+            <span class="pd-badge ${severityClass}">${esc(pattern.severity)}</span>
+            <span class="pd-badge pd-badge--muted">${esc(pattern.kind_label)}</span>
+            <span class="pd-badge pd-badge--muted">${esc(pattern.category_label)}</span>
+            ${wstg}
+          </div>
+          <p class="pd-detail__desc">${esc(pattern.description)}</p>
+          <div class="pd-detail__actions">
+            <button type="button" class="pd-btn" data-copy="json">Copy JSON</button>
+            <button type="button" class="pd-btn pd-btn--ghost" data-copy="id">Copy ID</button>
+          </div>
+          <dl class="pd-facts">${facts}</dl>
+          ${pattern.trigger ? `<section class="pd-section"><h3>Trigger</h3><pre class="pd-code"><code>${esc(pattern.trigger)}</code></pre><p class="pd-muted">${esc(pattern.trigger_type || '')}</p></section>` : ''}
+          <section class="pd-section"><h3>Detection path</h3>${detection}${pattern.score_note ? `<p class="pd-muted">${esc(pattern.score_note)}</p>` : ''}</section>
+          <section class="pd-section"><h3>Sources</h3>${sources}</section>
+          ${signatures ? `<section class="pd-section"><h3>Signatures</h3>${signatures}</section>` : ''}
+          ${suricata ? `<section class="pd-section"><h3>Suricata evidence</h3>${suricata}</section>` : ''}
+          ${lesson}
+          ${preset}
+          ${notes}
+          <section class="pd-section pd-plugin-scaffold">
+            <h3>Pattern plugin</h3>
+            <p>This entry is read-only today, but its ID, provenance and export shape are the contract for the upcoming add / edit / remove / enable workflow.</p>
+            <label class="pd-check"><input type="checkbox" checked disabled /> Enabled (scaffold)</label>
+          </section>`;
+      }
+
+      function openPattern(id, updateUrl = true) {
+        const pattern = byId[id];
+        if (!pattern) return;
+        renderDetail(pattern);
+        markSelected(id);
+        detail.classList.add('is-open');
+        backdrop.hidden = false;
+        document.body.classList.add('pd-detail-open');
+        if (updateUrl) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('pattern', id);
+          history.replaceState({}, '', url);
+        }
+        detail.querySelectorAll('[data-copy]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const text = button.dataset.copy === 'id' ? pattern.id : JSON.stringify(pattern, null, 2);
+            try {
+              await navigator.clipboard.writeText(text);
+              const original = button.textContent;
+              button.textContent = 'Copied';
+              setTimeout(() => { button.textContent = original; }, 1200);
+            } catch {
+              window.prompt('Copy this pattern JSON:', text);
+            }
+          });
+        });
+        detail.querySelector('.pd-detail__close')?.addEventListener('click', closePattern);
+        if (window.matchMedia('(max-width: 1023px)').matches) {
+          detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+
+      function closePattern() {
+        detail.classList.remove('is-open');
+        backdrop.hidden = true;
+        document.body.classList.remove('pd-detail-open');
+        markSelected(null);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('pattern');
+        history.replaceState({}, '', url);
+      }
+
+      rows.forEach(row => row.addEventListener('click', () => openPattern(row.dataset.patternId)));
+      [search, kind, category, severity, source].forEach(el => el.addEventListener('input', applyFilters));
+      [kind, category, severity, source].forEach(el => el.addEventListener('change', applyFilters));
+      reset.addEventListener('click', () => {
+        search.value = '';
+        kind.value = '';
+        category.value = '';
+        severity.value = '';
+        source.value = '';
+        applyFilters();
+        search.focus();
+      });
+      backdrop.addEventListener('click', closePattern);
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && detail.classList.contains('is-open')) closePattern();
+      });
+
+      applyFilters();
+      const requested = new URL(window.location.href).searchParams.get('pattern');
+      if (requested && byId[requested]) {
+        openPattern(requested, false);
+        currentRow(requested)?.scrollIntoView({ block: 'nearest' });
+      }
+    })();
+  </script>
+</DocsLayout>
