@@ -31,6 +31,7 @@ from core.container_status import classify
 from ui.page_backups import BackupsPage
 from ui.page_certs import CertsPage
 from ui.page_patterns import PatternsPage
+from ui.page_pattern_database import PatternDatabasePage
 from ui.page_signature_sim import SignatureSimPage
 from ui.page_detection import DetectionPage
 from ui.page_extras import ExtrasPage
@@ -71,7 +72,7 @@ _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
     "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
-    "kibana", "patterns", "signature_sim", "pool_test", "log_search", "extras", "settings", "learn",
+    "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
@@ -89,6 +90,7 @@ PAGE_LABELS = {
     "backups": "Backup & Recovery",
     "kibana": "SIEM Analytics",
     "patterns": "Attack Simulation",
+    "pattern_database": "Pattern Database",
     "signature_sim": "Signature Simulation",
     "pool_test": "Segmentation Validation",
     "log_search": "Forensics Analysis",
@@ -103,7 +105,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["patterns", "signature_sim", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "pattern_database", "signature_sim", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
@@ -218,6 +220,7 @@ class MainWindow(QMainWindow):
         self.backups_page = BackupsPage(state)
         self.kibana_page = KibanaPage(state)
         self.patterns_page = PatternsPage(state)
+        self.pattern_database_page = PatternDatabasePage()
         # Every pattern run drops a time-aligned marker onto the Resources
         # graphs so its resource impact is visible.
         self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
@@ -247,6 +250,7 @@ class MainWindow(QMainWindow):
             ("backups", self.backups_page),
             ("kibana", self.kibana_page),
             ("patterns", self.patterns_page),
+            ("pattern_database", self.pattern_database_page),
             ("signature_sim", self.signature_sim_page),
             ("pool_test", self.pool_test_page),
             ("log_search", self.log_search_page),

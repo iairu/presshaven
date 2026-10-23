@@ -354,6 +354,13 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Each card on the Pattern analyzer tab is one signal that added points. Watch the "
         "score cross the threshold and the route flip to HONEYPOT.",
     ),
+    "pattern_database": PageGuide(
+        "Browse every detection pattern in one place: CVEs, generic signatures, upload and header rules, "
+        "scanner tools and Suricata SIDs, with provenance and an attack lesson for each.",
+        "Search for 'sql', 'upload' or a CVE ID, then select a row and read its detection path and sources.",
+        "The same generated catalogue feeds the docs site. Stable IDs and export are the contract for the "
+        "upcoming pattern-plugin workflow: add, edit, remove and enable without two lists drifting apart.",
+    ),
     "signature_sim": PageGuide(
         "Watch one browser characteristic become the proxy's consent-gated one-way gdpr_signature, end to end.",
         "Resize the visitor browser window, press 'Agree & derive signature', then resize and run again.",
