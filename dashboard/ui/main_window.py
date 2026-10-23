@@ -110,23 +110,31 @@ PAGE_LABELS = {
 # as a fallback when state.last_page is invalid). The rows the rail actually
 # shows come from the user-editable _nav_layout, and Ctrl+1..9 follow that
 # live order.
+# Each group lists its default sidebar rows first, then the pages that
+# default into its "⋮" overflow panel (see NAV_OVERFLOW), so this order is
+# also the View-menu order and the default visible/overflow ordering.
 NAV_GROUPS = [
     ("Overview", ["overview"]),
-    ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
-    ("Threat Operations", ["patterns", "pattern_database", "signature_sim", "sessions", "suricata", "detection", "pool_scaling", "pool_test", "redis"]),
-    ("Manage", ["services", "certificates", "backups", "settings"]),
-    ("Reporting", ["extras", "learn"]),
+    ("Monitor", ["live_events", "health", "kibana", "pipeline", "resources", "log_search"]),
+    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
+    ("Manage", ["services", "settings", "certificates", "backups"]),
+    ("Reporting", ["learn", "extras"]),
 ]
 
 # Pages that stay one click away in their group's "⋮" menu instead of
 # taking a row in the rail. Everything here is still reachable through the
 # View menu, Ctrl+K palette and the group menu, so this is purely about
-# keeping the rail focused on the pages opened most often.
+# keeping the rail focused on the most useful, informative pages:
+# the sidebar shows the live monitoring surfaces (Live Events, Global
+# Visualization, SIEM Analytics), the core threat-ops pages, workload/config
+# control and the Knowledge Base; diagnostics (Log Pipeline, Workload
+# Telemetry, Forensics), reference/validation tooling and one-off exports
+# (Reporting) move into overflow.
 NAV_OVERFLOW = {
-    "Monitor": ["resources", "kibana", "log_search"],
+    "Monitor": ["pipeline", "resources", "log_search"],
     "Threat Operations": ["pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"],
     "Manage": ["certificates", "backups"],
-    "Reporting": ["learn"],
+    "Reporting": ["extras"],
 }
 
 NAV_ORDER = [page_id for _group, ids in NAV_GROUPS for page_id in ids]
