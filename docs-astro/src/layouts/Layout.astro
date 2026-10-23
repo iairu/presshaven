@@ -5,7 +5,22 @@ interface Props {
   description?: string;
   hype?: boolean;
 }
-const { title, description, hype } = Astro.props;
+const { title, description } = Astro.props;
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const tabs = [
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Detection', href: '/docs/detection' },
+  { title: 'Observability', href: '/docs/observability' },
+  { title: 'Operations', href: '/docs/operations' },
+  { title: 'Testing', href: '/docs/testing' },
+  { title: 'Reference', href: '/docs/reference' },
+];
+const isActive = (href: string) => path === href || path.startsWith(href + '/');
+const isDocs = path === '/docs' || path.startsWith('/docs/');
+const isReference = path === '/reference' || path.startsWith('/reference/');
 ---
 <!doctype html>
 <html lang="en">
@@ -21,83 +36,89 @@ const { title, description, hype } = Astro.props;
   </head>
   <body class="bg-bg-primary text-text-primary font-sans antialiased min-h-screen">
     <!-- Search Modal -->
-    <div id="search-modal" class="fixed inset-0 z-[200] hidden">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSearch()"></div>
-      <div class="relative max-w-3xl mx-auto mt-16">
-        <div class="bg-bg-secondary border border-border-accent rounded-xl shadow-2xl overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input id="search-input" type="text" placeholder="Search documentation..." class="flex-1 bg-transparent border-none outline-none text-text-primary placeholder-text-muted text-lg" />
-            <kbd class="text-xs text-text-muted bg-bg-tertiary px-2 py-1 rounded border border-border">ESC</kbd>
-          </div>
-          <div id="search-results" class="max-h-96 overflow-y-auto p-2">
-            <div class="text-text-muted text-sm p-4 text-center">Type to search...</div>
-          </div>
+    <div id="search-modal" class="md-search-modal">
+      <div class="md-search-modal__overlay" onclick="closeSearch()"></div>
+      <div class="md-search-modal__panel">
+        <div class="md-search-modal__input">
+          <svg class="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="search-input" type="text" placeholder="Search documentation..." autocomplete="off" />
+          <kbd>ESC</kbd>
+        </div>
+        <div id="search-results" class="md-search-modal__results">
+          <div class="md-search-empty">Type to search...</div>
         </div>
       </div>
     </div>
 
-    <!-- Top Header: Brand + Search -->
-    <header class="sticky top-0 z-50 bg-bg-secondary/95 backdrop-blur-md border-b border-border">
-      <div class="flex items-center gap-4 px-6 py-3">
-        <a href="/" class="font-bold text-lg text-text-primary flex items-center gap-2 no-underline shrink-0">
-          <span class="text-accent-green font-mono">></span> Honeypot IDS
-        </a>
-        <div class="flex-1 max-w-3xl mx-auto">
-          <button onclick="openSearch()" class="w-full flex items-center gap-3 text-text-secondary text-sm bg-bg-tertiary border border-border px-4 py-2 hover:border-accent-green transition-all">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <span class="flex-1 text-left">Search documentation...</span>
-            <kbd class="text-xs bg-bg-secondary px-2 py-0.5 border border-border font-mono">⌘K</kbd>
-          </button>
-        </div>
-        <div class="flex gap-1 shrink-0">
-          <a href="/" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Hub</a>
-          <a href="/docs" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Docs</a>
-          <a href="/reference" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Reference</a>
-        </div>
+    <!-- Top header: brand + search + primary links -->
+    <header class="md-header">
+      <a href="/" class="md-header__brand">
+        <span class="prompt">&gt;</span> Honeypot IDS
+        <span class="version">v2.0</span>
+      </a>
+      <div class="md-header__search">
+        <button type="button" class="md-search__button" onclick="openSearch()" aria-label="Search documentation (Cmd+K)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <span class="label">Search documentation...</span>
+          <kbd>⌘K</kbd>
+        </button>
       </div>
+      <nav class="md-header__nav" aria-label="Primary">
+        <a href="/" class={path === '/' ? 'active' : ''}>Hub</a>
+        <a href="/docs" class={isDocs ? 'active' : ''}>Docs</a>
+        <a href="/reference" class={isReference ? 'active' : ''}>Reference</a>
+      </nav>
     </header>
 
-    <!-- Bottom Header: Doc Section Links -->
-    <nav class="bg-bg-tertiary border-b border-border overflow-x-auto">
-      <div class="flex items-center gap-1 px-6 py-1.5 min-w-max">
-        <a href="/docs/getting-started" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Getting Started</a>
-        <a href="/docs/architecture" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Architecture</a>
-        <a href="/docs/engine" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Honeypot Engine</a>
-        <a href="/docs/detection" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Detection</a>
-        <a href="/docs/observability" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Observability</a>
-        <a href="/docs/operations" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Operations</a>
-        <a href="/docs/testing" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Testing</a>
-        <a href="/docs/reference" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Reference</a>
+    <!-- Second header: documentation sections -->
+    <nav class="md-tabs" aria-label="Documentation sections">
+      <div class="md-tabs__list">
+        {tabs.map(tab => (
+          <a href={tab.href} class:list={['md-tabs__link', { active: isActive(tab.href) }]}>{tab.title}</a>
+        ))}
       </div>
     </nav>
 
     <main>
       <slot />
     </main>
-    <footer class="text-center py-8 text-text-muted border-t border-border mt-12 text-sm font-mono">
-      Honeypot IDS System — FIIT STU Master's Thesis Project ·
-      <a href="https://github.com" target="_blank" class="text-text-secondary">Source</a>
+
+    <footer class="md-footer">
+      <div class="md-footer__inner">
+        <span>Honeypot IDS System — FIIT STU Master's Thesis Project</span>
+        <span>
+          <a href="/docs/reference/literature">Literature</a> ·
+          <a href="/docs/reference/changelog">Changelog</a> ·
+          <a href="https://github.com" target="_blank" rel="noopener">Source</a>
+        </span>
+      </div>
     </footer>
 
     <script>
+      const modal = document.getElementById('search-modal');
+      const searchInput = document.getElementById('search-input');
+      const searchResults = document.getElementById('search-results');
+
       function openSearch() {
-        document.getElementById('search-modal').classList.remove('hidden');
-        document.getElementById('search-input').focus();
+        modal.classList.add('open');
+        searchInput.focus();
       }
       function closeSearch() {
-        document.getElementById('search-modal').classList.add('hidden');
+        modal.classList.remove('open');
       }
+      window.openSearch = openSearch;
+      window.closeSearch = closeSearch;
       document.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
         if (e.key === 'Escape') closeSearch();
       });
 
-      const searchInput = document.getElementById('search-input');
-      const searchResults = document.getElementById('search-results');
       const pages = [
-        { title: 'Knowledge Hub', url: '/', content: 'honeypot ids detection observability' },
-        { title: 'Documentation', url: '/docs', content: 'docs detection observability operations' },
+        { title: 'Knowledge Hub', url: '/', content: 'honeypot ids detection observability landing' },
+        { title: 'Documentation', url: '/docs', content: 'docs index detection observability operations' },
+        { title: 'Getting Started', url: '/docs/getting-started', content: 'installation setup quickstart dashboard commands' },
+        { title: 'Architecture', url: '/docs/architecture', content: 'request pipeline two-host lua modules services' },
+        { title: 'Honeypot Engine', url: '/docs/engine', content: 'wordpress woocommerce pooling seeding backups state' },
         { title: 'Detection Overview', url: '/docs/detection', content: 'detection pipeline scoring CVE suricata' },
         { title: 'Detection Capabilities', url: '/docs/detection/capabilities', content: 'pattern matching CVE suricata scoring function reference' },
         { title: 'Seeded CVEs', url: '/docs/detection/cves', content: 'CVE-2023-28121 CVE-2025-4403 vulnerability' },
@@ -118,8 +139,8 @@ const { title, description, hype } = Astro.props;
         { title: 'Known Issues', url: '/docs/reference/known-issues', content: 'bugs workarounds' },
         { title: 'Roadmap', url: '/docs/reference/roadmap', content: 'future plans' },
         { title: 'Changelog', url: '/docs/reference/changelog', content: 'history changes' },
-        { title: 'Literature', url: '/docs/reference/literature', content: 'academic technical' },
-        { title: 'Architecture', url: '/docs/architecture', content: 'request pipeline lua modules' },
+        { title: 'Literature', url: '/docs/reference/literature', content: 'academic technical references' },
+        { title: 'Reference Hub', url: '/reference', content: 'quick reference glossary tables' },
         { title: 'Request Simulator', url: '/sim', content: 'simulator scoring request' },
         { title: 'Live Demo', url: '/demo', content: 'demo attack scenarios' },
       ];
@@ -127,18 +148,18 @@ const { title, description, hype } = Astro.props;
       searchInput?.addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase().trim();
         if (!q) {
-          searchResults.innerHTML = '<div class="text-text-muted text-sm p-4 text-center">Type to search...</div>';
+          searchResults.innerHTML = '<div class="md-search-empty">Type to search...</div>';
           return;
         }
         const matches = pages.filter(p => p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q));
         if (matches.length === 0) {
-          searchResults.innerHTML = '<div class="text-text-muted text-sm p-4 text-center">No results found</div>';
+          searchResults.innerHTML = '<div class="md-search-empty">No results found</div>';
           return;
         }
         searchResults.innerHTML = matches.map(m => `
-          <a href="${m.url}" class="block px-4 py-3 rounded-lg hover:bg-bg-tertiary transition-all no-underline mb-1">
-            <div class="text-text-primary font-medium">${m.title}</div>
-            <div class="text-text-muted text-xs mt-1">${m.url}</div>
+          <a href="${m.url}" class="md-search-result">
+            <div class="title">${m.title}</div>
+            <div class="path">${m.url}</div>
           </a>
         `).join('');
       });

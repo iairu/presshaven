@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Live Demo" description="Live honeypot demonstration">
   <div class="container">
-    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">🔬 Live Demo</h1>
+    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">Live Demo</h1>
     <p style="color: var(--muted); margin-bottom: 2rem;">
       Interactive demonstration of the honeypot detection and routing pipeline.
       Watch requests get scored and routed in real time.
@@ -35,7 +35,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
 
     <div class="section">
-      <h2>📊 Detection Pipeline Stages</h2>
+      <h2>Detection Pipeline Stages</h2>
       <table>
         <tr><th>Stage</th><th>Condition</th><th>Route</th></tr>
         <tr><td>1</td><td>Static asset</td><td>Production</td></tr>
@@ -69,7 +69,7 @@ import Layout from '../layouts/Layout.astro';
         out.innerHTML = `
           <div style="margin-top: 1rem; padding: 1rem; background: var(--bg2); border-radius: 8px;">
             <div style="font-size: 1.5rem; font-weight: 700; color: ${suspicious ? '#ff6584' : '#6c63ff'}; margin-bottom: 0.5rem;">
-              ${type.toUpperCase()} → Score: ${s.score}/80 → ${suspicious ? '🚨 HONEYPOT' : '✅ PRODUCTION'}
+              ${type.toUpperCase()} → Score: ${s.score}/80 → ${suspicious ? 'HONEYPOT' : 'PRODUCTION'}
             </div>
             <p><strong>URI:</strong> <code>${s.uri}</code></p>
             <p><strong>User-Agent:</strong> <code>${s.ua}</code></p>

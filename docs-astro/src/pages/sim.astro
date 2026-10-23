@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Request Simulator" description="Interactive honeypot request scoring simulator">
   <div class="container">
-    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">🎮 Request Scoring Simulator</h1>
+    <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">Request Scoring Simulator</h1>
     <p style="color: var(--muted); margin-bottom: 2rem;">
       Enter a request and see how the detection pipeline scores it. This simulates
       <code>pattern_analyzer.analyze_request()</code> and <code>router.decide_route()</code>.
@@ -36,7 +36,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
 
     <div class="section">
-      <h2>📊 Scoring Reference</h2>
+      <h2>Scoring Reference</h2>
       <table>
         <tr><th>Signal</th><th>Score</th><th>Source</th></tr>
         <tr><td>Static asset</td><td>0 (skipped)</td><td>pattern_rules.is_static_asset()</td></tr>
