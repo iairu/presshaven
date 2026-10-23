@@ -1,0 +1,62 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced', active: true },
+];
+const toc = [
+  { id: 'vuln', text: 'Vulnerability Pattern Detection', level: 2 },
+  { id: 'suricata', text: 'Threat Alert Processing', level: 2 },
+  { id: 'abuseipdb', text: 'AbuseIPDB Reporting Logic', level: 2 },
+  { id: 'scoring', text: 'Risk Scoring Model', level: 2 },
+  { id: 'decay', text: 'Escalation-Aware Decay', level: 2 },
+];
+---
+<DocsLayout title="Advanced Signals" description="Advanced behavioral analysis and anomaly detection signals" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="vuln">Vulnerability Pattern Detection (vulnerability_rules.lua)</h2>
+  <p>Responsible for direct pattern matching against URI requests to identify known vulnerability patterns or exploit kit signatures. Uses <code>lua_pattern_utils.escape_pattern</code> for safe pattern matching. The core function <code>detect_vulnerability_pattern(uri, args, wcpay_checkout_user_header)</code> analyzes request URIs to flag potential vulnerabilities.</p>
+
+  <h2 id="suricata">Threat Alert Processing (suricata_rules.lua)</h2>
+  <p>Processes raw threat intelligence (specifically eve.json alerts) to derive a risk score and a human-readable reason string.</p>
+  <ul>
+    <li><strong>Parsing:</strong> Parses eve.json lines (flow, netflow, http, dns, tls events) into structured alert records.</li>
+    <li><strong>Risk Scoring & Gating:</strong> Connects incoming alerts to IP reputation checks and is used in the honeypot diversion logic in router.lua Stage 6 ("IP reputation").</li>
+    <li><strong>Output:</strong> Generates a final risk-score, delta, and a detailed reason string for each event.</li>
+  </ul>
+
+  <h2 id="abuseipdb">AbuseIPDB Reporting Logic (abuseipdb_rules.lua)</h2>
+  <p>Governs the deterministic decision-making process for reporting detected IP addresses to the AbuseIPDB service. Acts as a whitelist for reportability.</p>
+  <ul>
+    <li><strong>Category Mapping:</strong> Maintains <code>_M.REASON_CATEGORIES</code> mapping routing reasons to AbuseIPDB category IDs.</li>
+    <li><strong>Reportability Check:</strong> <code>_M.is_reportable_reason(reason)</code> checks if a reason is in the whitelist.</li>
+    <li><strong>Comment Generation:</strong> Constructs detailed report comment, including associated CVEs.</li>
+  </ul>
+
+  <h2 id="scoring">Risk Scoring Model</h2>
+  <table>
+    <tr><th>Signal</th><th>Score Impact</th></tr>
+    <tr><td>Static asset requests</td><td>0 (always skipped)</td></tr>
+    <tr><td>Matching a suspicious pattern</td><td>+15 base, +5..+30 specific</td></tr>
+    <tr><td>Matching a CVE pattern</td><td>+40 per CVE matched</td></tr>
+    <tr><td>Flagged user-agent string</td><td>+50</td></tr>
+    <tr><td>Bad IP reputation</td><td>+variable (from threat_intel dict)</td></tr>
+    <tr><td>High per-IP request rate</td><td>+20 (>10 req/s)</td></tr>
+    <tr><td>Missing user-agent</td><td>+10</td></tr>
+    <tr><td>CVE-specific header present</td><td>+50</td></tr>
+    <tr><td>Automated tool signature</td><td>+5..+30</td></tr>
+    <tr><td>Prompt-injection pattern hit</td><td>+(risk_score / 2)</td></tr>
+    <tr><td>Honeypot threshold (default)</td><td>80 (configurable in init.lua)</td></tr>
+  </table>
+
+  <h2 id="decay">Escalation-Aware Decay (decay_policy.lua)</h2>
+  <p>Shared by two risk-score decay paths: <code>router_rules.decayed_score()</code> (per-session) and <code>suricata_rules.decayed_score()</code> (per-IP reputation).</p>
+  <ul>
+    <li>Each offense multiplies the half-life by (1 + <code>decay_offense_slowdown</code>), so repeat offenders fade progressively more slowly.</li>
+    <li>Past <code>permaflag_offenses</code> offenses, OR once the stored peak has ever reached <code>permaflag_score</code>, decay stops entirely (permaflag).</li>
+    <li>Default: <code>decay_offense_slowdown = 0.75</code>, <code>permaflag_offenses = 5</code>, <code>permaflag_score = 100</code>.</li>
+  </ul>
+  <p><strong>Relevance:</strong> Ensures that only high-confidence, logic-driven signals (combining CVEs, Suricata alerts, and IP reputation hits) lead to external reporting.</p>
+</DocsLayout>

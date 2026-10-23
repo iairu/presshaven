@@ -1,0 +1,41 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference' },
+  { title: 'Glossary', href: '/docs/reference/glossary' },
+  { title: 'Known Issues', href: '/docs/reference/known-issues' },
+  { title: 'Roadmap', href: '/docs/reference/roadmap', active: true },
+  { title: 'Changelog', href: '/docs/reference/changelog' },
+  { title: 'Literature', href: '/docs/reference/literature' },
+];
+const toc = [
+  { id: 'near', text: 'Near-Term', level: 2 },
+  { id: 'mid', text: 'Mid-Term', level: 2 },
+  { id: 'long', text: 'Long-Term', level: 2 },
+];
+---
+<DocsLayout title="Roadmap" description="Future development plans and roadmap for the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="near">Near-Term</h2>
+  <ul>
+    <li>Additional CVE seeding and detection coverage — expand vulnerability_rules.lua and cve_patterns with newly published WordPress plugin vulnerabilities.</li>
+    <li>Enhanced behavioral analytics — extend sophistication_analyzer.lua with additional signals and finer-grained confidence thresholds.</li>
+    <li>Dashboard feature improvements — new panel types and improved Kibana visualizations.</li>
+    <li>pattern_rules generic pattern refinement — reduce false positives on legitimate REST API clients.</li>
+  </ul>
+
+  <h2 id="mid">Mid-Term</h2>
+  <ul>
+    <li>Automated threat intelligence feed integration — expand AbuseIPDB bulk feed and integrate additional threat feeds.</li>
+    <li>Expanded reporting and alerting automation — webhook-based alerts, Slack/PagerDuty integration.</li>
+    <li>Pool manager auto-scaling improvements — better resource budget management.</li>
+    <li>GDPR consent-gated identity enhancements — additional browser characteristics.</li>
+  </ul>
+
+  <h2 id="long">Long-Term</h2>
+  <ul>
+    <li>ML-based anomaly detection — deliberate choice for explainable rule-based detection (COUNTERARGUMENTS.md Q7), future hybrid approaches possible.</li>
+    <li>Multi-environment scaling and multi-tenant support.</li>
+    <li>Honeytoken expansion — additional types beyond 5 current (API key, DB creds, admin password, S3 URL, JWT secret).</li>
+    <li>Automated eve.json correlation verification for genuine external traffic.</li>
+  </ul>
+</DocsLayout>

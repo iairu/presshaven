@@ -1,0 +1,71 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata', active: true },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+];
+const toc = [
+  { id: 'overview', text: 'Overview', level: 2 },
+  { id: 'sid', text: 'SID Allocation', level: 2 },
+  { id: 'integration', text: 'Suricata Integration', level: 2 },
+  { id: 'caveats', text: 'Known Caveats', level: 2 },
+];
+---
+<DocsLayout title="Suricata Network IDS" description="Network-based detection using Suricata intrusion detection system" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="overview">Overview</h2>
+  <p>Suricata rules are specifically designed to detect attack patterns targeting the WordPress honeypot, organized by CVE and OWASP WSTG categories. SIDs range from 1000001 to 1000070+.</p>
+  <h3>OWASP WSTG Category Index</h3>
+  <ul>
+    <li><strong>WSTG-INFO</strong> – Information Gathering (SIDs 1000017-1000020, 1000049)</li>
+    <li><strong>WSTG-CONF</strong> – Configuration Management (SIDs 1000019-1000020)</li>
+    <li><strong>WSTG-IDNT</strong> – Identity Management (SID 1000018)</li>
+    <li><strong>WSTG-ATHN</strong> – Authentication Testing (SID 1000017)</li>
+    <li><strong>WSTG-AUTHZ</strong> – Authorization / Access Control (SIDs 1000001-1000008)</li>
+    <li><strong>WSTG-INPV</strong> – Input Validation (SIDs 1000011-1000016, 1000026-1000041)</li>
+    <li><strong>WSTG-SESS</strong> – Session Management (SID 1000017)</li>
+  </ul>
+
+  <h2 id="sid">SID Allocation Summary</h2>
+  <table>
+    <tr><th>Range</th><th>Purpose</th></tr>
+    <tr><td>1000001-1000016</td><td>CVE-specific detection rules</td></tr>
+    <tr><td>1000017-1000025</td><td>General WordPress attack patterns + plugin detection</td></tr>
+    <tr><td>1000026-1000029</td><td>SQL injection generic patterns (WSTG-INPV-05)</td></tr>
+    <tr><td>1000030-1000032</td><td>XSS patterns (WSTG-INPV-02)</td></tr>
+    <tr><td>1000033-1000035</td><td>Command injection (WSTG-INPV-12)</td></tr>
+    <tr><td>1000036-1000038</td><td>Directory traversal (WSTG-INPV-01)</td></tr>
+    <tr><td>1000039-1000041</td><td>File inclusion wrappers (WSTG-INPV-11)</td></tr>
+    <tr><td>1000042-1000048</td><td>Malicious user-agent strings (WSTG-INFO-02)</td></tr>
+    <tr><td>1000049-1000052</td><td>Scanning and reconnaissance probes</td></tr>
+    <tr><td>1000053-1000055</td><td>Suspicious file uploads</td></tr>
+    <tr><td>1000056-1000057</td><td>Rate limiting and DoS detection</td></tr>
+    <tr><td>1000058-1000060</td><td>Honeypot specific rules</td></tr>
+    <tr><td>1000061-1000063</td><td>Session management integration</td></tr>
+    <tr><td>1000064-1000066</td><td>Zero-day and generic attack patterns</td></tr>
+    <tr><td>1000067-1000068</td><td>API abuse detection</td></tr>
+    <tr><td>1000069-1000070</td><td>Custom malware and backdoor detection</td></tr>
+  </table>
+
+  <h2 id="integration">Suricata Integration Details</h2>
+  <p><code>suricata_rules.lua</code> holds the pure, testable pieces of the Suricata alert pipeline. It parses one <code>eve.json</code> line into an alert record (or nil for non-alert event types — flow, netflow, http, dns, tls) and turns an alert into a risk-score delta and human-readable reason string.</p>
+  <table>
+    <tr><th>Function</th><th>Purpose</th></tr>
+    <tr><td>is_alert_line(line)</td><td>Cheap pre-check — substring search for "event_type":"alert" to skip full JSON decode</td></tr>
+    <tr><td>extract_alert(decoded)</td><td>Extracts alert record from decoded eve.json. Returns nil for non-alert or malformed events.</td></tr>
+    <tr><td>severity_to_score(severity)</td><td>Maps Suricata severity (1=high → +50, 2=medium → +25, default → +10)</td></tr>
+    <tr><td>next_score(prev, severity)</td><td>Applies delta to running score, capped at 100. Never decreases on its own.</td></tr>
+    <tr><td>decayed_score(entry, time, half_life, cfg)</td><td>Time-decayed view of stored raw_score. Escalation-aware: repeat offenders decay slower; permaflagged never decay.</td></tr>
+    <tr><td>build_reason(alert)</td><td>Builds "suricata: " + alert.signature</td></tr>
+    <tr><td>is_private_ip(ip)</td><td>Filters RFC1918/loopback so container-internal hops never pollute threat_ips</td></tr>
+  </table>
+
+  <h2 id="caveats">Known Caveats</h2>
+  <ul>
+    <li><strong>Same-host (loopback) testing:</strong> Suricata runs with network_mode: host and interface "any", so it sees every hop. In same-host test setups, Suricata's src_ip may be a container-internal address that never correlates with nginx's remote_addr. Stage 6 IP reputation gating never fires locally from Suricata alerts. For genuine external traffic, Docker DNAT-based port publishing preserves source IP.</li>
+    <li><strong>Private IP filtering:</strong> is_private_ip() filters RFC1918/loopback src_ip values at ingestion time.</li>
+    <li><strong>fast.log vs eve.json:</strong> Previous fast.log regex parser had 8 capture groups into 7 variables — Lua silently drops excess, shifting all fields. Now uses structured eve.json.</li>
+  </ul>
+</DocsLayout>

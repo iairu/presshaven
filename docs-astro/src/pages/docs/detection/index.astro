@@ -1,0 +1,64 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection', active: true },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+];
+const toc = [
+  { id: 'pipeline', text: 'Detection Pipeline', level: 2 },
+  { id: 'coverage', text: 'Coverage Areas', level: 2 },
+  { id: 'stages', text: 'Detection Stages', level: 2 },
+  { id: 'thresholds', text: 'Thresholds & Scaling', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Detection" description="How the honeypot system detects and identifies attackers" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="pipeline">Detection Pipeline Overview</h2>
+  <p>The honeypot detection pipeline ingests attacker traffic and produces actionable detection signals through a layered chain, implemented as a series of pure Lua modules (no <code>ngx.*</code> dependency, unit-testable under a plain Lua interpreter) driving an adapter half that performs I/O:</p>
+  <ol>
+    <li><strong>Traffic Capture</strong> — Nginx reverse proxy forwards HTTP requests; <code>pattern_analyzer.analyze_request()</code> runs once per non-static request.</li>
+    <li><strong>Lua Pattern Matching</strong> — <code>pattern_rules.lua</code> and <code>vulnerability_rules.lua</code> match request URIs, headers, and arguments against seeded CVE exploit patterns.</li>
+    <li><strong>Suricata Correlation</strong> — <code>suricata_rules.lua</code> parses <code>eve.json</code> alerts into structured records and converts them into risk-score deltas.</li>
+    <li><strong>Risk Scoring</strong> — <code>pattern_analyzer.lua</code> accumulates scores; <code>router.lua</code> accumulates onto a decaying session base.</li>
+    <li><strong>Routing Decision</strong> — <code>router.lua</code>'s 11-stage decision pipeline diverts high-risk requests to isolated honeypot pool instances.</li>
+    <li><strong>Reporting</strong> — <code>abuseipdb_rules.lua</code> gates external AbuseIPDB reporting and enriches comments with matched CVEs.</li>
+  </ol>
+
+  <h2 id="coverage">Coverage Areas</h2>
+  <ul>
+    <li><strong>Direct CVE detections</strong> via plugin-specific and generic vulnerability patterns.</li>
+    <li><strong>Generic attack patterns</strong>: SQL injection, XSS, command injection, path traversal, file inclusion, deserialization, template injection, code injection.</li>
+    <li><strong>Network IDS detections</strong> via Suricata signatures aligned to OWASP WSTG categories.</li>
+    <li><strong>Behavioral signals</strong>: brute force, scanning, automation, anomaly detection.</li>
+    <li><strong>Sophistication classification</strong> — scripted / ai_assisted / manual / unknown.</li>
+  </ul>
+
+  <h2 id="stages">Detection Stages</h2>
+  <table>
+    <tr><th>Stage</th><th>Analyser</th><th>WSTG</th><th>Score Impact</th></tr>
+    <tr><td>1</td><td>URI pattern analysis</td><td>WSTG-INPV, CONF, INFO</td><td>+15 base per generic; +5..+80 per specific</td></tr>
+    <tr><td>2</td><td>Header analysis</td><td>WSTG-ATHN, AUTHZ</td><td>+50 flagged UA; +50 CVE header; +10 missing UA</td></tr>
+    <tr><td>3</td><td>CVE pattern matching</td><td>WSTG-AUTHZ, INPV</td><td>+40 per CVE matched</td></tr>
+    <tr><td>4</td><td>IP reputation + rate</td><td>—</td><td>+variable (threat_intel); +20 high rate</td></tr>
+    <tr><td>5</td><td>Request method</td><td>WSTG-INPV</td><td>+10 OPTIONS/TRACE; +15 override</td></tr>
+    <tr><td>6</td><td>Automation detection</td><td>WSTG-INFO, ATHN</td><td>+5..+30 per tool; +15 rapid streak</td></tr>
+    <tr><td>6b</td><td>AJAX upload analysis</td><td>WSTG-INPV-10</td><td>Variable (upload_rules)</td></tr>
+    <tr><td>7</td><td>Prompt-injection probe</td><td>—</td><td>+filter risk/2</td></tr>
+  </table>
+
+  <h2 id="thresholds">Thresholds & Scaling</h2>
+  <ul>
+    <li><strong>Honeypot threshold</strong>: 80 (raised from 50 to reduce false positives)</li>
+    <li><strong>Max risk score</strong>: 100 (hard cap)</li>
+    <li><strong>IP reputation cap</strong>: 10 per request on shared (NAT) addresses</li>
+    <li><strong>Decay half-life</strong>: 300s, scaled by offense count via <code>decay_policy.lua</code></li>
+    <li><strong>Permaflag</strong>: After 5 offenses or a single request scoring 100</li>
+  </ul>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Multi-layered detection (11+ stages), explainable scoring, severity-graded Suricata integration, decay system prevents permanent poisoning, NAT protection, sophistication classification.</p>
+  <p><strong>Limitations:</strong> Same-host Suricata testing gap (unverified against genuine external traffic), threshold tuning needed for legitimate API clients, generic pattern false positives (historical), decay complexity (4 tunable params), honeytoken coverage (only 5 types), no ML, Suricata rule maintenance (70+ SIDs).</p>
+</DocsLayout>

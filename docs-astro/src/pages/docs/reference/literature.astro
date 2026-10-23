@@ -1,0 +1,44 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference' },
+  { title: 'Glossary', href: '/docs/reference/glossary' },
+  { title: 'Known Issues', href: '/docs/reference/known-issues' },
+  { title: 'Roadmap', href: '/docs/reference/roadmap' },
+  { title: 'Changelog', href: '/docs/reference/changelog' },
+  { title: 'Literature', href: '/docs/reference/literature', active: true },
+];
+const toc = [
+  { id: 'academic', text: 'Academic References', level: 2 },
+  { id: 'technical', text: 'Technical References', level: 2 },
+  { id: 'related', text: 'Related Work', level: 2 },
+];
+---
+<DocsLayout title="Primary Literature" description="Academic and technical literature related to the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="academic">Academic References</h2>
+  <ul>
+    <li><strong>Honeypot-based intrusion detection literature</strong> — Foundational concepts for honeypot systems, deception technology, and intrusion detection.</li>
+    <li><strong>Intrusion detection and deception taxonomy</strong> — Classification frameworks for honeypot types and detection methodologies.</li>
+    <li><strong>OWASP Web Security Testing Guide (WSTG) v4.2</strong> — The category system used throughout the detection pipeline.</li>
+    <li><strong>COUNTERARGUMENTS.md Q7</strong> — Documentation on the deliberate choice of explainable rule-based detection over black-box ML.</li>
+  </ul>
+
+  <h2 id="technical">Technical References</h2>
+  <ul>
+    <li><strong>Suricata rule documentation</strong> — Suricata IDS configuration, rule syntax, and eve.json log format.</li>
+    <li><strong>AbuseIPDB category mapping</strong> — AbuseIPDB report category IDs (15=Hacking, 21=Web App Attack, 18=Brute-Force, 19=Bad Web Bot).</li>
+    <li><strong>Kibana saved objects API</strong> — Used by build_dashboards.py and export_dashboards.py.</li>
+    <li><strong>Lua pattern syntax</strong> — Lua pattern matching documentation relevant to pattern_rules.lua and the hyphen-escaping bug fix.</li>
+    <li><strong>OpenResty / Nginx Lua</strong> — Runtime environment for the reverse proxy and detection pipeline.</li>
+    <li><strong>Redis Lua scripting</strong> — Atomic pool assignment via EVAL in pool_router_rules.ASSIGN_SCRIPT.</li>
+  </ul>
+
+  <h2 id="related">Related Work</h2>
+  <ul>
+    <li><strong>Honeypot platforms and IDS/SIEM integration</strong> — Comparative studies of honeypot platforms and their SIEM integration approaches.</li>
+    <li><strong>Threat intelligence sharing</strong> — AbuseIPDB, MISP, and other threat intelligence platforms.</li>
+    <li><strong>Session management and deception</strong> — Techniques for session tracking, fingerprinting, and honeypot pool isolation.</li>
+    <li><strong>GDPR and privacy-preserving security</strong> — Consent-gated identity and one-way signature approaches.</li>
+    <li><strong>Honeytoken / CanaryToken research</strong> — Academic literature on honeytoken injection and detection strategies.</li>
+  </ul>
+</DocsLayout>

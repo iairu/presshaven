@@ -1,0 +1,38 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Operations Overview', href: '/docs/operations' },
+  { title: 'Two-Host', href: '/docs/operations/two-host' },
+  { title: 'Single-Host', href: '/docs/operations/single-host', active: true },
+  { title: 'Hardening', href: '/docs/operations/hardening' },
+  { title: 'Runbooks', href: '/docs/operations/runbooks' },
+];
+const toc = [
+  { id: 'ids', text: 'Dashboard IDs', level: 2 },
+  { id: 'context', text: 'SIEM Single-Host Context', level: 2 },
+  { id: 'notes', text: 'Single-Host Notes', level: 2 },
+];
+---
+<DocsLayout title="Single-Host Deployment" description="How to test the system on a single host environment" section="Operations" sidebar={sidebar} toc={toc}>
+  <h2 id="ids">Dashboard IDs (All Consolidated)</h2>
+  <p>All dashboards are consolidated under a single SIEM instance:</p>
+  <ul>
+    <li>dashboard-ids-alerts</li>
+    <li>dashboard-web-threat-overview</li>
+    <li>dashboard-threat-decisions</li>
+    <li>dashboard-session-analysis</li>
+    <li>dashboard-attack-patterns</li>
+    <li>dashboard-threat-intel</li>
+  </ul>
+
+  <h2 id="context">SIEM Single-Host Context</h2>
+  <p>All dashboards are consolidated under a single SIEM instance. This configuration handles the full lifecycle of the dashboards, relying on build_dashboards.py for creation and export_dashboards.py for distribution/backup.</p>
+
+  <h2 id="notes">Single-Host Notes</h2>
+  <ul>
+    <li>Simplifies deployment by running honeypot, detection, and SIEM components on one host.</li>
+    <li>Suitable for evaluation, lab environments, and small-scale deployments.</li>
+    <li>May require additional tuning for resource constraints and performance.</li>
+  </ul>
+  <p>In a single-host deployment, all components (reverse proxy, Nginx Lua pipeline, Suricata, Kibana/Elasticsearch, Redis) run on the same host. The routing pipeline diverts suspicious traffic to local honeypot pools, while security events are logged locally and visualized via Kibana on the same host.</p>
+</DocsLayout>

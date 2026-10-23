@@ -1,0 +1,57 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Observability', href: '/docs/observability' },
+  { title: 'Operations', href: '/docs/operations' },
+  { title: 'Testing', href: '/docs/testing' },
+  { title: 'Reference', href: '/docs/reference' },
+  { title: 'Architecture', href: '/docs/architecture', active: true },
+];
+const toc = [
+  { id: 'overview', text: 'Architecture Overview', level: 2 },
+  { id: 'pipeline', text: 'Request Pipeline', level: 2 },
+  { id: 'modules', text: 'Lua Modules', level: 2 },
+  { id: 'pooling', text: 'Pooling System', level: 2 },
+  { id: 'gdpr', text: 'GDPR Identity', level: 2 },
+];
+---
+<DocsLayout title="Architecture" description="System architecture and request pipeline" section="Architecture" sidebar={sidebar} toc={toc}>
+  <h2 id="overview">Architecture Overview</h2>
+  <p>The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them unit-testable under a plain Lua interpreter.</p>
+
+  <h2 id="pipeline">Request Pipeline</h2>
+  <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
+  → router.decide_route() (11 stages) → pool_router.get_or_assign_pool()
+  → session_handler.update_session() → Redis session_store
+  → Suricata eve.json → init_worker.lua → threat_intel shared dict
+  → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
+
+  <h2 id="modules">Lua Modules</h2>
+  <p>The system uses 16 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
+  <table>
+    <tr><th>Pure Module</th><th>Adapter</th><th>Purpose</th></tr>
+    <tr><td>pattern_rules.lua</td><td>pattern_analyzer.lua</td><td>URI/header/CVE pattern scoring</td></tr>
+    <tr><td>vulnerability_rules.lua</td><td>vulnerability_handler.lua</td><td>CVE/exploit-kit pattern matching</td></tr>
+    <tr><td>suricata_rules.lua</td><td>init_worker.lua</td><td>eve.json alert parsing/scoring</td></tr>
+    <tr><td>abuseipdb_rules.lua</td><td>abuseipdb_client.lua</td><td>Report eligibility logic</td></tr>
+    <tr><td>router_rules.lua</td><td>router.lua</td><td>Routing predicates</td></tr>
+    <tr><td>upload_rules.lua</td><td>upload_handler.lua</td><td>File-upload pattern analysis</td></tr>
+    <tr><td>admin_rules.lua</td><td>admin_handler.lua</td><td>Admin-access decision logic</td></tr>
+    <tr><td>session_rules.lua</td><td>session_handler.lua</td><td>Session anomaly detection</td></tr>
+    <tr><td>decay_policy.lua</td><td>router_rules/suricata_rules</td><td>Escalation-aware decay</td></tr>
+    <tr><td>lua_pattern_utils.lua</td><td>—</td><td>Shared string helpers</td></tr>
+    <tr><td>ip_rules.lua</td><td>init.lua (utils)</td><td>IPv4/IPv6 CIDR matching</td></tr>
+    <tr><td>honeytoken_rules.lua</td><td>honeytoken_handler.lua</td><td>Token-in-corpus matching</td></tr>
+    <tr><td>gdpr_rules.lua</td><td>gdpr_handler.lua</td><td>Consent-gated identity</td></tr>
+    <tr><td>shared_ip_rules.lua</td><td>pattern_analyzer.lua</td><td>Shared-address policy</td></tr>
+    <tr><td>pool_router_rules.lua</td><td>pool_router.lua</td><td>Pool routing logic</td></tr>
+    <tr><td>session_identity_rules.lua</td><td>session_handler.lua</td><td>Session cookie identity</td></tr>
+  </table>
+
+  <h2 id="pooling">Pooling System</h2>
+  <p>Each user session is permanently assigned to a specific honeypot pool instance (honeypot_eshop_N + honeypot_database_N). Pools are cloned from a pre-built template. Assignment is atomic via Redis EVAL. Scale-up and scale-down are managed by pool_manager.</p>
+
+  <h2 id="gdpr">GDPR Identity</h2>
+  <p>A privacy-preserving second identifier runs alongside the signed SERVERID session cookie. The browser RSA-OAEP-encrypts a payload of characteristics + timestamp into a gdpr_token. The proxy decrypts in memory, checks freshness, and hashes into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
+</DocsLayout>

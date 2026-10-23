@@ -1,0 +1,35 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference' },
+  { title: 'Glossary', href: '/docs/reference/glossary' },
+  { title: 'Known Issues', href: '/docs/reference/known-issues', active: true },
+  { title: 'Roadmap', href: '/docs/reference/roadmap' },
+  { title: 'Changelog', href: '/docs/reference/changelog' },
+  { title: 'Literature', href: '/docs/reference/literature' },
+];
+const toc = [
+  { id: 'issues', text: 'Known Issues', level: 2 },
+  { id: 'corrections', text: 'Corrections', level: 2 },
+  { id: 'reporting', text: 'Reporting', level: 2 },
+];
+---
+<DocsLayout title="Known Issues & Corrections" description="Known issues and their corrections or workarounds" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="issues">Known Issues</h2>
+  <ul>
+    <li><strong>Dashboard generation drift:</strong> Offline vs live dashboard state can diverge. Workaround: Re-run build_dashboards.py --ndjson or export_dashboards.py.</li>
+    <li><strong>Timeline capture requires Kibana auth:</strong> Configure autologin scripts or manual login.</li>
+    <li><strong>Suricata same-host testing misattributes src_ip:</strong> Suricata runs with network_mode: host. In same-host test setups, alert src_ip may be container-internal. Workaround: is_private_ip() filters RFC1918/loopback at ingestion.</li>
+    <li><strong>Fast.log regex parsing bug (historical):</strong> 8 capture groups into 7 variables shifted all fields. Fixed by switching to structured eve.json.</li>
+    <li><strong>Admin-ajax.php false positives (historical):</strong> Blanket-flagged every admin-ajax.php request. Fixed: excluded from is_admin_access(), gets dedicated analysis.</li>
+    <li><strong>Session score laundering (historical):</strong> Single clean request reset CVE-triggered sessions. Fixed by score accumulation in router.lua.</li>
+    <li><strong>is_vulnerable_plugin_request() hyphen-escaping bug (historical):</strong> Un-escaped plugin slug broke match for hyphenated slugs. Fixed via lua_pattern_utils.escape_pattern().</li>
+    <li><strong>ngx.null sentinel crash (historical):</strong> red:get() returns ngx.null userdata for missing key. Fixed with if not raw or raw == ngx.null idiom.</li>
+  </ul>
+
+  <h2 id="corrections">Corrections</h2>
+  <p>Corrections to documentation should be recorded here with issue references and resolution notes.</p>
+
+  <h2 id="reporting">Reporting</h2>
+  <p>New known issues should be added with severity, affected versions, and workarounds.</p>
+</DocsLayout>

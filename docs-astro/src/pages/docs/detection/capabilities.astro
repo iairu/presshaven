@@ -1,0 +1,59 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities', active: true },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+];
+const toc = [
+  { id: 'summary', text: 'Capability Summary', level: 2 },
+  { id: 'techniques', text: 'Detection Techniques', level: 2 },
+  { id: 'cve', text: 'CVE Pattern Matching', level: 2 },
+  { id: 'functions', text: 'Function Reference', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Detection Capabilities" description="What the system can detect and how it identifies malicious activity" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="summary">Capability Summary</h2>
+  <p>The system provides detection coverage across multiple analytical layers, implemented across <code>pattern_rules.lua</code>, <code>vulnerability_rules.lua</code>, <code>suricata_rules.lua</code>, <code>abuseipdb_rules.lua</code>, <code>session_rules.lua</code>, <code>upload_rules.lua</code>, <code>admin_rules.lua</code>, and <code>sophistication_analyzer.lua</code>.</p>
+  <table>
+    <tr><th>Capability</th><th>Technique</th><th>Module</th><th>Description</th></tr>
+    <tr><td>Direct CVE Matching</td><td>Lua URI/argument patterns</td><td>vulnerability_rules.lua</td><td>Exact matching of seeded CVE exploit signatures</td></tr>
+    <tr><td>Generic Attack Patterns</td><td>Lua pattern signatures</td><td>pattern_rules.lua</td><td>Heuristic coverage for SQLi, XSS, C2, injection, traversal, upload abuse</td></tr>
+    <tr><td>Network IDS</td><td>Suricata signatures</td><td>suricata_rules.lua</td><td>Alert-based detection correlated via suricata_rules</td></tr>
+    <tr><td>Behavioral Signals</td><td>Brute force, automation, anomalies</td><td>session_rules.lua</td><td>Session anomaly detection, automation detection via UA fingerprint and timing</td></tr>
+    <tr><td>Reportability</td><td>AbuseIPDB mapping</td><td>abuseipdb_rules.lua</td><td>Deterministic gating and comment enrichment with matched CVEs</td></tr>
+    <tr><td>Sophistication Classification</td><td>Weighted rule set</td><td>sophistication_analyzer.lua</td><td>Classifies traffic as scripted / ai_assisted / manual / unknown</td></tr>
+    <tr><td>Honeytoken Detection</td><td>Token corpus scanning</td><td>honeytoken_handler.lua</td><td>Detects when injected fake credentials appear in inbound requests</td></tr>
+  </table>
+
+  <h2 id="techniques">Detection Techniques</h2>
+  <h3>Pattern Matching</h3>
+  <ul>
+    <li><strong>Generic patterns</strong>: Layer 1 entries in <code>pattern_rules.SUSPICIOUS_PATTERNS</code> — each entry declares how it matches (plain, ext, param, segment, pat). Matches add +15 per entry.</li>
+    <li><strong>Specific checks</strong>: Layer 2 in <code>pattern_rules.analyze_uri_patterns()</code> with per-pattern scores (directory traversal +20, SQL drop +30, wp-config.bak +80).</li>
+    <li><strong>URL encoding evasion</strong>: +10 when percent-encoding is detected in the URI.</li>
+    <li><strong>HTTP Parameter Pollution</strong>: +15 when more than 20 parameters are present.</li>
+  </ul>
+
+  <h3>Header Analysis</h3>
+  <ul>
+    <li><strong>Flagged User-Agents</strong>: +50 for known automation/scanner tools (sqlmap, nmap, masscan, zap, acunetix, nikto, dirb, gobuster, wpscan, whatweb, nuclei, burpsuite, havij, pangolin).</li>
+    <li><strong>Missing User-Agent</strong>: +10 — legitimate browsers always send one.</li>
+    <li><strong>CVE-2023-28121 header</strong>: +50 when <code>X-WCPAY-PLATFORM-CHECKOUT-USER</code> is present.</li>
+    <li><strong>Missing Referer on POST</strong>: +5 (WSTG-ATHN-04).</li>
+    <li><strong>HTTP Basic Authentication probe</strong>: +5.</li>
+  </ul>
+
+  <h2 id="cve">CVE Pattern Matching</h2>
+  <p><code>pattern_rules.analyze_cve_patterns()</code> checks URI, query string, and headers against <code>_G.config.vulnerability.cve_patterns</code>. Each match scores +40. See <a href="/docs/detection/cves">Seeded CVEs</a> for the full list.</p>
+
+  <h2 id="functions">Function Reference</h2>
+  <p>See the <a href="/docs/detection/capabilities">Detection Capabilities</a> page in the old docs for the complete function reference table, or refer to the Lua module comments directly.</p>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Explainable scoring, pure/adapter split for unit testing, severity-graded Suricata integration, NAT protection, sophistication classification.</p>
+  <p><strong>Limitations:</strong> Same-host Suricata testing gap, threshold tuning needed for legitimate API clients, generic pattern false positives (historical), no ML.</p>
+</DocsLayout>

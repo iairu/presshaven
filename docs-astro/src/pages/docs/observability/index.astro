@@ -1,0 +1,48 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Observability Overview', href: '/docs/observability', active: true },
+  { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem' },
+  { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
+];
+const toc = [
+  { id: 'layers', text: 'Observability Layers', level: 2 },
+  { id: 'logging', text: 'Logging Architecture', level: 2 },
+  { id: 'suricata', text: 'Suricata Log Ingestion', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Observability" description="How the honeypot system provides observability into attacker activities" section="Observability" sidebar={sidebar} toc={toc}>
+  <h2 id="layers">Observability Layers</h2>
+  <ul>
+    <li><strong>Log Ingestion</strong>: Structured logs from the reverse proxy, Lua engines, and Suricata are centralized for SIEM consumption via Nginx error logs and Vector forwarding to Elasticsearch/Kibana.</li>
+    <li><strong>SIEM Dashboards</strong>: High-level operational views of IDS alerts, threat overview, and web traffic.</li>
+    <li><strong>Kibana Visualizations</strong>: Interactive dashboards and pattern report timelines.</li>
+    <li><strong>Alerting & Reporting</strong>: AbuseIPDB reporting and reputation-based alerting.</li>
+  </ul>
+
+  <h2 id="logging">Logging Architecture (from init.lua)</h2>
+  <h3>Shared Dictionaries</h3>
+  <table>
+    <tr><th>Dictionary</th><th>Size</th><th>Purpose</th></tr>
+    <tr><td>sessions</td><td>10 MB</td><td>Worker-local cache of session JSON blobs. Reduces Redis round-trips on hot paths.</td></tr>
+    <tr><td>threat_intel</td><td>10 MB</td><td>Threat-intelligence data: flagged IPs, flagged user-agents, and backend health-check results.</td></tr>
+    <tr><td>rate_limit</td><td>10 MB</td><td>Per-IP request-rate counters for botnet detection.</td></tr>
+    <tr><td>honeypot_routes</td><td>1 MB</td><td>Per-IP pool assignments cached locally for 5 min.</td></tr>
+  </table>
+  <h3>Security Event Logging</h3>
+  <p><code>_G.utils.log_security_event(event_type, details)</code> appends structured JSON security events to the Nginx error log. Vector reads these and forwards to Elasticsearch.</p>
+  <p><strong>Important:</strong> Empty Lua tables are tagged with <code>cjson.empty_array_mt</code> so they encode as <code>[]</code> rather than <code>{}</code>. This prevents Elasticsearch mapping conflicts.</p>
+
+  <h2 id="suricata">Suricata Log Ingestion</h2>
+  <ul>
+    <li><code>init_worker.lua</code> runs <code>parse_suricata_logs()</code> every 30 seconds.</li>
+    <li>Alerts are extracted via <code>suricata_rules.extract_alert()</code> and written to <code>threat_intel</code> shared dict as <code>threat_ips</code>.</li>
+    <li>Private IPs (RFC1918/loopback) are filtered at ingestion time via <code>suricata_rules.is_private_ip()</code>.</li>
+    <li>Scores are decayed at read time via <code>suricata_rules.decayed_score()</code> using <code>score_decay_half_life_seconds</code>.</li>
+  </ul>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Multi-layer observability, structured security events, empty-table fix, Suricata integration, offline dashboard generation.</p>
+  <p><strong>Limitations:</strong> Dashboard drift, timeline capture fragility, no automated health monitoring, Vector complexity, same-host testing gap.</p>
+</DocsLayout>

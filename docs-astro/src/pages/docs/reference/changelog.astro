@@ -1,0 +1,54 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference' },
+  { title: 'Glossary', href: '/docs/reference/glossary' },
+  { title: 'Known Issues', href: '/docs/reference/known-issues' },
+  { title: 'Roadmap', href: '/docs/reference/roadmap' },
+  { title: 'Changelog', href: '/docs/reference/changelog', active: true },
+  { title: 'Literature', href: '/docs/reference/literature' },
+];
+const toc = [
+  { id: 'unreleased', text: 'Unreleased', level: 2 },
+  { id: 'historical', text: 'Historical', level: 2 },
+  { id: 'versioning', text: 'Versioning', level: 2 },
+];
+---
+<DocsLayout title="Changelog" description="History of changes to the system" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="unreleased">Unreleased</h2>
+  <ul>
+    <li>Documentation expansion for detection, observability, operations, testing, and reference sections — enriched with Lua code comments and architecture details.</li>
+    <li>Astro knowledge hub created with mkdocs-material styling, search, sidebar, TOC, and interactive demos.</li>
+  </ul>
+
+  <h2 id="historical">Historical</h2>
+  <h3>Detection Pipeline</h3>
+  <ul>
+    <li>pattern_analyzer.lua split into pure pattern_rules.lua + adapter.</li>
+    <li>suricata_rules.lua migrated from fast.log regex to structured eve.json JSON parsing.</li>
+    <li>vulnerability_rules.lua, abuseipdb_rules.lua, router_rules.lua, upload_rules.lua, admin_rules.lua, session_rules.lua extracted as pure modules.</li>
+    <li>decay_policy.lua extracted as shared escalation-aware decay module.</li>
+    <li>lua_pattern_utils.lua promoted from duplicated copies (fixing hyphen-escaping bug).</li>
+    <li>sophistication_analyzer.lua added for scripted/ai_assisted/manual/unknown classification.</li>
+    <li>honeytoken_handler.lua added for honeytoken injection and detection.</li>
+    <li>gdpr_rules.lua / gdpr_handler.lua added for consent-gated privacy-preserving identity.</li>
+  </ul>
+  <h3>Routing & Pooling</h3>
+  <ul>
+    <li>router.lua decision pipeline with 11 stages.</li>
+    <li>pool_router.lua implemented with exclusive assignment, spare provisioning, scale-up, reuse at resource limit.</li>
+    <li>Score accumulation added (fixing session score laundering bug).</li>
+    <li>Decay system added with offense-scaled half-life and permaflag thresholds.</li>
+  </ul>
+  <h3>Security Fixes</h3>
+  <ul>
+    <li>admin-ajax.php excluded from is_admin_access() — fixed false-positive escalation.</li>
+    <li>is_vulnerable_plugin_request() hyphen-escaping bug fixed.</li>
+    <li>ngx.null sentinel crash fixed.</li>
+    <li>Empty Lua tables tagged with cjson.empty_array_mt to prevent Elasticsearch mapping conflicts.</li>
+    <li>Suricata private IP filtering added.</li>
+  </ul>
+
+  <h2 id="versioning">Versioning</h2>
+  <p>Changes are tracked with semantic versioning for engine, detection, and dashboard components.</p>
+</DocsLayout>

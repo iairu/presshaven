@@ -1,0 +1,55 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference', active: true },
+  { title: 'Glossary', href: '/docs/reference/glossary' },
+  { title: 'Known Issues', href: '/docs/reference/known-issues' },
+  { title: 'Roadmap', href: '/docs/reference/roadmap' },
+  { title: 'Changelog', href: '/docs/reference/changelog' },
+  { title: 'Literature', href: '/docs/reference/literature' },
+];
+const toc = [
+  { id: 'categories', text: 'Reference Categories', level: 2 },
+  { id: 'architecture', text: 'Architecture Reference', level: 2 },
+  { id: 'modules', text: 'Pure Modules', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Reference" description="Reference materials for the honeypot system" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="categories">Reference Categories</h2>
+  <ul>
+    <li><strong>Glossary</strong>: Definitions of key terms and concepts.</li>
+    <li><strong>Known Issues & Corrections</strong>: Documented issues and workarounds.</li>
+    <li><strong>Roadmap</strong>: Future development plans.</li>
+    <li><strong>Changelog</strong>: History of changes.</li>
+    <li><strong>Primary Literature</strong>: Academic and technical literature.</li>
+  </ul>
+
+  <h2 id="architecture">Architecture Reference</h2>
+  <p>The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them unit-testable under a plain Lua interpreter.</p>
+
+  <h2 id="modules">Pure Modules</h2>
+  <table>
+    <tr><th>Module</th><th>Purpose</th></tr>
+    <tr><td>pattern_rules.lua</td><td>URI/header/CVE pattern scoring</td></tr>
+    <tr><td>vulnerability_rules.lua</td><td>CVE/exploit-kit pattern matching</td></tr>
+    <tr><td>suricata_rules.lua</td><td>eve.json alert parsing/scoring</td></tr>
+    <tr><td>abuseipdb_rules.lua</td><td>Report eligibility logic</td></tr>
+    <tr><td>router_rules.lua</td><td>Routing predicates</td></tr>
+    <tr><td>upload_rules.lua</td><td>File-upload pattern analysis</td></tr>
+    <tr><td>admin_rules.lua</td><td>Admin-access decision logic</td></tr>
+    <tr><td>session_rules.lua</td><td>Session anomaly detection</td></tr>
+    <tr><td>decay_policy.lua</td><td>Escalation-aware decay</td></tr>
+    <tr><td>lua_pattern_utils.lua</td><td>Shared string helpers</td></tr>
+    <tr><td>ip_rules.lua</td><td>IPv4/IPv6 CIDR matching</td></tr>
+    <tr><td>honeytoken_rules.lua</td><td>Token-in-corpus matching</td></tr>
+    <tr><td>gdpr_rules.lua</td><td>Consent-gated identity</td></tr>
+    <tr><td>shared_ip_rules.lua</td><td>Shared-address policy</td></tr>
+    <tr><td>pool_router_rules.lua</td><td>Pool routing logic</td></tr>
+    <tr><td>session_identity_rules.lua</td><td>Session cookie identity</td></tr>
+  </table>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Comprehensive detection, explainable architecture, per-attacker isolation, privacy-preserving, full telemetry.</p>
+  <p><strong>Limitations:</strong> Same-host testing gap, decay complexity, honeytoken coverage (5 types), no ML, Redis dependency, pool scaling limits, dashboard drift, no automated health monitoring.</p>
+</DocsLayout>

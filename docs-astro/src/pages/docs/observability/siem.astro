@@ -1,0 +1,42 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Observability Overview', href: '/docs/observability' },
+  { title: 'SIEM & Log Pipeline', href: '/docs/observability/siem', active: true },
+  { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
+];
+const toc = [
+  { id: 'dashboard', text: 'Dashboard Management', level: 2 },
+  { id: 'timeline', text: 'Timeline Visualization', level: 2 },
+  { id: 'dataflow', text: 'Data Flow', level: 2 },
+  { id: 'artifacts', text: 'Key Artifacts', level: 2 },
+];
+---
+<DocsLayout title="SIEM & Log Pipeline" description="How logs are processed and analyzed using SIEM tools" section="Observability" sidebar={sidebar} toc={toc}>
+  <h2 id="dashboard">Dashboard Management</h2>
+  <p>Honeypot dashboards are managed through a combination of offline generation and live Kibana interactions.</p>
+  <h3>1. Dashboard Building and Export</h3>
+  <ul>
+    <li><strong>Offline Building:</strong> <code>siem/kibana/build_dashboards.py</code> generates dashboard objects and visualizations into a local NDJSON file. Idempotent, can be run offline.</li>
+    <li><strong>Live Kibana Interaction:</strong> Same script can interact with a live Kibana instance via Saved Objects API (using KIBANA_URL, ELASTIC_USERNAME, ELASTIC_PASSWORD env vars).</li>
+    <li><strong>Exporting Live Changes:</strong> <code>siem/kibana/export_dashboards.py</code> exports live dashboard objects from Kibana to local NDJSON. Used after manually editing panels in live Kibana.</li>
+  </ul>
+  <h3>2. Timeline Visualization</h3>
+  <p>A key component is the pattern report time-series panel, which visualizes requests captured by the reverse proxy. The client-side component (<code>dashboard/ui/kibana_timeline_capture.py</code>) handles the capture process: automates login, imports saved objects via Kibana API, loads the timeline dashboard in embed mode, waits for render-complete signal, captures screenshot.</p>
+
+  <h2 id="dataflow">Data Flow Architecture</h2>
+  <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
+  → security events → Nginx error log → Vector → Elasticsearch
+  → router.decide_route() → routing decision → honeypot pool or production
+  → session_handler.update_session() → Redis session_store
+  → Suricata eve.json → init_worker.lua → threat_intel shared dict
+  → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
+
+  <h2 id="artifacts">Key Artifacts</h2>
+  <ul>
+    <li><code>siem/kibana/build_dashboards.py</code> — Script for generating and managing dashboard configuration.</li>
+    <li><code>siem/kibana/export_dashboards.py</code> — Script for synchronizing live Kibana state to disk.</li>
+    <li><code>dashboard/core/kibana_timeline.py</code> — Defines structure and payload for request timeline visualization.</li>
+    <li><code>dashboard/ui/kibana_timeline_capture.py</code> — Handles client-side workflow for live dashboard capture.</li>
+  </ul>
+</DocsLayout>

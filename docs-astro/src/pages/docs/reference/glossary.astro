@@ -1,0 +1,70 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Reference Overview', href: '/docs/reference' },
+  { title: 'Glossary', href: '/docs/reference/glossary', active: true },
+  { title: 'Known Issues', href: '/docs/reference/known-issues' },
+  { title: 'Roadmap', href: '/docs/reference/roadmap' },
+  { title: 'Changelog', href: '/docs/reference/changelog' },
+  { title: 'Literature', href: '/docs/reference/literature' },
+];
+const toc = [
+  { id: 'core', text: 'Core Concepts', level: 2 },
+  { id: 'detection', text: 'Detection Terms', level: 2 },
+  { id: 'architecture', text: 'Architecture Terms', level: 2 },
+  { id: 'scoring', text: 'Scoring Terms', level: 2 },
+  { id: 'operations', text: 'Operations Terms', level: 2 },
+];
+---
+<DocsLayout title="Glossary" description="Definitions of key terms and concepts" section="Reference" sidebar={sidebar} toc={toc}>
+  <h2 id="core">Core Concepts</h2>
+  <table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td>Honeypot</td><td>Decoy system designed to attract and engage attackers. The reverse proxy diverts suspicious requests to isolated honeypot pool instances running fake WordPress environments.</td></tr>
+    <tr><td>IDS</td><td>Intrusion Detection System — Suricata network IDS, which generates eve.json alerts parsed by suricata_rules.lua.</td></tr>
+    <tr><td>SIEM</td><td>Security Information and Event Management — Elasticsearch/Kibana stack for log ingestion and visualization.</td></tr>
+    <tr><td>CVE</td><td>Common Vulnerabilities and Exposures identifier — used to name specific seeded vulnerability patterns.</td></tr>
+    <tr><td>WSTG</td><td>OWASP Web Security Testing Guide — category system used to classify detection patterns.</td></tr>
+  </table>
+
+  <h2 id="detection">Detection Terms</h2>
+  <table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td>SID</td><td>Suricata rule identifier — allocated in suricata.md (1000001-1000070+).</td></tr>
+    <tr><td>Risk Score</td><td>Accumulated threat score (0-100) computed by pattern_analyzer.analyze_request().</td></tr>
+    <tr><td>Honeypot Threshold</td><td>Minimum risk score (default 80) that triggers honeypot routing.</td></tr>
+    <tr><td>Decay</td><td>Exponential reduction of stored risk scores over time since last suspicious signal.</td></tr>
+    <tr><td>Permaflag</td><td>Score stops decaying entirely — triggered by permaflag_offenses (5) or permaflag_score (100).</td></tr>
+    <tr><td>Offense</td><td>Counter bumped once per recorded attack signal, used by decay_policy to slow decay.</td></tr>
+    <tr><td>Honeytoken</td><td>Fake high-value artefact planted in honeypot responses — detection signals confirmed compromise.</td></tr>
+    <tr><td>GDPR Signature</td><td>Privacy-preserving one-way hash of browser characteristics used as second identifier.</td></tr>
+  </table>
+
+  <h2 id="architecture">Architecture Terms</h2>
+  <table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td>Pure Module</td><td>Lua module with no ngx.* dependency, plain-lua-interpreter testable (all *_rules.lua files).</td></tr>
+    <tr><td>Adapter Module</td><td>Lua module performing I/O, delegating decisions to pure modules.</td></tr>
+    <tr><td>Pool</td><td>Isolated honeypot environment (honeypot_eshop_N + honeypot_database_N) assigned per user session.</td></tr>
+    <tr><td>Escalation</td><td>Gradual increase in response to repeated suspicious signals.</td></tr>
+    <tr><td>Sticky Routing</td><td>Once honeypot_bound, all subsequent requests locked to same honeypot pool.</td></tr>
+  </table>
+
+  <h2 id="scoring">Scoring Terms</h2>
+  <table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td>Stage 6</td><td>IP reputation gate in router.lua — diverts IPs scoring >50 on address's own reputation.</td></tr>
+    <tr><td>Shared Address</td><td>Public IP shared by multiple sessions (NAT) — detected via shared_ip_rules.</td></tr>
+    <tr><td>IP Reputation Cap</td><td>Maximum score an address's reputation can contribute per request on shared addresses (default 10).</td></tr>
+    <tr><td>Decision Trace</td><td>Flat strings logged to Nginx security access log by router_rules.decision_trace(), parsed by Vector into Kibana fields.</td></tr>
+  </table>
+
+  <h2 id="operations">Operations Terms</h2>
+  <table>
+    <tr><th>Term</th><th>Definition</th></tr>
+    <tr><td>Hardening</td><td>Security posture improvements for production deployment.</td></tr>
+    <tr><td>Runbook</td><td>Operational troubleshooting and response procedures.</td></tr>
+    <tr><td>Blind Pentest</td><td>Simulated attacker assessment where tester has no prior knowledge.</td></tr>
+    <tr><td>Internal Test Secret</td><td>Shared secret gating diagnostic response headers to prevent exposing routing oracles.</td></tr>
+  </table>
+</DocsLayout>

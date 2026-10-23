@@ -1,0 +1,63 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves', active: true },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+];
+const toc = [
+  { id: 'direct', text: 'Direct CVE Matches', level: 2 },
+  { id: 'suricata', text: 'Suricata Alert-Based', level: 2 },
+  { id: 'abuseipdb', text: 'AbuseIPDB Mapping', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Seeded CVEs" description="The specific CVEs seeded into the honeypot to attract attackers" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="direct">Direct CVE Matches (via vulnerability_rules.lua)</h2>
+  <p>The following CVEs are explicitly matched via URI/argument pattern analysis in the vulnerability rules. vulnerability_rules.detect_vulnerability_pattern() returns an object with cve, severity, description, plugin, attack_vector for each matched pattern.</p>
+  <table>
+    <tr><th>CVE ID</th><th>Severity</th><th>Plugin</th><th>Attack Vector</th><th>Match Condition</th></tr>
+    <tr><td>CVE-2023-28121</td><td>HIGH</td><td>woocommerce-payments</td><td>header_manipulation</td><td>URI contains wp-json/wp/v2/users AND X-WCPAY-PLATFORM-CHECKOUT-USER header</td></tr>
+    <tr><td>CVE-2023-2986</td><td>HIGH</td><td>abandoned-cart-lite</td><td>encryption_bypass</td><td>URI/args contain wcal_action=checkout_link AND validate=</td></tr>
+    <tr><td>CVE-2025-4403</td><td>CRITICAL</td><td>drag-and-drop-multiple-file-upload</td><td>file_upload_bypass</td><td>URI/args contain dnd_codedropz_upload AND supported_type</td></tr>
+    <tr><td>CVE-2025-2266</td><td>CRITICAL</td><td>cwmp</td><td>privilege_escalation</td><td>URI/args contain cwmpupdateoptions</td></tr>
+    <tr><td>CVE-2025-47577</td><td>CRITICAL</td><td>gift-voucher</td><td>file_upload_rce</td><td>URI/args contain mwb_wgm_preview_mail</td></tr>
+    <tr><td>CVE-2024-8425</td><td>CRITICAL</td><td>gift-voucher</td><td>file_upload_rce</td><td>URI/args contain mwb_wgm_preview_mail</td></tr>
+    <tr><td>CVE-2024-2387</td><td>HIGH</td><td>advanced-form-integration</td><td>sql_injection</td><td>URI contains advanced-form-integration-log AND args contain integration_id with quote/union/select</td></tr>
+    <tr><td>CVE-2025-10142</td><td>HIGH</td><td>pagseguro-connect-woocommerce</td><td>path_traversal</td><td>URI/args contain pc_added_uploaded_image AND file[path]</td></tr>
+    <tr><td>CVE-2024-50508</td><td>HIGH</td><td>wp-file-upload</td><td>directory_traversal</td><td>URI/args contain file[path] AND (../ or /etc/)</td></tr>
+    <tr><td>GENERIC-WP-001</td><td>CRITICAL</td><td>wordpress-core</td><td>sensitive_file_access</td><td>URI contains wp-config.php</td></tr>
+    <tr><td>GENERIC-WP-002</td><td>HIGH</td><td>wordpress-core</td><td>installation_abuse</td><td>URI contains wp-admin/install.php or setup-config.php</td></tr>
+    <tr><td>GENERIC-WP-003</td><td>MEDIUM</td><td>wordpress-core</td><td>information_disclosure</td><td>URI contains wp-json/wp/v2/users or author=digits</td></tr>
+    <tr><td>GENERIC-WP-004</td><td>MEDIUM</td><td>wordpress-core</td><td>xmlrpc_abuse</td><td>URI contains xmlrpc.php</td></tr>
+  </table>
+  <p>Additional CVE patterns in <code>_G.config.vulnerability.cve_patterns</code> (init.lua): CVE-2024-25600 (Bricks Builder RCE), CVE-2024-27956 (WP Automatic SQLi), CVE-2024-1071 (Ultimate Member SQLi), CVE-2022-0739 (BookingPress SQLi), CVE-2024-2879 (LayerSlider SQLi).</p>
+
+  <h2 id="suricata">Suricata Alert-Based Detections</h2>
+  <p>The system leverages Suricata alerts to detect potential exploits. When an alert is generated, it is processed via <code>suricata_rules.lua</code> and used to generate a descriptive reason string mapped to an AbuseIPDB category.</p>
+  <ul>
+    <li><strong>Detection Mechanism:</strong> Suricata signature matching on network traffic (eve.json).</li>
+    <li><strong>Reputation Scoring:</strong> Severity 1 → +50, Severity 2 → +25, default → +10. Max score capped at 100.</li>
+    <li><strong>Why eve.json:</strong> Previous fast.log regex parser had 8 capture groups into 7 variables — Lua silently drops excess, shifting all fields. eve.json uses named fields, eliminating this bug class.</li>
+    <li><strong>Private IP filtering:</strong> <code>is_private_ip()</code> filters RFC1918/loopback at ingestion time.</li>
+    <li><strong>Decay:</strong> <code>decayed_score()</code> applies exponential decay at READ time based on half-life, offense count, and permaflag thresholds.</li>
+  </ul>
+
+  <h2 id="abuseipdb">AbuseIPDB Reportability Mapping</h2>
+  <table>
+    <tr><th>Honeypot Reason</th><th>Categories</th><th>Description</th></tr>
+    <tr><td>cve_pattern_match</td><td>15, 21</td><td>CVE pattern detected via URL/argument matching</td></tr>
+    <tr><td>vulnerable_plugin_access</td><td>15, 21</td><td>Access on plugins known to have specific CVEs</td></tr>
+    <tr><td>multiple_admin_attempts</td><td>18</td><td>Indicators of brute-force attempts</td></tr>
+    <tr><td>rapid_automation_detected</td><td>19</td><td>Signatures of malicious bots</td></tr>
+    <tr><td>suspicious_file_upload</td><td>21</td><td>File upload vector anomalies</td></tr>
+    <tr><td>suricata_confirmed_alert</td><td>15, 21</td><td>An IP confirmed via Suricata alert</td></tr>
+  </table>
+  <p><strong>Report Comment Format:</strong> <code>Honeypot detection: [Honeypot Reason] (CVEs: [List of Matched CVEs])</code></p>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> 14+ seeded CVEs across multiple exploit vectors, severity-graded Suricata integration, AbuseIPDB reportability for 6 reason types.</p>
+  <p><strong>Limitations:</strong> Coverage limited to seeded CVEs (manual addition required), Suricata same-host testing gap, generic patterns may need tuning for new WordPress versions.</p>
+</DocsLayout>

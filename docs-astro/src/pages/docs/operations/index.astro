@@ -1,0 +1,82 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Operations Overview', href: '/docs/operations', active: true },
+  { title: 'Two-Host', href: '/docs/operations/two-host' },
+  { title: 'Single-Host', href: '/docs/operations/single-host' },
+  { title: 'Hardening', href: '/docs/operations/hardening' },
+  { title: 'Runbooks', href: '/docs/operations/runbooks' },
+];
+const toc = [
+  { id: 'domains', text: 'Operational Domains', level: 2 },
+  { id: 'routing', text: 'Routing Decision Pipeline', level: 2 },
+  { id: 'pooling', text: 'Honeypot Pool Assignment', level: 2 },
+  { id: 'gdpr', text: 'GDPR Consent-Gated Identity', level: 2 },
+  { id: 'config', text: 'Configuration Reference', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Operations" description="Operational aspects of running the honeypot system" section="Operations" sidebar={sidebar} toc={toc}>
+  <h2 id="domains">Operational Domains</h2>
+  <ul>
+    <li><strong>Deployment</strong>: Two-host and single-host topologies.</li>
+    <li><strong>Monitoring</strong>: Observability, dashboards, alerting.</li>
+    <li><strong>Hardening</strong>: Production security recommendations.</li>
+    <li><strong>Runbooks</strong>: Troubleshooting and incident procedures.</li>
+    <li><strong>Routing & Pooling</strong>: Router decision pipeline, honeypot pool assignment, session management.</li>
+  </ul>
+
+  <h2 id="routing">Routing Decision Pipeline (from router.lua)</h2>
+  <p>router.lua makes the final routing decision for every inbound HTTP request: forward to production WordPress or divert to an isolated honeypot pool instance.</p>
+  <table>
+    <tr><th>Stage</th><th>Condition</th><th>Route</th><th>Reason</th></tr>
+    <tr><td>1</td><td>Static asset</td><td>Production</td><td>CSS/JS/images, no attack surface</td></tr>
+    <tr><td>1b</td><td>install.php on uninstalled WordPress</td><td>Production</td><td>Legitimate setup wizard</td></tr>
+    <tr><td>2</td><td>Session already honeypot_bound</td><td>Honeypot</td><td>Sticky honeypot (same pool via Redis)</td></tr>
+    <tr><td>3</td><td>Risk score >= honeypot_threshold</td><td>Honeypot</td><td>High risk (WSTG-INPV catch-all)</td></tr>
+    <tr><td>4</td><td>CVE pattern matched</td><td>Honeypot</td><td>CVE pattern detected</td></tr>
+    <tr><td>5</td><td>Vulnerable plugin URI</td><td>Honeypot</td><td>Direct plugin endpoint access</td></tr>
+    <tr><td>6</td><td>Bad IP reputation (>50)</td><td>Honeypot</td><td>Known flagged IP from threat_intel</td></tr>
+    <tr><td>7</td><td>Multiple admin-access attempts (>=3)</td><td>Honeypot</td><td>WSTG-ATHN-04</td></tr>
+    <tr><td>8</td><td>Accumulated suspicious activities (>=5)</td><td>Honeypot</td><td>Cumulative suspicious signals</td></tr>
+    <tr><td>9</td><td>Rapid automation detected</td><td>Honeypot</td><td>WSTG-INFO-02 (if score >= 40)</td></tr>
+    <tr><td>10</td><td>Suspicious file upload</td><td>Honeypot</td><td>WSTG-INPV-10</td></tr>
+    <tr><td>11</td><td>Default</td><td>Production</td><td>—</td></tr>
+  </table>
+
+  <h2 id="pooling">Honeypot Pool Assignment (from pool_router.lua)</h2>
+  <p>Each user session (not IP address) is permanently assigned to a specific honeypot pool instance. This gives every user their own isolated WordPress environment.</p>
+  <ul>
+    <li><strong>Exclusive assignment:</strong> New session gets a free ready pool (atomic Redis EVAL).</li>
+    <li><strong>Spare provisioning:</strong> Every assignment queues a wake-up on honeypot_pool:provision; pool_manager builds an additional pool pair.</li>
+    <li><strong>Scale-up:</strong> If no pool is free, session borrows a ready pool round-robin and joins honeypot_pool:waiting.</li>
+    <li><strong>Reuse at resource limit:</strong> Once pool_manager caps growth, new session shares an existing ready pool in round-robin.</li>
+    <li><strong>TTL:</strong> Session→pool mapping lives in Redis with 24-hour TTL.</li>
+    <li><strong>Health fallbacks:</strong> If a pool is unhealthy, router falls back to next healthy pool without changing stored assignment.</li>
+  </ul>
+
+  <h2 id="gdpr">GDPR Consent-Gated Identity (from gdpr_rules.lua)</h2>
+  <p>A second, privacy-preserving identifier runs alongside the signed SERVERID session cookie. The reverse proxy serves a consent banner and RSA public key. Only if the visitor agrees does the browser build a tiny payload, RSA-OAEP-encrypt it into a gdpr_token, and send it as a cookie. The proxy decrypts in memory only long enough to check timestamp freshness and hash the REST into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
+
+  <h2 id="config">Configuration Reference (from init.lua)</h2>
+  <table>
+    <tr><th>Section</th><th>Key</th><th>Default</th><th>Description</th></tr>
+    <tr><td>threat</td><td>honeypot_threshold</td><td>80</td><td>Minimum score for honeypot routing</td></tr>
+    <tr><td>threat</td><td>max_risk_score</td><td>100</td><td>Hard cap on accumulated score</td></tr>
+    <tr><td>threat</td><td>ip_reputation_cap</td><td>10</td><td>Max reputation contribution on shared addresses</td></tr>
+    <tr><td>threat</td><td>score_decay_half_life_seconds</td><td>300s</td><td>Half-life for score decay (0 = disabled)</td></tr>
+    <tr><td>threat</td><td>decay_offense_slowdown</td><td>0.75</td><td>Half-life multiplier per offense</td></tr>
+    <tr><td>threat</td><td>permaflag_offenses</td><td>5</td><td>Offenses at/above this → no decay</td></tr>
+    <tr><td>threat</td><td>permaflag_score</td><td>100</td><td>Score at/above this → permaflag</td></tr>
+    <tr><td>session</td><td>max_idle_time</td><td>3600s</td><td>Session TTL</td></tr>
+    <tr><td>session</td><td>tamper_score</td><td>50</td><td>Score added for tampered cookies</td></tr>
+    <tr><td>abuseipdb</td><td>confidence_minimum</td><td>90</td><td>Bulk feed confidence threshold</td></tr>
+    <tr><td>abuseipdb</td><td>daily_check_limit</td><td>1000</td><td>Free-tier daily cap on on-demand checks</td></tr>
+    <tr><td>abuseipdb</td><td>blacklist_enabled</td><td>false</td><td>Bulk blacklist pull opt-in</td></tr>
+    <tr><td>internal_test_secret</td><td>—</td><td>from env</td><td>Gates diagnostic headers (fail closed when unset)</td></tr>
+  </table>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Explainable detection, pure/adapter split, per-attacker isolation, elastic pools, no tarpit, privacy-preserving identity, honeytoken injection.</p>
+  <p><strong>Limitations:</strong> Same-host testing gap, decay complexity, NAT protection trade-off, admin-ajax complexity, pool scaling limits, threshold tuning, no dashboard health monitoring, honeytoken coverage (5 types), rule-based detection, Redis dependency, GDPR key requirement.</p>
+</DocsLayout>

@@ -1,0 +1,200 @@
+---
+import '../styles/global.css';
+interface Props {
+  title: string;
+  description?: string;
+  toc?: { id: string; text: string; level: number }[];
+  sidebar?: { title: string; href: string; active?: boolean }[];
+  section?: string;
+  prev?: { title: string; href: string };
+  next?: { title: string; href: string };
+}
+const { title, description, toc = [], sidebar = [], section, prev, next } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} — Honeypot IDS Docs</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-bg-primary text-text-primary font-sans antialiased min-h-screen">
+    <!-- Search Modal -->
+    <div id="search-modal" class="fixed inset-0 z-[200] hidden">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSearch()"></div>
+      <div class="relative max-w-2xl mx-auto mt-20">
+        <div class="bg-bg-secondary border border-border-accent rounded-xl shadow-2xl overflow-hidden">
+          <div class="flex items-center gap-3 px-4 py-3 border-b border-border">
+            <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input id="search-input" type="text" placeholder="Search documentation..." class="flex-1 bg-transparent border-none outline-none text-text-primary placeholder-text-muted text-lg" />
+            <kbd class="text-xs text-text-muted bg-bg-tertiary px-2 py-1 rounded border border-border">ESC</kbd>
+          </div>
+          <div id="search-results" class="max-h-96 overflow-y-auto p-2">
+            <div class="text-text-muted text-sm p-4 text-center">Type to search...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sticky top-0 z-50 bg-bg-secondary/90 backdrop-blur-md border-b border-border px-6 py-3 flex items-center justify-between flex-wrap gap-4">
+      <a href="/" class="font-bold text-lg text-text-primary flex items-center gap-2 no-underline">
+        <span class="text-accent-green">🐝</span> Honeypot IDS
+      </a>
+      <div class="flex items-center gap-4">
+        <button onclick="openSearch()" class="flex items-center gap-2 text-text-secondary text-sm bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 hover:border-accent-green transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Search
+          <kbd class="text-xs bg-bg-secondary px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
+        </button>
+        <div class="flex gap-1 flex-wrap">
+          <a href="/" class="text-text-secondary text-sm font-medium px-3 py-1.5 rounded-md hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Hub</a>
+          <a href="/docs" class="text-text-secondary text-sm font-medium px-3 py-1.5 rounded-md hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Docs</a>
+          
+        </div>
+      </div>
+    </nav>
+
+    <div class="flex min-h-[calc(100vh-4rem)]">
+      <!-- Sidebar -->
+      <aside class="w-72 bg-bg-secondary border-r border-border p-4 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden lg:block">
+        <div class="mb-6">
+          <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Navigation</h3>
+          <nav class="space-y-1">
+            {sidebar.map(item => (
+              <a href={item.href} class={`block px-3 py-2 rounded-md text-sm transition-all no-underline ${item.active ? 'bg-bg-tertiary text-accent-green border-l-2 border-accent-green font-medium' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'}`}>
+                {item.title}
+              </a>
+            ))}
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main content -->
+      <main class="flex-1 min-w-0 px-8 py-6 max-w-4xl">
+        <!-- Breadcrumbs -->
+        <div class="flex items-center gap-2 text-xs text-text-muted mb-4">
+          <a href="/" class="hover:text-accent-green no-underline">Home</a>
+          <span>/</span>
+          <a href="/docs" class="hover:text-accent-green no-underline">Docs</a>
+          {section && <><span>/</span><span class="text-text-secondary">{section}</span></>}
+          <span>/</span>
+          <span class="text-text-primary">{title}</span>
+        </div>
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold mb-2">{title}</h1>
+          {description && <p class="text-text-secondary">{description}</p>}
+        </div>
+        <div class="prose prose-invert max-w-none">
+          <slot />
+        </div>
+        <!-- Prev/Next Navigation -->
+        {(prev || next) && (
+          <div class="flex justify-between mt-12 pt-6 border-t border-border">
+            {prev ? (
+              <a href={prev.href} class="flex items-center gap-2 text-text-secondary hover:text-accent-green no-underline transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                <div>
+                  <div class="text-xs text-text-muted">Previous</div>
+                  <div class="text-sm font-medium">{prev.title}</div>
+                </div>
+              </a>
+            ) : <div></div>}
+            {next ? (
+              <a href={next.href} class="flex items-center gap-2 text-text-secondary hover:text-accent-green no-underline transition-all text-right">
+                <div>
+                  <div class="text-xs text-text-muted">Next</div>
+                  <div class="text-sm font-medium">{next.title}</div>
+                </div>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </a>
+            ) : <div></div>}
+          </div>
+        )}
+      </main>
+
+      <!-- TOC Sidebar -->
+      <aside class="w-64 p-4 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden xl:block">
+        <div class="mb-4">
+          <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">On this page</h3>
+          <nav class="space-y-1" id="toc-nav">
+            {toc.map(item => (
+              <a href={`#${item.id}`} class={`block text-sm transition-all no-underline ${item.level === 2 ? 'text-text-secondary hover:text-accent-green pl-0 font-medium' : 'text-text-muted hover:text-text-secondary pl-4 text-xs'}`}>
+                {item.text}
+              </a>
+            ))}
+          </nav>
+        </div>
+        <!-- Admonition: tip -->
+        <div class="mt-6 p-3 bg-bg-tertiary/50 border border-border rounded-lg">
+          <div class="text-xs text-accent-green font-semibold mb-1">💡 Tip</div>
+          <div class="text-xs text-text-muted">Use ⌘K to search across all documentation pages.</div>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      function openSearch() {
+        document.getElementById('search-modal').classList.remove('hidden');
+        document.getElementById('search-input').focus();
+      }
+      function closeSearch() {
+        document.getElementById('search-modal').classList.add('hidden');
+      }
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+        if (e.key === 'Escape') closeSearch();
+      });
+
+      const searchInput = document.getElementById('search-input');
+      const searchResults = document.getElementById('search-results');
+      const pages = [
+        { title: 'Detection Overview', url: '/docs/detection', content: 'detection pipeline scoring CVE suricata' },
+        { title: 'Detection Capabilities', url: '/docs/detection/capabilities', content: 'pattern matching CVE suricata scoring function reference' },
+        { title: 'Seeded CVEs', url: '/docs/detection/cves', content: 'CVE-2023-28121 CVE-2025-4403 vulnerability' },
+        { title: 'Suricata Network IDS', url: '/docs/detection/suricata', content: 'suricata eve.json alerts SID severity' },
+        { title: 'Advanced Signals', url: '/docs/detection/advanced', content: 'risk scoring decay policy' },
+        { title: 'Observability', url: '/docs/observability', content: 'siem kibana dashboards logs' },
+        { title: 'SIEM & Log Pipeline', url: '/docs/observability/siem', content: 'vector elasticsearch kibana logs' },
+        { title: 'Kibana Dashboards', url: '/docs/observability/kibana', content: 'dashboards visualizations timeline' },
+        { title: 'Operations', url: '/docs/operations', content: 'deployment hardening runbooks' },
+        { title: 'Two-Host', url: '/docs/operations/two-host', content: 'two host deployment topology' },
+        { title: 'Single-Host', url: '/docs/operations/single-host', content: 'single host deployment' },
+        { title: 'Hardening', url: '/docs/operations/hardening', content: 'security production hardening' },
+        { title: 'Runbooks', url: '/docs/operations/runbooks', content: 'troubleshooting incident response' },
+        { title: 'Testing', url: '/docs/testing', content: 'unit tests blind pentest' },
+        { title: 'Blind Pentest', url: '/docs/testing/blind-pentest', content: 'pentest evaluation protocol' },
+        { title: 'Reference', url: '/docs/reference', content: 'glossary known issues roadmap' },
+        { title: 'Glossary', url: '/docs/reference/glossary', content: 'terms definitions' },
+        { title: 'Known Issues', url: '/docs/reference/known-issues', content: 'bugs workarounds' },
+        { title: 'Roadmap', url: '/docs/reference/roadmap', content: 'future plans' },
+        { title: 'Changelog', url: '/docs/reference/changelog', content: 'history changes' },
+        { title: 'Architecture', url: '/docs/architecture', content: 'request pipeline lua modules' },
+        { title: 'Engine', url: '/docs/engine', content: 'wordpress pooling seeding' },
+      ];
+
+      searchInput?.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        if (!q) {
+          searchResults.innerHTML = '<div class="text-text-muted text-sm p-4 text-center">Type to search...</div>';
+          return;
+        }
+        const matches = pages.filter(p => p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q));
+        if (matches.length === 0) {
+          searchResults.innerHTML = '<div class="text-text-muted text-sm p-4 text-center">No results found</div>';
+          return;
+        }
+        searchResults.innerHTML = matches.map(m => `
+          <a href="${m.url}" class="block px-4 py-3 rounded-lg hover:bg-bg-tertiary transition-all no-underline mb-1">
+            <div class="text-text-primary font-medium">${m.title}</div>
+            <div class="text-text-muted text-xs mt-1">${m.url}</div>
+          </a>
+        `).join('');
+      });
+    </script>
+  </body>
+</html>

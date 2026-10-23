@@ -1,0 +1,34 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Operations Overview', href: '/docs/operations' },
+  { title: 'Two-Host', href: '/docs/operations/two-host', active: true },
+  { title: 'Single-Host', href: '/docs/operations/single-host' },
+  { title: 'Hardening', href: '/docs/operations/hardening' },
+  { title: 'Runbooks', href: '/docs/operations/runbooks' },
+];
+const toc = [
+  { id: 'ids', text: 'Dashboard IDs (Edge)', level: 2 },
+  { id: 'split', text: 'SIEM Two-Host Split', level: 2 },
+  { id: 'topology', text: 'Two-Host Topology', level: 2 },
+];
+---
+<DocsLayout title="Two-Host Deployment" description="How to run the system across two separate hosts" section="Operations" sidebar={sidebar} toc={toc}>
+  <h2 id="ids">Dashboard IDs (Edge)</h2>
+  <p><strong>Alerts & Overview:</strong> dashboard-ids-alerts, dashboard-web-threat-overview</p>
+  <p><strong>Threat Intelligence & Analysis:</strong> dashboard-threat-decisions, dashboard-session-analysis, dashboard-attack-patterns, dashboard-threat-intel</p>
+
+  <h2 id="split">SIEM Two-Host Split</h2>
+  <p>Dashboards are split by functional domain:</p>
+  <ol>
+    <li><strong>Operational View:</strong> Real-time alerts and web traffic overview.</li>
+    <li><strong>Strategic View:</strong> Deep threat analysis, decision-making, and intelligence.</li>
+  </ol>
+
+  <h2 id="topology">Two-Host Topology</h2>
+  <ul>
+    <li><strong>Edge Host:</strong> Runs the reverse proxy, honeypot backend, and dashboard/monitoring components. The Nginx Lua pipeline (pattern_analyzer, router, pool_router) runs here.</li>
+    <li><strong>SIEM Host:</strong> Runs Kibana/Elasticsearch and consumes logs from the edge host via Vector over mTLS.</li>
+  </ul>
+  <p>Security events (SECURITY_EVENT: JSON in Nginx error log) are shipped by Vector to the SIEM host's Elasticsearch. Suricata on the edge host writes eve.json alerts, ingested by init_worker.lua into the threat_intel shared dict.</p>
+</DocsLayout>
