@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T00:00:00Z",
+  "title": "Design System: Honeypot IDS Knowledge Hub",
+  "extensions": {
+    "colorMeta": {
+      "accent-green": { "role": "primary", "displayName": "Neon Green", "canonical": "#00ff41", "tonalRamp": ["#00210b", "#003311", "#004d19", "#007a28", "#00a836", "#00cc33", "#00ff41", "#33ff66"] },
+      "bg-primary": { "role": "neutral", "displayName": "Void Black", "canonical": "#080808", "tonalRamp": ["#080808", "#0f0f0f", "#121212", "#161616", "#1a1a1a", "#222222", "#333333", "#555555"] },
+      "text-primary": { "role": "neutral", "displayName": "Instrument White", "canonical": "#f0f0f0", "tonalRamp": ["#1a1a1a", "#333333", "#555555", "#777777", "#999999", "#bbbbbb", "#d4d4d4", "#f0f0f0"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Home-hero headline only; Inter 800, heavy negative tracking." },
+      "label": { "displayName": "Mono Label", "purpose": "Every machine signal: eyebrows, table headers, metadata, badges, code, diagram text. JetBrains Mono, uppercase, tracked." }
+    },
+    "shadows": [
+      { "name": "card-hover", "value": "0 6px 26px rgba(0,0,0,0.45)", "purpose": "Ambient lift under cards/doc-cards on hover (paired with translateY(-2px))." },
+      { "name": "button-glow", "value": "0 6px 22px rgba(0,255,65,0.22)", "purpose": "The one green-tinted glow; primary action hover only." },
+      { "name": "modal", "value": "0 24px 80px rgba(0,0,0,0.7)", "purpose": "Deep lift for the search modal overlay." }
+    ],
+    "motion": [
+      { "name": "ui-fast", "value": "0.15s ease", "purpose": "Links, nav, header controls." },
+      { "name": "ui-standard", "value": "0.18s ease", "purpose": "Cards, buttons, doc-cards." },
+      { "name": "scan", "value": "6s linear infinite", "purpose": "Console scan-line sweep." },
+      { "name": "radar", "value": "7s linear infinite", "purpose": "Home hero radar sweep." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "900px" },
+      { "name": "sm", "value": "620px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (sheared)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Terminal action button; neon fill with a 10px parallelogram shear.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Read the Docs</a>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; gap:0.5rem; background: var(--color-accent-green, #00ff41); color: var(--color-bg-primary, #080808); padding:0.62rem 1.55rem; font-family:'JetBrains Mono', monospace; font-size:0.8rem; font-weight:700; letter-spacing:0.01em; text-decoration:none; border:none; clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); transition: background .18s ease, transform .18s ease, box-shadow .18s ease; } .ds-btn-primary:hover { background:#33ff66; transform:translateY(-1px); box-shadow:0 6px 22px rgba(0,255,65,0.22); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ghost/secondary action; transparent with a border that turns green on hover.",
+      "html": "<a class=\"ds-btn-secondary\" href=\"#\">View Source</a>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; gap:0.5rem; background:transparent; color: var(--color-text-primary, #f0f0f0); padding:0.62rem 1.55rem; font-family:'JetBrains Mono', monospace; font-size:0.8rem; font-weight:700; text-decoration:none; border:1px solid var(--color-border-accent, #333); clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); transition: border-color .18s ease, background .18s ease; } .ds-btn-secondary:hover { border-color: var(--color-accent-green, #00ff41); background: rgba(0,255,65,0.06); }"
+    },
+    {
+      "name": "Doc Card",
+      "kind": "card",
+      "refersTo": "doc-card",
+      "description": "Navigational card with a green icon tile, mono tag, title, description and nudging arrow.",
+      "html": "<a class=\"ds-doc-card\" href=\"#\"><span class=\"ds-doc-card__icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\"/><path d=\"M3 9h18M9 21V9\"/></svg></span><span class=\"ds-doc-card__body\"><span class=\"ds-doc-card__tag\">pattern_rules</span><span class=\"ds-doc-card__title\">Request shape</span><span class=\"ds-doc-card__desc\">Generic and specific URI patterns, encoding evasion and header anomalies.</span></span><span class=\"ds-doc-card__arrow\">&rarr;</span></a>",
+      "css": ".ds-doc-card { position:relative; display:flex; align-items:flex-start; gap:0.85rem; padding:1rem 1.05rem; background: var(--color-bg-secondary, #0f0f0f); border:1px solid var(--color-border, #222); color: var(--color-text-secondary, #999); text-decoration:none; transition: border-color .18s, background .18s, transform .18s, box-shadow .18s; } .ds-doc-card:hover { transform:translateY(-2px); border-color: var(--color-border-accent, #333); background: var(--color-bg-card-hover, #1a1a1a); box-shadow:0 6px 22px rgba(0,0,0,0.4); } .ds-doc-card__icon { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:2.15rem; height:2.15rem; border:1px solid var(--color-border, #222); background: var(--color-bg-tertiary, #161616); color: var(--color-accent-green, #00ff41); } .ds-doc-card__body { display:flex; flex-direction:column; gap:0.18rem; min-width:0; } .ds-doc-card__tag { font-family:'JetBrains Mono', monospace; font-size:0.58rem; text-transform:uppercase; letter-spacing:0.1em; color: var(--color-text-muted, #555); } .ds-doc-card__title { font-size:0.86rem; font-weight:600; color: var(--color-text-primary, #f0f0f0); } .ds-doc-card__desc { font-size:0.76rem; line-height:1.55; } .ds-doc-card__arrow { align-self:center; color: var(--color-text-muted, #555); transition: color .18s, transform .18s; } .ds-doc-card:hover .ds-doc-card__arrow { color: var(--color-accent-green, #00ff41); transform:translateX(2px); }"
+    },
+    {
+      "name": "Admonition",
+      "kind": "custom",
+      "refersTo": "admonition",
+      "description": "Callout with a green left-rule, a hairline green top gradient and a mono uppercase title.",
+      "html": "<div class=\"ds-admonition\"><div class=\"ds-admonition__title\">Measured vs configured</div><p>Configured half-life is 300 s, but a recorded run measured the effective half-life at 529 s.</p></div>",
+      "css": ".ds-admonition { position:relative; margin:1.15rem 0; padding:0.9rem 1.1rem; border:1px solid var(--color-border, #222); border-left:2px solid var(--color-accent-green, #00ff41); background: var(--color-bg-card, #121212); font-size:0.9rem; color: var(--color-text-secondary, #999); } .ds-admonition::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg, var(--color-accent-green, #00ff41), transparent); opacity:0.35; } .ds-admonition__title { font-family:'JetBrains Mono', monospace; font-weight:600; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.09em; color: var(--color-accent-green, #00ff41); margin-bottom:0.35rem; } .ds-admonition p { margin:0; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "table",
+      "description": "Reference table with green mono uppercase headers and row-hover fill.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Signal</th><th>Score</th></tr></thead><tbody><tr><td>CVE pattern match</td><td>+40 per CVE</td></tr><tr><td>Flagged user-agent</td><td>+50</td></tr></tbody></table>",
+      "css": ".ds-table { width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid var(--color-border, #222); background: var(--color-bg-secondary, #0f0f0f); } .ds-table th { background: var(--color-bg-tertiary, #161616); color: var(--color-accent-green, #00ff41); text-align:left; padding:0.55rem 0.8rem; border-bottom:1px solid var(--color-border-accent, #333); font-family:'JetBrains Mono', monospace; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; } .ds-table td { padding:0.55rem 0.8rem; border-bottom:1px solid var(--color-border, #222); color: var(--color-text-secondary, #999); } .ds-table tr:hover td { background: var(--color-bg-card-hover, #1a1a1a); } .ds-table tr:last-child td { border-bottom:none; }"
+    },
+    {
+      "name": "Sidebar Nav Link",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Section sidebar link; transparent left-rule that turns green and fills when active.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav__title\">Detection</span><a class=\"ds-nav__link active\" href=\"#\">Capabilities</a><a class=\"ds-nav__link\" href=\"#\">Seeded CVEs</a><a class=\"ds-nav__link\" href=\"#\">Suricata Network IDS</a></nav>",
+      "css": ".ds-nav { display:flex; flex-direction:column; gap:1px; } .ds-nav__title { font-family:'JetBrains Mono', monospace; font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color: var(--color-text-muted, #555); margin:0 0 0.65rem; padding:0 0.55rem; } .ds-nav__link { display:block; padding:0.32rem 0.55rem; font-size:0.78rem; color: var(--color-text-secondary, #999); border-left:2px solid transparent; text-decoration:none; transition: color .15s, background .15s, border-color .15s; } .ds-nav__link:hover { color: var(--color-text-primary, #f0f0f0); background: var(--color-bg-tertiary, #161616); } .ds-nav__link.active { color: var(--color-accent-green, #00ff41); border-left-color: var(--color-accent-green, #00ff41); background: rgba(0,255,65,0.06); font-weight:500; }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Mono status pill; green on tertiary surface.",
+      "html": "<span class=\"ds-badge\">EXCLUSIVE</span>",
+      "css": ".ds-badge { display:inline-block; background: var(--color-bg-tertiary, #161616); color: var(--color-accent-green, #00ff41); padding:0.12rem 0.45rem; font-size:0.64rem; font-family:'JetBrains Mono', monospace; border:1px solid var(--color-border, #222); text-transform:uppercase; letter-spacing:0.05em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operator's Terminal",
+    "overview": "A dark, instrument-panel reference built for people who read docs like a console: scanning for the exact signal in a field of calm gray. The world is almost entirely grayscale with a single neon green (#00ff41) doing all the signalling, never decoration. Inter carries prose; JetBrains Mono carries every machine signal in uppercase with wide tracking. Corners are square; depth comes from borders and tonal layering, not resting shadow.",
+    "keyCharacteristics": [
+      "Four-step near-black grayscale surface ramp with #222/#333 hairline borders.",
+      "Exactly one accent hue: neon green #00ff41, used on ≤10% of any screen.",
+      "Square corners everywhere; depth from borders + tonal layering, not radius.",
+      "Inter for prose, JetBrains Mono (uppercase, tracked) for every machine/data signal.",
+      "Ambient machine texture: 64px grid, faint green radial bloom, scan-line and radar motifs."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Green appears on ≤10% of any screen and only to mark a live signal (link, metric, active state, accent edge). If green is decorating, it is wrong.", "section": "colors" },
+      { "name": "The No Second Hue Rule", "body": "No blue, amber, or red. Severity and state are expressed through green vs. gray steps; warnings use a light-gray #d4d4d4 rule, never orange.", "section": "colors" },
+      { "name": "The Mono-Means-Data Rule", "body": "If text is monospace and uppercase, it is a machine signal (label, metric, header, code), never prose.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest; borders and tonal steps carry structure. A shadow is a response to state (hover, overlay), never resting decoration.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do express every token through the CSS custom properties in global.css; add new tokens there rather than inlining hex.",
+      "Do keep green scarce — links, active states, metrics, and one accent edge per element.",
+      "Do set every machine signal in JetBrains Mono, uppercase, tracked.",
+      "Do keep corners square; use the 10px clip-path shear only for primary/footer-nav buttons.",
+      "Do convey depth with borders + tonal steps; add shadow only on hover/overlay."
+    ],
+    "donts": [
+      "Don't introduce a second accent hue.",
+      "Don't put raw hex in page markup — tokens only.",
+      "Don't round corners or add resting drop-shadows to cards.",
+      "Don't set body sentences in monospace, or large body text in neon green.",
+      "Don't fabricate figures; every number traces to source or a cited report."
+    ]
+  }
+}
