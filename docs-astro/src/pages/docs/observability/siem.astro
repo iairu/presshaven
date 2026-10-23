@@ -52,7 +52,7 @@ const toc = [
   <p>The SIEM host (<code>siem/</code>) and the honeypot host (<code>ids/</code>) are a two-host split — see
   <a href="/docs/architecture">Architecture</a> for why. The Vector hop between them is secured with mutual TLS:</p>
   <ul>
-    <li><code>certs/root-ca/gen_elk_certs.sh</code> creates a CA and signs certificates for <code>es01</code>,
+    <li><code>siem/certs/root-ca/gen_elk_certs.sh</code> creates a CA and signs certificates for <code>es01</code>,
     <code>kibana</code>, <code>vector</code> and <code>vector-agent</code>. The <code>vector-agent</code> client
     certificate is copied to the honeypot host's <code>ids/vector/certs/</code> before its shipper can connect.</li>
     <li>The <code>vector</code> server certificate carries a Subject Alternative Name list so the agent can connect

@@ -49,7 +49,7 @@ const toc = [
   <p>Security events (SECURITY_EVENT: JSON in Nginx error log) are shipped by Vector to the SIEM host's Elasticsearch. Suricata on the edge host writes eve.json alerts, ingested by init_worker.lua into the threat_intel shared dict.</p>
   <h3>Setting up the mTLS channel</h3>
   <ol>
-    <li>On the SIEM host, run <code>certs/root-ca/gen_elk_certs.sh</code> to create the CA and sign certificates for <code>es01</code>, <code>kibana</code>, <code>vector</code> and <code>vector-agent</code>.</li>
+    <li>On the SIEM host, run <code>siem/certs/root-ca/gen_elk_certs.sh</code> to create the CA and sign certificates for <code>es01</code>, <code>kibana</code>, <code>vector</code> and <code>vector-agent</code>.</li>
     <li>Copy the generated <code>vector-agent</code> client certificate (<code>siem/vector/certs/vector-agent/</code>) to the edge host's <code>ids/vector/certs/</code> before starting the edge shipper.</li>
     <li>Point the edge shipper at the SIEM with <code>VECTOR_HOST</code> (a raw IP in production). The <code>vector</code> server certificate's Subject Alternative Name list covers connecting by IP as well as by hostname.</li>
   </ol>

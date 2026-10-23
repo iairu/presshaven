@@ -5,12 +5,12 @@ import Icon from '../components/Icon.astro';
 const github = 'https://github.com/iairu/honeypot-ids';
 
 const stats = [
-  { num: '14+', label: 'Seeded CVEs' },
+  { num: '13', label: 'Seeded CVEs' },
   { num: '70+', label: 'Suricata SIDs' },
-  { num: '11', label: 'Routing Stages' },
+  { num: '12', label: 'Routing Stages' },
   { num: '16', label: 'Pure Lua Modules' },
-  { num: '18', label: 'Unit Test Files' },
-  { num: '7', label: 'Kibana Dashboards' },
+  { num: '23', label: 'Unit Test Files' },
+  { num: '6', label: 'Kibana Dashboards' },
 ];
 
 // Mirrors the real dashboard's nav structure 1:1 (dashboard/ui/main_window.py
@@ -18,7 +18,7 @@ const stats = [
 // (dashboard/core/learning.py PAGE_GUIDES) — nothing here is invented.
 // widgets are small qualitative capability tags (not invented live metrics) —
 // each pulled from the page's real purpose above, plus a few verified counts
-// already used elsewhere on this page (14+ CVEs, 70+ SIDs, 7 dashboards, etc).
+// already used elsewhere on this page (13 CVEs, 70+ SIDs, 6 dashboards, etc).
 const dashNav = [
   {
     group: 'Overview',
@@ -32,7 +32,7 @@ const dashNav = [
     items: [
       { id: 'live_events', label: 'Live Events', icon: 'activity', summary: "Real-time stream of the proxy's detection decisions, filterable and exportable, without needing the SIEM.", widgets: [['Stream', 'Real-time'], ['Filter', 'Yes'], ['Export', 'CSV/JSON']] },
       { id: 'health', label: 'Global Visualization', icon: 'sitemap', summary: 'Topology map of every workload with live health, enforcement path and honeypot pool status.', widgets: [['View', 'Topology'], ['Health', 'Live'], ['Pools', 'Shown']] },
-      { id: 'kibana', label: 'SIEM Analytics', icon: 'chart', summary: 'SIEM dashboards for flows, alerts and security events, correlated across both stacks.', widgets: [['Dashboards', '7'], ['Stacks', 'Correlated'], ['Scope', 'Flows + alerts']] },
+      { id: 'kibana', label: 'SIEM Analytics', icon: 'chart', summary: 'SIEM dashboards for flows, alerts and security events, correlated across both stacks.', widgets: [['Dashboards', '6'], ['Stacks', 'Correlated'], ['Scope', 'Flows + alerts']] },
     ],
     overflow: [
       { id: 'pipeline', label: 'Log Pipeline', icon: 'route', summary: "Is the edge shipper really delivering logs to the SIEM? Shipping config, shipper, log errors and aggregator in one check.", widgets: [['Transport', 'mTLS'], ['Shipper', 'Vector'], ['Checks', 'Config + errors']] },
@@ -43,13 +43,13 @@ const dashNav = [
   {
     group: 'Threat Operations',
     items: [
-      { id: 'patterns', label: 'Attack Simulation', icon: 'zap', summary: 'Replay real WordPress CVE patterns against the edge and observe detection, scoring and diversion.', widgets: [['Library', '14+ CVEs'], ['Replay', 'One click'], ['Outcome', 'Scored live']] },
+      { id: 'patterns', label: 'Attack Simulation', icon: 'zap', summary: 'Replay real WordPress CVE patterns against the edge and observe detection, scoring and diversion.', widgets: [['Library', '13 CVEs'], ['Replay', 'One click'], ['Outcome', 'Scored live']] },
       { id: 'sessions', label: 'Attacker Sessions', icon: 'fingerprint', summary: "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.", widgets: [['Scope', 'Per session'], ['Score', 'Trend shown'], ['Routing', 'Divert trace']] },
       { id: 'suricata', label: 'Network IDS (Suricata)', icon: 'shieldAlert', summary: 'Network IDS view: recent Suricata alerts, top signatures and sources, and the rule set with per-rule switches.', widgets: [['Rules', '70+ SIDs'], ['Alerts', 'Live feed'], ['Toggles', 'Per rule']] },
       { id: 'detection', label: 'Detection Policy', icon: 'crosshair', summary: 'Tune how evidence builds and fades: score decay, IP-reputation weight and shared-address handling.', widgets: [['Decay', 'Tunable'], ['IP rep', 'Weighted'], ['Shared IP', 'Configurable']] },
     ],
     overflow: [
-      { id: 'pattern_database', label: 'Pattern Database', icon: 'clipboard', summary: 'Browse every detection pattern in one place: CVEs, generic signatures, upload and header rules, scanner tools and Suricata SIDs, with provenance and an attack lesson for each.', widgets: [['CVE rules', '14+'], ['IDS rules', '70+ SIDs'], ['Provenance', 'Per entry']] },
+      { id: 'pattern_database', label: 'Pattern Database', icon: 'clipboard', summary: 'Browse every detection pattern in one place: CVEs, generic signatures, upload and header rules, scanner tools and Suricata SIDs, with provenance and an attack lesson for each.', widgets: [['CVE rules', '13'], ['IDS rules', '70+ SIDs'], ['Provenance', 'Per entry']] },
       { id: 'signature_sim', label: 'Signature Simulation', icon: 'eye', summary: "Watch one browser characteristic become the proxy's consent-gated one-way gdpr_signature, end to end.", widgets: [['Token', 'RSA-OAEP'], ['Signature', 'One-way'], ['Consent', 'Required']] },
       { id: 'pool_scaling', label: 'Pool Scaling', icon: 'layers', summary: 'Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.', widgets: [['Pools', 'Static + runtime'], ['Budget', 'Capped'], ['Scaling', 'On demand']] },
       { id: 'pool_test', label: 'Segmentation Validation', icon: 'target', summary: 'Validate per-session segmentation: several isolated user sessions, each diverted to its own honeypot pool.', widgets: [['Sessions', 'Parallel'], ['Pools', 'Isolated'], ['Check', 'Segmentation']] },
@@ -85,7 +85,7 @@ const navigation = [
     kicker: '6 pages',
     title: 'Detection',
     description: 'URI and header patterns, CVE signatures, Suricata alerts, IP reputation, escalation-aware decay and a consent-gated device signature — every score explained.',
-    meta: '14+ CVEs · WSTG mapped',
+    meta: '13 CVEs · WSTG mapped',
   },
   {
     href: '/docs/observability',
@@ -93,7 +93,7 @@ const navigation = [
     kicker: '3 pages',
     title: 'Observability',
     description: 'Structured security events shipped over mTLS by Vector into Elasticsearch, with six operational Kibana dashboards and an embedded request timeline.',
-    meta: '7 dashboards',
+    meta: '6 dashboards',
   },
   {
     href: '/docs/operations',
@@ -117,7 +117,7 @@ const navigation = [
     kicker: '2 pages',
     title: 'Testing',
     description: 'Eighteen pure-Lua unit test suites, dashboard validation and the blind penetration-test protocol.',
-    meta: '18 test files',
+    meta: '23 test files',
   },
   {
     href: '/docs/reference',
@@ -358,7 +358,7 @@ const navigation = [
               <text class="diagram-text diagram-text--accent" x="206" y="148" text-anchor="middle">OPENRESTY</text>
               <text class="diagram-text--sm" x="206" y="163" text-anchor="middle">analyze_request()</text>
               <text class="diagram-text--sm" x="206" y="175" text-anchor="middle">decide_route()</text>
-              <text class="diagram-text--sm" x="206" y="187" text-anchor="middle">11 stages</text>
+              <text class="diagram-text--sm" x="206" y="187" text-anchor="middle">12 stages</text>
 
               <path class="diagram-arrow" d="M264 165H300" />
               <path class="diagram-line--accent" d="M300 165V96H350" />
@@ -462,7 +462,7 @@ const navigation = [
             <h3>Request pipeline</h3>
             <pre><code>Client Request → Nginx access_by_lua_block
   → pattern_analyzer.analyze_request()
-  → router.decide_route() (11 stages)
+  → router.decide_route() (12 stages)
   → pool_router.get_or_assign_pool()
   → session_handler.update_session() → Redis
   → WordPress backend: production or honeypot
@@ -533,7 +533,7 @@ const navigation = [
 
               <rect class="diagram-node diagram-node--accent" x="418" y="228" width="110" height="46" />
               <text class="diagram-text diagram-text--accent" x="430" y="246">KIBANA</text>
-              <text class="diagram-text--sm" x="430" y="260">7 dashboards</text>
+              <text class="diagram-text--sm" x="430" y="260">6 dashboards</text>
 
               <path class="diagram-line--accent" d="M473 146v18M473 210v18" />
               <path class="diagram-arrowhead" d="M473 164l-4-8h8zM473 228l-4-8h8z" />
@@ -616,7 +616,7 @@ const navigation = [
 
               <rect class="diagram-panel" x="386" y="112" width="150" height="56" />
               <text class="diagram-text" x="400" y="133">ROUTE DECISION</text>
-              <text class="diagram-text--sm" x="400" y="147">threshold 80 · 11 stages</text>
+              <text class="diagram-text--sm" x="400" y="147">threshold 80 · 12 stages</text>
               <text class="diagram-text--sm" x="400" y="159">CVE / plugin / reputation</text>
 
               <path class="diagram-line" d="M461 168v20" />
@@ -813,7 +813,7 @@ const navigation = [
             <li>No tarpit — identical proxy latency</li>
             <li>Privacy-preserving GDPR identity</li>
             <li>Honeytoken injection for high-confidence signals</li>
-            <li>Pure / adapter split with 18 unit test files</li>
+            <li>Pure / adapter split with 23 unit test files</li>
             <li>Severity-graded Suricata integration</li>
           </ul>
         </div>
@@ -870,10 +870,10 @@ const navigation = [
           </a>
         </div>
         <div class="home-chips" style="justify-content: center; border-top: 0; padding-top: 1.5rem; margin-left: auto; margin-right: auto;">
-          <span><Icon name="radar" class="w-3.5 h-3.5" /> 11-stage routing</span>
-          <span><Icon name="shield" class="w-3.5 h-3.5" /> 14+ seeded CVEs</span>
-          <span><Icon name="chart" class="w-3.5 h-3.5" /> 7 dashboards</span>
-          <span><Icon name="flask" class="w-3.5 h-3.5" /> 18 test suites</span>
+          <span><Icon name="radar" class="w-3.5 h-3.5" /> 12-stage routing</span>
+          <span><Icon name="shield" class="w-3.5 h-3.5" /> 13 seeded CVEs</span>
+          <span><Icon name="chart" class="w-3.5 h-3.5" /> 6 dashboards</span>
+          <span><Icon name="flask" class="w-3.5 h-3.5" /> 23 test suites</span>
         </div>
       </div>
     </div>
