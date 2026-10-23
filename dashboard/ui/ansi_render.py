@@ -14,8 +14,9 @@ from PyQt6.QtWidgets import QPlainTextEdit
 from ui import theme
 from ui.ansi import (
     AnsiStyle, AnsiTextParser, DARK_BASE_COLORS, DARK_BRIGHT_COLORS,
-    HC_DARK_BASE_COLORS, HC_DARK_BRIGHT_COLORS, HC_LIGHT_BASE_COLORS,
-    HC_LIGHT_BRIGHT_COLORS, LIGHT_BASE_COLORS, LIGHT_BRIGHT_COLORS,
+    DOCS_BASE_COLORS, DOCS_BRIGHT_COLORS, HC_DARK_BASE_COLORS,
+    HC_DARK_BRIGHT_COLORS, HC_LIGHT_BASE_COLORS, HC_LIGHT_BRIGHT_COLORS,
+    LIGHT_BASE_COLORS, LIGHT_BRIGHT_COLORS,
 )
 
 # This is what the user called "the shell": a fixed dark background
@@ -23,9 +24,10 @@ from ui.ansi import (
 # existed (bright ANSI colors meant for a dark background go
 # low-contrast-to-invisible on it too -- see ui/ansi.py's palettes). Uses
 # ui/theme.py's scheme_colors() so the panel matches whichever theme
-# (Solarized or High Contrast, light or dark) is actually active, instead
-# of making its own separate light/dark choice.
+# (Docs, Solarized or High Contrast, light or dark) is actually active,
+# instead of making its own separate light/dark choice.
 _ANSI_PALETTES = {
+    theme.THEME_DOCS: (DOCS_BASE_COLORS, DOCS_BRIGHT_COLORS),
     theme.THEME_CONSOLE_DARK: (DARK_BASE_COLORS, DARK_BRIGHT_COLORS),
     theme.THEME_CONSOLE_LIGHT: (LIGHT_BASE_COLORS, LIGHT_BRIGHT_COLORS),
     theme.THEME_DARK: (DARK_BASE_COLORS, DARK_BRIGHT_COLORS),

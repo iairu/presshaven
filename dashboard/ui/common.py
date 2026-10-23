@@ -89,7 +89,8 @@ def set_status(label: QLabel, text: str, color: str | None = None, bold: bool = 
 
 def badge_css(bg: str, fg: str = "#1e1e1e") -> str:
     """Pill-style QLabel stylesheet (score/route badges on the Attack Simulation page)."""
-    return f"QLabel {{ background-color: {bg}; color: {fg}; padding: 4px 10px; border-radius: 4px; font-weight: bold; }}"
+    return (f"QLabel {{ background-color: {bg}; color: {fg}; padding: 4px 10px; "
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}")
 
 
 def danger_button(text: str, on_click: Callable[[], None] | None = None) -> QPushButton:

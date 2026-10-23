@@ -46,6 +46,19 @@ DARK_BRIGHT_COLORS = {
 LIGHT_BASE_COLORS = dict(DARK_BASE_COLORS)
 LIGHT_BRIGHT_COLORS = dict(DARK_BRIGHT_COLORS)
 
+# Docs Dark palettes -- drawn from docs-astro's grayscale + neon-green
+# tokens and its critical/high/medium badge hues, so container logs in the
+# default theme read as part of the same design rather than borrowing
+# Solarized's cyan/violet/olive set.
+DOCS_BASE_COLORS = {
+    0: "#555555", 1: "#ff6b6b", 2: "#00ff41", 3: "#ffb020",
+    4: "#7dd3fc", 5: "#d980fa", 6: "#00e5c0", 7: "#f0f0f0",
+}
+DOCS_BRIGHT_COLORS = {
+    0: "#999999", 1: "#ff9e9e", 2: "#66ff88", 3: "#ffd166",
+    4: "#a5d8ff", 5: "#e599f7", 6: "#66ffe0", 7: "#ffffff",
+}
+
 # High Contrast palettes -- near-maximally saturated primaries rather than
 # Solarized's more moderate tones, for anyone who specifically wants that
 # over Solarized's ~4.7:1 body-text contrast. Genuinely different between

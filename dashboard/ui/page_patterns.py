@@ -236,7 +236,7 @@ class _EventCard(QFrame):
         card_bg, detail_color = colors["bg_alt"], colors["fg_muted"]
         self.setStyleSheet(
             f"_EventCard {{ background-color: {card_bg}; border-left: 4px solid {event.color}; "
-            "border-radius: 3px; }"
+            f"border-radius: {theme.corner_radius_css(3)}; }}"
         )
         card_layout = QHBoxLayout(self)
         card_layout.setContentsMargins(4, 4, 8, 4)
@@ -621,7 +621,7 @@ class PatternsPage(QWidget):
         self.score_badge = QLabel(f"Score: --/{SCORE_MAX}")
         self.score_badge.setStyleSheet(
             "QLabel { background-color: #444444; color: #d4d4d4; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }"
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}"
         )
         status_row.addWidget(self.score_badge)
 
@@ -632,7 +632,7 @@ class PatternsPage(QWidget):
         self.route_label = QLabel("Route: --")
         self.route_label.setStyleSheet(
             "QLabel { background-color: #444444; color: #d4d4d4; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }"
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}"
         )
         status_row.addSpacing(6)
         status_row.addWidget(self.route_label)
@@ -856,7 +856,7 @@ class PatternsPage(QWidget):
         self.score_badge.setText(f"Score: {score}/{SCORE_MAX}")
         self.score_badge.setStyleSheet(
             f"QLabel {{ background-color: {color}; color: #1e1e1e; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }"
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}"
         )
 
     def _update_route_label(self, event: PatternEvent) -> None:
@@ -866,7 +866,7 @@ class PatternsPage(QWidget):
         self.route_label.setText(text)
         self.route_label.setStyleSheet(
             f"QLabel {{ background-color: {color}; color: #1e1e1e; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }"
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}"
         )
 
     # ---- toolbar actions ----
@@ -1299,7 +1299,7 @@ class PatternsPage(QWidget):
         self.route_label.setText("Routed to PROD")
         self.route_label.setStyleSheet(
             f"QLabel {{ background-color: {COLOR_LOW}; color: #1e1e1e; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }"
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}"
         )
 
     def _capture_browser(self, url: str, key: str) -> str:

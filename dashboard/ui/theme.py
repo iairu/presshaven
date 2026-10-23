@@ -1,6 +1,7 @@
-"""App-wide theme: Console Dark/Light (the default security-operations
-look), Solarized Light/Dark, High Contrast Light/Dark -- applied as an actual forced QPalette, not just Qt's
-native color-scheme hint.
+"""App-wide theme: Docs Dark (the default security-operations look, matching
+the docs-astro site's grayscale + neon-green design), Console Dark/Light,
+Solarized Light/Dark, High Contrast Light/Dark -- applied as an actual forced
+QPalette, not just Qt's native color-scheme hint.
 
 QStyleHints.setColorScheme() alone (the original implementation) does NOT
 reliably force a real dark look on a real desktop: it only influences how
@@ -39,8 +40,9 @@ THEME_HC_LIGHT = "hc_light"
 THEME_HC_DARK = "hc_dark"
 THEME_CONSOLE_DARK = "console_dark"
 THEME_CONSOLE_LIGHT = "console_light"
-THEMES = [THEME_SYSTEM, THEME_CONSOLE_DARK, THEME_CONSOLE_LIGHT, THEME_LIGHT, THEME_DARK,
-          THEME_HC_LIGHT, THEME_HC_DARK]
+THEME_DOCS = "docs"
+THEMES = [THEME_DOCS, THEME_SYSTEM, THEME_CONSOLE_DARK, THEME_CONSOLE_LIGHT, THEME_LIGHT,
+          THEME_DARK, THEME_HC_LIGHT, THEME_HC_DARK]
 
 # THEME_SYSTEM only ever resolves into the Console Light/Dark pair (see
 # _resolve_effective()) -- Qt's own OS-preference signal (Qt.ColorScheme)
@@ -49,6 +51,7 @@ THEMES = [THEME_SYSTEM, THEME_CONSOLE_DARK, THEME_CONSOLE_LIGHT, THEME_LIGHT, TH
 # something "system" falls into.
 
 THEME_LABELS = {
+    THEME_DOCS: "Docs Dark",
     THEME_SYSTEM: "Follow system (Console)",
     THEME_CONSOLE_DARK: "Console Dark",
     THEME_CONSOLE_LIGHT: "Console Light",
@@ -66,6 +69,19 @@ SOLARIZED = {
     "base0": "#839496", "base1": "#93a1a1", "base2": "#eee8d5", "base3": "#fdf6e3",
     "yellow": "#b58900", "orange": "#cb4b16", "red": "#dc322f", "magenta": "#d33682",
     "violet": "#6c71c4", "blue": "#268bd2", "cyan": "#2aa198", "green": "#859900",
+}
+
+# The docs-astro site's design tokens (docs-astro/src/styles/global.css):
+# near-black grayscale surfaces, hairline #222 borders, and one neon-green
+# accent. Kept as one dict so the PyQt app and the documentation site stay
+# literally the same palette, not merely similar ones.
+DOCS = {
+    "bg": "#080808", "surface": "#0f0f0f", "surface_alt": "#161616",
+    "card": "#121212", "card_hover": "#1a1a1a",
+    "border": "#222222", "border_accent": "#333333",
+    "text": "#f0f0f0", "secondary": "#999999", "muted": "#555555",
+    "accent": "#00ff41", "accent_dim": "#00cc33", "accent_text": "#04140a",
+    "danger": "#ff6b6b", "warning": "#ffb020", "info": "#7dd3fc",
 }
 
 # Security-operations console palettes: slate/navy surfaces with a cyan
@@ -99,8 +115,16 @@ CONSOLE = {
 #   surface   - raised panel fill (cards, inputs, tables)
 #   nav_bg / nav_fg / nav_muted - the navigation rail (dark in every theme
 #               except High Contrast Light)
+#   nav_hover / nav_selected / nav_selected_fg - navigation rail item states
+#   header_bg - page header / title bar fill
+#   selection_bg / selection_fg - text and item selection
 #   danger / success / warning - semantic status colors
 _SCHEME_COLORS = {
+    THEME_DOCS: {
+        "bg": DOCS["bg"], "fg": DOCS["text"],
+        "bg_alt": DOCS["surface_alt"], "fg_muted": DOCS["secondary"],
+        "border": DOCS["border"],
+    },
     THEME_CONSOLE_DARK: {
         "bg": CONSOLE[THEME_CONSOLE_DARK]["window"], "fg": CONSOLE[THEME_CONSOLE_DARK]["text"],
         "bg_alt": CONSOLE[THEME_CONSOLE_DARK]["surface_alt"],
@@ -136,43 +160,69 @@ _SCHEME_COLORS = {
 }
 
 _EXTRA_ROLES = {
+    THEME_DOCS: {
+        "accent": DOCS["accent"], "accent_text": DOCS["accent_text"], "surface": DOCS["surface"],
+        "nav_bg": DOCS["bg"], "nav_fg": DOCS["text"], "nav_muted": DOCS["muted"],
+        "nav_hover": "rgba(0, 255, 65, 0.08)", "nav_selected": "rgba(0, 255, 65, 0.12)",
+        "nav_selected_fg": DOCS["accent"], "header_bg": DOCS["surface"],
+        "selection_bg": "#064616", "selection_fg": DOCS["text"],
+        "danger": DOCS["danger"], "success": DOCS["accent"], "warning": DOCS["warning"],
+    },
     THEME_CONSOLE_DARK: {
         "accent": "#22d3ee", "accent_text": "#04131a", "surface": "#111a2e",
         "nav_bg": "#080d1a", "nav_fg": "#e2e8f0", "nav_muted": "#64748b",
+        "nav_hover": "rgba(148, 163, 184, 0.14)", "nav_selected": "rgba(148, 163, 184, 0.20)",
+        "nav_selected_fg": "#e2e8f0", "header_bg": "#0b1120",
+        "selection_bg": "#22d3ee", "selection_fg": "#04131a",
         "danger": "#ef4444", "success": "#22c55e", "warning": "#f59e0b",
     },
     THEME_CONSOLE_LIGHT: {
         "accent": "#0284c7", "accent_text": "#ffffff", "surface": "#ffffff",
         "nav_bg": "#0f172a", "nav_fg": "#e2e8f0", "nav_muted": "#94a3b8",
+        "nav_hover": "rgba(148, 163, 184, 0.14)", "nav_selected": "rgba(148, 163, 184, 0.20)",
+        "nav_selected_fg": "#e2e8f0", "header_bg": "#f4f6fa",
+        "selection_bg": "#0284c7", "selection_fg": "#ffffff",
         "danger": "#dc2626", "success": "#16a34a", "warning": "#d97706",
     },
     THEME_DARK: {
         "accent": SOLARIZED["cyan"], "accent_text": SOLARIZED["base03"],
         "surface": SOLARIZED["base02"], "nav_bg": "#00212b", "nav_fg": SOLARIZED["base1"],
-        "nav_muted": SOLARIZED["base01"], "danger": SOLARIZED["red"],
-        "success": SOLARIZED["green"], "warning": SOLARIZED["yellow"],
+        "nav_muted": SOLARIZED["base01"],
+        "nav_hover": "rgba(131, 148, 150, 0.14)", "nav_selected": "rgba(131, 148, 150, 0.20)",
+        "nav_selected_fg": SOLARIZED["base1"], "header_bg": SOLARIZED["base03"],
+        "selection_bg": SOLARIZED["blue"], "selection_fg": SOLARIZED["base03"],
+        "danger": SOLARIZED["red"], "success": SOLARIZED["green"], "warning": SOLARIZED["yellow"],
     },
     THEME_LIGHT: {
         "accent": SOLARIZED["blue"], "accent_text": SOLARIZED["base3"],
         "surface": SOLARIZED["base3"], "nav_bg": SOLARIZED["base02"], "nav_fg": SOLARIZED["base2"],
-        "nav_muted": SOLARIZED["base1"], "danger": SOLARIZED["red"],
-        "success": SOLARIZED["green"], "warning": SOLARIZED["yellow"],
+        "nav_muted": SOLARIZED["base1"],
+        "nav_hover": "rgba(131, 148, 150, 0.14)", "nav_selected": "rgba(131, 148, 150, 0.20)",
+        "nav_selected_fg": SOLARIZED["base2"], "header_bg": SOLARIZED["base3"],
+        "selection_bg": SOLARIZED["blue"], "selection_fg": SOLARIZED["base3"],
+        "danger": SOLARIZED["red"], "success": SOLARIZED["green"], "warning": SOLARIZED["yellow"],
     },
     THEME_HC_DARK: {
         "accent": "#ffff00", "accent_text": "#000000", "surface": "#000000",
         "nav_bg": "#000000", "nav_fg": "#ffffff", "nav_muted": "#e6e6e6",
+        "nav_hover": "rgba(255, 255, 255, 0.14)", "nav_selected": "rgba(255, 255, 255, 0.22)",
+        "nav_selected_fg": "#ffffff", "header_bg": "#000000",
+        "selection_bg": "#ffff00", "selection_fg": "#000000",
         "danger": "#ff5555", "success": "#55ff55", "warning": "#ffcc00",
     },
     THEME_HC_LIGHT: {
         "accent": "#000000", "accent_text": "#ffffff", "surface": "#ffffff",
         "nav_bg": "#ffffff", "nav_fg": "#000000", "nav_muted": "#333333",
+        "nav_hover": "rgba(0, 0, 0, 0.08)", "nav_selected": "rgba(0, 0, 0, 0.14)",
+        "nav_selected_fg": "#000000", "header_bg": "#ffffff",
+        "selection_bg": "#000000", "selection_fg": "#ffffff",
         "danger": "#cc0000", "success": "#006600", "warning": "#8a5a00",
     },
 }
 for _name, _roles in _EXTRA_ROLES.items():
     _SCHEME_COLORS[_name].update(_roles)
 
-_current_theme = THEME_SYSTEM
+_current_theme = THEME_DOCS
 _change_callbacks: list[Callable[[], None]] = []
 _os_listener_installed = False
 
@@ -207,6 +257,17 @@ def _build_palette(effective: str) -> QPalette:
         highlight, highlighted_text = c["accent"], c["accent_text"]
         bright_text = c["danger"]
         link, link_visited = c["accent"], c["accent"]
+    elif effective == THEME_DOCS:
+        window, window_text = DOCS["bg"], DOCS["text"]
+        base, alt_base = DOCS["surface"], DOCS["surface_alt"]
+        button = DOCS["surface_alt"]
+        placeholder = DOCS["muted"]
+        disabled_text = DOCS["muted"]
+        # Translucent green over #080808, matching the site's
+        # ::selection { background: rgba(0, 255, 65, 0.25) }.
+        highlight, highlighted_text = "#064616", DOCS["text"]
+        bright_text = DOCS["danger"]
+        link, link_visited = DOCS["accent"], DOCS["accent_dim"]
     elif effective == THEME_HC_DARK:
         window, window_text = "#000000", "#ffffff"
         base, alt_base = "#000000", "#1a1a1a"
@@ -292,19 +353,38 @@ def _arrow_icons(color: str) -> tuple[str, str]:
 
 
 def _build_stylesheet(effective: str) -> str:
-    """The app-wide QSS layered on top of the palette: rounded controls,
+    """The app-wide QSS layered on top of the palette: theme-shaped controls,
     focus rings in the accent color, flat tabs/tables/scrollbars, and the
     navigation rail / page header object names main_window.py uses. Every
     color comes from scheme_colors() roles, so each theme gets the same
-    shapes in its own colors."""
+    shapes in its own colors -- except Docs Dark, which deliberately uses
+    the documentation site's square corners and mono micro-labels."""
     c = _SCHEME_COLORS[effective]
-    radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "6px"
+    is_docs = effective == THEME_DOCS
+    if is_docs:
+        radius = panel_radius = small_radius = nav_radius = brand_radius = "0px"
+    else:
+        radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "6px"
+        panel_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "8px"
+        small_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "4px"
+        nav_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "6px"
+        brand_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "3px"
+    mono = f"font-family: {MONO_STACK};" if is_docs else ""
+    mono_micro = (
+        f"font-family: {MONO_STACK}; font-size: 8pt; letter-spacing: 0.5px;"
+        if is_docs else ""
+    )
+    status_bg = c["header_bg"] if is_docs else c["nav_bg"]
+    tab_selected_fg = c["accent"] if is_docs else c["fg"]
+    table_header_fg = c["accent"] if is_docs else c["fg_muted"]
+    scroll_track = c["surface"] if is_docs else "transparent"
+    scroll_thumb = DOCS["border_accent"] if is_docs else c["border"]
     down, up = _arrow_icons(c["fg_muted"])
     return f"""
     QWidget {{ font-family: {FONT_STACK}; font-size: 10pt; }}
     QMainWindow, QDialog {{ background: {c["bg"]}; }}
     QToolTip {{ background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
-               padding: 6px 8px; border-radius: 4px; }}
+               padding: 6px 8px; border-radius: {small_radius}; }}
 
     QPushButton, QToolButton {{
         background: {c["bg_alt"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
@@ -317,13 +397,14 @@ def _build_stylesheet(effective: str) -> str:
         background: {c["accent"]}; color: {c["accent_text"]}; border-color: {c["accent"]};
     }}
     QPushButton:default {{ border-color: {c["accent"]}; }}
+    QPushButton:default:pressed {{ background: {c["accent"]}; color: {c["accent_text"]}; }}
     QPushButton:disabled, QToolButton:disabled {{ color: {c["fg_muted"]}; background: {c["bg"]}; }}
 
     QLineEdit, QPlainTextEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox,
     QComboBox, QDateTimeEdit {{
         background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
         border-radius: {radius}; padding: 4px 6px;
-        selection-background-color: {c["accent"]}; selection-color: {c["accent_text"]};
+        selection-background-color: {c["selection_bg"]}; selection-color: {c["selection_fg"]};
     }}
     QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus,
     QDoubleSpinBox:focus, QComboBox:focus, QDateTimeEdit:focus {{ border-color: {c["accent"]}; }}
@@ -340,16 +421,16 @@ def _build_stylesheet(effective: str) -> str:
     QSpinBox::down-button, QDoubleSpinBox::down-button, QDateTimeEdit::down-button {{ subcontrol-position: bottom right; }}
     QComboBox QAbstractItemView {{
         background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
-        selection-background-color: {c["accent"]}; selection-color: {c["accent_text"]};
+        selection-background-color: {c["selection_bg"]}; selection-color: {c["selection_fg"]};
     }}
 
     QGroupBox {{
-        background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: 8px;
+        background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: {panel_radius};
         margin-top: 14px; padding: 12px 10px 10px 10px;
     }}
     QGroupBox::title {{
         subcontrol-origin: margin; left: 12px; padding: 0 4px; color: {c["fg_muted"]};
-        font-weight: 600; letter-spacing: 0.5px;
+        {mono_micro} font-weight: 600; letter-spacing: 0.5px;
     }}
 
     QTabWidget::pane {{ border: 1px solid {c["border"]}; border-radius: {radius}; top: -1px;
@@ -359,24 +440,24 @@ def _build_stylesheet(effective: str) -> str:
         border: none; border-bottom: 2px solid transparent; margin-right: 2px;
     }}
     QTabBar::tab:hover {{ color: {c["fg"]}; }}
-    QTabBar::tab:selected {{ color: {c["fg"]}; border-bottom: 2px solid {c["accent"]}; font-weight: 600; }}
+    QTabBar::tab:selected {{ color: {tab_selected_fg}; border-bottom: 2px solid {c["accent"]}; font-weight: 600; }}
 
     QTableView, QTreeView, QListView, QTableWidget, QTreeWidget, QListWidget {{
         background: {c["surface"]}; alternate-background-color: {c["bg_alt"]};
         border: 1px solid {c["border"]}; border-radius: {radius}; gridline-color: {c["border"]};
-        selection-background-color: {c["accent"]}; selection-color: {c["accent_text"]};
+        selection-background-color: {c["selection_bg"]}; selection-color: {c["selection_fg"]};
     }}
     QHeaderView::section {{
-        background: {c["bg_alt"]}; color: {c["fg_muted"]}; border: none;
+        background: {c["bg_alt"]}; color: {table_header_fg}; border: none;
         border-bottom: 1px solid {c["border"]}; border-right: 1px solid {c["border"]};
-        padding: 5px 8px; font-weight: 600;
+        padding: 5px 8px; {mono_micro} font-weight: 600;
     }}
     QTableCornerButton::section {{ background: {c["bg_alt"]}; border: none; }}
 
-    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
-    QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 0; }}
+    QScrollBar:vertical {{ background: {scroll_track}; width: 10px; margin: 0; }}
+    QScrollBar:horizontal {{ background: {scroll_track}; height: 10px; margin: 0; }}
     QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
-        background: {c["border"]}; border-radius: 4px; min-height: 24px; min-width: 24px;
+        background: {scroll_thumb}; border-radius: {small_radius}; min-height: 24px; min-width: 24px;
     }}
     QScrollBar::handle:hover {{ background: {c["fg_muted"]}; }}
     QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
@@ -388,30 +469,32 @@ def _build_stylesheet(effective: str) -> str:
 
     QMenuBar {{ background: {c["bg"]}; border-bottom: 1px solid {c["border"]}; }}
     QMenuBar::item {{ padding: 4px 10px; background: transparent; }}
-    QMenuBar::item:selected {{ background: {c["bg_alt"]}; border-radius: 4px; }}
+    QMenuBar::item:selected {{ background: {c["bg_alt"]}; border-radius: {small_radius}; }}
     QMenu {{ background: {c["surface"]}; border: 1px solid {c["border"]}; padding: 4px; }}
-    QMenu::item {{ padding: 5px 22px 5px 14px; border-radius: 4px; }}
-    QMenu::item:selected {{ background: {c["accent"]}; color: {c["accent_text"]}; }}
+    QMenu::item {{ padding: 5px 22px 5px 14px; border-radius: {small_radius}; }}
+    QMenu::item:selected {{ background: {c["selection_bg"]}; color: {c["selection_fg"]}; }}
     QMenu::separator {{ height: 1px; background: {c["border"]}; margin: 4px 6px; }}
-    QStatusBar {{ background: {c["nav_bg"]}; color: {c["nav_muted"]}; border-top: 1px solid {c["border"]}; }}
+    QStatusBar {{ background: {status_bg}; color: {c["nav_muted"]}; border-top: 1px solid {c["border"]}; }}
     QStatusBar QLabel {{ color: {c["nav_muted"]}; }}
     QSplitter::handle {{ background: {c["border"]}; }}
 
     #NavRail {{ background: {c["nav_bg"]}; border-right: 1px solid {c["border"]}; }}
     #NavRail QLabel {{ color: {c["nav_fg"]}; background: transparent; }}
     #BrandTitle {{ font-size: 12pt; font-weight: 700; letter-spacing: 2px; }}
-    #NavRail QLabel#BrandSubtitle {{ color: {c["nav_muted"]}; font-size: 8pt; letter-spacing: 0.5px; }}
-    #NavRail QLabel#BrandMark {{ background: {c["accent"]}; border-radius: 3px; }}
+    #NavRail QLabel#BrandSubtitle {{ color: {c["nav_muted"]}; font-size: 8pt;
+                                     {mono} letter-spacing: 0.5px; }}
+    #NavRail QLabel#BrandMark {{ background: {c["accent"]}; border-radius: {brand_radius}; }}
     #NavList {{ background: transparent; border: none; color: {c["nav_fg"]}; outline: 0; }}
-    #NavList::item {{ padding: 7px 12px; margin: 1px 8px; border-radius: 6px;
+    #NavList::item {{ padding: 7px 12px; margin: 1px 8px; border-radius: {nav_radius};
                       border-left: 3px solid transparent; }}
-    #NavList::item:hover {{ background: rgba(148, 163, 184, 0.14); }}
-    #NavList::item:selected {{ background: rgba(148, 163, 184, 0.20); color: {c["nav_fg"]};
+    #NavList::item:hover {{ background: {c["nav_hover"]}; }}
+    #NavList::item:selected {{ background: {c["nav_selected"]}; color: {c["nav_selected_fg"]};
                                border-left: 3px solid {c["accent"]}; font-weight: 600; }}
     #NavRail QLabel#NavFooter {{ color: {c["nav_muted"]}; font-size: 8pt; }}
 
-    #HeaderBar {{ background: {c["bg"]}; border-bottom: 1px solid {c["border"]}; }}
-    #PageCrumb {{ color: {c["accent"]}; font-size: 8pt; font-weight: 700; letter-spacing: 1.5px; }}
+    #HeaderBar {{ background: {c["header_bg"]}; border-bottom: 1px solid {c["border"]}; }}
+    #PageCrumb {{ color: {c["accent"]}; {mono} font-size: 8pt; font-weight: 700;
+                  letter-spacing: 1.5px; }}
     #PageTitle {{ color: {c["fg"]}; font-size: 16pt; font-weight: 700; }}
     #PageSubtitle {{ color: {c["fg_muted"]}; }}
     """
@@ -421,7 +504,7 @@ def apply_theme(theme: str) -> None:
     """Call once at startup with the persisted state.theme, and again
     whenever the user changes it in Settings."""
     global _current_theme, _os_listener_installed
-    _current_theme = theme if theme in THEMES else THEME_SYSTEM
+    _current_theme = theme if theme in THEMES else THEME_DOCS
 
     app = QApplication.instance()
     if app is None:
@@ -475,9 +558,21 @@ def effective_theme() -> str:
 
 
 def is_dark() -> bool:
-    """Whether the EFFECTIVE current theme has a dark background (either
-    Console Dark, Solarized Dark or High Contrast Dark)."""
+    """Whether the EFFECTIVE current theme has a dark background (Docs
+    Dark, Console Dark, Solarized Dark or High Contrast Dark)."""
     return effective_theme() not in _LIGHT_THEMES
+
+
+def corner_radius(default: int) -> int:
+    """Theme-appropriate corner radius in pixels for custom-painted
+    widgets. Docs Dark is deliberately square-cornered, like the
+    documentation site; every other theme keeps its existing rounding."""
+    return 0 if effective_theme() == THEME_DOCS else default
+
+
+def corner_radius_css(default: int) -> str:
+    """corner_radius() as a QSS length, for custom widget stylesheets."""
+    return f"{corner_radius(default)}px"
 
 
 def scheme_colors() -> dict[str, str]:

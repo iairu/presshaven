@@ -116,7 +116,8 @@ class _BrowserView(QFrame):
             f"#SimBrowserView {{ background: {c['bg']}; border: 1px solid {c['border']}; }}"
             f"#SimChrome {{ background: {c['bg_alt']}; border-bottom: 1px solid {c['border']}; }}"
             f"#SimAddress {{ {_MONO} color: {c['fg_muted']}; background: {c['bg']}; "
-            f"  border: 1px solid {c['border']}; border-radius: 10px; padding: 3px 10px; }}"
+            f"  border: 1px solid {c['border']}; border-radius: {theme.corner_radius_css(10)}; "
+            f"  padding: 3px 10px; }}"
             f"#SimConsentBanner {{ color: {c['fg']}; background: {c['bg_alt']}; "
             f"  border: 1px solid {c['border']}; border-left: 3px solid {BLUE}; padding: 9px 11px; }}"
             f"#SimBrowserView QLabel {{ color: {c['fg']}; }}")
@@ -165,7 +166,8 @@ class _Stage(QFrame):
         self.badge.setFixedSize(22, 22)
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.badge.setStyleSheet(
-            f"background: {accent}; color: #10151f; border-radius: 11px; font-weight: bold;")
+            f"background: {accent}; color: #10151f; "
+            f"border-radius: {theme.corner_radius_css(11)}; font-weight: bold;")
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-weight: bold;")
         tag = QLabel(role.upper())

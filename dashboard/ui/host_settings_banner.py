@@ -80,7 +80,8 @@ class HostSettingsBanner(QWidget):
             f"QLabel {{ color: {c['fg']}; background: transparent; }} "
             f"QLabel#BannerHeader {{ color: {edge}; font-weight: 700; }} "
             f"QLabel#BannerCommand {{ font-family: {theme.MONO_STACK}; background-color: {c['bg']}; "
-            f"border: 1px solid {c['border']}; border-radius: 4px; padding: 6px; }}")
+            f"border: 1px solid {c['border']}; border-radius: {theme.corner_radius_css(4)}; "
+            f"padding: 6px; }}")
 
     def refresh(self) -> None:
         """Start a background check (no-op while one is running)."""

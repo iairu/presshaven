@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core import thesis_export
+from ui import theme
 
 # The report/export surfaces that live on OTHER pages. Reporting routes to
 # each one rather than duplicating it: (page id, title, what it produces).
@@ -130,7 +131,9 @@ class ExtrasPage(QWidget):
     def _link_row(self, page_id: str, title: str, desc: str) -> QWidget:
         row = QFrame()
         row.setObjectName("ReportLinkRow")
-        row.setStyleSheet("#ReportLinkRow { border: 1px solid #3a3a3a; border-radius: 6px; }")
+        row.setStyleSheet(
+            f"#ReportLinkRow {{ border: 1px solid #3a3a3a; "
+            f"border-radius: {theme.corner_radius_css(6)}; }}")
         h = QHBoxLayout(row)
         h.setContentsMargins(12, 8, 12, 8)
         text = QVBoxLayout()

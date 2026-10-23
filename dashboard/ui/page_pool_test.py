@@ -55,6 +55,7 @@ from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capa
                                     parse_cart, parse_decision, parse_product_ids, window_plan)
 from core.resource_stats import collect_pool_usage, host_stats
 from core.state import AppState
+from ui import theme
 from ui.browser_widget import BrowserWidget
 from ui.common import (clear_all_attacks, danger_button,
                        gdpr_screen_characteristics, request_gdpr_consent)
@@ -612,7 +613,9 @@ class PoolTestPage(QWidget):
         box_layout.addWidget(decision)
         cart = QLabel("Cart: —")
         cart.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cart.setStyleSheet("QLabel { color: #cfcfcf; padding: 2px 8px; border: 1px solid #555; border-radius: 4px; }")
+        cart.setStyleSheet(
+            "QLabel { color: #cfcfcf; padding: 2px 8px; border: 1px solid #555; "
+            f"border-radius: {theme.corner_radius_css(4)}; }}")
         box_layout.addWidget(cart)
         self._boxes.append(box)
         self._all_browsers.append(browser)
@@ -697,17 +700,21 @@ class PoolTestPage(QWidget):
         label.setText(d.text())
         label.setStyleSheet(
             f"QLabel {{ background-color: {color}; color: #1e1e1e; padding: 4px 10px; "
-            "border-radius: 4px; font-weight: bold; }")
+            f"border-radius: {theme.corner_radius_css(4)}; font-weight: bold; }}")
 
     def _style_cart(self, index: int, cart: CartState | None) -> None:
         label = self.cart_labels[index]
         if cart is None:
             label.setText("Cart: —")
-            label.setStyleSheet("QLabel { color: #cfcfcf; padding: 2px 8px; border: 1px solid #555; border-radius: 4px; }")
+            label.setStyleSheet(
+                "QLabel { color: #cfcfcf; padding: 2px 8px; border: 1px solid #555; "
+                f"border-radius: {theme.corner_radius_css(4)}; }}")
             return
         label.setText(cart.text())
         color = "#5cb85c" if cart.items else "#cfcfcf"
-        label.setStyleSheet(f"QLabel {{ color: {color}; padding: 2px 8px; border: 1px solid {color}; border-radius: 4px; }}")
+        label.setStyleSheet(
+            f"QLabel {{ color: {color}; padding: 2px 8px; border: 1px solid {color}; "
+            f"border-radius: {theme.corner_radius_css(4)}; }}")
 
     def _read_cart(self, index: int) -> CartState | None:
         """The window's cart as the shop (production or its honeypot pool) reports it."""

@@ -25,6 +25,7 @@ from core.log_error_match import is_error_log_line
 from ui.error_monitor import ErrorLogMonitor
 from ui.flow_layout import FlowLayout
 from core.container_status import classify, is_ready, status_detail
+from ui import theme
 from ui.health_diagram import HealthDiagram, STATUS_COLORS, STATUS_LABELS
 from ui.log_export import LogExporter
 from ui.process_runner import LogPanel
@@ -151,14 +152,16 @@ class LegendWidget(QWidget):
         row.setSpacing(4)
         if swatch_color is not None:
             swatch = QLabel("  ")
-            swatch.setStyleSheet(f"background-color: {swatch_color.name()}; border-radius: 3px;")
+            swatch.setStyleSheet(
+                f"background-color: {swatch_color.name()}; "
+                f"border-radius: {theme.corner_radius_css(3)};")
             swatch.setFixedSize(16, 16)
             row.addWidget(swatch)
         if badge_text is not None:
             badge = QLabel(badge_text)
             badge.setStyleSheet(
                 "background-color: #d9302c; color: white; font-weight: bold; "
-                "font-size: 10px; border-radius: 3px; padding: 1px 3px;"
+                f"font-size: 10px; border-radius: {theme.corner_radius_css(3)}; padding: 1px 3px;"
             )
             row.addWidget(badge)
         row.addWidget(QLabel(text))
@@ -268,7 +271,8 @@ class HealthPage(QWidget):
         self.sync_activity_label.setWordWrap(True)
         self.sync_activity_label.setVisible(False)
         self.sync_activity_label.setStyleSheet(
-            "QLabel { background-color: rgba(128, 128, 128, 30); padding: 6px; border-radius: 4px; }"
+            "QLabel { background-color: rgba(128, 128, 128, 30); padding: 6px; "
+            f"border-radius: {theme.corner_radius_css(4)}; }}"
         )
         detail_layout.addWidget(self.sync_activity_label)
         self._sync_log_buffer = ""

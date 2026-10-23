@@ -65,8 +65,10 @@ class AppState:
     # behavior, unlike the Attack Simulation page's eshop browser, where an
     # ephemeral session is the whole point.
     kibana_remember_credentials: bool = True
-    # "system" (follow the OS), "light", or "dark" -- see ui/theme.py.
-    theme: str = "system"
+    # "docs" (the default, matching the docs-astro design), "system"
+    # (follow the OS), "console_dark"/"console_light", "light"/"dark"
+    # (Solarized), or "hc_light"/"hc_dark" -- see ui/theme.py.
+    theme: str = "docs"
     # Cross-session history of notable security events (honeypot
     # diversions, CVE/high-severity signals, missing required
     # dependencies), capped at security_feed.MAX_EVENTS -- see

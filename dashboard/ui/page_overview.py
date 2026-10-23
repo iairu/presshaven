@@ -115,7 +115,8 @@ class StatCard(QFrame):
         c = theme.scheme_colors()
         self.setStyleSheet(
             f"#StatCard {{ background: {c['surface']}; border: 1px solid {c['border']};"
-            f" border-left: 4px solid {self._accent}; border-radius: 8px; }}"
+            f" border-left: 4px solid {self._accent};"
+            f" border-radius: {theme.corner_radius_css(8)}; }}"
             f"#StatCardTitle {{ color: {c['fg_muted']}; font-size: 8pt; font-weight: 700;"
             " letter-spacing: 1px; }"
             f"#StatCardValue {{ color: {self._accent}; font-size: 22pt; font-weight: 800; }}"

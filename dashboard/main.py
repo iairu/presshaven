@@ -24,7 +24,37 @@ import sys
 # new category of risk beyond what that handler already accepted. Must
 # be set before QtWebEngineWidgets is imported below -- Chromium reads
 # this env var once, at engine startup.
-os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--ignore-certificate-errors")
+def _is_wsl() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/sys/kernel/osrelease", encoding="utf-8") as release:
+            return "microsoft" in release.read().lower()
+    except OSError:
+        return False
+
+
+def _set_webengine_chromium_flags() -> None:
+    """Add this app's required Chromium flags without discarding any the
+    user already put in QTWEBENGINE_CHROMIUM_FLAGS.
+
+    On WSL/WSLg, QtWebEngine's GPU compositor tries to import the web
+    view's texture through dma_buf and fails ("Compositor returned null
+    texture" / "Failed to get native pixmap due to dma_buf acquisition
+    failure"), leaving every embedded browser blank. Software compositing
+    avoids that path and renders the pages correctly; it is scoped to WSL
+    so native Linux keeps hardware compositing.
+    """
+    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "").split()
+    for flag in ("--ignore-certificate-errors",):
+        if flag not in flags:
+            flags.append(flag)
+    if _is_wsl() and "--disable-gpu-compositing" not in flags:
+        flags.append("--disable-gpu-compositing")
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(flags)
+
+
+_set_webengine_chromium_flags()
 
 # Must be imported before the QApplication instance is constructed below --
 # PyQt6 raises ImportError otherwise ("QtWebEngineWidgets must be imported
