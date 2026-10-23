@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
 from ui import theme
 from core.colors import BLUE, GREY, ORANGE, RED
 from core.pattern_catalog import PatternCatalog
-from ui.common import ErrorBanner, badge_css, clear_layout
+from ui.common import ErrorBanner, badge_css
 from ui.responsive import ResponsiveSplitter
 
 _SEVERITY_COLOR = {
@@ -45,10 +45,34 @@ _SEVERITY_COLOR = {
 }
 
 _ROLE_ID = Qt.ItemDataRole.UserRole
+_ZWSP = "\u200b"
 
 
 def _fmt(value) -> str:
     return "" if value is None else str(value)
+
+
+def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
+    """Insert zero-width break points into long unbroken tokens.
+
+    QLabel wraps at whitespace only; a percent-encoded URI or an underscore
+    identifier therefore keeps its full intrinsic width and forces the whole
+    page into a horizontal scrollbar. This changes only what the label
+    displays, never the catalogue data or the JSON copied from it.
+    """
+    text = label.text()
+    out: list[str] = []
+    since = 0
+    for ch in text:
+        out.append(ch)
+        if ch.isspace() or ch in "/&?=,|_.":
+            since = 0
+        else:
+            since += 1
+            if since >= run:
+                out.append(_ZWSP)
+                since = 0
+    label.setText("".join(out))
 
 
 def _score_text(pattern: dict) -> str:
@@ -160,9 +184,9 @@ class PatternDatabasePage(QWidget):
         self.split = ResponsiveSplitter(880)
         self.split.setChildrenCollapsible(False)
 
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ["Pattern", "Type", "Category", "Severity", "Sources", "ID"])
+            ["Pattern", "Type", "Category", "Severity", "Sources"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -172,9 +196,12 @@ class PatternDatabasePage(QWidget):
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in (1, 2, 3, 4, 5):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        header.setMinimumSectionSize(60)
+        for column, width in ((1, 104), (2, 124), (3, 86), (4, 150)):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
+            header.resizeSection(column, width)
         header.setStretchLastSection(False)
+        self.table.setMinimumWidth(0)
         self.table.setMinimumHeight(330)
         self.table.itemSelectionChanged.connect(self._on_select)
         self.split.addWidget(self.table)
@@ -337,7 +364,7 @@ class PatternDatabasePage(QWidget):
             self.table.insertRow(row)
             name_item = QTableWidgetItem(pattern.get("name", pattern.get("id", "")))
             name_item.setData(_ROLE_ID, pattern.get("id", ""))
-            name_item.setToolTip(pattern.get("description", ""))
+            name_item.setToolTip(f"{pattern.get('id', '')}\n{pattern.get('description', '')}")
             font = name_item.font()
             font.setBold(True)
             name_item.setFont(font)
@@ -355,9 +382,6 @@ class PatternDatabasePage(QWidget):
                 f"{s.get('label', s.get('key', ''))} — {s.get('detail', '')}"
                 for s in pattern.get("sources", [])))
             self.table.setItem(row, 4, sources_item)
-            id_item = QTableWidgetItem(pattern.get("id", ""))
-            id_item.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
-            self.table.setItem(row, 5, id_item)
         self.table.blockSignals(False)
 
         target_row = -1
@@ -368,7 +392,9 @@ class PatternDatabasePage(QWidget):
         if target_row < 0 and self.table.rowCount():
             target_row = 0
         if target_row >= 0:
+            self.table.blockSignals(True)
             self.table.setCurrentCell(target_row, 0)
+            self.table.blockSignals(False)
             self._on_select()
         else:
             self._selected_id = ""
@@ -388,8 +414,20 @@ class PatternDatabasePage(QWidget):
         self._selected_id = pattern_id or ""
         self._show_detail(self._selected_id)
 
+    def _new_detail_host(self) -> None:
+        """Swap in a fresh scroll-area body instead of deleteLater()ing the
+        old labels: a deferred delete lets the previous detail paint for one
+        frame and makes fast row changes look like overlapping sections."""
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(9)
+        self.detail_scroll.setWidget(host)
+        self.detail_host = host
+        self.detail_layout = layout
+
     def _show_detail(self, pattern_id: str) -> None:
-        clear_layout(self.detail_layout)
+        self._new_detail_host()
         pattern = self.catalog.by_id.get(pattern_id)
         if not pattern:
             empty = QLabel("Select a pattern to inspect its trigger, sources, detection path and lesson.")
@@ -437,6 +475,7 @@ class PatternDatabasePage(QWidget):
             body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             body.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
             body.setStyleSheet(f"color: {c['accent']};")
+            _wrap_anywhere(body)
             self.detail_layout.addWidget(self._section("Trigger", body,
                                                        subtitle=pattern.get("trigger_type", "")))
         else:
@@ -577,6 +616,7 @@ class PatternDatabasePage(QWidget):
         raw = QPlainTextEdit()
         raw.setReadOnly(True)
         raw.setMaximumHeight(170)
+        raw.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         raw.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         raw.setPlainText(json.dumps(pattern, indent=2, ensure_ascii=False))
         self.detail_layout.addWidget(self._section("Raw catalogue entry", raw))
@@ -613,11 +653,13 @@ class PatternDatabasePage(QWidget):
                     mono: bool = False) -> QLabel:
         label = QLabel(text)
         label.setWordWrap(True)
+        label.setMinimumWidth(0)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         style = f"color: {color}; font-size: {size}pt;"
         if mono:
             style += " font-family: monospace;"
         label.setStyleSheet(style)
+        _wrap_anywhere(label)
         return label
 
     def _section(self, title: str, body: QWidget, subtitle: str = "") -> QFrame:
