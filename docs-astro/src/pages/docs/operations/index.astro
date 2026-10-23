@@ -31,6 +31,7 @@ const toc = [
   <h2 id="domains">Operational Domains</h2>
   <ul>
     <li><strong>Deployment</strong>: Two-host and single-host topologies.</li>
+    <li><strong>Deception layer</strong>: Choosing the <a href="/docs/engine/layers">honeypot layer</a> — reverse-proxy pools (default, isolates file/upload/RCE as well as data-layer attacks) or the lighter database layer (one eshop, DB swapped per request).</li>
     <li><strong>Monitoring</strong>: Observability, dashboards, alerting.</li>
     <li><strong>Hardening</strong>: Production security recommendations.</li>
     <li><strong>Runbooks</strong>: Troubleshooting and incident procedures.</li>
@@ -103,7 +104,7 @@ const toc = [
   </ul>
 
   <h2 id="gdpr">GDPR Consent-Gated Identity (from gdpr_rules.lua)</h2>
-  <p>A second, privacy-preserving identifier runs alongside the signed SERVERID session cookie. The reverse proxy serves a consent banner and RSA public key. Only if the visitor agrees does the browser build a tiny payload, RSA-OAEP-encrypt it into a gdpr_token, and send it as a cookie. The proxy decrypts in memory only long enough to check timestamp freshness and hash the REST into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
+  <p>A second, privacy-preserving identifier runs alongside the signed SERVERID session cookie. The reverse proxy serves a consent banner and RSA public key. Only if the visitor agrees does the browser build a tiny payload, RSA-OAEP-encrypt it into a gdpr_token, and send it as a cookie. The proxy decrypts in memory only long enough to check timestamp freshness (<code>GDPR_TIMESTAMP_WINDOW</code>) and hash the rest into a one-way gdpr_signature. Only the signature is stored, and only when bound to a honeypot, with <code>GDPR_BINDING_TTL</code> as the binding's expiry. The full client/server flow is on the <a href="/docs/detection/signature">Device &amp; GDPR Signature</a> page.</p>
 
   <h2 id="config">Configuration Reference (from init.lua)</h2>
   <table>

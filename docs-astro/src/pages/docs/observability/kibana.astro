@@ -17,9 +17,12 @@ const toc = [
 ---
 <DocsLayout title="Kibana Dashboards" description="Visual dashboards for monitoring honeypot activity" section="Observability" sidebar={sidebar} toc={toc}>
   <p>
-    Seven saved dashboards cover alert triage, aggregate threat posture, decisioning, session behaviour,
-    attack patterns and threat intelligence. All of them are generated from Python and committed as NDJSON,
-    so the same definition can be rebuilt offline or imported into a live Kibana.
+    Six saved dashboards cover alert triage, aggregate threat posture, decisioning, session behaviour,
+    attack patterns and threat intelligence, plus a seventh embed-only timeline dashboard used for evidence
+    capture. All of them are generated from Python and committed as NDJSON, so the same definition can be
+    rebuilt offline or imported into a live Kibana. The <code>kibana_dashboards_setup</code> service re-imports
+    the NDJSON on every <code>docker compose up</code> with <code>overwrite=true</code>, so the set is
+    idempotent and self-healing, and it sets the Web Traffic dashboard as Kibana's landing page.
   </p>
   <CardGrid columns={3}>
     <DocCard title="6 registered views" icon="chart" tag="Operational" description="Alerts, web threat overview, decisions and decay, session analysis, attack patterns and threat intelligence." meta="dashboard-* IDs" />
@@ -29,15 +32,24 @@ const toc = [
 
   <h2 id="registry">Dashboard Registry</h2>
   <table>
-    <tr><th>Dashboard ID</th><th>Title</th><th>Purpose</th></tr>
-    <tr><td>dashboard-ids-alerts</td><td>Honeypot: IDS Alerts (Suricata)</td><td>Real-time IDS alert triage</td></tr>
-    <tr><td>dashboard-web-threat-overview</td><td>Honeypot: Web Traffic & Threat Overview</td><td>Aggregate web threat posture</td></tr>
-    <tr><td>dashboard-threat-decisions</td><td>Honeypot: Threat Decisions & Decay</td><td>Decisioning logic and threat decay</td></tr>
-    <tr><td>dashboard-session-analysis</td><td>Honeypot: Session Analysis</td><td>Session-level attacker behavior</td></tr>
-    <tr><td>dashboard-attack-patterns</td><td>Honeypot: Attack Patterns</td><td>Pattern-based attack analysis</td></tr>
-    <tr><td>dashboard-threat-intel</td><td>Honeypot: Threat Intelligence</td><td>Threat intelligence integrations</td></tr>
+    <tr><th>Dashboard ID</th><th>Title</th><th>Answers the question…</th></tr>
+    <tr><td>dashboard-ids-alerts</td><td>Honeypot: IDS Alerts (Suricata)</td><td>What did the network IDS see? Severity over time, categories, protocols, targeted ports, top signatures and source IPs.</td></tr>
+    <tr><td>dashboard-web-threat-overview</td><td>Honeypot: Web Traffic & Threat Overview</td><td>What was requested and how was it answered? The Top URIs table marks every URI <code>attack_pattern</code> or <code>safe</code>.</td></tr>
+    <tr><td>dashboard-threat-decisions</td><td>Honeypot: Threat Decisions & Decay</td><td>Why did each request go where it went? Request score vs the decayed score carried from the session, against the threshold; decay state, offenses and routing reasons.</td></tr>
+    <tr><td>dashboard-session-analysis</td><td>Honeypot: Session Analysis</td><td>How did each session behave? Per-session volume, duration, peak score, offenses and sophistication class.</td></tr>
+    <tr><td>dashboard-attack-patterns</td><td>Honeypot: Attack Patterns</td><td>What did requests match? Attack patterns and CVEs, the URIs behind them, security events, honeytokens and top attacking IPs.</td></tr>
+    <tr><td>dashboard-threat-intel</td><td>Honeypot: Threat Intelligence</td><td>What does external reputation say? Threat-intelligence integrations and flagged addresses.</td></tr>
   </table>
-  <p>Each dashboard is built via <code>_dashboard(dash_id, title, description, layout)</code> and registered as <code>("dashboard", did, body)</code> objects in <code>saved_objects/honeypot-dashboards.ndjson</code>.</p>
+  <p>Each dashboard is built via <code>_dashboard(dash_id, title, description, layout)</code> and registered as <code>("dashboard", did, body)</code> objects in <code>saved_objects/honeypot-dashboards.ndjson</code>, all built on the <code>honeypot-*</code> data view whose time field is <code>timestamp</code>.</p>
+  <div class="admonition note">
+    <div class="admonition-title">What powers the decision panels</div>
+    <p>The Threat Decisions &amp; Decay panels read fields the reverse proxy writes to its <code>security</code>
+    access log (<code>log_format security</code> in <code>nginx.conf</code>, filled by
+    <code>router_rules.decision_trace()</code>): <code>request_score</code>, <code>decayed_score</code>,
+    <code>carried_score</code>, <code>offenses</code>, <code>decay_state</code>, <code>uri_class</code>,
+    <code>patterns</code> and <code>route_reason</code>. Vector parses them into typed Elasticsearch fields — see
+    <a href="/docs/observability/siem">SIEM &amp; Log Pipeline</a>.</p>
+  </div>
 
   <h2 id="timeline">Pattern Report Timeline Dashboard</h2>
   <p>A dedicated pattern report timeline dashboard (<code>pattern-report-request-timeline-dashboard</code>) is used in embed mode to capture screenshots of request timelines for specific patterns.</p>
@@ -59,5 +71,5 @@ const toc = [
 
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> Offline generation is idempotent. Export workflow preserves manual panel edits. Timeline capture enables per-pattern visual evidence.</p>
-  <p><strong>Limitations:</strong> Dashboard generation and export are separate scripts with potential drift. Timeline capture depends on Kibana auth setup. Layout defined in Python code (not editable JSON). No automated dashboard health monitoring.</p>
+  <p><strong>Limitations:</strong> Dashboard generation and export are separate scripts with potential drift. Timeline capture depends on Kibana auth setup. Layout defined in Python code (not editable JSON). No automated dashboard health monitoring. The <code>honeypot-docker-*</code> index currently ingests nothing — Docker container labels trigger an Elasticsearch field-mapping conflict (<code>label.com.docker.compose.project</code>), a pre-existing issue out of scope for the nginx/Suricata dashboards.</p>
 </DocsLayout>

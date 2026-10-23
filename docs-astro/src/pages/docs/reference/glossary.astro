@@ -47,8 +47,11 @@ const toc = [
     <tr><td>Decay</td><td>Exponential reduction of stored risk scores over time since last suspicious signal.</td></tr>
     <tr><td>Permaflag</td><td>Score stops decaying entirely — triggered by permaflag_offenses (5) or permaflag_score (100).</td></tr>
     <tr><td>Offense</td><td>Counter bumped once per recorded attack signal, used by decay_policy to slow decay.</td></tr>
-    <tr><td>Honeytoken</td><td>Fake high-value artefact planted in honeypot responses — detection signals confirmed compromise.</td></tr>
+    <tr><td>Honeytoken</td><td>Fake high-value artefact (API key, DB credentials, admin password, S3 URL, JWT secret) planted in honeypot responses — a later request carrying one confirms compromise with high confidence.</td></tr>
     <tr><td>GDPR Signature</td><td>Consent-gated, privacy-preserving one-way hash of browser characteristics (plus the server-observed IP) used as a second identifier that survives a cookie and storage wipe. See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</td></tr>
+    <tr><td>Sophistication Class</td><td>Weighted classification of a session as <code>scripted</code>, <code>ai_assisted</code>, <code>manual</code> or <code>unknown</code>, produced by <code>sophistication_analyzer.lua</code> with a confidence margin.</td></tr>
+    <tr><td><code>eve.json</code></td><td>Suricata's structured JSON event log; parsed by <code>suricata_rules.lua</code> into alert records and severity-graded score deltas (replaced the older <code>fast.log</code> regex path).</td></tr>
+    <tr><td>Prompt-Injection Probe</td><td>Stage-7 check (<code>prompt_injection_filter.lua</code>) that scores attempts to manipulate an LLM-backed consumer of the logs; contributes <code>filter risk / 2</code> to the request score.</td></tr>
   </table>
 
   <h2 id="architecture">Architecture Terms</h2>
@@ -61,6 +64,8 @@ const toc = [
     <tr><td>Honeypot Layer</td><td>Where deception happens: reverse-proxy level (separate decoy backends / pools) or database level (one eshop, production vs honeypot database swapped per request). See <a href="/docs/engine/layers">Honeypot Layers</a>.</td></tr>
     <tr><td>Escalation</td><td>Gradual increase in response to repeated suspicious signals.</td></tr>
     <tr><td>Sticky Routing</td><td>Once honeypot_bound, all subsequent requests locked to same honeypot pool.</td></tr>
+    <tr><td>Static Pool</td><td>A pool (numbers 1..<code>STATIC_POOL_COUNT</code>, default 3) declared in compose and always running, so there is warm capacity before the pool manager builds any runtime pools.</td></tr>
+    <tr><td>Pool Autoscaling</td><td>Runtime creation of pools above the static count — one per waiting session plus spares — within a memory / CPU / count budget (<code>POOL_MAX</code>, <code>POOL_MAX_MEMORY_MB</code>, <code>POOL_MAX_CPUS</code>), with idle pools retired after <code>POOL_IDLE_TIMEOUT_SECONDS</code>. See the <a href="/docs/engine#pools">Engine</a> page.</td></tr>
   </table>
 
   <h2 id="scoring">Scoring Terms</h2>
@@ -77,7 +82,9 @@ const toc = [
     <tr><th>Term</th><th>Definition</th></tr>
     <tr><td>Hardening</td><td>Security posture improvements for production deployment.</td></tr>
     <tr><td>Runbook</td><td>Operational troubleshooting and response procedures.</td></tr>
-    <tr><td>Blind Pentest</td><td>External attacker assessment where the tester has no prior knowledge of the deployment or routing logic.</td></tr>
-    <tr><td>Internal Test Secret</td><td>Shared secret gating diagnostic response headers to prevent exposing routing oracles.</td></tr>
+    <tr><td>Blind Pentest</td><td>External attacker assessment where the tester has no prior knowledge of the deployment or routing logic. See <a href="/docs/testing/blind-pentest">Blind Pentest</a>.</td></tr>
+    <tr><td>Internal Test Secret</td><td>Shared secret (<code>INTERNAL_TEST_SECRET</code>) gating the <code>X-Route-Target</code> / <code>X-Risk-Score</code> diagnostic headers; fail closed when unset, so a blind tester cannot read their own routing/score oracle.</td></tr>
+    <tr><td>SIEM Pipeline</td><td>The log path <code>Nginx / Suricata → Vector → Elasticsearch → Kibana</code>; in a two-host deployment the Vector hop is secured with mutual TLS. See <a href="/docs/observability/siem">SIEM</a>.</td></tr>
+    <tr><td>Honeypot Layer</td><td>Reverse-proxy deception (separate decoy pools) vs database deception (one eshop, DB swapped per request). See <a href="/docs/engine/layers">Honeypot Layers</a>.</td></tr>
   </table>
 </DocsLayout>

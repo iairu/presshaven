@@ -25,11 +25,14 @@ const toc = [
 
   <h2 id="layers">Observability Layers</h2>
   <ul>
-    <li><strong>Log Ingestion</strong>: Structured logs from the reverse proxy, Lua engines, and Suricata are centralized for SIEM consumption via Nginx error logs and Vector forwarding to Elasticsearch/Kibana.</li>
+    <li><strong>Log Ingestion</strong>: Structured logs from the reverse proxy, Lua engines, and Suricata are centralized for SIEM consumption via Nginx error/security logs and Vector forwarding — over mutual TLS — to Elasticsearch/Kibana. See <a href="/docs/observability/siem#transport">Transport &amp; mTLS</a>.</li>
     <li><strong>SIEM Dashboards</strong>: High-level operational views of IDS alerts, threat overview, and web traffic.</li>
     <li><strong>Kibana Visualizations</strong>: Interactive dashboards and pattern report timelines.</li>
     <li><strong>Alerting & Reporting</strong>: AbuseIPDB reporting and reputation-based alerting.</li>
   </ul>
+  <p>The whole SIEM side is <strong>fail-open with respect to detection</strong>: it turns an ephemeral request
+  decision into durable evidence, but nothing in the request path waits for it, so a SIEM outage never affects
+  routing or scoring.</p>
 
   <h2 id="sources">Telemetry Sources</h2>
   <CardGrid columns={2}>
@@ -62,7 +65,7 @@ const toc = [
       href="/docs/observability/kibana"
       icon="chart"
       tag="Kibana"
-      description="Seven saved dashboards plus a dedicated pattern-report timeline used for per-pattern visual evidence."
+      description="Six saved dashboards plus a dedicated pattern-report timeline used for per-pattern visual evidence."
       meta="NDJSON managed"
     />
   </CardGrid>

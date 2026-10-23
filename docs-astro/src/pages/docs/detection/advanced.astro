@@ -15,6 +15,7 @@ const sidebar = [
 const toc = [
   { id: 'vuln', text: 'Vulnerability Pattern Detection', level: 2 },
   { id: 'suricata', text: 'Threat Alert Processing', level: 2 },
+  { id: 'behaviour', text: 'Behavioural & Sophistication Signals', level: 2 },
   { id: 'abuseipdb', text: 'AbuseIPDB Reporting Logic', level: 2 },
   { id: 'scoring', text: 'Risk Scoring Model', level: 2 },
   { id: 'decay', text: 'Escalation-Aware Decay', level: 2 },
@@ -33,9 +34,27 @@ const toc = [
   <h2 id="suricata">Threat Alert Processing (suricata_rules.lua)</h2>
   <p>Processes raw threat intelligence (specifically eve.json alerts) to derive a risk score and a human-readable reason string.</p>
   <ul>
-    <li><strong>Parsing:</strong> Parses eve.json lines (flow, netflow, http, dns, tls events) into structured alert records.</li>
+    <li><strong>Parsing:</strong> Reads <code>eve.json</code> lines and extracts a structured record only from <code>alert</code> events; non-alert event types (flow, netflow, http, dns, tls) and malformed lines return <code>nil</code> and are ignored.</li>
     <li><strong>Risk Scoring & Gating:</strong> Connects incoming alerts to IP reputation checks and is used in the honeypot diversion logic in router.lua Stage 6 ("IP reputation").</li>
     <li><strong>Output:</strong> Generates a final risk-score, delta, and a detailed reason string for each event.</li>
+  </ul>
+
+  <h2 id="behaviour">Behavioural & Sophistication Signals</h2>
+  <p>Beyond matching a single request, <code>sophistication_analyzer.lua</code> classifies a whole session as
+  <code>scripted</code>, <code>ai_assisted</code>, <code>manual</code> or <code>unknown</code> using an inspectable
+  weighted rule set. Every contributing signal is returned in a <code>signals</code> list, and the confidence is
+  simply the winning class's share of the total weight — so the classification is auditable, not a black box.</p>
+  <table>
+    <tr><th>Signal</th><th>What it reads</th><th>Leans toward</th></tr>
+    <tr><td>Timing</td><td>Mean and standard deviation of inter-request gaps across the session.</td><td>Very regular, fast cadence → scripted; human-like variance → manual; in between → ai_assisted.</td></tr>
+    <tr><td>User-agent</td><td>Known scanner fragments, SDK/agent markers, or a normal browser string.</td><td>Scanner UA → scripted (+35); agent/SDK marker → ai_assisted (+35); browser UA → manual.</td></tr>
+    <tr><td>Headers</td><td>Presence of browser-like headers such as <code>Accept-Language</code>.</td><td>Present → manual (+20); absent → split evenly between scripted and ai_assisted (the UA/timing signals disambiguate).</td></tr>
+    <tr><td>Precision</td><td>How noisy vs targeted the matched patterns are.</td><td>Broad, noisy "spray" → scripted (+20); few precise high-value matches → ai_assisted / manual.</td></tr>
+  </table>
+  <p>Two further high-confidence signals feed the same picture:</p>
+  <ul>
+    <li><strong>Honeytokens</strong> — a later request carrying one of the five injected fake credentials (API key, DB creds, admin password, S3 URL, JWT secret) confirms compromise. See <a href="/docs/detection/capabilities">Detection Capabilities</a>.</li>
+    <li><strong>Device signature</strong> — the consent-gated, one-way <a href="/docs/detection/signature">GDPR signature</a> re-recognises a returning attacker after a cookie and storage wipe, so a reset session does not launder prior risk.</li>
   </ul>
 
   <h2 id="abuseipdb">AbuseIPDB Reporting Logic (abuseipdb_rules.lua)</h2>

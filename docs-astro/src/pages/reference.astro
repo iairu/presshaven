@@ -39,7 +39,9 @@ import Icon from '../components/Icon.astro';
         <tr><td>Permaflag</td><td>Score stops decaying entirely (repeat offender)</td></tr>
         <tr><td>Honeytoken</td><td>Fake credential planted in honeypot responses</td></tr>
         <tr><td>GDPR Signature</td><td>Privacy-preserving one-way hash of browser characteristics</td></tr>
+        <tr><td>Sophistication Class</td><td>scripted / ai_assisted / manual / unknown, with confidence</td></tr>
         <tr><td>Pool</td><td>Isolated honeypot environment per user session</td></tr>
+        <tr><td>Honeypot Layer</td><td>Reverse-proxy (decoy pools) vs database (DB swapped per request)</td></tr>
         <tr><td>Pure Module</td><td>Lua module with no ngx.* dependency, unit-testable</td></tr>
         <tr><td>Adapter Module</td><td>Lua module performing I/O, delegating to pure modules</td></tr>
       </table>
@@ -56,9 +58,13 @@ import Icon from '../components/Icon.astro';
         <tr><td><code>permaflag_offenses</code></td><td>5</td><td>Offenses at or above this stop decay.</td></tr>
         <tr><td><code>permaflag_score</code></td><td>100</td><td>Peak score that stops decay.</td></tr>
         <tr><td><code>ip_reputation_cap</code></td><td>10</td><td>Reputation contribution on shared addresses.</td></tr>
+        <tr><td><code>STATIC_POOL_COUNT</code></td><td>3</td><td>Always-on pools declared in compose; the manager builds runtime pools above this.</td></tr>
         <tr><td><code>POOL_SPARES</code> / <code>POOL_MAX</code></td><td>1 / 10</td><td>Warm spare pools / hard pool ceiling.</td></tr>
         <tr><td><code>POOL_IDLE_TIMEOUT_SECONDS</code></td><td>1800</td><td>Idle window before scale-down.</td></tr>
       </table>
+      <p style="margin-top: 0.75rem; font-size: 0.9rem;">Full definitions and cross-links live in the
+      <a href="/docs/reference/glossary">glossary</a>; pool budget details are on the
+      <a href="/docs/engine#pools">Engine</a> page.</p>
     </div>
 
     <div class="section">

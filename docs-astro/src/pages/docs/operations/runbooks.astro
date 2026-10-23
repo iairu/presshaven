@@ -52,6 +52,9 @@ const toc = [
     <li><strong>Session not recovering after cookie clear:</strong> Passive fingerprint binding (fp_session in Redis) recovers sessions. Check request_fingerprint() and bind_fingerprint_to_session().</li>
     <li><strong>Decay not aging out:</strong> Check score_decay_half_life_seconds — if 0, decay returns stored peak unchanged. Check permaflag thresholds.</li>
     <li><strong>False positives on legitimate traffic:</strong> Honeypot threshold raised from 50 to 80. Consider raising ip_reputation_cap above 50 only if clients don't share addresses.</li>
+    <li><strong>Pools not scaling or stuck building:</strong> The pool manager only grows within the budget (<code>POOL_MAX</code>, <code>POOL_MAX_MEMORY_MB</code>, <code>POOL_MAX_CPUS</code>) and above the free-memory floor (<code>POOL_MIN_FREE_MEM_MB</code>); at the ceiling new sessions share ready pools round-robin rather than failing. Check the manager's logs, the budget and <code>POOL_PARALLEL_BUILDS</code>. See <a href="/docs/engine#pools">Engine</a>.</li>
+    <li><strong>Diagnostic headers missing during a test:</strong> <code>X-Route-Target</code> / <code>X-Risk-Score</code> are emitted only when <code>INTERNAL_TEST_SECRET</code> is set and the request carries a matching <code>X-Internal-Test-Auth</code> header (fail closed). This is intentional — see <a href="/docs/testing/blind-pentest#gating">the test-header oracle</a>.</li>
+    <li><strong>Switching the honeypot layer:</strong> The reverse-proxy and database layers use different compose files (<code>docker-compose.yml</code> vs <code>docker-compose.db-proxy.yml</code>); the active layer is persisted in dashboard state. Bring the current stack down before switching. See <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
   </ul>
 
   <h2 id="evidence">Evidence to Collect</h2>

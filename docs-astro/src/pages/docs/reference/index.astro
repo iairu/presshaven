@@ -30,7 +30,14 @@ const toc = [
   </CardGrid>
 
   <h2 id="architecture">Architecture Reference</h2>
-  <p>The honeypot system is built on a layered architecture following a pure/adapter split pattern. All core logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, making them unit-testable under a plain Lua interpreter.</p>
+  <p>The honeypot system is built on a layered architecture following a <strong>pure/adapter split</strong>. All
+  decision logic lives in <code>*_rules.lua</code> modules with zero <code>ngx.*</code> dependencies, so they run
+  and unit-test under a plain Lua interpreter; a thin adapter half (<code>router.lua</code>,
+  <code>pattern_analyzer.lua</code>, the <code>*_handler.lua</code> modules) performs the I/O — reading the request,
+  Redis and <code>eve.json</code>, writing the decision trace — and delegates every judgement to a pure module.</p>
+  <p>This is why the pipeline is testable: every one of the sixteen pure modules below ships with a matching
+  <code>test_*.lua</code> suite that exercises it without a running Nginx. Where a behaviour is described elsewhere
+  on this site, that page links to the exact module responsible for it.</p>
 
   <h2 id="modules">Pure Modules</h2>
   <table>
@@ -54,6 +61,13 @@ const toc = [
   </table>
 
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> Comprehensive detection, explainable architecture, per-attacker isolation, privacy-preserving, full telemetry.</p>
-  <p><strong>Limitations:</strong> Same-host testing gap, decay complexity, honeytoken coverage (5 types), no ML, Redis dependency, pool scaling limits, dashboard drift, no automated health monitoring.</p>
+  <p><strong>Strengths:</strong> comprehensive, explainable rule-based detection; a pure/adapter split that keeps the
+  decision logic unit-tested; per-session attacker isolation on dedicated pools; a privacy-preserving, consent-gated
+  <a href="/docs/detection/signature">device signature</a>; a choice of <a href="/docs/engine/layers">honeypot layer</a>;
+  and full telemetry through the SIEM pipeline.</p>
+  <p><strong>Limitations:</strong> same-host testing gap (unverified against genuine external traffic); decay
+  complexity (four tunable parameters); honeytoken coverage (five types); no ML; a Redis dependency on the state path;
+  pool scaling bounded by the memory / CPU / count budget; the database layer cannot isolate file-upload or RCE
+  attacks; and dashboard drift between offline and live state. See
+  <a href="/docs/reference/known-issues">Known Issues</a> for the full list and workarounds.</p>
 </DocsLayout>

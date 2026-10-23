@@ -25,9 +25,23 @@ const toc = [
   </CardGrid>
 
   <h2 id="unreleased">Unreleased</h2>
+  <h3>Features</h3>
+  <ul>
+    <li>Pool autoscaling — the pool manager builds runtime pools per waiting session plus spares within a memory / CPU / count budget, and retires idle pools after <code>POOL_IDLE_TIMEOUT_SECONDS</code>.</li>
+    <li>Consent-gated device signature — a one-way <code>gdpr_signature</code> re-recognises a returning visitor after a cookie and storage wipe without storing any PII (<code>gdpr_handler.lua</code>, <code>GET /__gdpr/config</code>). See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</li>
+    <li>Database-proxy honeypot layer — an alternative, lighter deception layer (<code>docker-compose.db-proxy.yml</code>) that swaps the database per request via <code>wp-content/db.php</code> instead of running separate decoy backends. See <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
+    <li>Generated pattern catalogue — one machine-readable <code>patterns/patterns.json</code> now feeds both the dashboard Pattern Database and the <a href="/docs/detection/patterns">documentation</a>, so the two cannot drift.</li>
+    <li>Honeypot threshold raised from 50 to 80 to cut false positives on aggressive but legitimate REST API clients.</li>
+  </ul>
+  <h3>Documentation &amp; Tooling</h3>
   <ul>
     <li>Documentation expansion for detection, observability, operations, testing, and reference sections — enriched with Lua code comments and architecture details.</li>
     <li>Astro knowledge hub with mkdocs-material styling, full-text search, section navigation, table of contents and documentation cards.</li>
+    <li>New pages: Honeypot Layers, Device &amp; GDPR Signature; enriched reference (known issues, roadmap, literature) and the blind-pentest evaluation write-up with Run&nbsp;1 results.</li>
+  </ul>
+  <h3>Security</h3>
+  <ul>
+    <li><code>X-Route-Target</code> / <code>X-Risk-Score</code> response headers gated behind <code>INTERNAL_TEST_SECRET</code> (fail closed) after the blind pentest found they leaked a live routing/score oracle to the client.</li>
   </ul>
 
   <h2 id="historical">Historical</h2>

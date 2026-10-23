@@ -84,7 +84,7 @@ python3 -m venv venv
   </ol>
 
   <h2 id="manual">Manual Setup</h2>
-  <p>The edge stack is enough for a first run. The shop is published at <code>https://localhost/</code> with a self-signed certificate, so expect a browser warning.</p>
+  <p>The edge stack is enough for a first run. The shop is published at <code>https://localhost/</code> with a self-signed certificate, so expect a browser warning. The command below brings up the default reverse-proxy deception layer (a separate decoy backend per session); see <a href="/docs/engine/layers">Honeypot Layers</a> for the lighter database-proxy alternative and how to choose between them.</p>
   <pre><code>cd ids
 cp .env.example .env
 $EDITOR .env                       # set real passwords first

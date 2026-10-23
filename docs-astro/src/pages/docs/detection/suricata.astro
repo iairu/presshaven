@@ -22,7 +22,7 @@ const toc = [
 ---
 <DocsLayout title="Suricata Network IDS" description="Network-based detection using Suricata intrusion detection system" section="Detection" sidebar={sidebar} toc={toc}>
   <h2 id="overview">Overview</h2>
-  <p>Suricata rules are specifically designed to detect attack patterns targeting the WordPress honeypot, organized by CVE and OWASP WSTG categories. SIDs range from 1000001 to 1000070+.</p>
+  <p>Suricata rules are specifically designed to detect attack patterns targeting the WordPress honeypot, organized by CVE and OWASP WSTG categories. SIDs range from 1000001 to 1000070+. The individual signatures, with their scores and provenance, are catalogued alongside every other rule on the <a href="/docs/detection/patterns">Pattern Database</a> page, which is generated from the same <code>patterns/patterns.json</code> the dashboard uses.</p>
   <CardGrid columns={3}>
     <DocCard title="Network evidence" icon="network" tag="Passive" description="Signatures see what the application layer cannot: scanners, payloads split across requests and protocol-level abuse." meta="eve.json alerts" />
     <DocCard title="Severity-graded" icon="gauge" tag="Scoring" description="Alert severity maps to a deterministic delta, capped at 100 and never reducing an existing score." meta="+10 / +25 / +50" />

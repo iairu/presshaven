@@ -12,6 +12,7 @@ const toc = [
   { id: 'dashboard', text: 'Dashboard Management', level: 2 },
   { id: 'timeline', text: 'Timeline Visualization', level: 2 },
   { id: 'dataflow', text: 'Data Flow', level: 2 },
+  { id: 'transport', text: 'Transport & mTLS', level: 2 },
   { id: 'artifacts', text: 'Key Artifacts', level: 2 },
   { id: 'contracts', text: 'Pipeline Contracts', level: 2 },
 ];
@@ -46,6 +47,28 @@ const toc = [
   → session_handler.update_session() → Redis session_store
   → Suricata eve.json → init_worker.lua → threat_intel shared dict
   → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
+
+  <h2 id="transport">Transport & mTLS</h2>
+  <p>The SIEM host (<code>siem/</code>) and the honeypot host (<code>ids/</code>) are a two-host split — see
+  <a href="/docs/architecture">Architecture</a> for why. The Vector hop between them is secured with mutual TLS:</p>
+  <ul>
+    <li><code>certs/root-ca/gen_elk_certs.sh</code> creates a CA and signs certificates for <code>es01</code>,
+    <code>kibana</code>, <code>vector</code> and <code>vector-agent</code>. The <code>vector-agent</code> client
+    certificate is copied to the honeypot host's <code>ids/vector/certs/</code> before its shipper can connect.</li>
+    <li>The <code>vector</code> server certificate carries a Subject Alternative Name list so the agent can connect
+    by hostname (<code>host.docker.internal</code> for single-host testing) or by raw IP (<code>VECTOR_HOST</code>
+    in a real two-host deployment).</li>
+    <li>Vector's Elasticsearch sink writes to <code>honeypot-&#123;log_type&#125;-%Y.%m.%d</code>, using the
+    <code>log_type</code> field the edge shipper tags on every event, so each log type and day lands in its own index.</li>
+    <li>A VRL <code>enrich</code> transform in <code>vector/vector.yaml</code> parses the <code>nginx_security</code>
+    lines into real, typed fields (<code>route</code>, <code>risk_score</code>, <code>suspicious</code>, the decision
+    fields above) instead of one opaque <code>message</code> string.</li>
+  </ul>
+  <div class="admonition note">
+    <div class="admonition-title">The edge never blocks on the SIEM</div>
+    <p>Vector buffers locally and the sink retries, so an Elasticsearch or Kibana outage shows up as ingestion lag,
+    never as a failed or slowed request in the honeypot's path.</p>
+  </div>
 
   <h2 id="artifacts">Key Artifacts</h2>
   <ul>

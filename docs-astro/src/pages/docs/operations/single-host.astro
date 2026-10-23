@@ -41,7 +41,18 @@ const toc = [
   </ul>
 
   <h2 id="context">SIEM Single-Host Context</h2>
-  <p>All dashboards are consolidated under a single SIEM instance. This configuration handles the full lifecycle of the dashboards, relying on build_dashboards.py for creation and export_dashboards.py for distribution/backup.</p>
+  <p>On one host there is a single SIEM instance that handles the full dashboard lifecycle, relying on
+  <code>build_dashboards.py</code> for creation and <code>export_dashboards.py</code> for distribution and backup.
+  Certificate generation still runs, but the Vector agent connects over <code>host.docker.internal</code> rather than
+  a remote IP — the <code>vector</code> server certificate's Subject Alternative Name list already covers both cases
+  (see <a href="/docs/observability/siem#transport">Transport &amp; mTLS</a>).</p>
+  <div class="admonition note">
+    <div class="admonition-title">Tip: the database layer is lighter</div>
+    <p>If the host is memory-constrained, consider the <a href="/docs/engine/layers">database honeypot layer</a>
+    (<code>docker-compose.db-proxy.yml</code>): it runs one eshop and swaps only the database per request, so there
+    are no separate decoy backends to build or hold in memory — at the cost of not isolating file-upload or RCE
+    attacks. The reverse-proxy layer remains the default when those attack classes matter.</p>
+  </div>
 
   <h2 id="notes">Single-Host Notes</h2>
   <ul>

@@ -37,6 +37,7 @@ const toc = [
     <li>Restrict inbound access to the honeypot backend to trusted proxies only.</li>
     <li>Enable firewall rules limiting SIEM/Kibana access to authorized hosts.</li>
     <li>Isolate the honeypot network segment from production backend networks.</li>
+    <li>Mind the layer's blast radius: the reverse-proxy layer gives each session a <a href="/docs/engine/layers">separate decoy backend</a> that absorbs file-upload and RCE attacks, whereas the database layer swaps only the database — a foothold there reaches the shared eshop filesystem, so prefer the reverse-proxy layer on an exposed deployment.</li>
   </ul>
 
   <h2 id="auth">Authentication & Access Control</h2>
@@ -69,6 +70,11 @@ const toc = [
   </ul>
   <h3>Internal Test Secret</h3>
   <p><code>INTERNAL_TEST_SECRET</code> gates the X-Route-Target / X-Risk-Score response headers. When set, headers only emitted for requests with matching X-Internal-Test-Auth header. When unset, headers never emitted (fail closed).</p>
+  <h3>Device-Signature Key</h3>
+  <p>The RSA private key that decrypts the consent-gated <code>gdpr_token</code> must live only on the proxy and
+  never be shipped to the SIEM or logged — the privacy guarantee is that only the one-way
+  <a href="/docs/detection/signature">signature</a> ever leaves the server. Keep <code>GDPR_TIMESTAMP_WINDOW</code>
+  tight to limit token replay, and treat the key like any other production secret.</p>
 
   <h2 id="logging">Logging & Monitoring</h2>
   <ul>
