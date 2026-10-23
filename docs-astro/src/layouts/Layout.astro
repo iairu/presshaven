@@ -23,7 +23,7 @@ const { title, description, hype } = Astro.props;
     <!-- Search Modal -->
     <div id="search-modal" class="fixed inset-0 z-[200] hidden">
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSearch()"></div>
-      <div class="relative max-w-2xl mx-auto mt-20">
+      <div class="relative max-w-3xl mx-auto mt-16">
         <div class="bg-bg-secondary border border-border-accent rounded-xl shadow-2xl overflow-hidden">
           <div class="flex items-center gap-3 px-4 py-3 border-b border-border">
             <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -37,27 +37,45 @@ const { title, description, hype } = Astro.props;
       </div>
     </div>
 
-    <nav class="sticky top-0 z-50 bg-bg-secondary/90 backdrop-blur-md border-b border-border px-8 py-4 flex items-center justify-between flex-wrap gap-4">
-      <a href="/" class="font-bold text-lg text-text-primary flex items-center gap-2 no-underline">
-        <span class="text-accent-green">></span> Honeypot IDS
-      </a>
-      <div class="flex items-center gap-4">
-        <button onclick="openSearch()" class="flex items-center gap-2 text-text-secondary text-sm bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 hover:border-accent-green transition-all">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          Search
-          <kbd class="text-xs bg-bg-secondary px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
-        </button>
-        <div class="flex gap-1 flex-wrap">
-          <a href="/" class="text-text-secondary text-sm font-medium px-3 py-1.5 rounded-md hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Hub</a>
-          <a href="/docs" class="text-text-secondary text-sm font-medium px-3 py-1.5 rounded-md hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Docs</a>
-          <a href="/reference" class="text-text-secondary text-sm font-medium px-3 py-1.5 rounded-md hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Reference</a>
+    <!-- Top Header: Brand + Search -->
+    <header class="sticky top-0 z-50 bg-bg-secondary/95 backdrop-blur-md border-b border-border">
+      <div class="flex items-center gap-4 px-6 py-3">
+        <a href="/" class="font-bold text-lg text-text-primary flex items-center gap-2 no-underline shrink-0">
+          <span class="text-accent-green font-mono">></span> Honeypot IDS
+        </a>
+        <div class="flex-1 max-w-3xl mx-auto">
+          <button onclick="openSearch()" class="w-full flex items-center gap-3 text-text-secondary text-sm bg-bg-tertiary border border-border px-4 py-2 hover:border-accent-green transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <span class="flex-1 text-left">Search documentation...</span>
+            <kbd class="text-xs bg-bg-secondary px-2 py-0.5 border border-border font-mono">⌘K</kbd>
+          </button>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <a href="/" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Hub</a>
+          <a href="/docs" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Docs</a>
+          <a href="/reference" class="text-text-secondary text-sm font-medium px-3 py-1.5 hover:text-text-primary hover:bg-bg-tertiary transition-all no-underline">Reference</a>
         </div>
       </div>
+    </header>
+
+    <!-- Bottom Header: Doc Section Links -->
+    <nav class="bg-bg-tertiary border-b border-border overflow-x-auto">
+      <div class="flex items-center gap-1 px-6 py-1.5 min-w-max">
+        <a href="/docs/getting-started" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Getting Started</a>
+        <a href="/docs/architecture" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Architecture</a>
+        <a href="/docs/engine" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Honeypot Engine</a>
+        <a href="/docs/detection" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Detection</a>
+        <a href="/docs/observability" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Observability</a>
+        <a href="/docs/operations" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Operations</a>
+        <a href="/docs/testing" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Testing</a>
+        <a href="/docs/reference" class="text-text-secondary text-sm font-medium px-4 py-2 hover:text-accent-green hover:bg-bg-secondary transition-all no-underline whitespace-nowrap border-b-2 border-transparent hover:border-accent-green">Reference</a>
+      </div>
     </nav>
+
     <main>
       <slot />
     </main>
-    <footer class="text-center py-12 text-text-muted border-t border-border mt-20 text-sm font-mono">
+    <footer class="text-center py-8 text-text-muted border-t border-border mt-12 text-sm font-mono">
       Honeypot IDS System — FIIT STU Master's Thesis Project ·
       <a href="https://github.com" target="_blank" class="text-text-secondary">Source</a>
     </footer>

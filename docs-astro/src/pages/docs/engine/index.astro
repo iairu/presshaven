@@ -1,0 +1,26 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Detection', href: '/docs/detection' },
+  { title: 'Observability', href: '/docs/observability' },
+  { title: 'Operations', href: '/docs/operations' },
+  { title: 'Testing', href: '/docs/testing' },
+  { title: 'Reference', href: '/docs/reference' },
+  { title: 'Architecture', href: '/docs/architecture' },
+  { title: 'Honeypot Engine', href: '/docs/engine', active: true },
+];
+const toc = [
+  { id: 'overview', text: 'Engine Overview', level: 2 },
+];
+---
+<DocsLayout title="Honeypot Engine" description="The WordPress layer, pool scaling, per-IP stickiness, seeding, backups" section="Engine" sidebar={sidebar} toc={toc}>
+  <h2 id="overview">Engine Overview</h2>
+  <p>The honeypot engine is the WordPress/WooCommerce layer that provides the high-interaction deception environment. It includes:</p>
+  <ul>
+    <li><strong>WordPress / WooCommerce Layer</strong> — Production and honeypot pool instances running full WordPress with WooCommerce, Elementor, and a real product catalog.</li>
+    <li><strong>Pool Scaling & Assignment</strong> — Elastic honeypot pools cloned from a pre-built template, assigned per user session.</li>
+    <li><strong>Seeding the Storefront</strong> — Product catalog, users, and content seeded for realism.</li>
+    <li><strong>Backups</strong> — Backup and restore procedures for honeypot instances.</li>
+  </ul>
+  <p>Content derived from the old mkdocs documentation in <code>docs-mkdocs-old/docs/engine/</code>.</p>
+</DocsLayout>
