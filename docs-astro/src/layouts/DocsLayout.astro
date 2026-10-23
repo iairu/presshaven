@@ -61,7 +61,7 @@ const { title, description, toc = [], sidebar = [], section, prev, next } = Astr
 
     <div class="flex min-h-[calc(100vh-4rem)]">
       <!-- Sidebar -->
-      <aside class="w-72 bg-bg-secondary border-r border-border p-4 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden lg:block">
+      <aside class="w-72 bg-bg-secondary border-r border-border p-5 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden lg:block">
         <div class="mb-6">
           <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Navigation</h3>
           <nav class="space-y-1">
@@ -75,7 +75,7 @@ const { title, description, toc = [], sidebar = [], section, prev, next } = Astr
       </aside>
 
       <!-- Main content -->
-      <main class="flex-1 min-w-0 px-8 py-6 max-w-4xl">
+      <main class="flex-1 min-w-0 px-10 py-8 max-w-4xl">
         <!-- Breadcrumbs -->
         <div class="flex items-center gap-2 text-xs text-text-muted mb-4">
           <a href="/" class="hover:text-accent-green no-underline">Home</a>
@@ -96,7 +96,7 @@ const { title, description, toc = [], sidebar = [], section, prev, next } = Astr
         {(prev || next) && (
           <div class="flex justify-between mt-12 pt-6 border-t border-border">
             {prev ? (
-              <a href={prev.href} class="flex items-center gap-2 text-text-secondary hover:text-accent-green no-underline transition-all">
+              <a href={prev.href} class="btn-sheared secondary flex items-center gap-2 no-underline">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 <div>
                   <div class="text-xs text-text-muted">Previous</div>
@@ -105,7 +105,7 @@ const { title, description, toc = [], sidebar = [], section, prev, next } = Astr
               </a>
             ) : <div></div>}
             {next ? (
-              <a href={next.href} class="flex items-center gap-2 text-text-secondary hover:text-accent-green no-underline transition-all text-right">
+              <a href={next.href} class="btn-sheared secondary flex items-center gap-2 no-underline text-right">
                 <div>
                   <div class="text-xs text-text-muted">Next</div>
                   <div class="text-sm font-medium">{next.title}</div>
@@ -118,7 +118,7 @@ const { title, description, toc = [], sidebar = [], section, prev, next } = Astr
       </main>
 
       <!-- TOC Sidebar -->
-      <aside class="w-64 p-4 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden xl:block">
+      <aside class="w-64 p-5 overflow-y-auto sticky top-16 h-[calc(100vh-4rem)] hidden xl:block">
         <div class="mb-4">
           <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">On this page</h3>
           <nav class="space-y-1" id="toc-nav">
