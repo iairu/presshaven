@@ -48,7 +48,7 @@ const toc = [
     <tr><td>Permaflag</td><td>Score stops decaying entirely — triggered by permaflag_offenses (5) or permaflag_score (100).</td></tr>
     <tr><td>Offense</td><td>Counter bumped once per recorded attack signal, used by decay_policy to slow decay.</td></tr>
     <tr><td>Honeytoken</td><td>Fake high-value artefact planted in honeypot responses — detection signals confirmed compromise.</td></tr>
-    <tr><td>GDPR Signature</td><td>Privacy-preserving one-way hash of browser characteristics used as second identifier.</td></tr>
+    <tr><td>GDPR Signature</td><td>Consent-gated, privacy-preserving one-way hash of browser characteristics (plus the server-observed IP) used as a second identifier that survives a cookie and storage wipe. See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</td></tr>
   </table>
 
   <h2 id="architecture">Architecture Terms</h2>
@@ -56,7 +56,9 @@ const toc = [
     <tr><th>Term</th><th>Definition</th></tr>
     <tr><td>Pure Module</td><td>Lua module with no ngx.* dependency, plain-lua-interpreter testable (all *_rules.lua files).</td></tr>
     <tr><td>Adapter Module</td><td>Lua module performing I/O, delegating decisions to pure modules.</td></tr>
-    <tr><td>Pool</td><td>Isolated honeypot environment (honeypot_eshop_N + honeypot_database_N) assigned per user session.</td></tr>
+    <tr><td>Pool</td><td>Isolated honeypot environment (honeypot_eshop_N + honeypot_database_N) assigned per user session. See the <a href="/docs/engine#pools">Engine</a> page.</td></tr>
+    <tr><td>Per-Session Segmentation</td><td>Telling visitors apart by session (signed cookie + fingerprint) rather than by IP, so several users behind one address — or one clearing cookies — are each isolated on their own pool.</td></tr>
+    <tr><td>Honeypot Layer</td><td>Where deception happens: reverse-proxy level (separate decoy backends / pools) or database level (one eshop, production vs honeypot database swapped per request). See <a href="/docs/engine/layers">Honeypot Layers</a>.</td></tr>
     <tr><td>Escalation</td><td>Gradual increase in response to repeated suspicious signals.</td></tr>
     <tr><td>Sticky Routing</td><td>Once honeypot_bound, all subsequent requests locked to same honeypot pool.</td></tr>
   </table>

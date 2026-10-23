@@ -13,6 +13,7 @@ const sidebar = [
   { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
   { title: 'Pattern Database', href: '/docs/detection/patterns' },
   { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+  { title: 'Device & GDPR Signature', href: '/docs/detection/signature' },
 ];
 const toc = [
   { id: 'pipeline', text: 'Detection Pipeline', level: 2 },
@@ -82,6 +83,14 @@ const toc = [
       tag="Scoring details"
       description="Vulnerability patterns, threat-alert processing, reportability rules, the scoring model and escalation-aware decay."
       meta="Decay policy"
+    />
+    <DocCard
+      title="Device & GDPR Signature"
+      href="/docs/detection/signature"
+      icon="fingerprint"
+      tag="Identity recovery"
+      description="A consent-gated, one-way signature that re-recognises a returning visitor after a cookie and storage wipe, without storing anything about them."
+      meta="Privacy-preserving"
     />
   </CardGrid>
 

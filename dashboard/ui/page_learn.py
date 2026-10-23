@@ -98,11 +98,18 @@ patterns, IP reputation, automation tools, uploads. Each signal adds points.</li
 <li>If the session's score reaches the <b>threshold (80/100)</b>, or a CVE or bad IP is
 seen, the session goes to the <b>honeypot</b>, a decoy copy of the shop. Otherwise it goes to
 <b>production</b>.</li>
+<li>Each diverted session is handed <b>its own honeypot pool</b> (per-session segmentation),
+built on demand within a resource budget. Where the deception happens -- separate decoy eshops
+or just a swapped database -- is set by the <a href="page:services">honeypot layer</a>.</li>
 <li>Once on the honeypot the session <b>stays there</b> (sticky), so the user doesn't
 notice. Scores slowly <b>decay</b> so innocent users recover.</li>
 <li>Every decision, plus <b>Suricata</b> network alerts, is shipped to the <b>SIEM</b>
 (Vector, Elasticsearch, Kibana) for analysis.</li>
 </ol>
+<p>Go deeper on the moving parts: the <a href="page:pattern_database">pattern database</a> of
+everything the proxy can recognise, the <a href="page:pool_scaling">honeypot pools</a> that give
+each attacker its own decoy, and the <a href="page:signature_sim">device signature</a> that
+re-recognises a returning visitor without storing anything about them.</p>
 <p><i>Safety note:</i> the pattern presets are real attack patterns. Only fire them at
 systems you run yourself, like this lab.</p>
 <h2>Tour of the dashboard</h2>

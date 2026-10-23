@@ -1,0 +1,130 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Detection Overview', href: '/docs/detection' },
+  { title: 'Detection Capabilities', href: '/docs/detection/capabilities' },
+  { title: 'Seeded CVEs', href: '/docs/detection/cves' },
+  { title: 'Suricata Network IDS', href: '/docs/detection/suricata' },
+  { title: 'Pattern Database', href: '/docs/detection/patterns' },
+  { title: 'Advanced Signals', href: '/docs/detection/advanced' },
+  { title: 'Device & GDPR Signature', href: '/docs/detection/signature', active: true },
+];
+const toc = [
+  { id: 'what', text: 'What It Is', level: 2 },
+  { id: 'why', text: 'Why It Exists', level: 2 },
+  { id: 'flow', text: 'The Flow', level: 2 },
+  { id: 'privacy', text: 'Why It Is Privacy-Preserving', level: 2 },
+  { id: 'recovery', text: 'Returning-Visitor Recovery', level: 2 },
+  { id: 'config', text: 'Configuration', level: 2 },
+  { id: 'try', text: 'See It Live', level: 2 },
+];
+---
+<DocsLayout title="Device & GDPR Signature" description="A consent-gated, one-way identifier that re-recognises a returning visitor without storing anything about them" section="Detection" sidebar={sidebar} toc={toc}>
+  <h2 id="what">What It Is</h2>
+  <p>
+    The <code>gdpr_signature</code> is a second, <strong>privacy-preserving</strong> way for the
+    reverse proxy to recognise a returning visitor — one that survives the visitor clearing
+    <em>both</em> their cookies and their <code>localStorage</code>. It is layered
+    <em>alongside</em> the signed <code>SERVERID</code> session cookie, never replacing it, and it
+    only activates with the visitor's <strong>explicit, revocable consent</strong>. The server never
+    stores anything identifiable about the visitor — only a one-way hash, and only when it matters.
+  </p>
+  <CardGrid columns={3}>
+    <DocCard title="Consent-gated" icon="check" tag="Opt-in" description="No token is generated or sent until the visitor clicks Agree. Decline, and the session cookie stays the only identifier." />
+    <DocCard title="One-way" icon="fingerprint" tag="No PII at rest" description="Browser characteristics become a salted SHA-256 hash. Only the hash is stored, and only for honeypot-bound sessions." />
+    <DocCard title="Deterministic" icon="route" tag="Recovery" description="The browser reproduces the same inputs live, so the same device yields the same signature after a storage wipe." />
+  </CardGrid>
+
+  <h2 id="why">Why It Exists</h2>
+  <p>
+    The signed session cookie and the passive recovery fingerprint
+    (<code>lua/session_identity_rules.lua</code>) can both be shed by a client that clears storage
+    <em>and</em> presents a different TLS/HTTP fingerprint. The signature adds an orthogonal,
+    consent-based recovery path that the browser itself reproduces deterministically, so a diverted
+    attacker who wipes everything and comes back is routed straight back to the honeypot.
+  </p>
+
+  <h2 id="flow">The Flow</h2>
+  <p>The source of truth is <code>ids/GDPR.md</code>; the client half lives in
+  <code>gdpr_client.js</code> and the server half in <code>lua/gdpr_handler.lua</code>.</p>
+  <h3>Client half (browser)</h3>
+  <ol>
+    <li>On <code>GET /</code> the proxy injects a <code>&lt;script&gt;</code> and serves
+    <code>/__gdpr/config</code>. <code>gdpr_client.js</code> shows a consent banner and fetches
+    <code>/__gdpr/config</code> → <code>&#123; enabled, publicKey, ... &#125;</code>.</li>
+    <li><strong>Only if the visitor clicks Agree</strong>, and immediately:
+      <ul>
+        <li>build the payload <code>&#123; s: "&lt;screenW&gt;x&lt;screenH&gt;", t: &lt;now&gt; &#125;</code>;</li>
+        <li>compute <code>gdpr_token = base64( RSA-OAEP-SHA256( payload, publicKey ) )</code>;</li>
+        <li>set the <code>gdpr_token</code> cookie and reload.</li>
+      </ul>
+    </li>
+  </ol>
+  <h3>Server half (reverse proxy, per request, in memory only)</h3>
+  <ol>
+    <li>Decrypt: <code>plaintext = RSA-OAEP-SHA256-decrypt( gdpr_token, PRIVATE key )</code>. The
+    private key never leaves the proxy.</li>
+    <li>Append the client IP <strong>server-side</strong>: <code>payload.ip = $remote_addr</code> —
+    the one characteristic the browser cannot supply or forge.</li>
+    <li>If the timestamp is within <code>GDPR_TIMESTAMP_WINDOW</code>, build a stable canonical form
+    of the characteristics (including the appended IP, timestamp stripped, keys sorted) and compute
+    the one-way <code>signature = SHA256( deployment-salt | canonical )</code>.</li>
+    <li>If Redis holds an unexpired <code>gdpr_honeypot_sig:&lt;signature&gt;</code>, prolong its TTL
+    and route the session to the honeypot (router Stage 1a). Otherwise fall through to the normal
+    session-token routing.</li>
+    <li>The plaintext and characteristics are discarded immediately; only the hash may persist.</li>
+  </ol>
+  <div class="admonition note">
+    <div class="admonition-title">Binding the signature</div>
+    <p>Whenever a request that carried a valid signature is routed to the honeypot for <em>any</em>
+    reason, the proxy writes <code>gdpr_honeypot_sig:&lt;signature&gt;</code> with a
+    <code>GDPR_BINDING_TTL</code>. A later storage wipe plus re-consent reproduces the same signature
+    and lands the visitor right back on the honeypot.</p>
+  </div>
+
+  <h2 id="privacy">Why It Is Privacy-Preserving</h2>
+  <ul>
+    <li><strong>Consent first, and only then.</strong> No token is generated until the visitor clicks
+    Agree. Decline or never decide, and the <code>gdpr_token</code> cookie is never set; the
+    <code>SERVERID</code> session stays the only identifier.</li>
+    <li><strong>The browser is the only thing that can produce a token.</strong> The plaintext
+    characteristics are recomputed live each time; only ciphertext is ever at rest, and it cannot be
+    decrypted without the private key, which never leaves the proxy.</li>
+    <li><strong>The server never stores PII.</strong> The token is decrypted only in memory, only long
+    enough to verify the timestamp and compute a <strong>one-way</strong> SHA-256 hash. Only that hash
+    is stored, and only for honeypot-bound signatures, as a Redis key with a TTL.</li>
+    <li><strong>Revocation is "just stop sending it."</strong> The only server-side record is a one-way
+    hash that expires on its own, so there is nothing identifiable to delete.</li>
+  </ul>
+
+  <h2 id="recovery">Returning-Visitor Recovery</h2>
+  <p>
+    Because the signature is derived from stable device characteristics plus the server-observed IP,
+    the same device from the same screen size reproduces the same signature. That is how a returning
+    visitor is re-recognised <em>without</em> storing anything about them: the honeypot binding keyed
+    on the hash is still in Redis, so the visitor is diverted again before the normal session routing
+    even runs. Change the screen size (or the IP), and the signature changes — this is a recovery
+    path, not a precise fingerprint.
+  </p>
+
+  <h2 id="config">Configuration</h2>
+  <table>
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>GDPR_TIMESTAMP_WINDOW</code></td><td>How fresh a token's timestamp must be for the proxy to derive a signature from it, bounding replay of a captured token.</td></tr>
+    <tr><td><code>GDPR_BINDING_TTL</code></td><td>How long a <code>gdpr_honeypot_sig:&lt;signature&gt;</code> binding lives in Redis before it expires on its own.</td></tr>
+    <tr><td><code>/__gdpr/config</code> <code>enabled</code></td><td>Whether the consent banner and token flow are served to the browser at all.</td></tr>
+  </table>
+  <p>The signature only ever adds to honeypot routing; it is never used to send a session <em>back</em>
+  to production, and it is independent of the <a href="/docs/detection/advanced">risk score</a>.</p>
+
+  <h2 id="try">See It Live</h2>
+  <p>
+    The dashboard's <strong>Signature Simulation</strong> page reproduces the whole flow against the
+    running proxy: resize the visitor window, press <em>Agree &amp; derive signature</em>, and watch the
+    hex signature the proxy logs. Resize to a new size for a different signature, then resize back to
+    the first size to see the original signature — and the re-recognition — return.
+  </p>
+</DocsLayout>

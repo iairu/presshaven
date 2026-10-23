@@ -1,0 +1,115 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Honeypot Layers', href: '/docs/engine/layers', active: true },
+];
+const toc = [
+  { id: 'what', text: 'Two Layers of Deception', level: 2 },
+  { id: 'compare', text: 'Choosing a Layer', level: 2 },
+  { id: 'reverse', text: 'Reverse-Proxy Level', level: 2 },
+  { id: 'database', text: 'Database Level', level: 2 },
+  { id: 'switching', text: 'Switching Layers', level: 2 },
+  { id: 'files', text: 'What the Database Layer Overlays', level: 2 },
+];
+---
+<DocsLayout title="Honeypot Layers" description="Where the deception happens: separate decoy backends, or one eshop with a swapped database" section="Engine" sidebar={sidebar} toc={toc}>
+  <h2 id="what">Two Layers of Deception</h2>
+  <p>
+    The <code>ids</code> stack can run its honeypot at one of two layers. Both are the same Compose
+    project — same project name, same <code>.env</code>, same data — and differ only in which Compose
+    file is used and, therefore, in <em>where</em> a suspicious session is diverted. You pick the layer
+    from the dashboard's <strong>Services</strong> page ("Honeypot layer"); the choice is persisted in
+    <code>AppState.honeypot_layer</code> and read by <code>core.docker_ctl.Target</code>, so every
+    <code>docker compose</code> call the dashboard makes follows it automatically.
+  </p>
+  <CardGrid columns={2}>
+    <DocCard
+      title="Reverse-proxy level"
+      href="#reverse"
+      icon="route"
+      tag="Default · Recommended"
+      description="The whole backend is switched: suspicious sessions are routed to separate honeypot WordPress containers (pools). Catches file, upload and code-execution attacks because each attacker has a real decoy to land in."
+    />
+    <DocCard
+      title="Database level"
+      href="#database"
+      icon="database"
+      tag="Lighter · Narrower"
+      description="Only the database is switched: one eshop serves everyone and wp-content/db.php connects it to the production or the honeypot database per request. Isolates database-layer attacks only."
+    />
+  </CardGrid>
+
+  <h2 id="compare">Choosing a Layer</h2>
+  <table>
+    <tr><th></th><th>Reverse-proxy level</th><th>Database level</th></tr>
+    <tr><td>Compose file</td><td><code>docker-compose.yml</code></td><td><code>docker-compose.db-proxy.yml</code></td></tr>
+    <tr><td>What is switched per suspicious session</td><td>The whole backend (separate honeypot WordPress pools)</td><td>Only the database (one eshop, production vs honeypot DB)</td></tr>
+    <tr><td>Honeypot pools</td><td>Per-session pools, autoscaled</td><td>None — <code>POOL_COUNT</code> is 0</td></tr>
+    <tr><td>Resource cost per pool</td><td>~1536 MB / 1.5 CPU (eshop + database)</td><td>~512 MB / 0.5 CPU (database alone)</td></tr>
+    <tr><td>Isolates file / upload / RCE attacks</td><td>Yes — the attacker runs against a real decoy</td><td>No — there is no separate backend to land in</td></tr>
+    <tr><td>Honeypot data volume</td><td>Per-pool databases</td><td><code>honeypot_database_proxy_data</code></td></tr>
+  </table>
+
+  <h2 id="reverse">Reverse-Proxy Level</h2>
+  <p>
+    The default, recommended layer. Suspicious sessions are routed to separate honeypot WordPress
+    containers — the per-session <a href="/docs/engine#pools">pools</a> described on the Engine page.
+    Because each diverted attacker gets a full, real decoy eshop and database of their own, every
+    class of attack has somewhere to "work": upload a web shell, exploit an RCE, dump the decoy
+    database — all against fake data, fully isolated from production and from other attackers.
+  </p>
+
+  <h2 id="database">Database Level</h2>
+  <p>
+    A lighter alternative. One <code>production_eshop</code> serves every session, and
+    <code>wp-content/db.php</code> acts as a per-request database router: a suspicious session's
+    requests are connected to the honeypot database, a clean session's to the production database. The
+    routing decision still comes from the proxy's Lua logic; <code>proxy_params</code> sets
+    <code>X-Honeypot-Backend</code> from that decision and always overwrites the header, so a client
+    cannot forge it.
+  </p>
+  <div class="admonition note">
+    <div class="admonition-title">What this layer can and cannot catch</div>
+    <p>Because there is only one eshop and only the database is swapped, this layer isolates
+    database-layer attacks (for example SQL injection reading the decoy database) but not attacks that
+    need a separate backend — a file upload or a code-execution exploit has no honeypot container to
+    land in. Use it when resources are tight or the focus is data-layer deception; prefer the
+    reverse-proxy level otherwise.</p>
+  </div>
+
+  <h2 id="switching">Switching Layers</h2>
+  <p>Use the Services page, or by hand from <code>ids/</code>:</p>
+  <pre><code>docker compose up -d --remove-orphans                                # reverse-proxy level
+docker compose -f docker-compose.db-proxy.yml up -d --remove-orphans # database level</code></pre>
+  <p>
+    Both layers share the project name, so <code>--remove-orphans</code> replaces the services that
+    differ and removes the other layer's extra services. The honeypot database volume is the
+    exception: the database layer uses its own <code>honeypot_database_proxy_data</code>.
+  </p>
+
+  <h2 id="files">What the Database Layer Overlays</h2>
+  <p>
+    <code>docker-compose.db-proxy.yml</code> bind-mounts whole-file replacements from
+    <code>ids/db_proxy/</code> over the shared copies, at the same relative paths:
+  </p>
+  <ul>
+    <li><code>reverse_proxy_enhanced/nginx.conf</code> — no pool upstreams; every location proxies to <code>production_backend</code>.</li>
+    <li><code>reverse_proxy_enhanced/proxy_params</code> — sets <code>X-Honeypot-Backend</code> from the Lua routing decision, always overwriting it.</li>
+    <li><code>lua/health_check.lua</code> and <code>lua/init_worker.lua</code> — set <code>POOL_COUNT</code> to 0 so nothing probes honeypot eshops that don't exist; health is mirrored from the database pools in Redis instead.</li>
+    <li><code>scripts/replicate_content_to_honeypot.sh</code> — syncs content into the single <code>honeypot_database</code>.</li>
+    <li><code>honeypot_database_migrations/01_clean-honeypot-data.sql</code> — DELETEs that tolerate missing tables, for the clone-of-production database.</li>
+  </ul>
+  <p>
+    Two files live in the shared <code>production_eshop_files/</code> because Docker cannot overlay
+    paths that don't exist in the default tree; they do nothing unless
+    <code>HONEYPOT_LAYER=database</code>, which only this layer's Compose file sets:
+    <code>wp-content/db.php</code> (the per-request database router) and
+    <code>wp-content/mu-plugins/honeypot-db-backend-header.php</code> (adds <code>X-DB-*</code> debug
+    headers for the dashboard; requires <code>INTERNAL_TEST_SECRET</code>). See
+    <code>ids/db_proxy/README.md</code> for the complete file list.
+  </p>
+</DocsLayout>

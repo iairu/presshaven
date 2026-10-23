@@ -5,14 +5,8 @@ import DocCard from '../../../components/DocCard.astro';
 
 const sidebar = [
   { title: 'Documentation Home', href: '/docs' },
-  { title: 'Getting Started', href: '/docs/getting-started' },
-  { title: 'Architecture', href: '/docs/architecture' },
   { title: 'Honeypot Engine', href: '/docs/engine', active: true },
-  { title: 'Detection', href: '/docs/detection' },
-  { title: 'Observability', href: '/docs/observability' },
-  { title: 'Operations', href: '/docs/operations' },
-  { title: 'Testing', href: '/docs/testing' },
-  { title: 'Reference', href: '/docs/reference' },
+  { title: 'Honeypot Layers', href: '/docs/engine/layers' },
 ];
 const toc = [
   { id: 'layers', text: 'Engine Layers', level: 2 },
@@ -29,6 +23,11 @@ const toc = [
     real WordPress/WooCommerce installation with a real database, real plugins and a real storefront. The
     proxy decides <em>whether</em> a session sees production or a pool; the engine makes the pool convincing
     enough that the session stays there.
+  </p>
+  <p>
+    The engine can run its deception at two different layers — separate decoy backends, or one eshop with a
+    swapped database. This page describes the default reverse-proxy level with per-session pools; see
+    <a href="/docs/engine/layers">Honeypot Layers</a> for the alternative database level and how to choose.
   </p>
 
   <h2 id="layers">Engine Layers</h2>
@@ -64,8 +63,12 @@ const toc = [
   </CardGrid>
 
   <h2 id="pools">Pool Lifecycle</h2>
-  <p>Assignment happens once per session, not per request and not per IP. The session identity is a signed
-  cookie with a passive-fingerprint fallback, and the mapping is stored in Redis with a 24-hour TTL.</p>
+  <p>Assignment happens once per session, not per request and not per IP. This is <strong>per-session
+  segmentation</strong>: visitors are told apart by their session identity (a signed cookie with a
+  passive-fingerprint fallback), so several users behind one address — or one user who clears cookies —
+  are each isolated on a pool of their own. The mapping is stored in Redis with a 24-hour TTL, and the
+  dashboard's Segmentation Validation page proves it by running several independent sessions from one
+  machine and showing each land on a different pool.</p>
   <ol>
     <li><strong>Assign.</strong> A new session asks Redis for a free ready pool. The assignment is a single atomic <code>EVAL</code> so two sessions can never receive the same exclusive pool.</li>
     <li><strong>Provision a spare.</strong> Every assignment queues a wake-up on the pool-provision channel. The pool manager builds another shop/database pair so the next session finds a warm pool.</li>

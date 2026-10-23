@@ -236,6 +236,73 @@ GLOSSARY: list[GlossaryTerm] = [
         "use, which is why curl runs with -k.",
         "certificates",
     ),
+    GlossaryTerm(
+        "Honeypot pool",
+        "One isolated set of decoy containers (a decoy eshop plus its decoy database) that "
+        "diverted sessions are routed to. Keeping users on separate pools stops one user from "
+        "seeing another's activity and keeps the real shop untouched.",
+        "Pools 1-3 are declared in docker-compose.yml and always present; the pool manager "
+        "creates further pools at runtime and reuses the numbers of ones it destroyed. Each "
+        "diverted session is handed its own pool until the resource budget runs out. The Pool "
+        "Scaling page shows every pool, who is on it and why.",
+        "pool_scaling",
+    ),
+    GlossaryTerm(
+        "Per-session segmentation",
+        "Telling visitors apart by their session (cookie plus browser fingerprint) rather than "
+        "by IP address, so several people behind one address -- or one user clearing cookies -- "
+        "are isolated from each other.",
+        "Every diverted session is bound to its own honeypot pool, not shared by address. The "
+        "Segmentation Validation page runs several independent sessions from one machine and "
+        "shows each landing on a pool of its own.",
+        "pool_test",
+    ),
+    GlossaryTerm(
+        "Pool autoscaling",
+        "Starting and stopping decoy capacity on demand, within a fixed resource budget, so "
+        "there is always a free pool for the next user without wasting a running pool per idle one.",
+        "The pool manager builds one pool per waiting session plus a few spares, bounded by "
+        "POOL_MAX (pool count), POOL_MAX_MEMORY_MB and POOL_MAX_CPUS -- each WordPress-layer pool "
+        "reserves about 1536 MB and 1.5 CPUs. Idle pools are scaled down after "
+        "POOL_IDLE_TIMEOUT_SECONDS. Once the budget is reached, new sessions share existing pools; "
+        "the Pool Scaling page names whichever limit stopped scaling.",
+        "pool_scaling",
+    ),
+    GlossaryTerm(
+        "Honeypot layer",
+        "Which layer of the stack the deception happens at. Deceiving higher up (the whole "
+        "backend) catches more attack types; deceiving lower down (just the data) is lighter but "
+        "narrower.",
+        "Pick it from the Services page's Honeypot layer dropdown. Reverse-proxy level "
+        "(docker-compose.yml, default) routes suspicious sessions to separate honeypot WordPress "
+        "containers (pools). Database level (docker-compose.db-proxy.yml) keeps one eshop and lets "
+        "wp-content/db.php switch between the production and honeypot database per request, so it "
+        "isolates database-layer attacks only -- file-upload or code-execution attacks have no "
+        "separate backend to land in.",
+        "services",
+    ),
+    GlossaryTerm(
+        "Device signature (GDPR signature)",
+        "A stable, privacy-preserving identifier derived from a browser's own characteristics, so "
+        "a returning visitor can be recognised even after they clear cookies and local storage.",
+        "Consent-gated and one-way. After the visitor agrees, the browser encrypts its screen size "
+        "plus a timestamp with the proxy's public key (the gdpr_token cookie). Per request the "
+        "proxy decrypts it in memory, appends the client IP it actually sees, and hashes the result "
+        "with a deployment salt into the gdpr_signature. Only that hash is stored (no personal "
+        "data), only for honeypot-bound sessions, and only with a TTL. The Signature Simulation "
+        "page shows the whole flow live.",
+        "signature_sim",
+    ),
+    GlossaryTerm(
+        "Pattern catalogue",
+        "A single machine-readable list of every detection pattern the system knows, so tools and "
+        "docs share one source of truth instead of each keeping their own copy.",
+        "Generated into patterns/patterns.json: one record per CVE, generic signature, upload or "
+        "header rule, scanner-tool fingerprint and Suricata SID, each with a stable ID and its "
+        "provenance. The Pattern Database page and the documentation site both read it, so the two "
+        "can never drift apart.",
+        "pattern_database",
+    ),
 ]
 
 
@@ -750,6 +817,52 @@ LABS: list[Lab] = [
                     "and repeat. What changed, and why does never forgiving raise false "
                     "positives?", "settings"),
             LabStep("lab5.restore", "Put the setting back and restart ids.", "settings"),
+        )),
+    Lab("lab6", "Lab 6: Divert sessions and watch the pools",
+        "See per-session segmentation and pool autoscaling: each attacker gets a decoy of its own.",
+        (
+            LabStep("lab6.state", "Open Pool Scaling and note how many pools exist now and the "
+                    "memory, CPU and pool-count budget.", "pool_scaling"),
+            LabStep("lab6.open", "On Segmentation Validation, press 'Open shop in all' so each "
+                    "frame starts its own session.", "pool_test"),
+            LabStep("lab6.attack", "Press 'Attack from all', then 'Refresh pool state', and confirm "
+                    "each session is diverted to a different pool number.", "pool_test"),
+            LabStep("lab6.scale", "Back on Pool Scaling, read the event log: find a pool being built "
+                    "and handed over, and note which limit stops scaling once the budget is hit.",
+                    "pool_scaling"),
+            LabStep("lab6.glossary", "Read the glossary entries for Honeypot pool, Per-session "
+                    "segmentation and Pool autoscaling.", "learn"),
+        )),
+    Lab("lab7", "Lab 7: Switch the honeypot layer",
+        "Compare deceiving the whole backend with deceiving only the database.",
+        (
+            LabStep("lab7.note", "On Services, note the current Honeypot layer (WordPress proxy "
+                    "level by default).", "services"),
+            LabStep("lab7.base", "Run CVE-2024-27956 on Attack Simulation and confirm the session "
+                    "is diverted to a separate honeypot eshop pool.", "patterns"),
+            LabStep("lab7.switch", "Set the Honeypot layer to Database proxy level and restart the "
+                    "ids project.", "services"),
+            LabStep("lab7.compare", "Re-run the same pattern. There are no honeypot eshop pools now: "
+                    "one eshop serves everyone and only the database is switched. Which attack "
+                    "types can this layer still isolate, and which can it not?", "patterns"),
+            LabStep("lab7.restore", "Set the Honeypot layer back to WordPress proxy level and "
+                    "restart ids.", "services"),
+        )),
+    Lab("lab8", "Lab 8: Derive a device signature",
+        "Watch a browser characteristic become a consent-gated, one-way signature that re-recognises "
+        "a returning visitor without storing anything about them.",
+        (
+            LabStep("lab8.open", "Open Signature Simulation and read what each half of the flow "
+                    "does.", "signature_sim"),
+            LabStep("lab8.derive", "Resize the visitor window, press 'Agree & derive signature', and "
+                    "note the hex signature the proxy logged.", "signature_sim"),
+            LabStep("lab8.change", "Resize to a clearly different size and derive again -- the "
+                    "signature changes.", "signature_sim"),
+            LabStep("lab8.return", "Resize back to the first size and derive once more: the original "
+                    "signature returns. That is how a visitor is re-recognised after clearing "
+                    "cookies.", "signature_sim"),
+            LabStep("lab8.glossary", "Read the glossary entry for Device signature (GDPR signature) "
+                    "and note why only a one-way hash is ever stored.", "learn"),
         )),
 ]
 
