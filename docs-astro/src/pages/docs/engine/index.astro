@@ -135,5 +135,14 @@ cp site/* ../production_eshop_files/wp-content/themes/omega-storefront/assets/fe
     <tr><td><code>POOL_WAITING_ACTIVE_SECONDS</code></td><td>60</td><td>How long a waiting session still counts as demand. Prevents abandoned sessions from consuming new pools.</td></tr>
     <tr><td><code>POOL_FAST_CLONE</code></td><td>0</td><td>Experimental: clone the configured production database and skip slow per-pool wp-cli setup steps.</td></tr>
   </table>
-  <p>See <a href="/docs/operations">Operations</a> for the router decision pipeline and the complete environment reference, and <a href="/docs/architecture">Architecture</a> for how the pool router sits in the request path.</p>
+  <div class="admonition note">
+    <div class="admonition-title">Size the reserve to measured use</div>
+    <p>A pool is charged its full container limit (≈1536&nbsp;MB / 1.5&nbsp;CPU) against the budget by default, but
+    a recorded run measured each honeypot pool using only ≈420–430&nbsp;MB once warm. Charging the limit stopped
+    scaling at roughly a quarter of the memory budget, so <code>POOL_RESERVE_MEM_MB</code> /
+    <code>POOL_RESERVE_CPUS</code> exist to lower the charge toward measured use (for example ≈768&nbsp;MB /
+    0.75&nbsp;CPU) and fit far more pools; the host free-memory and load guards still stop growth if the machine
+    really runs short.</p>
+  </div>
+  <p>See <a href="/docs/operations">Operations</a> for the router decision pipeline and the complete environment reference, <a href="/docs/architecture">Architecture</a> for how the pool router sits in the request path, and <a href="/docs/testing#results">Validation Results</a> for the segmentation evidence that each session lands on its own pool.</p>
 </DocsLayout>

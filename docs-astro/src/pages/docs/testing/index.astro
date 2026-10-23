@@ -14,6 +14,7 @@ const toc = [
   { id: 'dashboard', text: 'Dashboard Tests', level: 2 },
   { id: 'secret', text: 'Internal Test Secret', level: 2 },
   { id: 'running', text: 'Running Tests', level: 2 },
+  { id: 'results', text: 'Validation Results', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
@@ -85,7 +86,52 @@ cd dashboard && python3 -m unittest discover -s tests -v
 # Scenario tests
 bash testing/scenario_*.sh</code></pre>
 
+  <h2 id="results">Validation Results</h2>
+  <p>Two of the dashboard's report generators turn a live stack into evidence: the <strong>Segmentation
+  Validation</strong> run proves per-session isolation, and the <strong>Exploit test-scenario</strong> run
+  measures detection against the seeded CVEs. Both export a PDF with per-request scores, routing decisions,
+  resource footprints and statistics. The figures below come from representative recorded runs; regenerate
+  them from the dashboard to validate a given deployment.</p>
+
+  <h3>Segmentation validation — verdict EXCLUSIVE on both layers</h3>
+  <p>The run opens ten independent browser windows, each with its own cookie jar, User-Agent and language, so
+  the proxy sees ten separate users. Each one attacks, is flagged, and is expected to land on a honeypot pool
+  <em>of its own</em>. The run also injects random session tampering — cookie clearings plus hijack and
+  forgery attempts — to confirm a window cannot be pushed onto, or steal, another window's pool.</p>
+  <table>
+    <tr><th>Recorded run</th><th>Honeypot layer</th><th>Windows</th><th>Verdict</th></tr>
+    <tr><td>2026-10-18</td><td>WordPress (reverse-proxy) level</td><td>10, each on its own pool</td><td>EXCLUSIVE</td></tr>
+    <tr><td>2026-10-18</td><td>Database-proxy level</td><td>10, each on its own pool</td><td>EXCLUSIVE</td></tr>
+  </table>
+  <ul>
+    <li><strong>No shared pools below the resource ceiling.</strong> Every flagged session received an exclusive pool; round-robin reuse only happens once scaling hits <code>POOL_MAX</code> / the memory and CPU budget.</li>
+    <li><strong>Tampering was rejected.</strong> Forged and hijacked session cookies were scored as tampering and refused; a window that cleared its cookies was re-recognised by the passive fingerprint rather than handed a clean slate.</li>
+    <li><strong>Reassignment after scale-down worked.</strong> After a forced idle scale-down to the three Compose-declared pools, released sessions were reassigned to a surviving pool and their carts stayed intact.</li>
+    <li><strong>Both <a href="/docs/engine/layers">deception layers</a> pass.</strong> The database-proxy run exercises only data-layer patterns and checks the shared filesystem at the end (see <code>ids/db_proxy/COVERAGE.md</code>), since it cannot isolate file or upload attacks.</li>
+  </ul>
+
+  <h3>Exploit test-scenario — detection rate per attack class</h3>
+  <p>Each seeded CVE is replayed from a freshly reset threat state (Redis and the proxy's shared dicts
+  flushed) so its score is that exploit's own isolated value, read back from the diagnostic
+  <code>X-Risk-Score</code> / <code>X-Route-Target</code> headers. Rates below are from a recorded
+  WordPress-proxy-level run and use Wilson confidence intervals.</p>
+  <table>
+    <tr><th>Attack class</th><th>Diverted to honeypot (any request)</th><th>Caught on the first request</th></tr>
+    <tr><td>CVE exploits</td><td>13 / 14 (93%)</td><td>13 / 14</td></tr>
+    <tr><td>Plugin / theme targets</td><td>14 / 16 (88%)</td><td>14 / 16</td></tr>
+    <tr><td>Generic attack patterns</td><td>15 / 18 (83%)</td><td>7 / 18 (rest on request 2–3)</td></tr>
+    <tr><td>WordPress-core probes</td><td>14 / 16 (88%)</td><td>6 / 16 (rest on request 2–3)</td></tr>
+    <tr><td>Backend-facing</td><td>26 / 29 (90%)</td><td>18 / 29</td></tr>
+  </table>
+  <div class="admonition note">
+    <div class="admonition-title">No honeypot bypasses once routed</div>
+    <p>On the WordPress-proxy level the exploit report recorded zero honeypot bypasses: a diverted request is
+    served by a separate decoy eshop with its own files, PHP runtime and database, so every exploit is
+    contained after routing. Lower-confidence attacks (generic and user-enumeration probes) sometimes need a
+    second or third request before the accumulated score crosses the threshold — repetition tips them over.</p>
+  </div>
+
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> Pure/adapter split enables 18 unit test files. Comprehensive coverage of all pure modules. Dashboard validation catches NDJSON drift.</p>
+  <p><strong>Strengths:</strong> Pure/adapter split enables 18 unit test files. Comprehensive coverage of all pure modules. Dashboard validation catches NDJSON drift. Segmentation and exploit runs turn a live stack into reproducible, statistics-backed evidence on both deception layers.</p>
   <p><strong>Limitations:</strong> No end-to-end integration tests. Blind pentest requires manual setup. No CI/CD integration. Sophistication classifier and honeytoken handler lack dedicated tests.</p>
 </DocsLayout>

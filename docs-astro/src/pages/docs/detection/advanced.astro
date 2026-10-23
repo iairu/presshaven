@@ -88,5 +88,13 @@ const toc = [
     <li>Past <code>permaflag_offenses</code> offenses, OR once the stored peak has ever reached <code>permaflag_score</code>, decay stops entirely (permaflag).</li>
     <li>Default: <code>decay_offense_slowdown = 0.75</code>, <code>permaflag_offenses = 5</code>, <code>permaflag_score = 100</code>.</li>
   </ul>
+  <div class="admonition note">
+    <div class="admonition-title">Measured vs configured half-life</div>
+    <p>The configured half-life is 300&nbsp;s, but a recorded exploit test-scenario run measured the effective
+    half-life at <strong>529&nbsp;s</strong> (95% CI 475–596&nbsp;s, exponential fit R²&nbsp;=&nbsp;0.99) — well
+    outside the configured value. That is the escalation-aware slowdown working as designed: each prior offense
+    multiplies the half-life, so a session that has already misbehaved fades more slowly than the base constant
+    suggests. The decay the router applies is the curve the measurement tracks, not the raw 300&nbsp;s.</p>
+  </div>
   <p><strong>Relevance:</strong> Ensures that only high-confidence, logic-driven signals (combining CVEs, Suricata alerts, and IP reputation hits) lead to external reporting.</p>
 </DocsLayout>

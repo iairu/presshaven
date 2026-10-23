@@ -53,6 +53,12 @@ const toc = [
     <tr><td>Isolates file / upload / RCE attacks</td><td>Yes — the attacker runs against a real decoy</td><td>No — there is no separate backend to land in</td></tr>
     <tr><td>Honeypot data volume</td><td>Per-pool databases</td><td><code>honeypot_database_proxy_data</code></td></tr>
   </table>
+  <p>
+    Both layers have been segmentation-validated: a ten-window run on each layer gave every flagged session a
+    honeypot pool of its own (verdict EXCLUSIVE). See <a href="/docs/testing#results">Validation Results</a> for
+    the recorded figures. The database-level run exercises only data-layer patterns and checks the shared
+    filesystem afterwards, because it has no separate backend to contain a file write (<code>ids/db_proxy/COVERAGE.md</code>).
+  </p>
 
   <h2 id="reverse">Reverse-Proxy Level</h2>
   <p>
