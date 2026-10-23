@@ -500,6 +500,22 @@ def _build_stylesheet(effective: str) -> str:
                                border-left: 3px solid {c["accent"]}; font-weight: 600; }}
     #NavRail QLabel#NavFooter {{ color: {c["nav_muted"]}; font-size: 8pt; }}
 
+    #NavOverflowPanel {{ background: {c["surface"]}; border: 1px solid {c["border"]};
+                         border-radius: {panel_radius}; }}
+    #NavOverflowPanel QLabel {{ background: transparent; }}
+    #NavOverflowTitle {{ color: {c["fg_muted"]}; {mono_micro} font-weight: 700;
+                         letter-spacing: 1.2px; }}
+    #NavOverflowHint {{ color: {c["fg_muted"]}; font-size: 8pt; }}
+    #NavOverflowClose {{ background: transparent; border: none; color: {c["fg_muted"]};
+                         padding: 0; min-height: 0; font-size: 11pt; }}
+    #NavOverflowClose:hover {{ color: {c["accent"]}; background: {c["bg_alt"]};
+                               border-radius: {small_radius}; }}
+    #NavOverflowList {{ background: transparent; border: none; color: {c["fg"]}; outline: 0; }}
+    #NavOverflowList::item {{ padding: 5px 8px; border-radius: {nav_radius}; }}
+    #NavOverflowList::item:hover {{ background: {c["bg_alt"]}; }}
+    #NavOverflowList::item:selected {{ background: {c["nav_selected"]};
+                                       color: {c["nav_selected_fg"]}; font-weight: 600; }}
+
     #HeaderBar {{ background: {c["header_bg"]}; border-bottom: 1px solid {c["border"]}; }}
     #PageCrumb {{ color: {c["accent"]}; {mono} font-size: 8pt; font-weight: 700;
                   letter-spacing: 1.5px; }}

@@ -13,6 +13,7 @@ class Command:
     title: str
     group: str = ""
     keywords: str = ""   # extra searchable words (a page's one-line summary, synonyms)
+    icon: str = ""       # optional page id for a UI icon (core stays Qt-free)
 
 
 def _subsequence(needle: str, hay: str) -> bool:

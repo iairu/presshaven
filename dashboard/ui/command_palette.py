@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout
 
 from core import palette
+from ui import page_icons
 
 
 class CommandPalette(QDialog):
@@ -30,6 +31,7 @@ class CommandPalette(QDialog):
         self.search.returnPressed.connect(self._run_current)
         layout.addWidget(self.search)
         self.results = QListWidget()
+        self.results.setIconSize(page_icons.icon_size())
         self.results.itemActivated.connect(lambda _item: self._run_current())
         layout.addWidget(self.results, stretch=1)
         hint = QLabel("↑↓ move · Enter open · Esc close")
@@ -54,6 +56,8 @@ class CommandPalette(QDialog):
         for c in palette.rank(self.search.text(), self._commands):
             item = QListWidgetItem(f"{c.title}    —    {c.group}" if c.group else c.title)
             item.setData(Qt.ItemDataRole.UserRole, c)
+            if c.icon:
+                item.setIcon(page_icons.menu_icon(c.icon))
             self.results.addItem(item)
         if self.results.count():
             self.results.setCurrentRow(0)

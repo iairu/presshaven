@@ -69,6 +69,11 @@ class AppState:
     # (follow the OS), "console_dark"/"console_light", "light"/"dark"
     # (Solarized), or "hc_light"/"hc_dark" -- see ui/theme.py.
     theme: str = "docs"
+    # User-customized navigation layout: {group: {"visible": [page_id, ...],
+    # "overflow": [page_id, ...]}} -- the rail's drag-and-drop order and which
+    # pages live in each category's "⋮" panel. Missing/invalid entries fall
+    # back to ui/main_window.py's NAV_GROUPS/NAV_OVERFLOW defaults.
+    nav_layout: dict = field(default_factory=dict)
     # Cross-session history of notable security events (honeypot
     # diversions, CVE/high-severity signals, missing required
     # dependencies), capped at security_feed.MAX_EVENTS -- see

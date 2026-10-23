@@ -1,19 +1,21 @@
 """Main application window: a grouped navigation rail (Monitor / Threat
-operations / Manage / Reporting) with a page header bar, a menu bar (Settings menu + re-run wizard), a
-shared background status poller, window-geometry persistence, a system
-tray icon (unhealthy-container notifications), and a confirm-before-quit
-guard while a mutating docker compose action is in flight."""
+operations / Manage / Reporting) with drag-and-drop reordering, a persistent
+per-category overflow panel, per-page SVG icons, a page header bar, a menu bar
+(Settings menu + re-run wizard), a shared background status poller,
+window-geometry persistence, a system tray icon (unhealthy-container
+notifications), and a confirm-before-quit guard while a mutating docker
+compose action is in flight."""
 from __future__ import annotations
 
 import base64
 import time
 
-from PyQt6.QtCore import QByteArray, QPoint, QSize, Qt
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut
+from PyQt6.QtCore import QByteArray, QSize, Qt
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QMainWindow, QMenu, QMenuBar, QMessageBox, QPushButton, QStackedWidget,
-    QSystemTrayIcon, QToolButton, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QListWidgetItem, QMainWindow, QMenu, QMenuBar,
+    QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QToolButton,
+    QVBoxLayout, QWidget,
 )
 
 from core import alert_policy, honeypot_layer, live_events, palette
@@ -21,13 +23,17 @@ from core.docker_ctl import all_targets, target_for
 from core.paths import DASHBOARD_DIR
 from core.learning import PAGE_GUIDES
 from core.state import AppState
-from ui import theme
+from ui import page_icons, theme
 from ui.command_palette import CommandPalette
 from ui.common import Job, confirm
 from ui.dependency_banner import DependencyBanner
 from ui.host_settings_banner import HostSettingsBanner
 from ui.error_monitor import ErrorLogMonitor
 from core.container_status import classify
+from ui.nav_overflow import (
+    GROUP_ROLE, PAGE_ROLE, NavGroupHeader, NavOverflowPanel, NavSidebarList,
+    make_page_item,
+)
 from ui.page_backups import BackupsPage
 from ui.page_certs import CertsPage
 from ui.page_patterns import PatternsPage
@@ -100,9 +106,10 @@ PAGE_LABELS = {
 }
 
 # The navigation rail's sections, top to bottom. Every page id appears
-# exactly once. NAV_ORDER is the full flattened list (View menu / palette);
-# NAV_VISIBLE_ORDER is just the rows the rail shows, which Ctrl+1..9 follow
-# so the shortcuts match what is on screen.
+# exactly once. NAV_ORDER is the full flattened list in default order (used
+# as a fallback when state.last_page is invalid). The rows the rail actually
+# shows come from the user-editable _nav_layout, and Ctrl+1..9 follow that
+# live order.
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
@@ -123,15 +130,63 @@ NAV_OVERFLOW = {
 }
 
 NAV_ORDER = [page_id for _group, ids in NAV_GROUPS for page_id in ids]
-NAV_VISIBLE_ORDER = [
-    page_id for group, ids in NAV_GROUPS for page_id in ids
-    if page_id not in NAV_OVERFLOW.get(group, [])
-]
 PAGE_GROUP = {page_id: group for group, ids in NAV_GROUPS for page_id in ids}
 
 APP_TITLE = "Honeypot IDS · Security Operations Console"
 
-_PAGE_ROLE = Qt.ItemDataRole.UserRole
+
+def _default_nav_layout() -> dict[str, dict[str, list[str]]]:
+    """The rail layout before the user drags anything: every page in its
+    category's default visible rows or its default overflow panel."""
+    layout: dict[str, dict[str, list[str]]] = {}
+    for group, page_ids in NAV_GROUPS:
+        overflow = set(NAV_OVERFLOW.get(group, []))
+        layout[group] = {
+            "visible": [page_id for page_id in page_ids if page_id not in overflow],
+            "overflow": [page_id for page_id in page_ids if page_id in overflow],
+        }
+    return layout
+
+
+def _normalize_nav_layout(raw) -> dict[str, dict[str, list[str]]]:
+    """Merge a saved layout with the code's current defaults.
+
+    Tolerates old state.json files (no layout), unknown page ids, duplicate
+    rows, and pages added to NAV_GROUPS since the layout was saved. Every
+    page in a category ends up in exactly one of its two lists, so nothing
+    can become unreachable just because the saved JSON was stale.
+    """
+    default = _default_nav_layout()
+    if not isinstance(raw, dict):
+        return default
+
+    result: dict[str, dict[str, list[str]]] = {}
+    for group, page_ids in NAV_GROUPS:
+        default_entry = default[group]
+        all_pages = set(page_ids)
+        entry = raw.get(group)
+        visible: list[str] = []
+        overflow: list[str] = []
+        if isinstance(entry, dict):
+            for key, destination in (("visible", visible), ("overflow", overflow)):
+                values = entry.get(key)
+                if not isinstance(values, list):
+                    continue
+                for page_id in values:
+                    if (page_id in all_pages and page_id not in visible
+                            and page_id not in overflow):
+                        destination.append(page_id)
+        # Anything missing (a new page, a malformed list, a group absent
+        # from an old save) takes its default home.
+        for page_id in page_ids:
+            if page_id in visible or page_id in overflow:
+                continue
+            if page_id in default_entry["visible"]:
+                visible.append(page_id)
+            else:
+                overflow.append(page_id)
+        result[group] = {"visible": visible, "overflow": overflow}
+    return result
 
 # Responsive breakpoints, in window pixels: below NARROW_WIDTH the
 # navigation rail collapses behind the header's menu button (and closes
@@ -150,6 +205,13 @@ class MainWindow(QMainWindow):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
+        # User-editable rail order / overflow membership. Normalized before
+        # the rail is built so a stale or hand-edited state.json can never
+        # hide a page.
+        self._nav_layout = _normalize_nav_layout(state.nav_layout)
+        self._page_actions: list[tuple[QAction, str]] = []
+        self._current_page_id = state.last_page if state.last_page in PAGES else "overview"
+        self._nav_more_buttons: dict[str, QToolButton] = {}
         # Before any page builds a Target: they all read the active layer.
         honeypot_layer.set_active(state.honeypot_layer)
         self.setWindowTitle(APP_TITLE)
@@ -380,8 +442,9 @@ class MainWindow(QMainWindow):
 
     def _build_nav_rail(self) -> QWidget:
         """Brand block, then one non-selectable header per NAV_GROUPS
-        section followed by its pages. Page items carry their page id in
-        _PAGE_ROLE; header items carry none."""
+        section followed by the rows currently in that section's visible
+        list. Page items carry their page id in PAGE_ROLE; header items
+        carry only GROUP_ROLE."""
         rail = QFrame()
         rail.setObjectName("NavRail")
         rail.setFixedWidth(236)
@@ -407,30 +470,14 @@ class MainWindow(QMainWindow):
         brand.addLayout(brand_text, stretch=1)
         layout.addLayout(brand)
 
-        self.nav_list = QListWidget()
-        self.nav_list.setObjectName("NavList")
+        self.nav_list = NavSidebarList()
         self.nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.nav_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.nav_list.setToolTip(
+            "Drag pages to reorder, or into a category's ⋮ panel to hide them")
         self._nav_items: dict[str, QListWidgetItem] = {}
-        for group, page_ids in NAV_GROUPS:
-            overflow = NAV_OVERFLOW.get(group, [])
-            header = QListWidgetItem()
-            header.setFlags(Qt.ItemFlag.NoItemFlags)
-            header.setSizeHint(QSize(0, 40))
-            self.nav_list.addItem(header)
-            self.nav_list.setItemWidget(header, self._nav_group_header(group, overflow))
-            for page_id in page_ids:
-                item = QListWidgetItem(PAGE_LABELS[page_id])
-                item.setData(_PAGE_ROLE, page_id)
-                # One-line "what is this page for" on hover (core/learning.py)
-                # -- the rail is the first thing a newcomer reads.
-                if page_id in PAGE_GUIDES:
-                    item.setToolTip(PAGE_GUIDES[page_id].summary)
-                self.nav_list.addItem(item)
-                self._nav_items[page_id] = item
-                if page_id in overflow:
-                    item.setHidden(True)
+        self.nav_list.pageDropped.connect(
+            self._on_page_dropped, Qt.ConnectionType.QueuedConnection)
+        self._render_nav_list()
         layout.addWidget(self.nav_list, stretch=1)
 
         footer = QLabel("Edge + SIEM digital twin")
@@ -438,63 +485,166 @@ class MainWindow(QMainWindow):
         footer.setContentsMargins(20, 8, 16, 0)
         layout.addWidget(footer)
 
-        theme.on_change(self._recolor_nav_headers)
+        # The persistent overflow side panel lives directly on the window
+        # (not in a layout) so it can sit beside the rail without resizing
+        # the content. It is shown on demand by each category's "⋮".
+        self.overflow_panel = NavOverflowPanel(self)
+        self.overflow_panel.pageActivated.connect(self._open_page)
+        self.overflow_panel.pageDropped.connect(
+            self._on_page_dropped, Qt.ConnectionType.QueuedConnection)
+        self.overflow_panel.keep_open_when_clicking(rail)
+        self.overflow_panel.set_rail(rail)
+
+        theme.on_change(self._refresh_page_icons)
         return rail
 
-    def _nav_group_header(self, group: str, overflow_pages: list[str]) -> QWidget:
-        """A category label plus its "⋮" overflow button. The button opens
-        the category's less frequently used pages in a menu to the right of
-        the rail, keeping the rail itself focused on the common pages."""
-        row = QWidget()
-        row.setObjectName("NavGroupHeader")
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(20, 0, 8, 0)
-        layout.setSpacing(4)
-        label = QLabel(group.upper())
-        label.setObjectName("NavGroupTitle")
-        layout.addWidget(label, alignment=Qt.AlignmentFlag.AlignBottom)
-        layout.addStretch(1)
-        if overflow_pages:
-            more = QToolButton()
-            more.setObjectName("NavMore")
-            more.setText("⋮")
-            more.setToolTip(f"More {group} pages")
-            more.setCursor(Qt.CursorShape.PointingHandCursor)
-            more.setAutoRaise(True)
-            more.setFixedSize(22, 22)
-            more.clicked.connect(
-                lambda _checked=False, button=more, name=group, pages=tuple(overflow_pages):
-                self._show_nav_overflow_menu(button, name, pages)
-            )
-            layout.addWidget(more, alignment=Qt.AlignmentFlag.AlignBottom)
-        return row
+    def _render_nav_list(self) -> None:
+        """Rebuild the rail from _nav_layout, preserving the selected page.
 
-    def _show_nav_overflow_menu(self, button: QToolButton, group: str,
-                                page_ids: tuple[str, ...]) -> None:
-        """Open a category's overflow pages beside the rail, not on top of
-        it, so the button and the menu read as one control."""
-        menu = QMenu(self)
-        menu.setObjectName("NavOverflowMenu")
-        menu.setToolTipsVisible(True)
-        menu.addSection(group)
-        current = self.current_page()
-        for page_id in page_ids:
-            action = menu.addAction(_menu_text(PAGE_LABELS[page_id]))
-            action.setCheckable(True)
-            action.setChecked(page_id == current)
+        Rebuilding (rather than moving QListWidget rows in place) keeps the
+        group headers and the user's ordering as the single source of truth,
+        and makes a drop across the visible/overflow boundary one code path.
+        """
+        if not hasattr(self, "nav_list"):
+            return
+        scroll = self.nav_list.verticalScrollBar().value()
+        self.nav_list.blockSignals(True)
+        try:
+            self.nav_list.clear()
+            self._nav_items.clear()
+            self._nav_more_buttons.clear()
+            for group, _page_ids in NAV_GROUPS:
+                header = QListWidgetItem()
+                header.setData(GROUP_ROLE, group)
+                header.setFlags(Qt.ItemFlag.NoItemFlags)
+                header.setSizeHint(QSize(0, 40))
+                self.nav_list.addItem(header)
+                self.nav_list.setItemWidget(header, self._nav_group_header(group))
+                for page_id in self._nav_layout[group]["visible"]:
+                    guide = PAGE_GUIDES.get(page_id)
+                    item = make_page_item(
+                        page_id, PAGE_LABELS[page_id], group,
+                        page_icons.page_icon(page_id),
+                        guide.summary if guide else "", row_height=32,
+                    )
+                    self.nav_list.addItem(item)
+                    self._nav_items[page_id] = item
+            current_item = self._nav_items.get(self._current_page_id)
+            if current_item is not None:
+                self.nav_list.setCurrentItem(current_item)
+            else:
+                self.nav_list.setCurrentRow(-1)
+            self.nav_list.verticalScrollBar().setValue(scroll)
+        finally:
+            self.nav_list.blockSignals(False)
+
+    def _nav_group_header(self, group: str) -> QWidget:
+        """A category label plus its "⋮" button. The button opens the
+        category's persistent overflow panel -- the drop target that lets
+        pages move between the rail and that panel. The header itself is
+        also a drop target so a section with no visible rows can still
+        receive a page back from overflow."""
+        header = NavGroupHeader(group)
+        header.moreClicked.connect(
+            lambda name=group, button=header.more:
+            self._show_nav_overflow_panel(button, name)
+        )
+        header.pageDropped.connect(
+            self._on_page_dropped, Qt.ConnectionType.QueuedConnection)
+        self._nav_more_buttons[group] = header.more
+        return header
+
+    def _show_nav_overflow_panel(self, button: QToolButton, group: str) -> None:
+        """Open (or toggle) a category's overflow side panel beside the
+        rail. The panel stays open during drags, unlike a QMenu."""
+        if group not in self._nav_layout:
+            return
+        if self.overflow_panel.isVisible() and self.overflow_panel.group == group:
+            self.overflow_panel.hide()
+            return
+        self._refresh_overflow_panel(group)
+        self.overflow_panel.show_at(button)
+
+    def _refresh_overflow_panel(self, group: str | None = None) -> None:
+        group = group or self.overflow_panel.group
+        if group not in self._nav_layout:
+            return
+        entries = []
+        for page_id in self._nav_layout[group]["overflow"]:
             guide = PAGE_GUIDES.get(page_id)
-            if guide:
-                action.setToolTip(guide.summary)
-            action.triggered.connect(
-                lambda _checked=False, pid=page_id: self._open_page(pid))
-        menu.exec(button.mapToGlobal(QPoint(button.width() + 6, -4)))
+            entries.append((
+                page_id,
+                PAGE_LABELS[page_id],
+                page_icons.page_icon(page_id),
+                guide.summary if guide else "",
+            ))
+        self.overflow_panel.set_pages(group, entries, self._current_page_id)
+        if self.overflow_panel.isVisible():
+            self.overflow_panel.keep_on_screen()
 
-    def _recolor_nav_headers(self) -> None:
-        muted = QColor(theme.scheme_colors()["nav_muted"])
-        for row in range(self.nav_list.count()):
-            item = self.nav_list.item(row)
-            if item.data(_PAGE_ROLE) is None:
-                item.setForeground(muted)
+    def _on_page_dropped(self, page_id: str, source_group: str, target_group: str,
+                         target_kind: str, target_index: int) -> None:
+        """A page was dropped in the rail or the overflow panel.
+
+        Cross-category drags are intentionally ignored: PAGE_GROUP and the
+        breadcrumb treat a page's category as fixed.
+        """
+        if source_group != target_group:
+            return
+        self._move_page(page_id, target_group, target_kind, target_index)
+
+    def _move_page(self, page_id: str, target_group: str, target_kind: str,
+                   target_index: int) -> None:
+        if target_kind not in ("visible", "overflow"):
+            return
+        if PAGE_GROUP.get(page_id) != target_group:
+            return
+        entry = self._nav_layout.get(target_group)
+        if entry is None:
+            return
+        if page_id in entry["visible"]:
+            source_kind = "visible"
+        elif page_id in entry["overflow"]:
+            source_kind = "overflow"
+        else:
+            return
+
+        source_index = entry[source_kind].index(page_id)
+        entry[source_kind].remove(page_id)
+        target_list = entry[target_kind]
+        if source_kind == target_kind and source_index < target_index:
+            target_index -= 1
+        target_index = max(0, min(target_index, len(target_list)))
+        target_list.insert(target_index, page_id)
+        self._apply_nav_layout()
+
+    def _apply_nav_layout(self) -> None:
+        self.state.nav_layout = self._nav_layout
+        self.state.save()
+        self._render_nav_list()
+        if self.overflow_panel.isVisible():
+            self._refresh_overflow_panel()
+
+    def _visible_order(self) -> list[str]:
+        return [
+            page_id
+            for group, _page_ids in NAV_GROUPS
+            for page_id in self._nav_layout[group]["visible"]
+        ]
+
+    def _open_nth_visible(self, index: int) -> None:
+        order = self._visible_order()
+        if 0 <= index < len(order):
+            self._open_page(order[index])
+
+    def _refresh_page_icons(self) -> None:
+        for page_id, item in getattr(self, "_nav_items", {}).items():
+            item.setIcon(page_icons.page_icon(page_id))
+        for action, page_id in self._page_actions:
+            action.setIcon(page_icons.menu_icon(page_id))
+        panel = getattr(self, "overflow_panel", None)
+        if panel is not None and panel.isVisible():
+            self._refresh_overflow_panel()
 
     def _build_header_bar(self) -> QWidget:
         bar = QFrame()
@@ -536,18 +686,38 @@ class MainWindow(QMainWindow):
         return bar
 
     def current_page(self) -> str:
-        item = self.nav_list.currentItem()
-        page_id = item.data(_PAGE_ROLE) if item is not None else None
-        return page_id if page_id in PAGES else "learn"
+        return self._current_page_id if self._current_page_id in PAGES else "learn"
 
     def _open_page(self, page_id: str) -> None:
-        if page_id in self._nav_items:
-            self.nav_list.setCurrentItem(self._nav_items[page_id])
-
-    def _on_nav_changed(self, current: QListWidgetItem | None, _previous=None) -> None:
-        page_id = current.data(_PAGE_ROLE) if current is not None else None
+        """Open a page whether it is currently a rail row, a category
+        overflow page, or reached from the View menu / palette / a link."""
         if page_id not in PAGES:
             return
+        item = self._nav_items.get(page_id)
+        if item is not None:
+            if self.nav_list.currentItem() is item:
+                self._show_page(page_id)
+            else:
+                self.nav_list.setCurrentItem(item)
+            return
+        # An overflow page has no rail row to select. Clear the old
+        # selection (without firing _on_nav_changed) and display it
+        # directly; _current_page_id is the source of truth for "where am I".
+        self.nav_list.blockSignals(True)
+        try:
+            self.nav_list.setCurrentRow(-1)
+            self.nav_list.clearSelection()
+        finally:
+            self.nav_list.blockSignals(False)
+        self._show_page(page_id)
+
+    def _on_nav_changed(self, current: QListWidgetItem | None, _previous=None) -> None:
+        page_id = current.data(PAGE_ROLE) if current is not None else None
+        if page_id in PAGES:
+            self._show_page(page_id)
+
+    def _show_page(self, page_id: str) -> None:
+        self._current_page_id = page_id
         self.stack.setCurrentIndex(PAGES.index(page_id))
         self.page_crumb.setText(f"{PAGE_GROUP[page_id].upper()}  ›  {PAGE_LABELS[page_id].upper()}")
         self.page_title.setText(PAGE_LABELS[page_id])
@@ -557,6 +727,9 @@ class MainWindow(QMainWindow):
         # Narrow window: the rail is a drawer, closed again once a page is picked.
         if self._narrow:
             self._set_nav_visible(False)
+        panel = getattr(self, "overflow_panel", None)
+        if panel is not None:
+            panel.hide()
         self.state.last_page = page_id
         self.state.save()
 
@@ -738,7 +911,9 @@ class MainWindow(QMainWindow):
 
         settings_menu = menu_bar.addMenu("&Settings")
         open_settings_action = settings_menu.addAction("Open " + _menu_text(PAGE_LABELS["settings"]))
+        open_settings_action.setIcon(page_icons.menu_icon("settings"))
         open_settings_action.triggered.connect(lambda: self._open_page("settings"))
+        self._page_actions.append((open_settings_action, "settings"))
         rerun_wizard_action = settings_menu.addAction("Re-run setup wizard…")
         rerun_wizard_action.triggered.connect(self._rerun_wizard)
 
@@ -750,14 +925,18 @@ class MainWindow(QMainWindow):
             view_menu.addSection(group)
             for page_id in page_ids:
                 action = view_menu.addAction(_menu_text(PAGE_LABELS[page_id]))
+                action.setIcon(page_icons.menu_icon(page_id))
                 action.triggered.connect(lambda _checked, pid=page_id: self._open_page(pid))
+                self._page_actions.append((action, page_id))
 
         help_menu = menu_bar.addMenu("&Help")
         page_help_action = help_menu.addAction("Help for this page")
         page_help_action.setShortcut(QKeySequence("F1"))
         page_help_action.triggered.connect(self._show_page_help)
         learn_action = help_menu.addAction(f"{PAGE_LABELS['learn']}: labs, glossary, attack lessons")
+        learn_action.setIcon(page_icons.menu_icon("learn"))
         learn_action.triggered.connect(lambda: self._open_page("learn"))
+        self._page_actions.append((learn_action, "learn"))
 
     def palette_commands(self) -> list[palette.Command]:
         """Every page (grouped as in the rail, searchable by its summary)
@@ -766,8 +945,9 @@ class MainWindow(QMainWindow):
         for group, page_ids in NAV_GROUPS:
             for page_id in page_ids:
                 guide = PAGE_GUIDES.get(page_id)
-                commands.append(palette.Command(f"page:{page_id}", PAGE_LABELS[page_id], group,
-                                                guide.summary if guide else ""))
+                commands.append(palette.Command(
+                    f"page:{page_id}", PAGE_LABELS[page_id], group,
+                    guide.summary if guide else "", icon=page_id))
         commands += [
             palette.Command("lifecycle:start", "Start all stacks", "Actions",
                             "bring up docker compose ids siem run"),
@@ -813,9 +993,11 @@ class MainWindow(QMainWindow):
 
     def _build_shortcuts(self) -> None:
         # Ctrl+1..9: jump straight to the Nth page visible in the rail.
-        for i, page_id in enumerate(NAV_VISIBLE_ORDER[:9], start=1):
+        # Resolve the order when the shortcut fires, not here, so reordering
+        # or hiding pages keeps the numbers matching the rows on screen.
+        for i in range(1, 10):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
-            shortcut.activated.connect(lambda pid=page_id: self._open_page(pid))
+            shortcut.activated.connect(lambda idx=i - 1: self._open_nth_visible(idx))
 
         # Ctrl+R: refresh whatever the current page can meaningfully
         # refresh on demand -- an embedded browser reload, an immediate
@@ -885,9 +1067,18 @@ class MainWindow(QMainWindow):
     def _set_nav_visible(self, visible: bool) -> None:
         self.nav_rail.setVisible(visible)
         self.nav_toggle.setToolTip("Hide the navigation" if visible else "Show the navigation")
+        if not visible:
+            panel = getattr(self, "overflow_panel", None)
+            if panel is not None:
+                panel.hide()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        # The panel is an overlay anchored to a "⋮" button; a resize can
+        # move that anchor, so close it rather than leave it floating.
+        panel = getattr(self, "overflow_panel", None)
+        if panel is not None and panel.isVisible():
+            panel.hide()
         size = event.size()
         narrow = size.width() < NARROW_WIDTH
         if narrow != self._narrow:
