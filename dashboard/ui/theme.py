@@ -484,6 +484,14 @@ def _build_stylesheet(effective: str) -> str:
     #NavRail QLabel#BrandSubtitle {{ color: {c["nav_muted"]}; font-size: 8pt;
                                      {mono} letter-spacing: 0.5px; }}
     #NavRail QLabel#BrandMark {{ background: {c["accent"]}; border-radius: {brand_radius}; }}
+    #NavGroupHeader {{ background: transparent; }}
+    #NavRail QLabel#NavGroupTitle {{ color: {c["nav_muted"]}; background: transparent;
+                                     font-size: 7.5pt; font-weight: 700; letter-spacing: 1.2px; }}
+    #NavRail QToolButton#NavMore {{ background: transparent; border: none; color: {c["nav_muted"]};
+                                    padding: 0; min-height: 0; font-size: 12pt; }}
+    #NavRail QToolButton#NavMore:hover {{ color: {c["accent"]}; background: {c["nav_hover"]};
+                                          border-radius: {nav_radius}; }}
+    #NavRail QToolButton#NavMore:pressed {{ color: {c["accent"]}; background: {c["nav_selected"]}; }}
     #NavList {{ background: transparent; border: none; color: {c["nav_fg"]}; outline: 0; }}
     #NavList::item {{ padding: 7px 12px; margin: 1px 8px; border-radius: {nav_radius};
                       border-left: 3px solid transparent; }}

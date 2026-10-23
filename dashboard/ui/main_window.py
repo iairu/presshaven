@@ -8,12 +8,12 @@ from __future__ import annotations
 import base64
 import time
 
-from PyQt6.QtCore import QByteArray, QSize, Qt
+from PyQt6.QtCore import QByteArray, QPoint, QSize, Qt
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QMainWindow, QMenu, QMenuBar, QMessageBox, QPushButton, QStackedWidget,
-    QSystemTrayIcon, QVBoxLayout, QWidget,
+    QSystemTrayIcon, QToolButton, QVBoxLayout, QWidget,
 )
 
 from core import alert_policy, honeypot_layer, live_events, palette
@@ -100,8 +100,9 @@ PAGE_LABELS = {
 }
 
 # The navigation rail's sections, top to bottom. Every page id appears
-# exactly once; NAV_ORDER (the flattened list) is also what Ctrl+1..9 and
-# the View menu follow, so the shortcuts match what the rail shows.
+# exactly once. NAV_ORDER is the full flattened list (View menu / palette);
+# NAV_VISIBLE_ORDER is just the rows the rail shows, which Ctrl+1..9 follow
+# so the shortcuts match what is on screen.
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "pipeline", "health", "resources", "kibana", "log_search"]),
@@ -109,7 +110,23 @@ NAV_GROUPS = [
     ("Manage", ["services", "certificates", "backups", "settings"]),
     ("Reporting", ["extras", "learn"]),
 ]
+
+# Pages that stay one click away in their group's "⋮" menu instead of
+# taking a row in the rail. Everything here is still reachable through the
+# View menu, Ctrl+K palette and the group menu, so this is purely about
+# keeping the rail focused on the pages opened most often.
+NAV_OVERFLOW = {
+    "Monitor": ["resources", "kibana", "log_search"],
+    "Threat Operations": ["pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"],
+    "Manage": ["certificates", "backups"],
+    "Reporting": ["learn"],
+}
+
 NAV_ORDER = [page_id for _group, ids in NAV_GROUPS for page_id in ids]
+NAV_VISIBLE_ORDER = [
+    page_id for group, ids in NAV_GROUPS for page_id in ids
+    if page_id not in NAV_OVERFLOW.get(group, [])
+]
 PAGE_GROUP = {page_id: group for group, ids in NAV_GROUPS for page_id in ids}
 
 APP_TITLE = "Honeypot IDS · Security Operations Console"
@@ -397,17 +414,12 @@ class MainWindow(QMainWindow):
         self.nav_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._nav_items: dict[str, QListWidgetItem] = {}
         for group, page_ids in NAV_GROUPS:
-            header = QListWidgetItem(group.upper())
+            overflow = NAV_OVERFLOW.get(group, [])
+            header = QListWidgetItem()
             header.setFlags(Qt.ItemFlag.NoItemFlags)
-            font = header.font()
-            font.setPointSizeF(7.5)
-            font.setBold(True)
-            font.setLetterSpacing(font.SpacingType.AbsoluteSpacing, 1.2)
-            header.setFont(font)
-            header.setForeground(QColor(theme.scheme_colors()["nav_muted"]))
             header.setSizeHint(QSize(0, 40))
-            header.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
             self.nav_list.addItem(header)
+            self.nav_list.setItemWidget(header, self._nav_group_header(group, overflow))
             for page_id in page_ids:
                 item = QListWidgetItem(PAGE_LABELS[page_id])
                 item.setData(_PAGE_ROLE, page_id)
@@ -417,6 +429,8 @@ class MainWindow(QMainWindow):
                     item.setToolTip(PAGE_GUIDES[page_id].summary)
                 self.nav_list.addItem(item)
                 self._nav_items[page_id] = item
+                if page_id in overflow:
+                    item.setHidden(True)
         layout.addWidget(self.nav_list, stretch=1)
 
         footer = QLabel("Edge + SIEM digital twin")
@@ -426,6 +440,54 @@ class MainWindow(QMainWindow):
 
         theme.on_change(self._recolor_nav_headers)
         return rail
+
+    def _nav_group_header(self, group: str, overflow_pages: list[str]) -> QWidget:
+        """A category label plus its "⋮" overflow button. The button opens
+        the category's less frequently used pages in a menu to the right of
+        the rail, keeping the rail itself focused on the common pages."""
+        row = QWidget()
+        row.setObjectName("NavGroupHeader")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(20, 0, 8, 0)
+        layout.setSpacing(4)
+        label = QLabel(group.upper())
+        label.setObjectName("NavGroupTitle")
+        layout.addWidget(label, alignment=Qt.AlignmentFlag.AlignBottom)
+        layout.addStretch(1)
+        if overflow_pages:
+            more = QToolButton()
+            more.setObjectName("NavMore")
+            more.setText("⋮")
+            more.setToolTip(f"More {group} pages")
+            more.setCursor(Qt.CursorShape.PointingHandCursor)
+            more.setAutoRaise(True)
+            more.setFixedSize(22, 22)
+            more.clicked.connect(
+                lambda _checked=False, button=more, name=group, pages=tuple(overflow_pages):
+                self._show_nav_overflow_menu(button, name, pages)
+            )
+            layout.addWidget(more, alignment=Qt.AlignmentFlag.AlignBottom)
+        return row
+
+    def _show_nav_overflow_menu(self, button: QToolButton, group: str,
+                                page_ids: tuple[str, ...]) -> None:
+        """Open a category's overflow pages beside the rail, not on top of
+        it, so the button and the menu read as one control."""
+        menu = QMenu(self)
+        menu.setObjectName("NavOverflowMenu")
+        menu.setToolTipsVisible(True)
+        menu.addSection(group)
+        current = self.current_page()
+        for page_id in page_ids:
+            action = menu.addAction(_menu_text(PAGE_LABELS[page_id]))
+            action.setCheckable(True)
+            action.setChecked(page_id == current)
+            guide = PAGE_GUIDES.get(page_id)
+            if guide:
+                action.setToolTip(guide.summary)
+            action.triggered.connect(
+                lambda _checked=False, pid=page_id: self._open_page(pid))
+        menu.exec(button.mapToGlobal(QPoint(button.width() + 6, -4)))
 
     def _recolor_nav_headers(self) -> None:
         muted = QColor(theme.scheme_colors()["nav_muted"])
@@ -750,8 +812,8 @@ class MainWindow(QMainWindow):
     # ---- keyboard shortcuts ----
 
     def _build_shortcuts(self) -> None:
-        # Ctrl+1..9: jump straight to the Nth page in the navigation rail.
-        for i, page_id in enumerate(NAV_ORDER[:9], start=1):
+        # Ctrl+1..9: jump straight to the Nth page visible in the rail.
+        for i, page_id in enumerate(NAV_VISIBLE_ORDER[:9], start=1):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             shortcut.activated.connect(lambda pid=page_id: self._open_page(pid))
 
