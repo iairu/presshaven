@@ -13,7 +13,7 @@ its overflow panel are both supported.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QMimeData, QPoint, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QMimeData, QModelIndex, QPoint, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QDrag, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView, QApplication, QFrame, QGraphicsDropShadowEffect,
@@ -233,6 +233,27 @@ class NavSidebarList(_PageDragList):
     def __init__(self, parent=None):
         super().__init__("visible", parent)
         self.setObjectName("NavList")
+
+    def focusInEvent(self, event) -> None:
+        """Don't let merely focusing the rail select a page.
+
+        When a page is opened from a category's overflow panel the rail is
+        deliberately left with no current row (that page has no rail row).
+        Closing the panel then returns focus to this list, and Qt's default
+        focus-in behaviour selects the first selectable row -- which is
+        "Overview" -- firing currentItemChanged and navigating away from the
+        page the user just picked. Suppress that auto-selection so the rail
+        keeps its "nothing selected" state instead.
+        """
+        if self.currentIndex().isValid():
+            super().focusInEvent(event)
+            return
+        self.blockSignals(True)
+        try:
+            super().focusInEvent(event)
+            self.setCurrentIndex(QModelIndex())
+        finally:
+            self.blockSignals(False)
 
     def _page_items(self, group: str) -> list[QListWidgetItem]:
         return [
