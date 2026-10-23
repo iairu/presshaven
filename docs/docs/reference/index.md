@@ -2,6 +2,14 @@
 
 This section contains reference materials for the honeypot system.
 
+## Reference Categories
+
+- **Glossary**: Definitions of key terms.
+- **Known Issues & Corrections**: Documented issues and workarounds.
+- **Roadmap**: Future development plans.
+- **Changelog**: History of changes.
+- **Primary Literature**: Academic and technical literature.
+
 <div class="grid cards" markdown>
 
 -   :material-book:{ .lg .middle } **[Glossary](glossary.md)**

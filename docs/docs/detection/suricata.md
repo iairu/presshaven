@@ -124,3 +124,38 @@ This file contains Suricata rules specifically designed to detect attack pattern
 ## Custom Malware and Backdoor Detection:
 *   **PHP Webshell Detection** (SID 1000069)
 *   **Encoded PHP Payload** (SID 1000070)
+
+## Rule Management and Maintenance
+
+*   **SID Allocation**: SIDs are version-controlled in the Suricata rules file and follow a structured allocation scheme (CVE-specific, generic attack patterns, behavioral, honeypot triggers).
+*   **Testing**: New rules should be validated against the Suricata test framework and the honeypot integration tests before deployment.
+*   **Correlation**: Rule updates must keep the `suricata_rules.lua` correlation logic in sync with new SID-to-reason mappings.
+
+## Suricata Integration Details (from `suruicata_rules.lua`)
+
+### Module Purpose
+`suruicata_rules.lua` holds the pure, testable pieces of the Suricata alert pipeline: parsing one `eve.json` line into an alert record (or nil for non-alert event types — flow, netflow, http, dns, tls — interleaved in the same file), and turning an alert into a risk-score delta and a human-readable reason string.
+
+### Parsing Functions
+
+| Function | Purpose |
+| :--- | :--- |
+| `is_alert_line(line)` | Cheap pre-check — substring search for `"event_type":"alert"` to skip full JSON decode on the vast majority of non-alert lines. Cannot throw on malformed/partial lines. |
+| `extract_alert(decoded)` | Extracts `{timestamp, src_ip, src_port, dest_ip, dest_port, signature, signature_id, category, severity}` from a decoded eve.json event object. Returns nil for anything that isn't a well-formed alert event. |
+| `severity_to_score(severity)` | Maps Suricata severity (1=high → +50, 2=medium → +25, default → +10) to score delta. |
+| `next_score(previous_score, severity)` | Applies delta to running score, capped at MAX_SCORE (100). Never decreases on its own. |
+| `decayed_score(entry, current_time, half_life_seconds, cfg)` | Time-decayed view of a `threat_ips[ip]` entry's stored `raw_score`. Escalation-aware: repeat offenders decay slower; permaflagged IPs never decay. |
+| `build_reason(alert)` | Builds human-readable reason string: `"suricata: " .. alert.signature`. |
+
+### Severity → Score Mapping
+
+| Suricata Severity | Score Delta | Description |
+| :--- | :--- | :--- |
+| 1 | +50 | High severity (standard Suricata/Snort convention) |
+| 2 | +25 | Medium severity |
+| 3/unknown | +10 | Low or missing severity |
+
+### Known Caveats
+
+*   **Same-host (loopback) testing:** Suricata runs with `network_mode: host` and interface `"any"`, so it sees every hop of a request, not just the client→nginx leg. In same-host test setups, Suricata's `src_ip` for an alert may be a different internal address than what nginx logs as `remote_addr`, so the two never correlate locally. For genuine external traffic (Docker DNAT-based port publishing preserves source IP), this is expected to work correctly but has NOT been verified against genuine external traffic.
+*   **Private IP filtering:** `is_private_ip()` filters RFC1918/loopback `src_ip` values at ingestion time so they never pollute `threat_ips` — by construction, an alert whose `src_ip` is RFC1918/loopback is never the address `router.lua`'s `remote_ip` could equal for a real request.
