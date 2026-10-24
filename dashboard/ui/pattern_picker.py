@@ -25,7 +25,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtWidgets import (
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QButtonGroup, QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -109,6 +109,55 @@ class _PickerRow(QWidget):
         super().mousePressEvent(event)
 
 
+class _CategorySegment(QWidget):
+    """One test-category filter rendered as an inline segmented control --
+    "All | <opt> | <opt>" -- rather than a QComboBox. A combo's own dropdown
+    is itself a popup, which inside this frame's Qt.Popup fights the parent
+    for the grab and dismisses it; a row of exclusive buttons has no nested
+    popup, so it lives happily inside the picker."""
+
+    changed = pyqtSignal(str, str)   # (attr, value)
+
+    def __init__(self, attr: str, title: str, options: dict, tip: str, parent=None):
+        super().__init__(parent)
+        self.attr = attr
+        self.setToolTip(tip)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        label = QLabel(f"{title}:")
+        label.setFixedWidth(58)
+        c = theme.scheme_colors()
+        label.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px;")
+        row.addWidget(label)
+        self._group = QButtonGroup(self)
+        self._group.setExclusive(True)
+        self._buttons: dict[str, QPushButton] = {}
+        self.setStyleSheet(
+            "QPushButton { padding: 2px 9px; font-size: 11px; border: 1px solid "
+            f"{c['border']}; border-radius: {theme.corner_radius_css(4)}; "
+            f"background: {c['bg']}; color: {c['fg_muted']}; }} "
+            f"QPushButton:checked {{ background: {c['accent']}; color: {c['accent_text']}; "
+            "border-color: transparent; font-weight: 600; }")
+        for value, text in [("", "All")] + list(options.items()):
+            btn = QPushButton(text)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if value == "":
+                btn.setChecked(True)
+            self._group.addButton(btn)
+            btn.toggled.connect(lambda on, v=value: on and self.changed.emit(self.attr, v))
+            self._buttons[value] = btn
+            row.addWidget(btn)
+        row.addStretch(1)
+
+    def value(self) -> str:
+        for value, btn in self._buttons.items():
+            if btn.isChecked():
+                return value
+        return ""
+
+
 class _Popup(QFrame):
     """The frameless list that drops below the button. Closes on an outside
     click (Qt.Popup) and caps its own height at half the top-level window."""
@@ -123,6 +172,19 @@ class _Popup(QFrame):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(5)
+
+        # Filled by owner.add_category_filters() -- the test-category filters,
+        # which used to sit in a toolbar row of their own on the page. Kept at
+        # the very top of the popup so narrowing the list lives with the list.
+        self.category_heading = QLabel("Filter the list")
+        self.category_heading.setStyleSheet(
+            f"color: {c['accent']}; font-size: 8pt; font-weight: 700; letter-spacing: 1px;")
+        self.category_heading.setVisible(False)
+        outer.addWidget(self.category_heading)
+        self.category_container = QVBoxLayout()
+        self.category_container.setContentsMargins(0, 0, 0, 0)
+        self.category_container.setSpacing(3)
+        outer.addLayout(self.category_container)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search patterns…")
@@ -159,6 +221,7 @@ class _Popup(QFrame):
 class PatternPickerButton(QToolButton):
     selection_changed = pyqtSignal()   # the checked batch changed (multi mode)
     current_changed = pyqtSignal()     # the highlighted / picked preset changed
+    category_changed = pyqtSignal()    # a test-category filter changed (see add_category_filters)
 
     def __init__(self, mode: str = "multi", parent=None):
         super().__init__(parent)
@@ -169,6 +232,7 @@ class PatternPickerButton(QToolButton):
         self._presets: dict[str, object] = {}
         self._checked: set[str] = set()
         self._current: str | None = None
+        self._category_segments: dict[str, _CategorySegment] = {}
         # Default (DelayedPopup) mode with no QMenu set behaves as a plain
         # button that fires clicked -- we drive our own popup off that. (An
         # InstantPopup button swallows clicked, so don't use it here.)
@@ -177,6 +241,33 @@ class PatternPickerButton(QToolButton):
         self._popup = _Popup(self)
         self.clicked.connect(self._open_popup)
         self._update_text()
+
+    # ------------------------------------------------------------------
+    # test-category filters (shown at the top of the popup)
+    # ------------------------------------------------------------------
+    def add_category_filters(self, specs) -> None:
+        """Add inline category filters to the popup. `specs` is a list of
+        ``(attr, title, options_dict, tooltip)``; the chosen value per attr is
+        read back with category_value(), and category_changed fires on a
+        change (the page re-runs its filtering off that)."""
+        for attr, title, options, tip in specs:
+            seg = _CategorySegment(attr, title, options, tip)
+            seg.changed.connect(self._on_category_changed)
+            self._popup.category_container.addWidget(seg)
+            self._category_segments[attr] = seg
+        self._popup.category_heading.setVisible(bool(self._category_segments))
+
+    def _on_category_changed(self, _attr: str, _value: str) -> None:
+        self.category_changed.emit()
+
+    def category_value(self, attr: str) -> str:
+        """The selected value for category `attr` ("" = all / unset)."""
+        seg = self._category_segments.get(attr)
+        return seg.value() if seg else ""
+
+    def set_categories_enabled(self, enabled: bool) -> None:
+        for seg in self._category_segments.values():
+            seg.setEnabled(enabled)
 
     # ------------------------------------------------------------------
     # population

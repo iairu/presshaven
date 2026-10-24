@@ -78,7 +78,12 @@ class SecurityEventFeed(QObject):
         # --tail=0: only new lines from here on. Re-parsing old backlog on
         # every app start/restart would re-emit (and re-persist duplicates
         # of) events already recorded in a previous session.
-        argv, cwd = target.build("logs", "--tail=0", "-f", "reverse_proxy")
+        # --timestamps: stamp every line with its real (sub-second) log time.
+        # The feed's own persistence still uses wall-clock int(time.time()),
+        # but the Live Events page reads PatternEvent.timestamp off these to
+        # measure per-request latency (first signal -> routing outcome); the
+        # parser strips the prefix before matching either way.
+        argv, cwd = target.build("logs", "--tail=0", "-f", "--timestamps", "reverse_proxy")
         self._runner.run(argv, cwd)
 
     def stop(self) -> None:

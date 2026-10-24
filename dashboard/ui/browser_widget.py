@@ -18,12 +18,45 @@ staying logged in across restarts is actually wanted.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtWebEngineCore import QWebEngineCertificateError, QWebEnginePage, QWebEngineProfile
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QLineEdit, QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
+
+
+class _DimOverlay(QWidget):
+    """A translucent "idle" veil drawn over the whole browser while it is not
+    in use (during a PDF export, between screenshot captures). It also eats
+    mouse input, so the browser really is inert while dimmed. Hidden by
+    default; sized to cover its parent. It is a sibling of the QWebEngineView
+    raised above it -- Qt6 WebEngine composites the web layer with the widget
+    stack, so a raised overlay sits on top, and because capture un-dims it
+    first (see page_patterns), it never lands in a screenshot."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setVisible(False)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        self.label = QLabel("")
+        self.label.setWordWrap(True)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setStyleSheet(
+            "color: #e6e6e6; font-size: 12px; background: rgba(0,0,0,140); "
+            "padding: 8px 14px; border-radius: 6px;")
+        layout.addStretch(1)
+        layout.addWidget(self.label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch(1)
+        # A dark, semi-transparent wash over the live page -- clearly "not
+        # now" without fully hiding what the browser last showed.
+        self.setStyleSheet("_DimOverlay { background: rgba(18,18,18,150); }")
+
+    def set_message(self, message: str) -> None:
+        self.label.setText(message)
+        self.label.setVisible(bool(message))
 
 
 class BrowserWidget(QWidget):
@@ -81,6 +114,10 @@ class BrowserWidget(QWidget):
         self.view.setPage(self.page)
         layout.addWidget(self.view, stretch=1)
 
+        # Idle veil for the PDF export (see set_dimmed). Not in the layout --
+        # a free child kept sized to the whole widget and raised on top.
+        self._overlay = _DimOverlay(self)
+
         self.back_btn.clicked.connect(self.view.back)
         self.forward_btn.clicked.connect(self.view.forward)
         self.reload_btn.clicked.connect(self.view.reload)
@@ -95,6 +132,20 @@ class BrowserWidget(QWidget):
 
         if home_url and home_url != "about:blank":
             self.navigate(home_url)
+
+    def set_dimmed(self, dimmed: bool, message: str = "") -> None:
+        """Show (or hide) the idle veil over the browser. `message` is the
+        centered caption shown while dimmed."""
+        self._overlay.set_message(message)
+        self._overlay.setGeometry(self.rect())
+        self._overlay.setVisible(dimmed)
+        if dimmed:
+            self._overlay.raise_()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        if self._overlay.isVisible():
+            self._overlay.setGeometry(self.rect())
 
     def navigate(self, url_str: str) -> None:
         url = QUrl(url_str)

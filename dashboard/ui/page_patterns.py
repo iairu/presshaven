@@ -47,7 +47,7 @@ import tempfile
 
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QGroupBox,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QProgressBar,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
     QPushButton, QScrollArea, QTabWidget, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -62,6 +62,7 @@ from core.patterns import (COMPONENTS, GDPR_RESTORE_PRESET, PATTERN_PRESETS, KIN
                            is_gdpr_restore, selection_label)
 from core.pattern_registry import active_presets
 from ui.pattern_picker import PatternPickerButton
+from ui.report_stages import ReportStagesWidget
 from core import pattern_report_pdf
 from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
@@ -384,15 +385,17 @@ class PatternsPage(QWidget):
         # target (see PatternPickerButton). Filled by _apply_category_filters.
         self.pattern_picker = PatternPickerButton(mode="multi")
         self.pattern_picker.selection_changed.connect(self._refresh_multi_run_button)
-        # Test-category filters for the pattern list (built below, next to it).
-        self.kind_filter = self._category_filter(
-            "Type", KINDS, "Generic attacks are classes and tools (XSS, SQL injection, "
-            "wordlist scans, scanner user agents); CVE patterns are one published vulnerability.")
-        self.component_filter = self._category_filter(
-            "Target", COMPONENTS, "WordPress core, or a plugin / theme.")
-        self.surface_filter = self._category_filter(
-            "Surface", SURFACES, "Frontend: what visitors see (XSS, defacement). Backend: "
-            "admin, configuration, authentication and data (wp-config, SQL injection).")
+        # Test-category filters now live INSIDE the picker popup (top), instead
+        # of a toolbar row of their own -- same (kind, component, surface)
+        # selection, read back via _selection(), re-applied on category_changed.
+        self.pattern_picker.add_category_filters([
+            ("kind", "Type", KINDS, "Generic attacks are classes and tools (XSS, SQL injection, "
+             "wordlist scans, scanner user agents); CVE patterns are one published vulnerability."),
+            ("component", "Target", COMPONENTS, "WordPress core, or a plugin / theme."),
+            ("surface", "Surface", SURFACES, "Frontend: what visitors see (XSS, defacement). "
+             "Backend: admin, configuration, authentication and data (wp-config, SQL injection)."),
+        ])
+        self.pattern_picker.category_changed.connect(self._apply_category_filters)
         self.pattern_picker.setMinimumWidth(340)
         toolbar.addWidget(labeled("Pattern:", self.pattern_picker))
         self.explain_btn = QPushButton("What is this?")
@@ -498,12 +501,22 @@ class PatternsPage(QWidget):
 
         layout.addLayout(toolbar)
 
-        filter_row = FlowLayout()
-        filter_row.addWidget(QLabel("Test categories:"))
-        for combo in (self.kind_filter, self.component_filter, self.surface_filter):
-            filter_row.addWidget(combo)
-        layout.addLayout(filter_row)
-        self._apply_category_filters()  # sets the multi-run count
+        # One-line reminder of the picker's two roles (its single biggest
+        # source of confusion), sitting where the category-filter row used to
+        # be now that those filters live inside the picker popup.
+        picker_hint = QLabel(
+            "Open <b>Pattern</b> to choose: the <b>checked</b> patterns are the "
+            "Multi-run / PDF battery; the <b>highlighted</b> one is what a single "
+            "<i>Run pattern</i> targets. Filter the list from the same popup.")
+        picker_hint.setTextFormat(Qt.TextFormat.RichText)
+        picker_hint.setWordWrap(True)
+        picker_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        layout.addWidget(picker_hint)
+
+        # The test-category filters moved into the pattern picker popup (see
+        # add_category_filters above); this just does the initial population /
+        # multi-run count.
+        self._apply_category_filters()
 
         # Explains the greyed-out presets. Shown only in the database proxy
         # layer (single-eshop / two-database honeypot), which isolates
@@ -531,17 +544,28 @@ class PatternsPage(QWidget):
         # window used to land in the screenshots. A sibling widget above the
         # splitter never overlaps the browser, so nothing has to be hidden
         # during the grab. Hidden until an export is running.
-        self.report_progress_row = QWidget()
-        _prog_layout = QHBoxLayout(self.report_progress_row)
+        # A staged overview (every export phase shown going pending -> active
+        # -> done) rather than one anonymous bar, so it's clear which phase is
+        # running and how many remain. The Cancel button sits beside it.
+        self.report_progress_row = QFrame()
+        self.report_progress_row.setFrameShape(QFrame.Shape.StyledPanel)
+        _prog_outer = QVBoxLayout(self.report_progress_row)
+        _prog_outer.setContentsMargins(10, 8, 10, 8)
+        _prog_outer.setSpacing(6)
+        _prog_header = QLabel("Generating PDF report")
+        _prog_header.setStyleSheet("font-weight: 600;")
+        _prog_outer.addWidget(_prog_header)
+        _prog_layout = QHBoxLayout()
         _prog_layout.setContentsMargins(0, 0, 0, 0)
-        self.report_progress_label = QLabel("Preparing report...")
-        self.report_progress_bar = QProgressBar()
-        self.report_progress_bar.setMaximumWidth(320)
+        self.report_stages = ReportStagesWidget()
         self.report_cancel_btn = QPushButton("Cancel")
         self.report_cancel_btn.clicked.connect(self._cancel_report)
-        _prog_layout.addWidget(self.report_progress_label, stretch=1)
-        _prog_layout.addWidget(self.report_progress_bar)
-        _prog_layout.addWidget(self.report_cancel_btn)
+        _prog_layout.addWidget(self.report_stages, stretch=1)
+        _cancel_col = QVBoxLayout()
+        _cancel_col.addWidget(self.report_cancel_btn)
+        _cancel_col.addStretch(1)
+        _prog_layout.addLayout(_cancel_col)
+        _prog_outer.addLayout(_prog_layout)
         self.report_progress_row.setVisible(False)
 
         # Same red banner pattern as the Kibana/Backups/Pool State Store pages -- the
@@ -635,19 +659,12 @@ class PatternsPage(QWidget):
 
     # ---- target / base URL ----
 
-    def _category_filter(self, title: str, options: dict[str, str], tip: str) -> QComboBox:
-        combo = QComboBox()
-        combo.addItem(f"{title}: all", "")
-        for key, label in options.items():
-            combo.addItem(f"{title}: {label}", key)
-        combo.setToolTip(tip)
-        combo.currentIndexChanged.connect(self._apply_category_filters)
-        return combo
-
     def _selection(self) -> tuple[str, str, str]:
-        """The test-category selector as (kind, component, surface); "" = all."""
-        return (self.kind_filter.currentData(), self.component_filter.currentData(),
-                self.surface_filter.currentData())
+        """The test-category selector as (kind, component, surface); "" = all.
+        Read from the filters embedded in the pattern picker popup."""
+        return (self.pattern_picker.category_value("kind"),
+                self.pattern_picker.category_value("component"),
+                self.pattern_picker.category_value("surface"))
 
     def _selected_presets(self) -> list[PatternPreset]:
         """The patterns Multi-run / the report cover: the checked rows of the
@@ -920,9 +937,9 @@ class PatternsPage(QWidget):
         self._multi_total = len(presets)
         self._multi_gen += 1
         self.multi_run_btn.setText("Stop multi-run")
-        for widget in (self.run_curl_btn, self.run_browser_btn, self.export_btn,
-                       self.kind_filter, self.component_filter, self.surface_filter):
+        for widget in (self.run_curl_btn, self.run_browser_btn, self.export_btn):
             widget.setEnabled(False)
+        self.pattern_picker.set_categories_enabled(False)
         self._multi_run_next()
 
     def _multi_run_next(self, gen: int | None = None) -> None:
@@ -940,9 +957,9 @@ class PatternsPage(QWidget):
                 f"({selection_label(*self._selection())}). Last: {self.result_label.text()}")
 
     def _finish_multi_run(self, message: str) -> None:
-        for widget in (self.run_curl_btn, self.run_browser_btn, self.export_btn,
-                       self.kind_filter, self.component_filter, self.surface_filter):
+        for widget in (self.run_curl_btn, self.run_browser_btn, self.export_btn):
             widget.setEnabled(True)
+        self.pattern_picker.set_categories_enabled(True)
         self._apply_category_filters()  # restores the button's label/count
         self.result_label.setText(message)
 
@@ -1204,30 +1221,40 @@ class PatternsPage(QWidget):
         worker.finished.connect(self._on_report_thread_finished)
         self._report_worker = worker
 
-        total = len(presets) + 2
-        self.report_progress_bar.setRange(0, total)
-        self.report_progress_bar.setValue(0)
-        self.report_progress_label.setText("Preparing report...")
+        self.report_stages.reset(len(presets))
         self.report_cancel_btn.setEnabled(True)
+        self.report_cancel_btn.setText("Cancel")
         self.report_progress_row.setVisible(True)
 
         self.export_btn.setEnabled(False)
         self.multi_run_btn.setEnabled(False)
+        self.pattern_picker.set_categories_enabled(False)
+        # The browser is idle for most of the export -- only a screenshot grab
+        # actually uses it (see _on_report_screenshot_request). Veil it now so
+        # it clearly reads as "not in use", and lift the veil only for a grab.
+        self.browser.set_dimmed(
+            True, "Idle during export — shown live only while a screenshot is being captured.")
         worker.start()
 
     def _on_report_progress(self, message: str, current: int, total: int) -> None:
-        self.report_progress_bar.setMaximum(total)
-        self.report_progress_bar.setValue(current)
-        self.report_progress_label.setText(message)
+        self.report_stages.update(current / total if total else 0.0, message)
 
     def _on_report_screenshot_request(self, url: str, key: str) -> None:
         """GUI-thread screenshot: navigate the embedded browser to `url`, wait
         for it to finish loading, grab it, and hand the saved path back to the
         worker (which is blocked waiting for exactly this)."""
         path = ""
+        # This is the only moment the browser is actually in use during an
+        # export, so lift the idle veil for the capture and put it back after.
+        self.browser.set_dimmed(False)
         try:
             path = self._capture_browser(url, key)
         finally:
+            if self._report_worker is not None and self._report_worker._cancel:  # noqa: SLF001
+                self.browser.set_dimmed(False)   # teardown is imminent; don't flash the veil back
+            else:
+                self.browser.set_dimmed(
+                    True, "Idle during export — shown live only while a screenshot is being captured.")
             if self._report_worker is not None:
                 self._report_worker.provide_screenshot(key, path)
 
@@ -1394,7 +1421,7 @@ class PatternsPage(QWidget):
         if self._report_worker is not None:
             self._report_worker.cancel()
         self.report_cancel_btn.setEnabled(False)
-        self.report_progress_label.setText("Cancelling...")
+        self.report_cancel_btn.setText("Cancelling…")
 
     def _on_report_finished(self, data) -> None:
         # Fires before QThread.finished. Render the PDF here (GUI thread --
@@ -1414,6 +1441,10 @@ class PatternsPage(QWidget):
         error = self._report_worker_error or self._report_render_error
 
         self.report_progress_row.setVisible(False)
+        self.browser.set_dimmed(False)   # export over -- hand the browser back
+        self.pattern_picker.set_categories_enabled(True)
+        if not cancelled and not error:
+            self.report_stages.mark_all_done()
         if getattr(self, "_kibana_capture", None) is not None:
             self._kibana_capture.close()
             self._kibana_capture.deleteLater()

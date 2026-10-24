@@ -3,10 +3,15 @@ reverse proxy's pattern analyzer decides, independent of Kibana and the
 SIEM stack. Subscribes to SecurityEventFeed.event_parsed (the existing
 app-lifetime log tail -- no second process) and, on first open, backfills
 recent history with one `docker compose logs` read so the table is not
-blank until the next request arrives. Keeps a bounded table of the most
-recent events, with severity/kind filters, free-text search, a per-severity
-count summary, pause, clear and CSV export. Filtering, backfill parsing and
-export are in core/live_events.py (Qt-free, tested)."""
+blank until the next request arrives.
+
+Rather than one table row per raw log line, related lines are collapsed into
+one row per request: a request logs a burst of scoring signals, routing
+steps and a final score, terminated by a single "outcome" line, and that
+burst becomes one entry showing the outcome, the final score, the signals
+that fired, and a per-request latency (the span from the first to the last
+log line of the burst). Grouping, latency and filtering live in
+core/live_events.py (Qt-free, tested)."""
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
@@ -28,6 +33,9 @@ MAX_ROWS = 1000
 BACKFILL_LINES = 500
 _SEV_COLOR = {"high": RED, "medium": ORANGE, "low": GREEN, "info": GREY}
 
+# Table columns. One row = one request (a collapsed burst of related events).
+COL_TIME, COL_SEV, COL_REQUEST, COL_SCORE, COL_SIGNALS, COL_LATENCY = range(6)
+
 
 class LiveEventsPage(QWidget):
     def __init__(self, feed: SecurityEventFeed, state: AppState, parent=None):
@@ -38,6 +46,12 @@ class LiveEventsPage(QWidget):
         self._buffered: list[tuple[int, PatternEvent]] = []
         self._backfilled = False
         self._backfill_job: Job | None = None
+        # The trailing request whose outcome line hasn't arrived yet, and the
+        # table row showing it (so a growing request updates one row in place
+        # instead of forcing a full rebuild on every line). Reset whenever an
+        # outcome closes the group, and recomputed on _rebuild().
+        self._open_group: list[tuple[int, PatternEvent]] = []
+        self._open_row: int | None = None
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -63,14 +77,18 @@ class LiveEventsPage(QWidget):
         self.counts.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.counts)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Time", "Severity", "Kind", "Event", "Detail"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(
+            ["Time", "Severity", "Request", "Score", "Signals", "Latency"])
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(COL_REQUEST, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(COL_SIGNALS, QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setToolTip(
+            "Latency: the span from a request's first analyzer line to its routing "
+            "outcome, measured from the log timestamps.")
         layout.addWidget(self.table, stretch=1)
 
         self.status = QLabel("")
@@ -118,9 +136,11 @@ class LiveEventsPage(QWidget):
         self._backfill_job.done.connect(done)
         self._backfill_job.start()
 
-    def _visible(self, event: PatternEvent) -> bool:
-        return (live_events.matches(self.filter_combo.currentData(), event.kind, event.label, event.color)
-                and live_events.text_matches(self.search.text(), event.label, event.detail))
+    def _gvisible(self, group: live_events.EventGroup) -> bool:
+        return (live_events.group_matches(self.filter_combo.currentData(), group)
+                and live_events.text_matches(self.search.text(), group.search_text))
+
+    # -- live input -------------------------------------------------------
 
     def _on_event(self, event: PatternEvent, ts: int) -> None:
         if self._paused:
@@ -131,35 +151,91 @@ class LiveEventsPage(QWidget):
 
     def _append(self, ts: int, event: PatternEvent) -> None:
         self._events.append((ts, event))
-        del self._events[:-MAX_ROWS]
-        if self._visible(event):
-            self._add_row(ts, event)
-            while self.table.rowCount() > MAX_ROWS:
-                self.table.removeRow(0)
+        if len(self._events) > MAX_ROWS:
+            del self._events[:-MAX_ROWS]
+        # Extend the in-flight request (the open group) and reflect it in its
+        # row. The newest events are never the ones trimmed above, so the open
+        # group stays intact.
+        self._open_group.append((ts, event))
+        group = live_events.summarize_group(self._open_group)
+        if self._gvisible(group):
+            if self._open_row is None:
+                self._open_row = self.table.rowCount()
+                self.table.insertRow(self._open_row)
+            self._fill_row(self._open_row, group)
+            self._cap_rows()
             if self.autoscroll.isChecked():
                 self.table.scrollToBottom()
+        if event.kind == "outcome":
+            # Request finished -> freeze this row and start a fresh group.
+            self._open_group = []
+            self._open_row = None
         self._update_status()
 
-    def _add_row(self, ts: int, event: PatternEvent) -> None:
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        sev = live_events.severity(event.color)
-        for col, text in enumerate((live_events.format_time(ts), sev.upper(), event.kind,
-                                    event.label, event.detail)):
+    def _cap_rows(self) -> None:
+        while self.table.rowCount() > MAX_ROWS:
+            self.table.removeRow(0)
+            if self._open_row is not None:
+                self._open_row -= 1
+
+    # -- rendering --------------------------------------------------------
+
+    def _fill_row(self, row: int, group: live_events.EventGroup) -> None:
+        sev = live_events.severity(group.color)
+        score = "" if group.score is None else str(group.score)
+        latency = "—" if group.latency_ms is None else f"{group.latency_ms} ms"
+        cells = {
+            COL_TIME: live_events.format_time(group.ts),
+            COL_SEV: sev.upper(),
+            COL_REQUEST: group.title,
+            COL_SCORE: score,
+            COL_SIGNALS: group.signals,
+            COL_LATENCY: latency,
+        }
+        for col, text in cells.items():
             item = QTableWidgetItem(text)
-            if col == 1:
-                item.setForeground(QColor(event.color))
+            if col == COL_SEV:
+                item.setForeground(QColor(group.color))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            elif col in (COL_SCORE, COL_LATENCY):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            if group.detail:
+                item.setToolTip(group.detail)
             self.table.setItem(row, col, item)
+
+    def _groups(self) -> list[live_events.EventGroup]:
+        return live_events.group_events(self._events)
 
     def _rebuild(self) -> None:
         self.table.setRowCount(0)
-        for ts, event in self._events:
-            if self._visible(event):
-                self._add_row(ts, event)
+        for group in self._groups():
+            if self._gvisible(group):
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                self._fill_row(row, group)
+        # Re-establish the open-group tracking so live appends keep updating
+        # one row in place: the trailing events after the last outcome.
+        self._open_group = self._trailing_open()
+        if self._open_group and self._gvisible(live_events.summarize_group(self._open_group)):
+            self._open_row = self.table.rowCount() - 1
+        else:
+            self._open_row = None
         if self.autoscroll.isChecked():
             self.table.scrollToBottom()
         self._update_status()
+
+    def _trailing_open(self) -> list[tuple[int, PatternEvent]]:
+        """The events of the still-in-flight request: everything after the
+        most recent outcome line (empty if the newest event was an outcome)."""
+        tail: list[tuple[int, PatternEvent]] = []
+        for ts, e in reversed(self._events):
+            if e.kind == "outcome":
+                break
+            tail.append((ts, e))
+        tail.reverse()
+        return tail
+
+    # -- controls ---------------------------------------------------------
 
     def _on_pause(self, paused: bool) -> None:
         self._paused = paused
@@ -173,26 +249,27 @@ class LiveEventsPage(QWidget):
     def _clear(self) -> None:
         self._events.clear()
         self._buffered.clear()
+        self._open_group = []
+        self._open_row = None
         self.table.setRowCount(0)
         self._update_status()
 
     def _export(self) -> None:
-        visible = [(ts, e) for ts, e in self._events if self._visible(e)]
+        visible = [g for g in self._groups() if self._gvisible(g)]
         if not visible:
             QMessageBox.information(self, "Export", "No events to export.")
             return
         path, _ = QFileDialog.getSaveFileName(self, "Export events", "live_events.csv", "CSV (*.csv)")
         if not path:
             return
-        rows = [(ts, live_events.severity(e.color), e.kind, e.label, e.detail) for ts, e in visible]
         try:
             with open(path, "w", newline="", encoding="utf-8") as fh:
-                fh.write(live_events.to_csv(rows))
+                fh.write(live_events.groups_to_csv(visible))
         except OSError as e:
             QMessageBox.warning(self, "Export failed", str(e))
 
     def _update_status(self) -> None:
-        text = f"{self.table.rowCount()} shown of {len(self._events)} received"
+        text = f"{self.table.rowCount()} requests shown of {len(self._events)} events received"
         if self._paused:
             text += f" · paused, {len(self._buffered)} buffered"
         self.status.setText(text)
@@ -200,8 +277,8 @@ class LiveEventsPage(QWidget):
 
     def _update_counts(self) -> None:
         tally = {"high": 0, "medium": 0, "low": 0, "info": 0}
-        for _ts, e in self._events:
-            tally[live_events.severity(e.color)] += 1
+        for group in self._groups():
+            tally[live_events.severity(group.color)] += 1
         parts = [f"<b style='color:{_SEV_COLOR[sev]}'>{tally[sev]}</b> {sev}"
                  for sev in ("high", "medium", "low", "info")]
         self.counts.setText(" &nbsp; ".join(parts))
