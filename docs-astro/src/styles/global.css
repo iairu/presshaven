@@ -1429,6 +1429,16 @@ pre:hover .code-copy-btn { opacity: 1; }
   max-width: 35rem;
   margin-bottom: 1.9rem;
 }
+.two-col-tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1rem;
+  align-items: start;
+}
+.two-col-tables table { margin: 0; }
+@media (max-width: 720px) {
+  .two-col-tables { grid-template-columns: 1fr; }
+}
 .home-hero__lead--note {
   font-size: 0.9rem;
   line-height: 1.7;

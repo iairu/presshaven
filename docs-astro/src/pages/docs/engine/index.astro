@@ -7,6 +7,7 @@ const sidebar = [
   { title: 'Documentation Home', href: '/docs' },
   { title: 'Honeypot Engine', href: '/docs/engine', active: true },
   { title: 'Honeypot Layers', href: '/docs/engine/layers' },
+  { title: 'WordPress Management', href: '/docs/engine/wordpress-management' },
 ];
 const toc = [
   { id: 'layers', text: 'Engine Layers', level: 2 },
@@ -60,6 +61,13 @@ const toc = [
       tag="Maintenance"
       description="Periodic content replication keeps pools current; the backup service snapshots databases and files for recovery."
     />
+    <DocCard
+      title="WordPress management"
+      href="/docs/engine/wordpress-management"
+      icon="wrench"
+      tag="Dashboard"
+      description="Edit the real shop and push safe changes to every pool (Studio), and upgrade WordPress + WooCommerce across all instances behind a maintenance page (Update)."
+    />
   </CardGrid>
 
   <h2 id="pools">Pool Lifecycle</h2>
@@ -108,6 +116,9 @@ cp site/* ../production_eshop_files/wp-content/themes/omega-storefront/assets/fe
     <li><strong>Not copied:</strong> options, comments, nav-menu items and term meta. The storefront therefore keeps reviews in postmeta (<code>_fh_reviews</code>), builds navigation in code, and derives store settings from option filters in a must-use plugin.</li>
     <li><strong>Deletes:</strong> pools never delete rows. After changing the catalog, clear a pool's old products or reseed it, then restart the sync service to mirror the new rows immediately.</li>
   </ul>
+  <p>To reflect an edit <em>immediately</em> instead of waiting for the next interval, use the dashboard's
+  <a href="/docs/engine/wordpress-management#studio">WordPress Studio</a> page: it edits the real shop and runs
+  this same replication script in its single-pool mode to fan the change out to every pool on demand.</p>
 
   <h2 id="backups">Backups</h2>
   <p>The <code>backup_service</code> container snapshots the production database and the production

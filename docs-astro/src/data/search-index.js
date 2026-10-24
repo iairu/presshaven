@@ -8,6 +8,7 @@ export const searchIndex = [
   { title: 'Architecture', url: '/docs/architecture', section: 'Architecture', content: 'request pipeline two-host lua modules services' },
   { title: 'Honeypot Engine', url: '/docs/engine', section: 'Honeypot Engine', content: 'wordpress woocommerce pooling seeding backups state per-session segmentation' },
   { title: 'Honeypot Layers', url: '/docs/engine/layers', section: 'Honeypot Engine', content: 'honeypot layer reverse proxy database db.php deception compose docker-compose.db-proxy' },
+  { title: 'WordPress Management', url: '/docs/engine/wordpress-management', section: 'Honeypot Engine', content: 'wordpress studio update updater wp-admin woocommerce propagate pools content replication maintenance page downtime core plugin upgrade db.php drop-in INTERNAL_TEST_SECRET studio passthrough' },
   { title: 'Detection Overview', url: '/docs/detection', section: 'Detection', content: 'detection pipeline scoring CVE suricata' },
   { title: 'Detection Capabilities', url: '/docs/detection/capabilities', section: 'Detection', content: 'pattern matching CVE suricata scoring function reference' },
   { title: 'Seeded CVEs', url: '/docs/detection/cves', section: 'Detection', content: 'CVE-2023-28121 CVE-2025-4403 vulnerability' },

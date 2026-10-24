@@ -1,0 +1,171 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Honeypot Engine', href: '/docs/engine' },
+  { title: 'Honeypot Layers', href: '/docs/engine/layers' },
+  { title: 'WordPress Management', href: '/docs/engine/wordpress-management', active: true },
+];
+const toc = [
+  { id: 'why', text: 'Why Manage From the Dashboard', level: 2 },
+  { id: 'studio', text: 'WordPress Studio', level: 2 },
+  { id: 'studio-routing', text: 'Staying Pinned to Production', level: 3 },
+  { id: 'studio-propagation', text: 'What Propagates, What Never Does', level: 3 },
+  { id: 'updates', text: 'WordPress Updates', level: 2 },
+  { id: 'update-stages', text: 'Update Stages', level: 3 },
+  { id: 'update-downtime', text: 'Downtime & Self-Recovery', level: 3 },
+  { id: 'update-dropin', text: 'Preserving the Database Router', level: 3 },
+];
+---
+<DocsLayout title="WordPress Management" description="Editing the real shop and keeping every honeypot in lockstep: the WordPress Studio and WordPress Update dashboard pages" section="Engine" sidebar={sidebar} toc={toc}>
+  <p>
+    A honeypot is only convincing while its decoys look exactly like the real shop. Two dashboard pages keep
+    that true without ever leaving the console: <strong>WordPress Studio</strong> edits the real
+    WordPress&nbsp;+&nbsp;WooCommerce storefront and fans safe changes out to every pool, and
+    <strong>WordPress Update</strong> upgrades WordPress core and WooCommerce across production and every pool
+    behind a maintenance page. Both reuse the engine's existing
+    <a href="/docs/engine#sync">content replication</a> and pool plumbing rather than inventing a second copy
+    of it.
+  </p>
+  <p>
+    Both are <strong>strictly defensive</strong>: they operate on the defender's own instances to keep the
+    decoys believable. Neither reaches out to an adversary, tracks back, or performs any offensive action.
+  </p>
+
+  <h2 id="why">Why Manage From the Dashboard</h2>
+  <p>
+    The <a href="/docs/engine#sync">periodic content-sync service</a> already keeps pools current on a timer,
+    but an operator editing the live catalogue wants their change reflected <em>now</em> — before the next
+    sync tick — so a diverted adversary never sees a stale price or a missing product that betrays the decoy.
+    Likewise, a WordPress or WooCommerce release has to land on production <em>and</em> every pool together, or
+    a version mismatch becomes a <a href="/docs/reference/known-issues">honeypot tell</a>. The Studio and
+    Update pages make both one-click, operator-driven actions with a progress bar, instead of a shell session
+    against each instance.
+  </p>
+
+  <h2 id="studio">WordPress Studio</h2>
+  <p>
+    The Studio page embeds the real <code>wp-admin</code> panel — pointed at <strong>production</strong> — directly
+    in the dashboard. The operator edits pages, posts, WooCommerce products and settings exactly as they would in
+    WordPress. On demand, pressing <strong>“Propagate to honeypot pools”</strong> mirrors the change into every
+    ready pool and shows a progress bar fanning out one pool at a time.
+  </p>
+  <p>
+    Propagation does not re-implement the “what is safe to copy” policy. It runs the honeypot content-sync
+    service's own replication script (<code>replicate_content_to_honeypot.sh</code>) in its single-pool
+    <code>--once&nbsp;N</code> mode, so a manual push from the Studio and the periodic background sync apply the
+    <em>exact same</em> allow-list and denylist — there is no second policy to drift out of step. Target pools are
+    the ones the router reports <strong>ready</strong> (falling back to the compose-declared static pools 1–3 when
+    Redis cannot be reached), so propagation never silently does nothing.
+  </p>
+
+  <h3 id="studio-routing">Staying Pinned to Production</h3>
+  <p>
+    A live editing session must never be diverted into a honeypot — otherwise the operator would be editing a
+    throwaway decoy. The embedded browser presents two headers so the edge force-routes it to production:
+    <code>X-Studio-Backend: production</code> and <code>X-Internal-Test-Auth</code> carrying the edge's
+    <code>INTERNAL_TEST_SECRET</code>.
+  </p>
+  <div class="admonition warning">
+    <div class="admonition-title">Fail-closed passthrough</div>
+    <p>The studio passthrough is <strong>fail-closed</strong>: nginx honours it only when the secret header is
+    present <em>and</em> matches the server-side secret (see <code>router_rules.is_studio_passthrough</code> and
+    the early return in <code>nginx.conf</code>). No external client that lacks the secret can use these headers
+    to reach production. If no secret is configured, the admin panel is routed normally — and may be diverted —
+    which the page warns about rather than silently sending an empty secret.</p>
+  </div>
+
+  <h3 id="studio-propagation">What Propagates, What Never Does</h3>
+  <p>
+    The split is deliberate and security-driven: the decoys must <em>match</em> production's content and
+    presentation, but a compromised honeypot must <em>leak nothing of value</em>. So content and presentational
+    settings propagate; identities, commerce records and secrets never do — they stay only in production.
+  </p>
+  <div class="two-col-tables">
+  <table>
+    <tr><th>Propagates to every pool</th></tr>
+    <tr><td>Pages and posts</td></tr>
+    <tr><td>WooCommerce products, variations and prices</td></tr>
+    <tr><td>Product categories, tags and attributes</td></tr>
+    <tr><td>Media / attachment metadata</td></tr>
+    <tr><td>Safe site &amp; store settings (address, currency, tax &amp; catalog display, theme customizer)</td></tr>
+  </table>
+  <table>
+    <tr><th>Never leaves production</th></tr>
+    <tr><td>User accounts and passwords</td></tr>
+    <tr><td>Orders, customers and carts</td></tr>
+    <tr><td>Payment-gateway &amp; SMTP settings (API keys, secrets, tokens)</td></tr>
+    <tr><td>WooCommerce API keys and licence keys</td></tr>
+    <tr><td>Any option whose name matches <code>api</code> / <code>key</code> / <code>secret</code> / <code>token</code> / <code>salt</code> / <code>password</code> / …</td></tr>
+  </table>
+  </div>
+  <p>
+    The denylist is enforced in the replication script itself (its <code>SETTINGS_ALLOW</code> allow-list and
+    <code>SETTINGS_DENY_RE</code> pattern, plus scoped content dumps), so the guarantee holds for both the manual
+    and the periodic sync.
+  </p>
+
+  <h2 id="updates">WordPress Updates</h2>
+  <p>
+    The Update page checks whether a newer WordPress core or WooCommerce release is available and, on the
+    operator's confirmation, upgrades production and every static pool together. Pressing
+    <strong>“Check for updates”</strong> runs a read-only version probe; if an update is offered,
+    <strong>“Update all instances”</strong> runs the staged plan below behind a site-wide maintenance page, with a
+    weighted progress bar and per-stage status.
+  </p>
+
+  <h3 id="update-stages">Update Stages</h3>
+  <p>The update follows an <em>update-production-then-re-sync</em> model, so core and WooCommerce are downloaded
+  once and every instance ends up byte-identical:</p>
+  <ol>
+    <li><strong>Maintenance on.</strong> A Redis flag is set; the edge mirrors it into its shared dict and serves a
+    503 maintenance page to all traffic (<code>lua/maintenance.lua</code>).</li>
+    <li><strong>Update production.</strong> The newest core and WooCommerce files are downloaded into the production
+    install and its database is migrated (<code>update_wordpress.sh --apply</code>).</li>
+    <li><strong>Re-sync files to pools.</strong> <code>init_setup</code> re-runs; its rsync mirrors the updated
+    production files into every pool volume.</li>
+    <li><strong>Migrate each static pool's database.</strong> Pools 1–3 run the database migration only — their files
+    are already in place (<code>update_wordpress.sh --apply-db-only</code>).</li>
+    <li><strong>Maintenance off.</strong> The flag is cleared and the shop returns.</li>
+  </ol>
+  <div class="admonition note">
+    <div class="admonition-title">Static vs. dynamic pools</div>
+    <p>Only the static pools 1–3 have a dedicated seed service and are migrated in place here. Dynamic pools
+    (built on demand by the <a href="/docs/engine#config">pool manager</a>) rsync production's now-updated files and
+    clone a freshly-migrated database at build time, so they pick up the new version automatically the next time
+    they are built — rather than being migrated live.</p>
+  </div>
+
+  <h3 id="update-downtime">Downtime &amp; Self-Recovery</h3>
+  <p>
+    While the update runs, every visitor — production and honeypot alike — sees a scheduled-maintenance page
+    instead of the store. Expect a few minutes of downtime for the download, file re-sync and four database
+    migrations. The maintenance flag is <strong>TTL-guarded in Redis</strong> (a 30-minute fail-safe cap), so if the
+    dashboard dies mid-update the flag expires and the site self-recovers rather than being stranded offline. The
+    page also waits out the edge's 5-second mirror interval after turning maintenance on, so no request slips
+    through to a half-upgraded store.
+  </p>
+
+  <h3 id="update-dropin">Preserving the Database Router</h3>
+  <p>
+    On the <a href="/docs/engine/layers">database-proxy layer</a>, <code>wp-content/db.php</code> is a drop-in that
+    binds each request to the production or honeypot database. A core update must not drop it, or the single-eshop /
+    two-database topology silently collapses back to one database.
+  </p>
+  <div class="admonition note">
+    <div class="admonition-title">Byte-for-byte guarantee</div>
+    <p>WordPress's own updater already skips <code>wp-content</code> when copying new core files, but the update
+    script makes it a guarantee independent of WordPress internals: it snapshots <code>db.php</code> before touching
+    any files and restores it byte-for-byte afterwards if the update removed or changed it. The production/honeypot
+    database routing is always preserved across an upgrade.</p>
+  </div>
+
+  <h2 id="related">Related</h2>
+  <CardGrid columns={3}>
+    <DocCard title="Content Replication" href="/docs/engine#sync" icon="archive" tag="Engine" description="The periodic sync the Studio's manual push reuses, and the allow-list / denylist it enforces." />
+    <DocCard title="Honeypot Layers" href="/docs/engine/layers" icon="layers" tag="Engine" description="The reverse-proxy and database-proxy layers — and the db.php router the updater preserves." />
+    <DocCard title="Known Issues" href="/docs/reference/known-issues" icon="alert" tag="Reference" description="Honeypot tells, including the version mismatches these pages exist to prevent." />
+  </CardGrid>
+</DocsLayout>

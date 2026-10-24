@@ -32,7 +32,7 @@ const toc = [
   </p>
 
   <CardGrid columns={3}>
-    <DocCard title="Latest cycle" href="#october-2026" icon="radar" tag="Oct 2026" description="Astro knowledge hub, pattern registry, device/GDPR signature, security-operations dashboard and segmentation validation." meta="Current" />
+    <DocCard title="Latest cycle" href="#october-2026" icon="radar" tag="Oct 2026" description="Astro knowledge hub, pattern registry, device/GDPR signature, security-operations dashboard, WordPress management (Studio + Update) and the defensive-security repositioning." meta="Current" />
     <DocCard title="Platform build-out" href="#september-2026" icon="route" tag="Sep 2026" description="Core refactor and tests, PDF/exploit reports, the database-proxy honeypot layer, pool scaling and resource monitoring." meta="Engine" />
     <DocCard title="Foundations" href="#october-2025" icon="shield" tag="2025" description="Reverse-proxy routing, WordPress/WooCommerce eshop, Suricata, the ELK/SIEM pipeline and the first honeypot migrations." meta="Origins" />
   </CardGrid>
@@ -77,6 +77,23 @@ const toc = [
     <li>Made Reporting an export hub routing to each report's page; Workloads defaults to the stack view and locks the honeypot layer while the stack is up; pre-warms Workload Telemetry history before the page opens.</li>
     <li>Added a global "Clear all attacks" action across the attack pages; dashboard UI gained a triple-dot overflow menu and SVG icons (with an overflow page-opening fix).</li>
     <li>Added a container-health fix, a staged PDF-export progress bar on Attack Simulation and an auto-updating time estimate on Segmentation Validation.</li>
+  </ul>
+
+  <h3>WordPress management from the dashboard</h3>
+  <ul>
+    <li>Added a <a href="/docs/engine/wordpress-management#studio">WordPress Studio</a> page: the real <code>wp-admin</code> panel embedded in the dashboard (pinned to production through a fail-closed studio passthrough), with a one-click “Propagate to honeypot pools” that fans an editor's change out to every ready pool and shows a progress bar.</li>
+    <li>Propagation reuses the content-sync service's own replication script in single-pool mode, so a manual push and the periodic sync share one allow-list / denylist: pages, posts, products, prices, categories and safe settings propagate; user accounts, orders, carts, API keys and payment/SMTP secrets never leave production.</li>
+    <li>Added a <a href="/docs/engine/wordpress-management#updates">WordPress Update</a> page: checks for newer WordPress core and WooCommerce releases and upgrades production and every static pool together behind a Redis-flagged, Lua-served maintenance page, with a staged, weighted progress bar.</li>
+    <li>Update model is update-production-then-re-sync: download core + WooCommerce once, migrate production, rsync the updated files to the pools, then migrate each static pool's database; the maintenance flag is TTL-guarded so the site self-recovers if an update is interrupted.</li>
+    <li>Guaranteed the database-proxy layer's <code>wp-content/db.php</code> router drop-in survives a core update — snapshotted before the file update and restored byte-for-byte afterwards — so the production/honeypot database routing is always preserved.</li>
+  </ul>
+
+  <h3>Positioning, terminology &amp; docs polish</h3>
+  <ul>
+    <li>Framed WordPress&nbsp;+&nbsp;WooCommerce as the target demo application the whole honeypot (reverse-proxy and database layers) is built around, across the knowledge hub.</li>
+    <li>Refocused the project as a <strong>defensive security platform</strong> growing toward a security-management layer above WordPress&nbsp;+&nbsp;WooCommerce instances, and stated explicitly that it performs only defensive security — no offensive tracking, hack-back or retaliation.</li>
+    <li>Renamed “attacker” to “adversary” across the whole project (dashboard, edge, docs and tooling); “Attacker Sessions” became “Adversary Sessions”.</li>
+    <li>Fixed an Astro whitespace quirk that joined words next to inline tags (e.g. bold phrases) in the rendered docs.</li>
   </ul>
 
   <h3>Pooling &amp; segmentation validation</h3>
