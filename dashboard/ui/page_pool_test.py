@@ -46,6 +46,7 @@ from PyQt6.QtWidgets import (
 
 from core import honeypot_layer, redis_inspect
 from core.docker_ctl import target_for
+from core.eta import EtaTracker, format_eta
 from core.patterns import PATTERN_PRESETS, GDPR_RESTORE_PRESET, group_presets, is_gdpr_restore
 from core.pattern_registry import active_presets
 from ui.pattern_picker import PatternPickerButton
@@ -444,15 +445,36 @@ class PoolTestPage(QWidget):
         self.progress_label = QLabel("Preparing report...")
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximumWidth(320)
+        # Auto-updating estimate of how much longer the run will take. It is a
+        # rough guide only -- the pool scale-up waits are highly variable -- so
+        # it is labelled "~" (see core/eta.py).
+        self.eta_label = QLabel("")
+        self.eta_label.setStyleSheet("color: #9aa0a6;")
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self._cancel_report)
         prog.addWidget(self.progress_label, stretch=1)
         prog.addWidget(self.progress_bar)
+        prog.addWidget(self.eta_label)
         prog.addWidget(self.cancel_btn)
         self.progress_row.setVisible(False)
         layout.addWidget(self.progress_row)
         self._exporting = False
         self._cancelled = False
+        # ETA tracker + a 1 s timer that ticks the figure down between the
+        # scenario's (infrequent) progress emissions.
+        self._eta = EtaTracker()
+        self._export_t0 = 0.0
+        self._eta_timer = QTimer(self)
+        self._eta_timer.setInterval(1000)
+        self._eta_timer.timeout.connect(self._tick_eta)
+        # Idle veil over the frames during an export: they are driven
+        # automatically by the run, so dim them "hands off" and only show a
+        # frame live while it is actively loading a page or being captured
+        # (same idea as the Attack Simulation browser). A depth counter so
+        # nested active sections (a probe that falls back to a single load)
+        # don't dim the frames back mid-section.
+        self._frame_active_depth = 0
+        self._frames_dimmed = False
         self._job: _Job | None = None
         # Consent-gated GDPR token for the current export run (set when the
         # operator agrees before exporting). Each window gets a DISTINCT token
@@ -844,6 +866,10 @@ class PoolTestPage(QWidget):
 
     # ---- report export (progress bar, all frames move every step) ----
 
+    # Caption on a dimmed frame during an export. Short, because the frames are
+    # narrow (up to five per row) -- the overlay wraps it to fit.
+    _FRAME_IDLE_MSG = "Driven by the report — hands off"
+
     def _cancel_report(self) -> None:
         self._cancelled = True
         self.cancel_btn.setEnabled(False)
@@ -853,6 +879,45 @@ class PoolTestPage(QWidget):
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(current)
         self.progress_label.setText(message)
+        self._eta.update(time.monotonic() - self._export_t0, current / total if total else 0.0)
+        self._tick_eta()
+
+    def _tick_eta(self) -> None:
+        """Refresh the "estimated time remaining" line (on the 1 s timer and on
+        each progress emission)."""
+        if not self._exporting:
+            return
+        remaining = self._eta.remaining_at(time.monotonic() - self._export_t0)
+        self.eta_label.setText(f"~ {format_eta(remaining)} left")
+
+    # ---- idle veil over the frames during an export ----
+
+    def _apply_frame_dim(self) -> None:
+        """Dim every frame when no active section is in progress, clear them
+        while one is (only during an export; a no-op otherwise)."""
+        if not self._exporting:
+            return
+        dim = self._frame_active_depth <= 0
+        if dim == self._frames_dimmed:
+            return
+        self._frames_dimmed = dim
+        for b in self.browsers:
+            b.set_dimmed(dim, self._FRAME_IDLE_MSG if dim else "")
+
+    def _frames_enter_active(self) -> None:
+        self._frame_active_depth += 1
+        self._apply_frame_dim()
+
+    def _frames_exit_active(self) -> None:
+        self._frame_active_depth = max(0, self._frame_active_depth - 1)
+        self._apply_frame_dim()
+
+    def _undim_all_frames(self) -> None:
+        """Hand every frame back (export over): clear the veil unconditionally."""
+        self._frame_active_depth = 0
+        self._frames_dimmed = False
+        for b in self._all_browsers:
+            b.set_dimmed(False)
 
     def _load_all(self, urls: list[str], step: str = "", attacks: frozenset = frozenset()) -> None:
         """Navigate each frame to its URL and wait for all loads (hard timeout,
@@ -864,9 +929,11 @@ class PoolTestPage(QWidget):
                    if not (u == "about:blank" and self.browsers[i].view.url().toString()
                            in ("", "about:blank"))}
         loop = QEventLoop()
+        self._frames_enter_active()      # show the frames live while they load
         if not pending:
             for browser, url in zip(self.browsers, urls):
                 browser.navigate(url)
+            self._frames_exit_active()
             return
         started = [time.monotonic()] * len(urls)
         t = self._now()
@@ -917,6 +984,7 @@ class PoolTestPage(QWidget):
                 relay.done.disconnect(conn)
             except TypeError:
                 pass
+        self._frames_exit_active()
 
     def _wait_for_render(self, script: str, timeout_ms: int) -> None:
         """Poll every window (on a page that loaded) until `script` returns
@@ -962,6 +1030,7 @@ class PoolTestPage(QWidget):
         """Navigate window `w` alone and wait for the load (retried like _load_all)."""
         browser = self.browsers[w]
         t = self._now()
+        self._frames_enter_active()      # show the frames live while this one loads
         for attempt in range(LOAD_RETRIES + 1):
             loop = QEventLoop()
             got: list = [False]
@@ -985,11 +1054,13 @@ class PoolTestPage(QWidget):
             if got[0]:
                 if attempt and log:
                     self._log_load(t, step, w, url, attempt + 1, "retried")
+                self._frames_exit_active()
                 return True
             if attempt < LOAD_RETRIES:
                 self._spin(LOAD_RETRY_DELAYS_MS[attempt])
         if log:
             self._log_load(t, step, w, url, LOAD_RETRIES + 1, "failed")
+        self._frames_exit_active()
         return False
 
     def _log_load(self, t: float, step: str, w: int, url: str, attempts: int, outcome: str) -> None:
@@ -1025,7 +1096,14 @@ class PoolTestPage(QWidget):
                   if not self._load_ok[w] and b.view.url().toString().startswith("http")]
         http = [self._relays[w].http_status if w < len(self._relays) else 0
                 for w in range(len(self.browsers))]
-        return [self._grab(b) for b in self.browsers], self._read_carts(), failed, http
+        # Show the frames live for the grab -- a dim overlay would otherwise
+        # land in a screen-grab fallback (the primary view.grab() skips it, but
+        # the fallback in _grab does not).
+        self._frames_enter_active()
+        try:
+            return [self._grab(b) for b in self.browsers], self._read_carts(), failed, http
+        finally:
+            self._frames_exit_active()
 
     def _latency_probe(self, label: str, total_steps: int, total: int, step: int) -> None:
         """Every window loads the same product page, one window at a time, so
@@ -1035,8 +1113,10 @@ class PoolTestPage(QWidget):
         if not self._t0 or not self.browsers:
             return
         url = f"{self._base_url()}/product/{CART_PLAN[0][0][0]}/"
+        self._frames_enter_active()      # show the frames live while they probe
         for w in range(len(self.browsers)):
             if self._cancelled:
+                self._frames_exit_active()
                 raise _Cancelled()
             self._progress(f"Step {step}/{total_steps}: latency probe ({label}) — "
                            f"window {self._letter(w)}", step, total)
@@ -1070,6 +1150,7 @@ class PoolTestPage(QWidget):
                 # the window on Chromium's error page for the next step.
                 fixed = self._load_one(w, url, log=False)
                 self._log_load(t, f"latency probe: {label}", w, url, 2, "retried" if fixed else "failed")
+        self._frames_exit_active()
         self._settled_decisions(need_sessions=True)   # tags the probe loads
 
     # ---- run timeline (samples for the scaling / latency figures) ----
@@ -1202,6 +1283,13 @@ class PoolTestPage(QWidget):
         self.cancel_btn.setEnabled(True)
         self.progress_row.setVisible(True)
         self.export_label.setVisible(False)
+        # ETA line + the veil over the frames (driven automatically from here).
+        self._export_t0 = time.monotonic()
+        self._eta.reset()
+        self.eta_label.setText("~ estimating…")
+        self._eta_timer.start()
+        self._frame_active_depth = 0
+        self._apply_frame_dim()
         for w in (self.export_btn, self.open_all_btn, self.attack_all_btn, self.reset_btn,
                   self.count_spin, self.delayed_spin, self.clear_check):
             w.setEnabled(False)
@@ -1212,11 +1300,14 @@ class PoolTestPage(QWidget):
         except Exception as e:  # noqa: BLE001 -- shown to the user below
             error = str(e)
 
+        self._eta_timer.stop()
+        self.eta_label.setText("")
         self.progress_row.setVisible(False)
         for w in (self.export_btn, self.open_all_btn, self.attack_all_btn, self.reset_btn,
                   self.count_spin, self.delayed_spin, self.clear_check):
             w.setEnabled(True)
         self._exporting = False
+        self._undim_all_frames()      # hand the frames back
         self._poll.start()
         if self._gdpr is not None:
             self._gdpr.cleanup()  # remove the temp key material

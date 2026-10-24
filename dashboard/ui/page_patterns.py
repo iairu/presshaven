@@ -44,6 +44,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QGroupBox,
@@ -63,6 +64,7 @@ from core.patterns import (COMPONENTS, GDPR_RESTORE_PRESET, PATTERN_PRESETS, KIN
 from core.pattern_registry import active_presets
 from ui.pattern_picker import PatternPickerButton
 from ui.report_stages import ReportStagesWidget
+from core.eta import EtaTracker, format_eta
 from core import pattern_report_pdf
 from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
@@ -566,6 +568,17 @@ class PatternsPage(QWidget):
         _cancel_col.addStretch(1)
         _prog_layout.addLayout(_cancel_col)
         _prog_outer.addLayout(_prog_layout)
+        # Auto-updating estimate of how much longer the export will take (see
+        # core/eta.py). The tracker re-anchors on every progress emission; a
+        # 1 s timer ticks the figure down smoothly between emissions.
+        self.report_eta_label = QLabel("")
+        self.report_eta_label.setStyleSheet("color: #9aa0a6; font-size: 11px;")
+        _prog_outer.addWidget(self.report_eta_label)
+        self._report_eta = EtaTracker()
+        self._report_t0 = 0.0
+        self._report_eta_timer = QTimer(self)
+        self._report_eta_timer.setInterval(1000)
+        self._report_eta_timer.timeout.connect(self._tick_report_eta)
         self.report_progress_row.setVisible(False)
 
         # Same red banner pattern as the Kibana/Backups/Pool State Store pages -- the
@@ -1224,6 +1237,10 @@ class PatternsPage(QWidget):
         self.report_stages.reset(len(presets))
         self.report_cancel_btn.setEnabled(True)
         self.report_cancel_btn.setText("Cancel")
+        self._report_t0 = time.monotonic()
+        self._report_eta.reset()
+        self.report_eta_label.setText("Estimated time remaining: estimating…")
+        self._report_eta_timer.start()
         self.report_progress_row.setVisible(True)
 
         self.export_btn.setEnabled(False)
@@ -1237,7 +1254,18 @@ class PatternsPage(QWidget):
         worker.start()
 
     def _on_report_progress(self, message: str, current: int, total: int) -> None:
-        self.report_stages.update(current / total if total else 0.0, message)
+        fraction = current / total if total else 0.0
+        self.report_stages.update(fraction, message)
+        self._report_eta.update(time.monotonic() - self._report_t0, fraction)
+        self._tick_report_eta()
+
+    def _tick_report_eta(self) -> None:
+        """Refresh the "estimated time remaining" line (on the 1 s timer and on
+        each real progress emission)."""
+        if self._report_worker is None:
+            return
+        remaining = self._report_eta.remaining_at(time.monotonic() - self._report_t0)
+        self.report_eta_label.setText(f"Estimated time remaining: {format_eta(remaining)}")
 
     def _on_report_screenshot_request(self, url: str, key: str) -> None:
         """GUI-thread screenshot: navigate the embedded browser to `url`, wait
@@ -1440,6 +1468,7 @@ class PatternsPage(QWidget):
         cancelled = self._report_worker is not None and self._report_worker._cancel  # noqa: SLF001
         error = self._report_worker_error or self._report_render_error
 
+        self._report_eta_timer.stop()
         self.report_progress_row.setVisible(False)
         self.browser.set_dimmed(False)   # export over -- hand the browser back
         self.pattern_picker.set_categories_enabled(True)

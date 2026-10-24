@@ -35,18 +35,23 @@ class _DimOverlay(QWidget):
     stack, so a raised overlay sits on top, and because capture un-dims it
     first (see page_patterns), it never lands in a screenshot."""
 
+    # Side margin kept between the caption pill and the overlay edges, so the
+    # label gets a real width to wrap into rather than overflowing (the old
+    # fixed-size pill clipped a one-line caption on a narrow browser).
+    _MARGIN = 20
+
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setVisible(False)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(self._MARGIN, self._MARGIN, self._MARGIN, self._MARGIN)
         self.label = QLabel("")
         self.label.setWordWrap(True)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setStyleSheet(
-            "color: #e6e6e6; font-size: 12px; background: rgba(0,0,0,140); "
-            "padding: 8px 14px; border-radius: 6px;")
+            "color: #e6e6e6; font-size: 14px; "
+            "background: rgba(0,0,0,150); padding: 14px 20px; border-radius: 8px;")
         layout.addStretch(1)
         layout.addWidget(self.label, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch(1)
@@ -57,6 +62,14 @@ class _DimOverlay(QWidget):
     def set_message(self, message: str) -> None:
         self.label.setText(message)
         self.label.setVisible(bool(message))
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        # Cap the caption's width to the overlay (minus margins, and never
+        # absurdly wide on a big browser) so word-wrap actually kicks in and
+        # the pill grows downward to fit instead of being clipped.
+        avail = max(120, self.width() - 2 * self._MARGIN)
+        self.label.setMaximumWidth(min(avail, 460))
 
 
 class BrowserWidget(QWidget):
