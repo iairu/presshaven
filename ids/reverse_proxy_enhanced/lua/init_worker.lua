@@ -536,6 +536,20 @@ local function init_worker()
                 end
             end
 
+            -- Mirror the site-wide scheduled-maintenance flag the same way.
+            -- The WordPress Update dashboard page SETs honeypot_maintenance in
+            -- Redis (with a TTL so it fails safe -- see maintenance.lua) while a
+            -- core/WooCommerce upgrade runs; access_by_lua_block reads this
+            -- mirrored shared-dict value at the very top of the pipeline and
+            -- serves a 503 maintenance page for ALL traffic until it clears.
+            -- A missing/expired key mirrors to "0" so the site comes back on
+            -- its own even if the dashboard dies mid-update.
+            if threat_intel_shared then
+                local maint = red:get("honeypot_maintenance")
+                local maint_flag = (maint and maint ~= ngx.null) and "1" or "0"
+                threat_intel_shared:set("maintenance", maint_flag)
+            end
+
             _G.redis_pool.close_connection(red)
         end
 

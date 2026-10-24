@@ -244,6 +244,47 @@ def get_value(remote: RemoteConfig | None, key: str, key_type: str, timeout: flo
     return json.dumps(parsed, indent=2, sort_keys=True)
 
 
+# --- Site-wide scheduled-maintenance flag ---------------------------------
+#
+# The WordPress Update page takes the whole site offline while a core/
+# WooCommerce upgrade runs by SET-ing this key with a TTL; the edge mirrors it
+# into a shared dict and serves a 503 maintenance page (see
+# reverse_proxy_enhanced/lua/maintenance.lua + init_worker.lua's mirror timer).
+# The TTL is the fail-safe: if the dashboard dies mid-update the key expires on
+# its own and the site comes back without manual intervention.
+MAINTENANCE_KEY = "honeypot_maintenance"
+
+
+def set_maintenance(remote: RemoteConfig | None, ttl_seconds: int, timeout: float = 15.0) -> None:
+    """Turn the site-wide maintenance page ON for at most `ttl_seconds`.
+
+    Written with an expiry on purpose -- see MAINTENANCE_KEY. The edge's mirror
+    timer picks the change up within a few seconds (it is not instantaneous),
+    so callers should allow a short grace period before assuming traffic is
+    being held."""
+    ttl = int(ttl_seconds)
+    if ttl < 1:
+        raise RedisInspectError("maintenance TTL must be at least 1 second")
+    _run_redis_cli(remote, "SET", MAINTENANCE_KEY, "1", "EX", str(ttl), timeout=timeout)
+
+
+def clear_maintenance(remote: RemoteConfig | None, timeout: float = 15.0) -> None:
+    """Turn the maintenance page OFF immediately (idempotent -- DEL of a missing
+    key is a no-op)."""
+    _run_redis_cli(remote, "DEL", MAINTENANCE_KEY, timeout=timeout)
+
+
+def maintenance_ttl(remote: RemoteConfig | None, timeout: float = 15.0) -> int:
+    """Remaining seconds the maintenance flag stays on: >=0 when set, -2 when
+    absent (maintenance off), -1 if set with no expiry (should not happen here).
+    Mirrors redis TTL semantics."""
+    out = _run_redis_cli(remote, "TTL", MAINTENANCE_KEY, timeout=timeout).strip()
+    try:
+        return int(out)
+    except ValueError:
+        return -2
+
+
 def get_risk_scores(remote: RemoteConfig | None, timeout: float = 15.0) -> dict[str, int]:
     """{ip: raw_score} from the "threat_ips" key (see router.lua/
     init_worker.lua), for page_redis.py's bar chart. This is the raw,

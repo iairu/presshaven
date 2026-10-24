@@ -769,6 +769,12 @@ services:
     volumes:
       - ./production_eshop_files:/var/www/html
       - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+      # On-demand WordPress core + WooCommerce upgrade (dashboard "WordPress
+      # Update" page runs `docker compose run --rm --no-deps <this service>
+      # sh /update_wordpress.sh <mode>`). Same wp-cli image + /var/www/html
+      # mount + WORDPRESS_DB_* env as the seed above, so it targets exactly
+      # this instance's files and database.
+      - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
       - ./scripts/seed_elementor_pages.sh:/seed_elementor_pages.sh:ro
       # Storefront catalog/pages/journal (Fernhill Coffee Roasters) and its images.
       - ./scripts/seed_storefront_content.php:/seed_storefront_content.php:ro
@@ -850,6 +856,11 @@ services:
     volumes:
       - honeypot_eshop_files:/var/www/html
       - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+      # On-demand WordPress core + WooCommerce upgrade -- see production_db_seed.
+      # For a pool the dashboard runs this with --apply-db-only (files are
+      # rsynced from production by init_setup; only this pool's DB schema is
+      # migrated here).
+      - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
     networks:
       - honeypot_network
     command: ["sh", "/seed_wordpress_db.sh"]
@@ -910,6 +921,11 @@ services:
     volumes:
       - honeypot_eshop_files_2:/var/www/html
       - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+      # On-demand WordPress core + WooCommerce upgrade -- see production_db_seed.
+      # For a pool the dashboard runs this with --apply-db-only (files are
+      # rsynced from production by init_setup; only this pool's DB schema is
+      # migrated here).
+      - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
     networks:
       - honeypot_network
     command: ["sh", "/seed_wordpress_db.sh"]
@@ -961,6 +977,11 @@ services:
     volumes:
       - honeypot_eshop_files_3:/var/www/html
       - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+      # On-demand WordPress core + WooCommerce upgrade -- see production_db_seed.
+      # For a pool the dashboard runs this with --apply-db-only (files are
+      # rsynced from production by init_setup; only this pool's DB schema is
+      # migrated here).
+      - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
     networks:
       - honeypot_network
     command: ["sh", "/seed_wordpress_db.sh"]

@@ -459,6 +459,13 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "The sync copies content and presentational settings but never user accounts, orders, or secrets (API keys, passwords, payment config) -- "
         "those stay in production so a compromised honeypot leaks nothing of value.",
     ),
+    "wp_update": PageGuide(
+        "Check for newer WordPress core and WooCommerce releases and apply them to production and every honeypot pool behind a maintenance page.",
+        "Press “Check for updates”; if a newer version is offered, press “Update all instances” and watch the staged progress bar.",
+        "An update takes the whole site offline for a few minutes: the edge serves a maintenance page while production is upgraded, the new files "
+        "are re-synced to the pools, and each database is migrated. The maintenance flag is TTL-guarded in Redis, so the site comes back on its own "
+        "even if the update is interrupted -- and keeping the decoys on the same version as production keeps their fingerprints believable.",
+    ),
     "settings": PageGuide(
         "Target connectors (local or SSH), stack configuration, detection policy values and console preferences.",
         "Open the edge .env and find SCORE_DECAY_HALF_LIFE_SECONDS and THREAT_DECAY_ENABLED.",
