@@ -385,6 +385,11 @@ class WpUpdatePage(QWidget):
         limit.setWordWrap(True)
         limit.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px; font-style: italic;")
         lay.addWidget(limit)
+
+        dropin = QLabel(wp_update.DROPIN_NOTE)
+        dropin.setWordWrap(True)
+        dropin.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px; font-style: italic;")
+        lay.addWidget(dropin)
         return frame
 
     # ---- check ----

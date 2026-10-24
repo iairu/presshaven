@@ -180,6 +180,11 @@ class PolicyConstantTests(unittest.TestCase):
         self.assertIn("dynamic pools", wp_update.POOL_LIMITATION.lower())
         self.assertTrue(wp_update.WHAT_UPDATES)
 
+    def test_dropin_note_names_the_db_router(self):
+        note = wp_update.DROPIN_NOTE.lower()
+        self.assertIn("db.php", note)
+        self.assertIn("preserved", note)
+
 
 if __name__ == "__main__":
     unittest.main()

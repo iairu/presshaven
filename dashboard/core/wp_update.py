@@ -86,6 +86,17 @@ POOL_LIMITATION = (
     "— they are not migrated live here." % STATIC_POOLS
 )
 
+# The db-proxy layer's wp-content/db.php drop-in is what binds each request to
+# the production or honeypot database; it must survive the upgrade. The update
+# script snapshots and restores it around the core/plugin file update (see
+# ids/scripts/update_wordpress.sh PRESERVE_FILES), so an upgrade can never drop
+# the router. Shown so the operator knows the two-database routing is kept.
+DROPIN_NOTE = (
+    "The database-router drop-in (wp-content/db.php) is snapshotted before the "
+    "upgrade and restored byte-for-byte afterwards, so the production/honeypot "
+    "database routing is always preserved."
+)
+
 
 @dataclass(frozen=True)
 class ComponentStatus:

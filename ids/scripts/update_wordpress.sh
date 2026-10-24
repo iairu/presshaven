@@ -82,6 +82,69 @@ if ! $WP core is-installed 2>/dev/null; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# PRESERVE_FILES -- custom files under wp-content that are NOT part of the
+# WordPress distribution and MUST survive a core update.
+#
+# wp-content/db.php is the db-proxy layer's database-router drop-in (see
+# production_eshop_files/wp-content/db.php): WordPress loads it before anything
+# else and it binds $wpdb to the production OR the honeypot database per the
+# proxy's X-Honeypot-Backend decision. Lose it and the whole single-eshop /
+# two-database honeynet topology silently collapses back to one database --
+# every request would hit production, including an attacker's.
+#
+# WordPress's own core updater already skips wp-content when it copies new
+# files (wp-admin/includes/update-core.php: $skip = array('wp-content', ...),
+# and it only ever READS db.php, for a MySQL-version compat check), so under
+# current WordPress these files are safe. snapshot_preserved/restore_preserved
+# make that a GUARANTEE independent of WordPress internals: we copy each file
+# aside before the update and, afterwards, restore it byte-for-byte if the
+# update removed or changed it. Space-separated, paths relative to
+# /var/www/html.
+#
+# Only applied on --apply (production): --apply-db-only touches no files, and
+# the pools' own copies arrive via init_setup's rsync from this very tree, so
+# restoring here is what keeps the pools correct too.
+PRESERVE_FILES="wp-content/db.php"
+PRESERVE_DIR=""
+
+snapshot_preserved() {
+    PRESERVE_DIR="$(mktemp -d 2>/dev/null || echo /tmp/wp_preserve_$$)"
+    mkdir -p "$PRESERVE_DIR"
+    for rel in $PRESERVE_FILES; do
+        if [ -f "/var/www/html/$rel" ]; then
+            mkdir -p "$PRESERVE_DIR/$(dirname "$rel")"
+            cp -p "/var/www/html/$rel" "$PRESERVE_DIR/$rel" \
+                && log "  Snapshotted drop-in before update: $rel"
+        else
+            log "  Note: $rel not present before update -- nothing to preserve."
+        fi
+    done
+}
+
+# Restore any preserved file the update dropped or altered. Returns 0 always:
+# a restore means the guarantee held, not that the update failed.
+restore_preserved() {
+    [ -n "$PRESERVE_DIR" ] || return 0
+    for rel in $PRESERVE_FILES; do
+        saved="$PRESERVE_DIR/$rel"
+        live="/var/www/html/$rel"
+        [ -f "$saved" ] || continue
+        if [ ! -f "$live" ]; then
+            log "  WARNING: the update removed $rel -- restoring the preserved drop-in."
+            mkdir -p "$(dirname "$live")"
+            cp -p "$saved" "$live"
+        elif ! cmp -s "$saved" "$live"; then
+            log "  WARNING: the update modified $rel -- restoring the preserved drop-in."
+            cp -p "$saved" "$live"
+        else
+            log "  Verified preserved (unchanged by the update): $rel"
+        fi
+    done
+    rm -rf "$PRESERVE_DIR"
+    PRESERVE_DIR=""
+}
+
 # Resolve the first administrator id once; WooCommerce's `wp wc update` wants a
 # user context. Best-effort -- an empty value just means we omit --user.
 admin_id() {
@@ -144,19 +207,28 @@ case "$MODE" in
 
     --apply)
         rc=0
+        # Snapshot the db-proxy drop-in (and any other custom wp-content file)
+        # before the update touches any files -- see PRESERVE_FILES.
+        snapshot_preserved
         log "Updating WordPress core files + database (production)..."
         if ! run_logged "core" $WP core update; then
             log "  ERROR: 'wp core update' failed (wordpress.org unreachable?)."
             rc=1
         fi
-        log "Running WordPress core DB migration..."
-        run_logged "core-db" $WP core update-db || rc=1
 
         log "Updating WooCommerce plugin files..."
         if ! run_logged "wc-plugin" $WP plugin update woocommerce; then
             log "  ERROR: 'wp plugin update woocommerce' failed (download.wordpress.org unreachable?)."
             rc=1
         fi
+
+        # All file-touching steps are done: guarantee the drop-ins survived
+        # BEFORE the DB migrations run (so db.php is intact for anything that
+        # loads WordPress thereafter).
+        restore_preserved
+
+        log "Running WordPress core DB migration..."
+        run_logged "core-db" $WP core update-db || rc=1
         log "Running WooCommerce DB migration..."
         wc_db_update || rc=1
 

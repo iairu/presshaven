@@ -589,6 +589,11 @@ services:
     volumes:
       - ./production_eshop_files:/var/www/html
       - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+      # On-demand WordPress core + WooCommerce upgrade (dashboard "WordPress
+      # Update" page). The --apply path snapshots + restores wp-content/db.php,
+      # which in THIS layer is the live database router, so an upgrade can never
+      # drop the drop-in -- see scripts/update_wordpress.sh PRESERVE_FILES.
+      - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
       - ./scripts/seed_elementor_pages.sh:/seed_elementor_pages.sh:ro
       # Storefront catalog/pages/journal (Fernhill Coffee Roasters) and its images.
       - ./scripts/seed_storefront_content.php:/seed_storefront_content.php:ro
