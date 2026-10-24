@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from core.container_status import classify, DOWN, EXITED_BAD, EXITED_OK, CREATED
+from core.container_status import STOPPED as C_STOPPED
 
 SHIPPER_SERVICE = "vector_outbound"
 AGGREGATOR_SERVICE = "vector_inbound"
@@ -103,7 +104,9 @@ def combine(shipping_enabled: bool, why_not: str, shipper: dict | None, logs: st
     if not shipping_enabled:
         return ShipperHealth(DISABLED, f"Log shipping is switched off: {why_not}.")
     status = classify(shipper)
-    if status in (DOWN, EXITED_BAD, EXITED_OK, CREATED):
+    # vector_outbound is long-running, so a clean exit now classifies as
+    # C_STOPPED rather than EXITED_OK -- both mean nothing is being shipped.
+    if status in (DOWN, EXITED_BAD, EXITED_OK, C_STOPPED, CREATED):
         return ShipperHealth(STOPPED, f"vector_outbound is {status.replace('_', ' ')}; nothing is being shipped.")
     return analyse_logs(logs)
 

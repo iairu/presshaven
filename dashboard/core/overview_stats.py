@@ -16,6 +16,10 @@ from core.colors import GREEN, GREY, ORANGE, RED
 from core.container_status import (
     classify, summarize, CREATED, DOWN, EXITED_BAD, EXITED_OK, HEALTHY, RUNNING, STARTING, UNHEALTHY,
 )
+# container_status also defines a container-level STOPPED (a long-running
+# service sitting at exited/0 -- off, though it should be up); imported under
+# an alias so it doesn't shadow this module's project-level STOPPED below.
+from core.container_status import STOPPED as C_STOPPED
 
 # Per-project operational states, worst-last.
 OFFLINE, STOPPED, STARTING_UP, OPERATIONAL, DEGRADED = (
@@ -87,6 +91,12 @@ def project_health(results: dict, project: str, label: str = "") -> ProjectHealt
     elif running == 0:
         # Containers exist but none have a live process (all exited/created).
         state = STOPPED
+    elif any(s == C_STOPPED for s in statuses):
+        # Some long-running services are off (exited/0) while others run --
+        # the stack is only partially up, so it is not operational. Run-once
+        # jobs that completed are EXITED_OK, not C_STOPPED, so a finished seed
+        # job alongside a running stack does NOT trip this.
+        state = DEGRADED
     elif any(s in (STARTING, CREATED) for s in statuses):
         state = STARTING_UP
     else:

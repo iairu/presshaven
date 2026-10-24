@@ -483,7 +483,7 @@ class HealthPage(QWidget):
             self.restart_progress.setVisible(False)
             return
         status = classify(container)
-        if status in ("unhealthy", "exited_bad"):
+        if status in ("unhealthy", "exited_bad", "stopped"):
             self.restart_progress.setFormat(f"Restarting… ({status})")
             self.restart_progress.setStyleSheet(_progress_chunk_css("#d9534f"))
 

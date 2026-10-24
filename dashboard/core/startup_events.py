@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import re
 
-from core.container_status import classify
+from core.container_status import classify, STOPPED
 from core.log_error_match import _ANSI_RE, _PREFIX_RE, is_error_log_line
 
 
@@ -187,6 +187,9 @@ def start_warnings(ps: list[dict], log_text: str, max_examples: int = 1) -> list
         state = classify(c)
         if state == "exited_bad":
             out.append((svc, f"exited with code {c.get('ExitCode')}"))
+        elif state == STOPPED:
+            # Clean exit, but a long-running service -- it is off, not "done".
+            out.append((svc, "exited (code 0) though it should stay running"))
         elif state == "created":
             out.append((svc, "created but never started"))
         elif state == "unhealthy":

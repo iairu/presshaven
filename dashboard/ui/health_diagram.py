@@ -72,6 +72,7 @@ STATUS_COLORS = {
     "running": QColor("#3f9fd9"),        # running, no healthcheck
     "unhealthy": QColor("#d9534f"),      # running but unhealthy
     "exited_ok": QColor("#7d7d7d"),      # exited, code 0 (expected one-shot)
+    "stopped": QColor("#c0732f"),        # exited, code 0, but a long-running service -- off
     "exited_bad": QColor("#c9302c"),     # exited, nonzero code
     "created": QColor("#e0a030"),        # created but never started (see classify())
     "down": QColor("#2b2b2b"),           # not present at all
@@ -84,6 +85,7 @@ STATUS_LABELS = {
     "running": "Up (no healthcheck)",
     "unhealthy": "Up, unhealthy",
     "exited_ok": "Exited OK (code 0)",
+    "stopped": "Stopped (should be running)",
     "exited_bad": "Exited with error",
     "created": "Created (never started)",
     "down": "Down / not created",

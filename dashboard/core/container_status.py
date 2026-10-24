@@ -10,13 +10,39 @@ from __future__ import annotations
 from core.colors import GREEN, GREY, ORANGE, RED
 
 # classify() results, in rough severity order.
-HEALTHY, STARTING, RUNNING, UNHEALTHY, EXITED_OK, EXITED_BAD, CREATED, DOWN = (
-    "healthy", "starting", "running", "unhealthy", "exited_ok", "exited_bad", "created", "down",
+HEALTHY, STARTING, RUNNING, UNHEALTHY, EXITED_OK, EXITED_BAD, STOPPED, CREATED, DOWN = (
+    "healthy", "starting", "running", "unhealthy", "exited_ok", "exited_bad", "stopped", "created", "down",
 )
+
+# Run-once ("one-shot") jobs: the services whose healthy terminal state IS a
+# clean exit -- they do their work and stop on purpose, and every service that
+# needs them waits on `condition: service_completed_successfully` (which is
+# exactly how this set is derived: grep the compose files for it). For any
+# service NOT listed here a clean exit means it is OFF, not "done" -- it is a
+# long-running service (database, web server, honeypot, proxy, log shipper,
+# ...) that is supposed to stay up. classify() reports those as STOPPED rather
+# than EXITED_OK so a stopped-but-required service never reads as "completed"
+# and is never counted toward "up". Keep in sync with the compose files:
+#   ids:  ids/docker-compose.yml, ids/docker-compose.db-proxy.yml
+#   siem: siem/docker/docker-compose.yml
+RUN_ONCE_SERVICES = frozenset({
+    "init_setup", "honeypot_db_migration", "production_db_seed",  # ids
+    "init-password", "kibana_dashboards_setup",                   # siem
+})
 
 
 def exit_code_ok(container: dict) -> bool:
     return str(container.get("ExitCode", "0")) in ("0", "")
+
+
+def is_run_once(container: dict | None) -> bool:
+    """True for a one-shot job whose clean exit is its finished state (see
+    RUN_ONCE_SERVICES). A record without a Service name is treated as
+    long-running -- the safe default, so an unexplained clean exit reads as
+    STOPPED (off) rather than silently counting as "done"."""
+    if not container:
+        return False
+    return container.get("Service", "") in RUN_ONCE_SERVICES
 
 
 def finished_ok(containers: list[dict]) -> list[dict]:
@@ -44,7 +70,12 @@ def classify(container: dict | None) -> str:
             return STARTING
         return RUNNING
     if state == "exited":
-        return EXITED_OK if exit_code_ok(container) else EXITED_BAD
+        if not exit_code_ok(container):
+            return EXITED_BAD
+        # A clean exit is the finished state of a one-shot job, but "off" for
+        # a long-running service that is supposed to stay up (see
+        # RUN_ONCE_SERVICES) -- the latter must not read as "completed".
+        return EXITED_OK if is_run_once(container) else STOPPED
     if state == "created":
         # `docker compose up` creates every container in the dependency
         # graph up front, then starts them in order -- if that process gets
@@ -67,7 +98,10 @@ def is_ready(container: dict | None) -> bool:
         return False
     state = container.get("State")
     if state == "exited":
-        return exit_code_ok(container)
+        # Only a one-shot job that exited cleanly is "done". A long-running
+        # service sitting at exited/0 is off, not ready -- a restart that
+        # lands it here hasn't actually brought it back up.
+        return exit_code_ok(container) and is_run_once(container)
     return state == "running" and container.get("Health", "") in ("", HEALTHY)
 
 
@@ -108,9 +142,12 @@ def summarize(containers: list[dict]) -> tuple[str, str]:
     Health=starting; neither gets alarming wording (an earlier "created but
     never started -- re-run Start" message was an alarming false positive
     during a normal in-progress Start), they simply don't count as up.
-    Run-once services (init_setup, migrations...) end in exited/0 -- their
-    successful terminal state -- so they count toward "up" rather than
-    leaving a healthy stack permanently at "N/total up"."""
+    Only genuine run-once jobs (init_setup, the migrations/seed jobs; see
+    RUN_ONCE_SERVICES) end in exited/0 as their successful terminal state, so
+    only they count toward "up" as "completed". A long-running service sitting
+    at exited/0 is OFF, not done (classify() -> STOPPED): it does NOT count as
+    up, so a mostly-stopped stack can never read "all N up" just because the
+    stopped containers happen to carry a clean exit code."""
     if not containers:
         return "not running / unreachable", GREY
 
@@ -124,10 +161,12 @@ def summarize(containers: list[dict]) -> tuple[str, str]:
     exited_bad = counts.get(EXITED_BAD, 0)
     exited_ok = counts.get(EXITED_OK, 0)
     starting = counts.get(STARTING, 0)
+    stopped = counts.get(STOPPED, 0)
     up = healthy + counts.get(RUNNING, 0) + unhealthy + exited_ok
 
     if unhealthy or exited_bad:
-        return f"{up}/{total} up ({unhealthy} unhealthy, {exited_bad} exited with error)", RED
+        extra = f", {stopped} stopped" if stopped else ""
+        return f"{up}/{total} up ({unhealthy} unhealthy, {exited_bad} exited with error{extra})", RED
     if up == total:
         details = []
         if healthy:
@@ -136,7 +175,12 @@ def summarize(containers: list[dict]) -> tuple[str, str]:
             details.append(f"{exited_ok} completed")
         detail = f" ({', '.join(details)})" if details else ""
         return f"all {total} up{detail}", GREEN
+    waiting = []
+    if starting:
+        waiting.append(f"{starting} starting")
+    if stopped:
+        waiting.append(f"{stopped} stopped")
+    detail = f" ({', '.join(waiting)})" if waiting else ""
     if up > 0:
-        waiting = f" ({starting} starting)" if starting else ""
-        return f"{up}/{total} up{waiting}", ORANGE
-    return f"0/{total} up", GREY
+        return f"{up}/{total} up{detail}", ORANGE
+    return f"0/{total} up{detail}", GREY
