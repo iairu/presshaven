@@ -178,9 +178,10 @@ const navigation = [
             <span class="home-hero__title-label">Knowledge Hub</span>
           </h1>
           <p class="home-hero__lead">
-            A high-interaction deception platform that <strong>scores every request in real time</strong> and
-            quietly diverts suspicious sessions into isolated honeypot clones. Real customers never notice;
-            attackers get a convincing shop while every move is recorded.
+            A high-interaction deception platform built around a <strong>WordPress + WooCommerce</strong> shop
+            as its target demo application. It <strong>scores every request in real time</strong> and quietly
+            diverts suspicious sessions into isolated honeypot clones. Real customers never notice; attackers
+            get a convincing storefront while every move is recorded.
           </p>
           <div class="home-cta">
             <a href="/docs/getting-started" class="btn-sheared">
@@ -197,6 +198,7 @@ const navigation = [
             </a>
           </div>
           <div class="home-chips">
+            <span><Icon name="box" class="w-3.5 h-3.5" /> WordPress + WooCommerce</span>
             <span><Icon name="shield" class="w-3.5 h-3.5" /> No tarpit</span>
             <span><Icon name="fingerprint" class="w-3.5 h-3.5" /> Session-bound</span>
             <span><Icon name="lock" class="w-3.5 h-3.5" /> GDPR aware</span>
@@ -326,14 +328,16 @@ const navigation = [
             A real storefront that quietly becomes a trap.
           </h2>
           <p>
-            The public shop is a full WordPress/WooCommerce storefront. In front of it sits an OpenResty
-            reverse proxy that scores every non-static request in Lua: URI and header patterns, seeded CVE
-            signatures, request rate, session history, network IDS alerts and IP reputation.
+            The target demo application is a full <strong>WordPress + WooCommerce</strong> storefront — a
+            coffee eshop with real products and carts — and both honeypot layers are built for and around it.
+            In front of it sits an OpenResty reverse proxy that scores every non-static request in Lua: URI and
+            header patterns, seeded WordPress and WooCommerce CVE signatures, request rate, session history,
+            network IDS alerts and IP reputation.
           </p>
           <p>
             Legitimate traffic continues to production. Once a session crosses the threshold it is bound to
-            its own honeypot pool — a complete clone of the shop — and stays there. Carts follow the session,
-            so the diversion is invisible and nothing about normal browsing changes.
+            its own honeypot pool — a complete clone of the WooCommerce shop — and stays there. Carts follow
+            the session, so the diversion is invisible and nothing about normal browsing changes.
           </p>
           <ul class="home-points">
             <li><Icon name="check" class="w-4 h-4" /><span><strong>Session-bound, not IP-bound.</strong> A signed cookie plus passive fingerprint recovery keeps the experience stable.</span></li>

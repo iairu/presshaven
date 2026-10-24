@@ -19,6 +19,13 @@ const toc = [
 <DocsLayout title="Honeypot Layers" description="Where the deception happens: separate decoy backends, or one eshop with a swapped database" section="Engine" sidebar={sidebar} toc={toc}>
   <h2 id="what">Two Layers of Deception</h2>
   <p>
+    Both layers protect the same target demo application: a <strong>WordPress + WooCommerce</strong>
+    storefront (a coffee eshop with real products and carts). The honeypot is built for and around that
+    shop — the reverse-proxy level clones the whole WooCommerce backend per session, and the database
+    level swaps only the WooCommerce database — so the deception is tuned to the same WordPress and
+    WooCommerce surface an attacker would actually probe.
+  </p>
+  <p>
     The <code>ids</code> stack can run its honeypot at one of two layers. Both are the same Compose
     project — same project name, same <code>.env</code>, same data — and differ only in which Compose
     file is used and, therefore, in <em>where</em> a suspicious session is diverted. You pick the layer
