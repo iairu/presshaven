@@ -70,7 +70,7 @@ const toc = [
 
   <h2 id="pipeline">Request Pipeline</h2>
   <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
-  → router.decide_route() (11 stages) → pool_router.get_or_assign_pool()
+  → router.decide_route() (12 stages) → pool_router.get_or_assign_pool()
   → session_handler.update_session() → Redis session_store
   → Suricata eve.json → init_worker.lua → threat_intel shared dict
   → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
@@ -78,11 +78,12 @@ const toc = [
   response — AbuseIPDB reporting, pool provisioning, content sync — is queued or handled by a worker.</p>
 
   <h3>Routing stages</h3>
-  <p>The eleven stages are ordered from cheapest and most certain to most heuristic. A static asset is
+  <p>The twelve stages are ordered from cheapest and most certain to most heuristic. A static asset is
   released immediately; a session already bound to a pool never has to be evaluated again for stickiness.</p>
   <table>
     <tr><th>Stage</th><th>Condition</th><th>Route</th><th>Reason</th></tr>
     <tr><td>1</td><td>Static asset</td><td>Production</td><td>No attack surface</td></tr>
+    <tr><td>1a</td><td>Consent-gated <code>gdpr_signature</code> match (returning honeypot visitor)</td><td>Honeypot</td><td>Known-bad browser re-consented</td></tr>
     <tr><td>1b</td><td>install.php on uninstalled WordPress</td><td>Production</td><td>Legitimate setup wizard</td></tr>
     <tr><td>2</td><td>Session already honeypot-bound</td><td>Honeypot</td><td>Sticky binding</td></tr>
     <tr><td>3</td><td>Risk score ≥ threshold</td><td>Honeypot</td><td>High risk</td></tr>

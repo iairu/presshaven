@@ -79,6 +79,7 @@ const toc = [
   <table>
     <tr><th>Stage</th><th>Condition</th><th>Route</th><th>Reason</th></tr>
     <tr><td>1</td><td>Static asset</td><td>Production</td><td>CSS/JS/images, no attack surface</td></tr>
+    <tr><td>1a</td><td>Consent-gated gdpr_signature match (returning honeypot visitor)</td><td>Honeypot</td><td>Known-bad browser re-consented</td></tr>
     <tr><td>1b</td><td>install.php on uninstalled WordPress</td><td>Production</td><td>Legitimate setup wizard</td></tr>
     <tr><td>2</td><td>Session already honeypot_bound</td><td>Honeypot</td><td>Sticky honeypot (same pool via Redis)</td></tr>
     <tr><td>3</td><td>Risk score >= honeypot_threshold</td><td>Honeypot</td><td>High risk (WSTG-INPV catch-all)</td></tr>

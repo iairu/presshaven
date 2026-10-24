@@ -29,7 +29,7 @@ const toc = [
   </p>
 
   <CardGrid columns={3}>
-    <DocCard title="14+ direct CVEs" icon="shieldAlert" tag="Lua patterns" description="WordPress plugin exploits matched against URI, arguments and required headers." meta="+40 per match" />
+    <DocCard title="13 direct CVEs" icon="shieldAlert" tag="Lua patterns" description="WordPress plugin exploits matched against URI, arguments and required headers." meta="+40 per match" />
     <DocCard title="Suricata evidence" icon="network" tag="Network layer" description="Severity 1 adds +50, severity 2 adds +25, everything else adds +10." meta="capped at 100" />
     <DocCard title="Report enrichment" icon="clipboard" tag="AbuseIPDB" description="Matched CVE names are appended to the report comment for the analyst on the other side." meta="6 reason types" />
   </CardGrid>
@@ -43,7 +43,6 @@ const toc = [
     <tr><td>CVE-2025-4403</td><td>CRITICAL</td><td>drag-and-drop-multiple-file-upload</td><td>file_upload_bypass</td><td>URI/args contain dnd_codedropz_upload AND supported_type</td></tr>
     <tr><td>CVE-2025-2266</td><td>CRITICAL</td><td>cwmp</td><td>privilege_escalation</td><td>URI/args contain cwmpupdateoptions</td></tr>
     <tr><td>CVE-2025-47577</td><td>CRITICAL</td><td>gift-voucher</td><td>file_upload_rce</td><td>URI/args contain mwb_wgm_preview_mail</td></tr>
-    <tr><td>CVE-2024-8425</td><td>CRITICAL</td><td>gift-voucher</td><td>file_upload_rce</td><td>URI/args contain mwb_wgm_preview_mail</td></tr>
     <tr><td>CVE-2024-2387</td><td>HIGH</td><td>advanced-form-integration</td><td>sql_injection</td><td>URI contains advanced-form-integration-log AND args contain integration_id with quote/union/select</td></tr>
     <tr><td>CVE-2025-10142</td><td>HIGH</td><td>pagseguro-connect-woocommerce</td><td>path_traversal</td><td>URI/args contain pc_added_uploaded_image AND file[path]</td></tr>
     <tr><td>CVE-2024-50508</td><td>HIGH</td><td>wp-file-upload</td><td>directory_traversal</td><td>URI/args contain file[path] AND (../ or /etc/)</td></tr>
@@ -53,6 +52,7 @@ const toc = [
     <tr><td>GENERIC-WP-004</td><td>MEDIUM</td><td>wordpress-core</td><td>xmlrpc_abuse</td><td>URI contains xmlrpc.php</td></tr>
   </table>
   <p>Additional CVE patterns in <code>_G.config.vulnerability.cve_patterns</code> (init.lua): CVE-2024-25600 (Bricks Builder RCE), CVE-2024-27956 (WP Automatic SQLi), CVE-2024-1071 (Ultimate Member SQLi), CVE-2022-0739 (BookingPress SQLi), CVE-2024-2879 (LayerSlider SQLi).</p>
+  <p><code>CVE-2024-8425</code> shares the same Gift Voucher upload pattern as <code>CVE-2025-47577</code> and is noted as an alias in code comments, but <code>vulnerability_rules.lua</code> only ever returns <code>CVE-2025-47577</code> for that match — it is not an independently-matched 14th CVE. The Suricata layer does detect it separately (see <a href="/docs/detection/suricata">Suricata Network IDS</a>, SID 1000010), since its signature matches on a distinct PHP-upload body pattern rather than the URI.</p>
 
   <h2 id="suricata">Suricata Alert-Based Detections</h2>
   <p>The system leverages Suricata alerts to detect potential exploits. When an alert is generated, it is processed via <code>suricata_rules.lua</code> and used to generate a descriptive reason string mapped to an AbuseIPDB category.</p>
@@ -89,6 +89,6 @@ const toc = [
   </ol>
 
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> 14+ seeded CVEs across multiple exploit vectors, severity-graded Suricata integration, AbuseIPDB reportability for 6 reason types.</p>
+  <p><strong>Strengths:</strong> 13 seeded CVEs across multiple exploit vectors, severity-graded Suricata integration, AbuseIPDB reportability for 6 reason types.</p>
   <p><strong>Limitations:</strong> Coverage limited to seeded CVEs (manual addition required), Suricata same-host testing gap, generic patterns may need tuning for new WordPress versions.</p>
 </DocsLayout>

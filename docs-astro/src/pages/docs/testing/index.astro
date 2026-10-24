@@ -34,7 +34,7 @@ const toc = [
 
   <h2 id="coverage-map">Coverage Map</h2>
   <CardGrid columns={3}>
-    <DocCard title="Pure rules" href="#unit" icon="code" tag="18 suites" description="Every *_rules.lua module has a matching test file covering positive matches, negatives and boundary values." meta="plain Lua" />
+    <DocCard title="Pure rules" href="#unit" icon="code" tag="23 suites" description="Every *_rules.lua module has a matching test file covering positive matches, negatives and boundary values." meta="plain Lua" />
     <DocCard title="Scenario scripts" href="#running" icon="terminal" tag="6 scenarios" description="WooCommerce, OWASP WSTG, WPScan, Metasploit, hardening verification and database password replacement." meta="bash" />
     <DocCard title="Dashboard" href="#dashboard" icon="chart" tag="4 test files" description="NDJSON integrity, host settings, overview statistics and learning-page validation." meta="unittest" />
     <DocCard title="Pool isolation" href="/docs/engine" icon="box" tag="Infrastructure" description="Verifies the 1:1 pool wiring and the live credential-level isolation between databases." meta="regression" />
@@ -63,6 +63,11 @@ const toc = [
     <tr><td>test_router_decide_route.lua</td><td>router.lua — routing decision pipeline</td></tr>
     <tr><td>test_gdpr_rules.lua</td><td>gdpr_rules.lua — timestamp, canonical chars, validation</td></tr>
     <tr><td>test_pool_assignment.lua</td><td>pool_router.lua — pool assignment lifecycle</td></tr>
+    <tr><td>test_sophistication_analyzer.lua</td><td>sophistication_analyzer.lua — scripted / AI-assisted / manual / unknown classification</td></tr>
+    <tr><td>test_threat_intel.lua</td><td>threat_intel.lua — threat-intel lookups and scoring</td></tr>
+    <tr><td>test_shared_ip_rules.lua</td><td>shared_ip_rules.lua — shared/CGNAT reputation isolation per session</td></tr>
+    <tr><td>test_no_tarpit.lua</td><td>repo-wide scan — no request-path code may sleep (tarpit removal regression)</td></tr>
+    <tr><td>test_suspicious_patterns.lua</td><td>pattern_rules.lua — generic SUSPICIOUS_PATTERNS list, false-positive regression</td></tr>
   </table>
 
   <h2 id="dashboard">Dashboard Tests</h2>
@@ -132,6 +137,6 @@ bash testing/scenario_*.sh</code></pre>
   </div>
 
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> Pure/adapter split enables 18 unit test files. Comprehensive coverage of all pure modules. Dashboard validation catches NDJSON drift. Segmentation and exploit runs turn a live stack into reproducible, statistics-backed evidence on both deception layers.</p>
-  <p><strong>Limitations:</strong> No end-to-end integration tests. Blind pentest requires manual setup. No CI/CD integration. Sophistication classifier and honeytoken handler lack dedicated tests.</p>
+  <p><strong>Strengths:</strong> Pure/adapter split enables 23 unit test files. Comprehensive coverage of all pure modules. Dashboard validation catches NDJSON drift. Segmentation and exploit runs turn a live stack into reproducible, statistics-backed evidence on both deception layers.</p>
+  <p><strong>Limitations:</strong> No end-to-end integration tests. Blind pentest requires manual setup. No CI/CD integration.</p>
 </DocsLayout>

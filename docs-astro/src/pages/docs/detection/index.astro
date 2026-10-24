@@ -38,7 +38,7 @@ const toc = [
     <li><strong>Lua Pattern Matching</strong> — <code>pattern_rules.lua</code> and <code>vulnerability_rules.lua</code> match request URIs, headers, and arguments against seeded CVE exploit patterns.</li>
     <li><strong>Suricata Correlation</strong> — <code>suricata_rules.lua</code> parses <code>eve.json</code> alerts into structured records and converts them into risk-score deltas.</li>
     <li><strong>Risk Scoring</strong> — <code>pattern_analyzer.lua</code> accumulates scores; <code>router.lua</code> accumulates onto a decaying session base.</li>
-    <li><strong>Routing Decision</strong> — <code>router.lua</code>'s 11-stage decision pipeline diverts high-risk requests to isolated honeypot pool instances.</li>
+    <li><strong>Routing Decision</strong> — <code>router.lua</code>'s 12-stage decision pipeline diverts high-risk requests to isolated honeypot pool instances.</li>
     <li><strong>Reporting</strong> — <code>abuseipdb_rules.lua</code> gates external AbuseIPDB reporting and enriches comments with matched CVEs.</li>
   </ol>
 
@@ -58,7 +58,7 @@ const toc = [
       icon="shieldAlert"
       tag="What is seeded"
       description="The explicitly matched WordPress plugin CVEs, the Suricata alert path and the AbuseIPDB reason-to-category mapping."
-      meta="14+ CVEs · 6 reason types"
+      meta="13 CVEs · 6 reason types"
     />
     <DocCard
       title="Suricata Network IDS"
@@ -151,6 +151,6 @@ const toc = [
   </ul>
 
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> Multi-layered detection (11+ stages), explainable scoring, severity-graded Suricata integration, decay system prevents permanent poisoning, NAT protection, sophistication classification.</p>
+  <p><strong>Strengths:</strong> Multi-layered detection (12 routing stages), explainable scoring, severity-graded Suricata integration, decay system prevents permanent poisoning, NAT protection, sophistication classification.</p>
   <p><strong>Limitations:</strong> Same-host Suricata testing gap (unverified against genuine external traffic), threshold tuning needed for legitimate API clients, generic pattern false positives (historical), decay complexity (4 tunable params), honeytoken coverage (only 5 types), no ML, Suricata rule maintenance (70+ SIDs).</p>
 </DocsLayout>

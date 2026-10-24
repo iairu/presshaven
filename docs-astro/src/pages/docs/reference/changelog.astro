@@ -20,7 +20,7 @@ const toc = [
 <DocsLayout title="Changelog" description="History of changes to the system" section="Reference" sidebar={sidebar} toc={toc}>
   <CardGrid columns={3}>
     <DocCard title="Detection" href="#historical" icon="radar" tag="Pipeline" description="Pure module extraction, eve.json migration, shared decay policy and sophistication classification." meta="Rules" />
-    <DocCard title="Routing & pooling" href="#historical" icon="route" tag="Edge" description="Eleven-stage decision pipeline, atomic pool assignment, score accumulation and escalation-aware decay." meta="Sessions" />
+    <DocCard title="Routing & pooling" href="#historical" icon="route" tag="Edge" description="Twelve-stage decision pipeline, atomic pool assignment, score accumulation and escalation-aware decay." meta="Sessions" />
     <DocCard title="Security fixes" href="#historical" icon="shield" tag="Fixes" description="Header gating, plugin slug escaping, ngx.null handling, empty-array encoding and private-IP filtering." meta="Hardening" />
   </CardGrid>
 
@@ -58,7 +58,7 @@ const toc = [
   </ul>
   <h3>Routing & Pooling</h3>
   <ul>
-    <li>router.lua decision pipeline with 11 stages.</li>
+    <li>router.lua decision pipeline with 12 stages.</li>
     <li>pool_router.lua implemented with exclusive assignment, spare provisioning, scale-up, reuse at resource limit.</li>
     <li>Score accumulation added (fixing session score laundering bug).</li>
     <li>Decay system added with offense-scaled half-life and permaflag thresholds.</li>
