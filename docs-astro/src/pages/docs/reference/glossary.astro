@@ -51,7 +51,7 @@ const toc = [
     <tr><td>GDPR Signature</td><td>Consent-gated, privacy-preserving one-way hash of browser characteristics (plus the server-observed IP) used as a second identifier that survives a cookie and storage wipe. See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</td></tr>
     <tr><td>Sophistication Class</td><td>Weighted classification of a session as <code>scripted</code>, <code>ai_assisted</code>, <code>manual</code> or <code>unknown</code>, produced by <code>sophistication_analyzer.lua</code> with a confidence margin.</td></tr>
     <tr><td><code>eve.json</code></td><td>Suricata's structured JSON event log; parsed by <code>suricata_rules.lua</code> into alert records and severity-graded score deltas (replaced the older <code>fast.log</code> regex path).</td></tr>
-    <tr><td>Prompt-Injection Probe</td><td>Stage-7 check (<code>prompt_injection_filter.lua</code>) that scores attempts to manipulate an LLM-backed consumer of the logs; contributes <code>filter risk / 2</code> to the request score.</td></tr>
+    <tr><td>Prompt-Injection Probe</td><td>A check (<code>prompt_injection_filter.lua</code>) that scores attempts to manipulate an LLM-backed consumer of the logs; contributes <code>filter risk / 2</code> to the request score. Run as the 7th scoring signal inside <code>pattern_analyzer.lua</code> — a separate, internal numbering from the <a href="/docs/architecture#pipeline">routing pipeline's</a> own Stage 7.</td></tr>
   </table>
 
   <h2 id="architecture">Architecture Terms</h2>

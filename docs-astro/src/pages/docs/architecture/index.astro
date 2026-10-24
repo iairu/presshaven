@@ -57,7 +57,7 @@ const toc = [
       href="#state"
       icon="database"
       tag="Redis"
-      description="Session blobs, risk scores, routing decisions and pool assignments, with worker-local caches for hot paths."
+      description="Session blobs, risk scores, routing decisions and pool assignments, with shared-dict caches for hot paths."
     />
     <DocCard
       title="Telemetry"
@@ -98,10 +98,11 @@ const toc = [
   </table>
 
   <h2 id="modules">Lua Modules</h2>
-  <p>The system uses 16 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
+  <p>The system uses 17 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
   <table>
     <tr><th>Pure Module</th><th>Adapter</th><th>Purpose</th></tr>
     <tr><td>pattern_rules.lua</td><td>pattern_analyzer.lua</td><td>URI/header/CVE pattern scoring</td></tr>
+    <tr><td>prompt_injection_filter.lua</td><td>pattern_analyzer.lua</td><td>LLM prompt-injection pattern probe</td></tr>
     <tr><td>vulnerability_rules.lua</td><td>vulnerability_handler.lua</td><td>CVE/exploit-kit pattern matching</td></tr>
     <tr><td>suricata_rules.lua</td><td>init_worker.lua</td><td>eve.json alert parsing/scoring</td></tr>
     <tr><td>abuseipdb_rules.lua</td><td>abuseipdb_client.lua</td><td>Report eligibility logic</td></tr>
@@ -132,8 +133,9 @@ const toc = [
 
   <h2 id="state">State and Failure Modes</h2>
   <p>Redis holds the state that makes sessions sticky: session blobs, accumulated risk, offense counters and
-  pool assignments. Nginx also keeps 10 MB worker-local shared dictionaries for sessions and threat
-  intelligence, so hot paths avoid a round-trip when possible.</p>
+  pool assignments. Nginx also keeps 10 MB shared dictionaries for sessions and threat intelligence —
+  shared across all worker processes of the Nginx instance, not per-worker — so hot paths avoid a
+  round-trip when possible.</p>
   <ul>
     <li><strong>Redis unavailable.</strong> Session stickiness degrades; the router must prefer a safe production fallback rather than blocking the shop.</li>
     <li><strong>Pool unhealthy.</strong> The router falls back to the next healthy pool without changing the stored assignment.</li>

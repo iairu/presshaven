@@ -35,7 +35,7 @@ const toc = [
   and unit-test under a plain Lua interpreter; a thin adapter half (<code>router.lua</code>,
   <code>pattern_analyzer.lua</code>, the <code>*_handler.lua</code> modules) performs the I/O — reading the request,
   Redis and <code>eve.json</code>, writing the decision trace — and delegates every judgement to a pure module.</p>
-  <p>This is why the pipeline is testable: every one of the sixteen pure modules below ships with a matching
+  <p>This is why the pipeline is testable: every one of the seventeen pure modules below ships with a matching
   <code>test_*.lua</code> suite that exercises it without a running Nginx. Where a behaviour is described elsewhere
   on this site, that page links to the exact module responsible for it.</p>
 
@@ -43,6 +43,7 @@ const toc = [
   <table>
     <tr><th>Module</th><th>Purpose</th></tr>
     <tr><td>pattern_rules.lua</td><td>URI/header/CVE pattern scoring</td></tr>
+    <tr><td>prompt_injection_filter.lua</td><td>LLM prompt-injection pattern probe</td></tr>
     <tr><td>vulnerability_rules.lua</td><td>CVE/exploit-kit pattern matching</td></tr>
     <tr><td>suricata_rules.lua</td><td>eve.json alert parsing/scoring</td></tr>
     <tr><td>abuseipdb_rules.lua</td><td>Report eligibility logic</td></tr>

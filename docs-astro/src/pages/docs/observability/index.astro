@@ -74,7 +74,7 @@ const toc = [
   <h3>Shared Dictionaries</h3>
   <table>
     <tr><th>Dictionary</th><th>Size</th><th>Purpose</th></tr>
-    <tr><td>sessions</td><td>10 MB</td><td>Worker-local cache of session JSON blobs. Reduces Redis round-trips on hot paths.</td></tr>
+    <tr><td>sessions</td><td>10 MB</td><td>Shared cache (across all worker processes) of session JSON blobs. Reduces Redis round-trips on hot paths.</td></tr>
     <tr><td>threat_intel</td><td>10 MB</td><td>Threat-intelligence data: flagged IPs, flagged user-agents, and backend health-check results.</td></tr>
     <tr><td>rate_limit</td><td>10 MB</td><td>Per-IP request-rate counters for botnet detection.</td></tr>
     <tr><td>honeypot_routes</td><td>1 MB</td><td>Per-IP pool assignments cached locally for 5 min.</td></tr>
