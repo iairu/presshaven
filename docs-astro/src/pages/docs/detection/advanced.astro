@@ -84,7 +84,7 @@ const toc = [
   <h2 id="decay">Escalation-Aware Decay (decay_policy.lua)</h2>
   <p>Shared by two risk-score decay paths: <code>router_rules.decayed_score()</code> (per-session) and <code>suricata_rules.decayed_score()</code> (per-IP reputation).</p>
   <ul>
-    <li>Each offense multiplies the half-life by (1 + <code>decay_offense_slowdown</code>), so repeat offenders fade progressively more slowly.</li>
+    <li>The half-life multiplier grows linearly with offenses: <code>1 + decay_offense_slowdown × offenses</code>, so repeat offenders fade progressively more slowly.</li>
     <li>Past <code>permaflag_offenses</code> offenses, OR once the stored peak has ever reached <code>permaflag_score</code>, decay stops entirely (permaflag).</li>
     <li>Default: <code>decay_offense_slowdown = 0.75</code>, <code>permaflag_offenses = 5</code>, <code>permaflag_score = 100</code>.</li>
   </ul>
@@ -93,8 +93,9 @@ const toc = [
     <p>The configured half-life is 300&nbsp;s, but a recorded exploit test-scenario run measured the effective
     half-life at <strong>529&nbsp;s</strong> (95% CI 475–596&nbsp;s, exponential fit R²&nbsp;=&nbsp;0.99) — well
     outside the configured value. That is the escalation-aware slowdown working as designed: each prior offense
-    multiplies the half-life, so a session that has already misbehaved fades more slowly than the base constant
-    suggests. The decay the router applies is the curve the measurement tracks, not the raw 300&nbsp;s.</p>
+    adds linearly to the half-life multiplier, so a session that has already misbehaved fades more slowly than
+    the base constant suggests. The decay the router applies is the curve the measurement tracks, not the raw
+    300&nbsp;s.</p>
   </div>
   <p><strong>Relevance:</strong> Ensures that only high-confidence, logic-driven signals (combining CVEs, Suricata alerts, and IP reputation hits) lead to external reporting.</p>
 </DocsLayout>

@@ -63,10 +63,10 @@ const toc = [
   <h2 id="modules">Dashboard Python Module Reference</h2>
   <table>
     <tr><th>Module</th><th>Purpose</th><th>Key Functions</th></tr>
-    <tr><td>build_dashboards.py</td><td>Generates dashboard objects and visualizations into NDJSON</td><td>_dashboard(), dashboard registration</td></tr>
-    <tr><td>export_dashboards.py</td><td>Exports live dashboard objects from Kibana to local NDJSON</td><td>Export by dashboard ID list</td></tr>
-    <tr><td>kibana_timeline.py</td><td>Defines structure and payload for request timeline visualization</td><td>DASHBOARD_ID, _dashboard_body(), NDJSON generation</td></tr>
-    <tr><td>kibana_timeline_capture.py</td><td>Client-side workflow for live dashboard capture</td><td>Autologin, Kibana API import, embed-mode loading, screenshot capture</td></tr>
+    <tr><td><code>siem/kibana/build_dashboards.py</code></td><td>Generates dashboard objects and visualizations into NDJSON</td><td>_dashboard(), dashboard registration</td></tr>
+    <tr><td><code>siem/kibana/export_dashboards.py</code></td><td>Exports live dashboard objects from Kibana to local NDJSON</td><td>Export by dashboard ID list</td></tr>
+    <tr><td><code>dashboard/core/kibana_timeline.py</code></td><td>Defines structure and payload for request timeline visualization</td><td>DASHBOARD_ID, _dashboard_body(), NDJSON generation</td></tr>
+    <tr><td><code>dashboard/ui/kibana_timeline_capture.py</code></td><td>Client-side workflow for live dashboard capture</td><td>Autologin, Kibana API import, embed-mode loading, screenshot capture</td></tr>
   </table>
 
   <h2 id="honest">Honest Assessment</h2>
