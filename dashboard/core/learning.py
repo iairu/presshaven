@@ -452,6 +452,13 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Export the Pattern / CVE matrix as a study sheet.",
         "The matrix lists every preset with its CVE and severity in one table.",
     ),
+    "wp_studio": PageGuide(
+        "Edit the real WordPress + WooCommerce shop in wp-admin, then push pages, posts, products and safe settings to every honeypot pool at once.",
+        "Change a product price or the store address, save, then press “Propagate to honeypot pools” and watch the progress bar fan it out.",
+        "Deception only holds if the decoys match production: an attacker who spots a stale catalog or a different price knows they have been moved. "
+        "The sync copies content and presentational settings but never user accounts, orders, or secrets (API keys, passwords, payment config) -- "
+        "those stay in production so a compromised honeypot leaks nothing of value.",
+    ),
     "settings": PageGuide(
         "Target connectors (local or SSH), stack configuration, detection policy values and console preferences.",
         "Open the edge .env and find SCORE_DECAY_HALF_LIFE_SECONDS and THREAT_DECAY_ENABLED.",

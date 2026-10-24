@@ -174,6 +174,43 @@ prod_mysqldump() {
 }
 
 # ---------------------------------------------------------------------------
+# Site & WooCommerce SETTINGS replicated alongside content (wp_options).
+#
+# So that an operator editing the real shop (store address, currency, tax &
+# catalog display, theme customizer) sees those changes in every honeypot pool
+# too -- not just pages/posts/products -- a curated set of presentational
+# option rows is mirrored as well. This is an ALLOW-LIST, not "everything
+# except": only the exact option_names below (plus theme_mods_*) are ever
+# copied. A payment gateway's own settings row (woocommerce_stripe_settings,
+# woocommerce_bacs_settings, ...) holds live API keys / bank details and is
+# deliberately NOT listed, so it never reaches a honeypot.
+#
+# SETTINGS_DENY_RE is defence-in-depth on top of the explicit list: even if a
+# listed name ever began carrying a secret, any option_name matching
+# api/key/secret/token/salt/password/smtp/stripe/paypal/license/_transient etc.
+# is dropped. wp_users/wp_usermeta and every order/customer/payment table stay
+# excluded exactly as before -- they are never dumped at all.
+SETTINGS_ALLOW="option_name IN (\
+'blogname','blogdescription','show_on_front','page_on_front','page_for_posts',\
+'posts_per_page','date_format','time_format','start_of_week','timezone_string',\
+'template','stylesheet',\
+'woocommerce_demo_store','woocommerce_demo_store_notice',\
+'woocommerce_currency','woocommerce_currency_pos','woocommerce_price_thousand_sep',\
+'woocommerce_price_decimal_sep','woocommerce_price_num_decimals',\
+'woocommerce_weight_unit','woocommerce_dimension_unit',\
+'woocommerce_store_address','woocommerce_store_address_2','woocommerce_store_city',\
+'woocommerce_store_postcode','woocommerce_default_country',\
+'woocommerce_shop_page_id','woocommerce_cart_page_id','woocommerce_checkout_page_id',\
+'woocommerce_myaccount_page_id','woocommerce_terms_page_id',\
+'woocommerce_catalog_columns','woocommerce_catalog_rows',\
+'woocommerce_enable_reviews','woocommerce_shop_page_display','woocommerce_category_archive_display',\
+'woocommerce_calc_taxes','woocommerce_prices_include_tax','woocommerce_tax_based_on',\
+'woocommerce_default_customer_address','woocommerce_tax_display_shop',\
+'woocommerce_tax_display_cart','woocommerce_tax_total_display') \
+OR option_name LIKE 'theme_mods_%'"
+SETTINGS_DENY_RE='(secret|token|api[_-]?key|_key$|passwd|password|salt|nonce|_auth|smtp|mailserver|stripe|paypal|ppcp|_gateway|payment|_license|client_id|client_secret|access_token|refresh_token|private|_transient)'
+
+# ---------------------------------------------------------------------------
 # build_sync_sql: read production's current content ID set once, dump it,
 # and write one complete apply script (delete-scoped + fresh inserts) to
 # $WORKDIR/content_sync.sql. Re-used unmodified across all three pools, since
@@ -239,6 +276,15 @@ build_sync_sql() {
     # Small reference tables: full add/update-only refresh, no prior DELETE
     # (mirrors init_setup's sync_files() non-destructive philosophy).
     prod_mysqldump --replace "$MYSQL_DATABASE" wp_terms wp_term_taxonomy >> "$sql_file" || return 2
+
+    # Settings (wp_options): allow-listed presentational rows only, with the
+    # defensive denylist on top. REPLACE INTO without a prior DELETE -- the
+    # option_name column is UNIQUE, so each row updates in place and a pool's
+    # own honeypot-only options are never removed (same non-destructive apply
+    # as wp_terms above). See SETTINGS_ALLOW / SETTINGS_DENY_RE above.
+    prod_mysqldump --replace \
+        --where="($SETTINGS_ALLOW) AND option_name NOT REGEXP '$SETTINGS_DENY_RE'" \
+        "$MYSQL_DATABASE" wp_options >> "$sql_file" || return 2
 
     {
         echo "COMMIT;"

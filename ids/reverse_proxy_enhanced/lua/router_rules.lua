@@ -164,6 +164,38 @@ function _M.is_admin_access(uri)
 end
 
 -- ---------------------------------------------------------------------------
+-- is_studio_passthrough(configured_secret, header_secret, header_backend)
+--
+-- True only for a dashboard "WordPress Studio" request: one that presents the
+-- internal-test shared secret AND asks (X-Studio-Backend: production) to be
+-- force-routed to production. The nginx access phase uses this to send the
+-- embedded wp-admin panel straight to production and skip scoring/routing, so
+-- an operator editing content/settings is never diverted into a honeypot
+-- mid-edit (the /wp-admin/* count path would otherwise divert after ~3 hits)
+-- and never poisons their own IP's reputation.
+--
+-- Fail-closed, exactly like the X-Route-Target debug headers and
+-- /internal-threat-reset: if no secret is configured, or the presented secret
+-- does not match, or the backend header is not "production", it returns false
+-- and the request is scored normally. No external client that lacks the secret
+-- can reach production this way. Pure (no ngx.*) so it is testable standalone.
+--
+-- @param configured_secret string|nil  _G.config.internal_test_secret
+-- @param header_secret      string|nil  X-Internal-Test-Auth request header
+-- @param header_backend     string|nil  X-Studio-Backend request header
+-- @return boolean
+-- ---------------------------------------------------------------------------
+function _M.is_studio_passthrough(configured_secret, header_secret, header_backend)
+    if not configured_secret or configured_secret == "" then
+        return false
+    end
+    if header_secret ~= configured_secret then
+        return false
+    end
+    return header_backend == "production"
+end
+
+-- ---------------------------------------------------------------------------
 -- is_rapid_automation(session_data, pattern_result, current_time)
 --
 -- @param session_data  table|nil

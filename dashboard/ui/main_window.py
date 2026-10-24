@@ -37,6 +37,7 @@ from ui.nav_overflow import (
 from ui.page_backups import BackupsPage
 from ui.page_certs import CertsPage
 from ui.page_patterns import PatternsPage
+from ui.page_wp_studio import WpStudioPage
 from ui.page_pattern_database import PatternDatabasePage
 from ui.page_signature_sim import SignatureSimPage
 from ui.page_detection import DetectionPage
@@ -78,7 +79,7 @@ _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
     "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
-    "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "settings", "learn",
+    "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "wp_studio", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
@@ -101,6 +102,7 @@ PAGE_LABELS = {
     "pool_test": "Segmentation Validation",
     "log_search": "Forensics Analysis",
     "extras": "Reporting",
+    "wp_studio": "WordPress Studio",
     "settings": "Connectors & Config",
     "learn": "Knowledge Base",
 }
@@ -117,7 +119,7 @@ NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "kibana", "pipeline", "resources", "log_search"]),
     ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
-    ("Manage", ["services", "settings", "certificates", "backups"]),
+    ("Manage", ["services", "wp_studio", "settings", "certificates", "backups"]),
     ("Reporting", ["learn", "extras"]),
 ]
 
@@ -320,6 +322,7 @@ class MainWindow(QMainWindow):
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
         self.extras_page.open_page_requested.connect(self._open_page)
+        self.wp_studio_page = WpStudioPage(state)
         self.settings_page = SettingsPage(state, self._on_remote_settings_changed, self.set_poll_interval,
                                       on_test_alert=self._test_alert)
         self.learn_page = LearnPage(state, PAGE_LABELS)
@@ -346,6 +349,7 @@ class MainWindow(QMainWindow):
             ("pool_test", self.pool_test_page),
             ("log_search", self.log_search_page),
             ("extras", self.extras_page),
+            ("wp_studio", self.wp_studio_page),
             ("settings", self.settings_page),
             ("learn", self.learn_page),
         ]:
@@ -369,6 +373,7 @@ class MainWindow(QMainWindow):
         # instead of running `docker compose ps` on the GUI thread.
         self.health_page.refresh_requested.connect(self.poller.poll_now)
         self.patterns_page.refresh_requested.connect(self.poller.poll_now)
+        self.wp_studio_page.refresh_requested.connect(self.poller.poll_now)
         self.poller.start()
 
         # Previous poll's classified status per (target_key, service), used

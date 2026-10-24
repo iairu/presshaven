@@ -209,5 +209,24 @@ do
     check("nil inputs are tolerated", rules.decision_trace(nil, nil, nil, nil, nil, nil).uri_class == "safe")
 end
 
+print("== is_studio_passthrough() ==")
+do
+    local S = "sekret-value"
+    check("secret presented + production backend -> true",
+          rules.is_studio_passthrough(S, S, "production") == true)
+    check("wrong presented secret -> false",
+          rules.is_studio_passthrough(S, "nope", "production") == false)
+    check("no presented secret -> false",
+          rules.is_studio_passthrough(S, nil, "production") == false)
+    check("no configured secret (fail-closed) -> false",
+          rules.is_studio_passthrough(nil, S, "production") == false)
+    check("empty configured secret (fail-closed) -> false",
+          rules.is_studio_passthrough("", "", "production") == false)
+    check("correct secret but backend not production -> false",
+          rules.is_studio_passthrough(S, S, "honeypot") == false)
+    check("correct secret but missing backend header -> false",
+          rules.is_studio_passthrough(S, S, nil) == false)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 os.exit(failed == 0 and 0 or 1)
