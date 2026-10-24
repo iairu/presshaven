@@ -40,14 +40,15 @@ from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEngineScript
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtNetwork import QNetworkCookie
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
+    QCheckBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
     QProgressBar, QPushButton, QSpinBox, QSplitter, QVBoxLayout, QWidget,
 )
 
 from core import honeypot_layer, redis_inspect
 from core.docker_ctl import target_for
-from core.patterns import PATTERN_PRESETS, GDPR_RESTORE_PRESET, is_gdpr_restore
+from core.patterns import PATTERN_PRESETS, GDPR_RESTORE_PRESET, group_presets, is_gdpr_restore
 from core.pattern_registry import active_presets
+from ui.pattern_picker import PatternPickerButton
 from core import pool_evidence
 from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
@@ -347,7 +348,6 @@ class PoolTestPage(QWidget):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
-        self._presets: list = []     # see _fill_presets
         # The honeypot layer a report run started on (the Workloads page can
         # switch it meanwhile; the run keeps the one it measured).
         self._layer_db = honeypot_layer.is_database()
@@ -379,14 +379,24 @@ class PoolTestPage(QWidget):
             "straight away and show the round-robin borrowing while pools are still being "
             "built.")
         bar.addWidget(labeled("of which wait for pools:", self.delayed_spin))
-        self.preset_combo = QComboBox()
-        self._fill_presets()
+        # A searchable, grouped checkbox popup capped at half the window instead
+        # of a 20-row dropdown (see PatternPickerButton). The checked set is
+        # what "Attack from all" spreads across the windows (one attack per
+        # window, round-robin -- a segmentation test with varied traffic); the
+        # highlighted row is the single-window / GDPR-report target.
+        # Registry-disabled patterns never appear.
+        self.preset_combo = PatternPickerButton(mode="multi")
         self.preset_combo.setMinimumWidth(320)
+        self._fill_presets()
         bar.addWidget(labeled("Pattern:", self.preset_combo))
         self.open_all_btn = QPushButton("Open shop in all")
         self.open_all_btn.clicked.connect(self.open_all)
         bar.addWidget(self.open_all_btn)
         self.attack_all_btn = QPushButton("Attack from all")
+        self.attack_all_btn.setToolTip(
+            "Each window opens one of the CHECKED patterns (spread round-robin, so "
+            "different windows hit different attacks); with none checked, every "
+            "window opens the highlighted one.")
         self.attack_all_btn.clicked.connect(self.attack_all)
         bar.addWidget(self.attack_all_btn)
         self.reset_btn = QPushButton("New sessions")
@@ -543,18 +553,18 @@ class PoolTestPage(QWidget):
         """The GET patterns a window can open by hand (the same in both
         layers; a report run on the database layer picks which reach the
         honeypot database, see core.pool_test_report.window_plan)."""
-        self._presets = [p for p in active_presets() if p.method.upper() == "GET"]
-        # Plus the GDPR-signature demonstration: selecting it keeps the per-window
-        # attacks (chosen by window_plan) but makes the run force the "clear all
-        # site data" tamper on, so at least one diverted window clears and
-        # re-consents -- and the exported report documents how its gdpr_signature
-        # restored it (see export_report / signature_restorations()).
-        self._presets.append(GDPR_RESTORE_PRESET)
-        self.preset_combo.blockSignals(True)
-        self.preset_combo.clear()
-        for p in self._presets:
-            self.preset_combo.addItem(f"{p.cve} — {p.name}")
-        self.preset_combo.blockSignals(False)
+        get_presets = [p for p in active_presets() if p.method.upper() == "GET"]
+        # Plus the GDPR-signature demonstration: highlighting it leaves the
+        # per-window attacks as they are (the checked set, or window_plan when
+        # nothing is checked -- see _attack_plan) but makes the report force the
+        # "clear all site data" tamper on, so at least one diverted window clears
+        # and re-consents -- and the report documents how its gdpr_signature
+        # restored it (see export_report / signature_restorations()). It is a
+        # report toggle, not a spreadable attack, so it is batch-excluded
+        # (highlight-only, no checkbox).
+        groups = list(group_presets(get_presets, "", "", ""))
+        groups.append(("GDPR signature", [GDPR_RESTORE_PRESET]))
+        self.preset_combo.set_groups(groups, batch_excluded=[GDPR_RESTORE_PRESET])
 
     def set_honeypot_layer(self) -> None:
         """The Workloads page switched the honeypot layer (only the intro and a
@@ -667,8 +677,7 @@ class PoolTestPage(QWidget):
         return _default_eshop_url(self.state).rstrip("/")
 
     def _preset(self):
-        i = self.preset_combo.currentIndex()
-        return self._presets[i] if 0 <= i < len(self._presets) else None
+        return self.preset_combo.current_preset()
 
     def open_all(self) -> None:
         for browser in self.browsers:
@@ -680,8 +689,18 @@ class PoolTestPage(QWidget):
             self.browsers[index].navigate(self._base_url() + preset.path)
 
     def attack_all(self) -> None:
+        # Spread the checked patterns across the windows (one each, round-robin)
+        # so a segmentation run can carry varied attack traffic; with nothing
+        # checked, fall back to the highlighted pattern in every window.
+        presets = self.preset_combo.checked_presets()
+        if not presets:
+            current = self._preset()
+            presets = [current] if current is not None else []
+        if not presets:
+            return
+        base = self._base_url()
         for i in range(len(self.browsers)):
-            self.attack(i)
+            self.browsers[i].navigate(base + presets[i % len(presets)].path)
 
     def _on_cookie(self, index: int, cookie) -> None:
         name = bytes(cookie.name()).decode(errors="replace")
@@ -1258,13 +1277,34 @@ class PoolTestPage(QWidget):
         cookie.setSecure(url.scheme() == "https")
         self._all_browsers[index].profile.cookieStore().setCookie(cookie, url)
 
+    def _attack_plan(self) -> list[tuple[str, str]]:
+        """The per-window (first, second) CVE pair the report run attacks with.
+
+        When the operator has CHECKED patterns in the picker, those drive the
+        windows: each window gets a pair from the checked set, spread so
+        adjacent windows differ (round-robin, second != first where possible).
+        With nothing checked, the pre-tuned window_plan() battery is used
+        instead -- its db-layer isolated / non-isolated split and its
+        first-request-divert choices. Either way _pattern_queue appends the
+        fallbacks, so a window whose chosen pattern never diverts still lands
+        on one that does."""
+        checked = [p.cve for p in self.preset_combo.checked_presets()]
+        if not checked:
+            return window_plan(self._count, self._layer_db)
+        n = len(checked)
+        return [(checked[w % n], checked[(w + 1) % n] if n > 1 else checked[0])
+                for w in range(self._count)]
+
     def _pattern_queue(self, window: int) -> list:
         """Patterns for one window: its primary and secondary choice, then the
-        fallbacks, as presets (those that divert within MAX_ATTEMPTS only)."""
+        rest of the checked set, then the fallbacks, as presets (so a window
+        whose earlier choices never divert within MAX_ATTEMPTS still finds one
+        that does)."""
         by_cve = {p.cve: p for p in PATTERN_PRESETS}
-        plan = window_plan(self._count, self._layer_db)[window]
-        return [by_cve[c] for c in dict.fromkeys((*plan, *fallback_patterns(self._layer_db)))
-                if c in by_cve]
+        plan = self._attack_plan()[window]
+        checked = [p.cve for p in self.preset_combo.checked_presets()]
+        order = dict.fromkeys((*plan, *checked, *fallback_patterns(self._layer_db)))
+        return [by_cve[c] for c in order if c in by_cve]
 
     def _letter(self, window: int) -> str:
         return FRAMES[window][0][-1]
@@ -1408,7 +1448,7 @@ class PoolTestPage(QWidget):
         self._mark(title)
         self._begin_browse()
         shop = self._base_url() + "/"
-        plan = window_plan(self._count, self._layer_db)
+        plan = self._attack_plan()
         state: dict[int, list] = {}     # window -> [preset, attempts, replaced, done]
         tried: dict[int, set[str]] = {}
         for w in windows:
@@ -1750,7 +1790,7 @@ class PoolTestPage(QWidget):
         now_windows = list(range(count - delayed))
         later_windows = list(range(count - delayed, count))
         cart_plan = CART_PLAN[:count]
-        plan = window_plan(count, self._layer_db)
+        plan = self._attack_plan()
         # open, fill carts, one attack per immediate window, scale-up, [pre-build,
         # delayed attack, scale-up], second pattern, cart page
         total_steps = 2 + len(now_windows) + (1 if now_windows else 0) \

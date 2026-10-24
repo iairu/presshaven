@@ -61,11 +61,12 @@ from core.patterns import (COMPONENTS, GDPR_RESTORE_PRESET, PATTERN_PRESETS, KIN
                            PatternPreset, build_curl_argv, filter_presets, group_presets,
                            is_gdpr_restore, selection_label)
 from core.pattern_registry import active_presets
+from ui.pattern_picker import PatternPickerButton
 from core import pattern_report_pdf
 from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
 from core.state import AppState
-from core.learning import explain_event, lesson_for
+from core.learning import explain_event
 from core.pattern_log_parser import COLOR_HIGH, COLOR_LOW, COLOR_MED, SCORE_MAX, LineBuffer, PatternEvent, parse_line
 from ui import theme
 from ui.common import (ErrorBanner, clear_all_attacks, danger_button,
@@ -128,86 +129,34 @@ def _wrap_anywhere(label: QLabel, run: int = 14) -> None:
     label.setText("".join(out))
 
 
-def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
-                           kind: str = "", component: str = "", surface: str = "",
-                           include_restore: bool = False) -> None:
-    """(Re)fill a combo with the pattern presets. In the database proxy
-    honeypot layer, grey out (disable) the CVEs that the single-eshop /
-    two-database honeypot cannot isolate (db_isolated=False). In the default
-    reverse proxy layer every preset is enabled. Keeps the current preset
-    selected when it is still enabled.
+def _picker_greyed() -> list[PatternPreset]:
+    """Presets the pattern picker shows disabled (not selectable): in the
+    database proxy honeypot layer, the CVEs the single-eshop / two-database
+    honeypot cannot isolate (db_isolated=False). In the default reverse proxy
+    layer nothing is greyed.
 
     That topology switches the DATABASE per request but shares one filesystem
     and one PHP runtime, so file-upload / path-traversal / config-disclosure /
     RCE attacks land on the real production-shared filesystem/runtime rather
-    than the switched database -- running them here would not be contained.
-    Those items render greyed and are not selectable (their tooltip explains
-    why); see ids/ids/db_proxy/COVERAGE.md.
+    than the switched database -- running them here would not be contained;
+    see ids/ids/db_proxy/COVERAGE.md."""
+    if not honeypot_layer.is_database():
+        return []
+    return [p for p in active_presets() if not p.db_isolated]
 
-    kind/component/surface narrow the list to one test category (see
-    core.patterns.PatternPreset); "" means any. The list is grouped under
-    bold, non-selectable headings naming the categories the selection
-    leaves open (core.patterns.group_presets)."""
-    previous = combo.currentData()
-    grey_out = honeypot_layer.is_database()
-    combo.blockSignals(True)
-    combo.clear()
-    if include_blank:
-        combo.addItem("(blank request)", None)
-    for heading, presets in group_presets(active_presets(), kind, component, surface):
-        if heading:
-            _add_group_heading(combo, heading)
-        for preset in presets:
-            _add_preset_item(combo, preset, grey_out)
-    # The gdpr_signature session-restoration demonstration is not a CVE in the
-    # battery (it is not in PATTERN_PRESETS), so it is appended on its own, under
-    # a heading, when the caller asks for it (the main pattern selector).
+
+def _picker_groups(kind: str = "", component: str = "", surface: str = "",
+                   include_restore: bool = False):
+    """Grouped presets for a PatternPickerButton: the active battery narrowed
+    to a test category (kind/component/surface; "" means any), grouped under
+    headings by core.patterns.group_presets. The gdpr_signature session-restore
+    demo is not a CVE in the battery (not in PATTERN_PRESETS), so it is appended
+    under its own heading only when asked -- a single-run target, never part of
+    the Multi-run batch."""
+    groups = list(group_presets(active_presets(), kind, component, surface))
     if include_restore:
-        _add_group_heading(combo, "GDPR signature")
-        _add_preset_item(combo, GDPR_RESTORE_PRESET, grey_out=False)
-    # Keep the previous selection if it's still enabled, else show the first
-    # enabled row (never a greyed CVE or a heading).
-    index = combo.findData(previous) if previous is not None else -1
-    item = combo.model().item(index) if index >= 0 else None
-    if item is None or not item.isEnabled():
-        index = next((i for i in range(combo.count())
-                      if combo.model().item(i) is None or combo.model().item(i).isEnabled()), 0)
-    combo.setCurrentIndex(index)
-    combo.blockSignals(False)
-
-
-def _add_group_heading(combo: QComboBox, heading: str) -> None:
-    combo.addItem(heading, None)
-    item = combo.model().item(combo.count() - 1)
-    if item is not None:
-        item.setEnabled(False)  # a label, not a choice
-        font = item.font()
-        font.setBold(True)
-        item.setFont(font)
-
-
-def _add_preset_item(combo: QComboBox, preset: PatternPreset, grey_out: bool) -> None:
-    label = f"{preset.cve} -- {preset.name}"
-    blocked = grey_out and not preset.db_isolated
-    if blocked:
-        label += "  —  not DB-isolatable"
-    combo.addItem(label, preset)
-    item = combo.model().item(combo.count() - 1)
-    if item is not None and blocked:
-        item.setEnabled(False)  # renders greyed + non-selectable
-        item.setToolTip(
-            "Not applicable to the database-proxy honeypot -- "
-            + preset.coverage_note
-        )
-    elif item is not None:
-        lesson = lesson_for(preset.cve)
-        tip = f"{preset.severity}: {preset.description}"
-        tip += (f"\n{KINDS[preset.kind]} · {COMPONENTS[preset.component]}"
-                + (f" ({preset.plugin})" if preset.plugin else "")
-                + f" · {SURFACES[preset.surface]}")
-        if lesson is not None:
-            tip += f"\n{lesson.attack_class} ({lesson.owasp})"
-        item.setToolTip(tip)
+        groups.append(("GDPR signature", [GDPR_RESTORE_PRESET]))
+    return groups
 
 
 def _event_copy_text(event: PatternEvent) -> str:
@@ -430,8 +379,11 @@ class PatternsPage(QWidget):
         self.reset_btn.clicked.connect(self._reset_local_score)
         toolbar.addWidget(self.reset_btn)
 
-        self.pattern_combo = QComboBox()
-        _populate_preset_combo(self.pattern_combo, include_restore=True)
+        # A checkbox popup rather than a 30-row dropdown: the checked set is the
+        # Multi-run / report battery, the highlighted row is the single-run
+        # target (see PatternPickerButton). Filled by _apply_category_filters.
+        self.pattern_picker = PatternPickerButton(mode="multi")
+        self.pattern_picker.selection_changed.connect(self._refresh_multi_run_button)
         # Test-category filters for the pattern list (built below, next to it).
         self.kind_filter = self._category_filter(
             "Type", KINDS, "Generic attacks are classes and tools (XSS, SQL injection, "
@@ -441,8 +393,8 @@ class PatternsPage(QWidget):
         self.surface_filter = self._category_filter(
             "Surface", SURFACES, "Frontend: what visitors see (XSS, defacement). Backend: "
             "admin, configuration, authentication and data (wp-config, SQL injection).")
-        self.pattern_combo.setMinimumWidth(340)
-        toolbar.addWidget(labeled("Pattern:", self.pattern_combo))
+        self.pattern_picker.setMinimumWidth(340)
+        toolbar.addWidget(labeled("Pattern:", self.pattern_picker))
         self.explain_btn = QPushButton("What is this?")
         self.explain_btn.setToolTip(
             "How the selected pattern works, its OWASP Top 10 / MITRE ATT&CK "
@@ -698,16 +650,21 @@ class PatternsPage(QWidget):
                 self.surface_filter.currentData())
 
     def _selected_presets(self) -> list[PatternPreset]:
-        """Every preset the selector lists that can run in the current layer
-        (the greyed, non-DB-isolatable ones are left out)."""
-        return [p for p in filter_presets(active_presets(), *self._selection())
-                if p.db_isolated or not honeypot_layer.is_database()]
+        """The patterns Multi-run / the report cover: the checked rows of the
+        picker (greyed, non-DB-isolatable ones can't be checked, so they're
+        already left out)."""
+        return self.pattern_picker.checked_presets()
 
     def _apply_category_filters(self) -> None:
-        """Narrow the pattern list to the selected test categories."""
+        """Narrow the pattern list to the selected test categories, keeping the
+        checked batch by identity across the change."""
         kind, component, surface = self._selection()
-        _populate_preset_combo(self.pattern_combo, kind=kind, component=component,
-                               surface=surface, include_restore=True)
+        self.pattern_picker.set_groups(
+            _picker_groups(kind, component, surface, include_restore=True),
+            greyed=_picker_greyed(), batch_excluded=[GDPR_RESTORE_PRESET])
+        self._refresh_multi_run_button()
+
+    def _refresh_multi_run_button(self) -> None:
         count = len(self._selected_presets())
         if not self._multi_queue:
             self.multi_run_btn.setText(f"Multi-run (curl, {count})")
@@ -727,7 +684,8 @@ class PatternsPage(QWidget):
         """The ids stack's honeypot layer changed (Workloads page): re-grey the
         presets and show/hide the coverage note to match."""
         self._apply_category_filters()
-        _populate_preset_combo(self.manual_tab.preset_combo, include_blank=True)
+        self.manual_tab.preset_combo.set_groups(
+            _picker_groups(), greyed=_picker_greyed(), blank_label="(blank request)")
         self.coverage_note.setVisible(honeypot_layer.is_database())
 
     def reload_patterns(self) -> None:
@@ -735,7 +693,8 @@ class PatternsPage(QWidget):
         rebuild the selector and the manual preset list so the battery reflects
         only the patterns that are currently enabled."""
         self._apply_category_filters()
-        _populate_preset_combo(self.manual_tab.preset_combo, include_blank=True)
+        self.manual_tab.preset_combo.set_groups(
+            _picker_groups(), greyed=_picker_greyed(), blank_label="(blank request)")
 
     # ---- reachability banner (production_eshop, reverse_proxy, and the
     # honeypot pools or both databases, depending on the layer) ----
@@ -888,7 +847,7 @@ class PatternsPage(QWidget):
         self.result_label.setStyleSheet("color: #5cb85c;")
 
     def _explain_selected_pattern(self) -> None:
-        preset: PatternPreset = self.pattern_combo.currentData()
+        preset: PatternPreset = self.pattern_picker.current_preset()
         if preset is None:
             return
         box = QMessageBox(self)
@@ -904,7 +863,7 @@ class PatternsPage(QWidget):
         preset's headers/body -- Run pattern (browser) below sends a
         plain GET instead, since a browser navigation has no way to carry
         those."""
-        preset: PatternPreset = self.pattern_combo.currentData()
+        preset: PatternPreset = self.pattern_picker.current_preset()
         if preset is None:
             return
         if is_gdpr_restore(preset):
@@ -992,7 +951,7 @@ class PatternsPage(QWidget):
         GET, using whatever session cookie the browser already holds --
         the visitor's-eye view of that path. Does NOT send the preset's
         headers/body (Run pattern (curl) above is the one that does)."""
-        preset: PatternPreset = self.pattern_combo.currentData()
+        preset: PatternPreset = self.pattern_picker.current_preset()
         if preset is None:
             return
         if is_gdpr_restore(preset):
@@ -1184,11 +1143,14 @@ class PatternsPage(QWidget):
     def _export_report(self) -> None:
         if self._report_worker is not None:
             return  # already running
-        # The report covers the patterns the test-category selector lists, and
-        # its header names the selection. Unlike Multi-run it keeps the
-        # non-DB-isolatable ones in the database layer: the report's bypass
-        # section is where those are shown.
-        presets = filter_presets(active_presets(), *self._selection())
+        # The report covers the checked battery (same set as Multi-run), and its
+        # header names the test-category selection. Unlike Multi-run it also
+        # keeps the non-DB-isolatable ones in the current selection, which the
+        # picker can't check: the report's bypass section is where those show.
+        presets = list(self.pattern_picker.checked_presets())
+        for p in filter_presets(active_presets(), *self._selection()):
+            if honeypot_layer.is_database() and not p.db_isolated and p not in presets:
+                presets.append(p)
         if not presets:
             QMessageBox.information(self, "Nothing to export",
                                     "No pattern matches the current selection.")
@@ -1512,8 +1474,9 @@ class _ManualRequestTab(QWidget):
 
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel("Load preset:"))
-        self.preset_combo = QComboBox()
-        _populate_preset_combo(self.preset_combo, include_blank=True)
+        self.preset_combo = PatternPickerButton(mode="single")
+        self.preset_combo.set_groups(_picker_groups(), greyed=_picker_greyed(),
+                                     blank_label="(blank request)")
         preset_row.addWidget(self.preset_combo, stretch=1)
         load_btn = QPushButton("Load")
         load_btn.setToolTip("Fill the fields below from this preset -- still editable before sending.")
@@ -1568,7 +1531,7 @@ class _ManualRequestTab(QWidget):
             self.headers_table.removeRow(row)
 
     def _load_preset(self) -> None:
-        preset: PatternPreset | None = self.preset_combo.currentData()
+        preset: PatternPreset | None = self.preset_combo.current_preset()
         if preset is None:
             return
         base = _default_eshop_url(self.state).rstrip("/")
