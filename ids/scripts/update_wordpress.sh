@@ -91,7 +91,7 @@ fi
 # else and it binds $wpdb to the production OR the honeypot database per the
 # proxy's X-Honeypot-Backend decision. Lose it and the whole single-eshop /
 # two-database honeynet topology silently collapses back to one database --
-# every request would hit production, including an attacker's.
+# every request would hit production, including an adversary's.
 #
 # WordPress's own core updater already skips wp-content when it copies new
 # files (wp-admin/includes/update-core.php: $skip = array('wp-content', ...),

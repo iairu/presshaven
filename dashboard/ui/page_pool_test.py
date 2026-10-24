@@ -424,7 +424,7 @@ class PoolTestPage(QWidget):
             "one user per pool (shared only when pools run out).")
         self.export_btn.clicked.connect(self.export_report)
         bar.addWidget(self.export_btn)
-        # Global reset: wipe every attacker's scored session, IP reputation,
+        # Global reset: wipe every adversary's scored session, IP reputation,
         # cached Suricata alerts and sticky pool assignments across the
         # session store, plus the dashboard's recorded event history -- a
         # clean slate before a validation run. Keeps the pool registry.
@@ -1456,7 +1456,7 @@ class PoolTestPage(QWidget):
 
     def _forge_session_data(self, event: ClearEvent) -> None:
         """Rewrite window `event.window`'s session the way a client-side
-        attacker would. Cookie forgeries replace SERVERID with
+        adversary would. Cookie forgeries replace SERVERID with
         "<session id>.<signature>" where the signature is made up (the real
         one is an HMAC only the proxy can compute): an invented id, or another
         window's real id (a hijack attempt). A storage forgery writes a fake

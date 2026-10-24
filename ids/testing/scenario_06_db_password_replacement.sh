@@ -4,14 +4,14 @@
 #
 # PURPOSE:
 #   Demonstrates and verifies the "WordPress database hashed password
-#   replacement" attack technique against the honeypot database.  An attacker
+#   replacement" attack technique against the honeypot database.  An adversary
 #   who gains database access (e.g. via SQLi or a shell on the container) can
 #   replace the bcrypt hash of the admin account with a known hash, then log
 #   in via wp-login.php as that administrator.
 #
 #   This scenario verifies:
 #     1. Direct MySQL access to the HONEYPOT database is possible from within
-#        the honeypot container (expected – attacker got a shell there).
+#        the honeypot container (expected – adversary got a shell there).
 #     2. The wp_users table is readable and the admin hash is replaceable.
 #     3. After the hash replacement, wp-login.php accepts the new password
 #        AND the session is routed to the honeypot (not production).
@@ -307,12 +307,12 @@ printf "Test pass   : %s\n\n" "${TEST_PASSWORD}"
 # =============================================================================
 # PHASE 1 – Confirm MySQL Access to Honeypot DB from Honeypot Container
 # =============================================================================
-# An attacker who obtained a shell on the honeypot WordPress container can
+# An adversary who obtained a shell on the honeypot WordPress container can
 # read wp-config.php to discover the database credentials, then connect to
 # the MySQL server on the honeypot_database service.
 #
 # This phase verifies the expected access is possible (the shell IS inside the
-# honeypot, the attacker CAN reach its database) and that the production DB
+# honeypot, the adversary CAN reach its database) and that the production DB
 # is NOT reachable from the same container.
 # =============================================================================
 banner "Phase 1 – MySQL Access Verification"
@@ -525,7 +525,7 @@ fi
 # PHASE 5 – Login via wp-login.php with Replaced Password
 # =============================================================================
 # Attempt to authenticate via the WordPress login form using the test password.
-# The Nginx router will route this to the honeypot because the attacker's
+# The Nginx router will route this to the honeypot because the adversary's
 # prior exploitation traffic has already established the session as
 # honeypot-bound.
 #
@@ -537,7 +537,7 @@ banner "Phase 5 – Login via wp-login.php with Replaced Password"
 check_route "${COOKIE_JAR}" \
     "GET wp-login.php (obtain testcookie)" "any" \
     --request GET "${BASE_URL}/wp-login.php" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)"
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)"
 
 # URL-encode the test password for form submission.
 # Simple encoding: replace ! with %21 and @ with %40.
@@ -549,7 +549,7 @@ check_route "${COOKIE_JAR}" \
     "POST wp-login.php with replaced password" "honeypot" \
     --request POST "${BASE_URL}/wp-login.php" \
     --header "Content-Type: application/x-www-form-urlencoded" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)" \
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)" \
     --data "log=${WP_ADMIN_USER}&pwd=${TEST_PASSWORD_ENC}&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1"
 
 # 5c. Inspect the HTTP response body / redirect for authentication success.
@@ -559,7 +559,7 @@ _login_resp=$(curl --silent --include \
     --max-time 15 \
     --request POST "${BASE_URL}/wp-login.php" \
     --header "Content-Type: application/x-www-form-urlencoded" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)" \
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)" \
     --data "log=${WP_ADMIN_USER}&pwd=${TEST_PASSWORD_ENC}&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1" \
     2>/dev/null) || _login_resp=""
 
@@ -594,7 +594,7 @@ fi
 # PHASE 6 – Verify Session is Honeypot-Bound
 # =============================================================================
 # After a successful login, all subsequent requests in the session must be
-# routed to the honeypot.  The attacker now has admin access – but only to
+# routed to the honeypot.  The adversary now has admin access – but only to
 # the isolated honeypot instance.
 # =============================================================================
 banner "Phase 6 – Verify Post-Login Session is Honeypot-Bound"
@@ -602,22 +602,22 @@ banner "Phase 6 – Verify Post-Login Session is Honeypot-Bound"
 check_route "${COOKIE_JAR}" \
     "wp-admin/ after login" "honeypot" \
     --request GET "${BASE_URL}/wp-admin/" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)"
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)"
 
 check_route "${COOKIE_JAR}" \
     "wp-admin/users.php after login (user list)" "honeypot" \
     --request GET "${BASE_URL}/wp-admin/users.php" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)"
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)"
 
 check_route "${COOKIE_JAR}" \
     "wp-admin/options-general.php after login (settings)" "honeypot" \
     --request GET "${BASE_URL}/wp-admin/options-general.php" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)"
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)"
 
 check_route "${COOKIE_JAR}" \
     "wp-json REST API as authenticated user" "honeypot" \
     --request GET "${BASE_URL}/wp-json/wp/v2/users?context=edit" \
-    --header "User-Agent: Mozilla/5.0 (compatible; AttackerBrowser/1.0)"
+    --header "User-Agent: Mozilla/5.0 (compatible; AdversaryBrowser/1.0)"
 
 # =============================================================================
 # PHASE 7 – Verify Production Database Was Never Touched

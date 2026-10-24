@@ -65,9 +65,9 @@ const toc = [
 
   <h3>Security-operations dashboard</h3>
   <ul>
-    <li>Added an Overview landing page: unique diverted attackers, pool state, a decayed aggregate risk score (not the last request), auto-refresh every 3&nbsp;s, and corrected health logic. Renamed its card to "Attacker IPs diverted".</li>
+    <li>Added an Overview landing page: unique diverted adversaries, pool state, a decayed aggregate risk score (not the last request), auto-refresh every 3&nbsp;s, and corrected health logic. Renamed its card to "Adversary IPs diverted".</li>
     <li>Added a Live Events page (an in-app event stream independent of Kibana), later backfilled and enriched.</li>
-    <li>Added an Attacker Sessions drill-down page — live, async and actionable.</li>
+    <li>Added an Adversary Sessions drill-down page — live, async and actionable.</li>
     <li>Added a native Network IDS (Suricata) page, later enriched with filters, detail and live refresh.</li>
     <li>Added a Detection Policy editor (with defaults, and no longer discarding unsaved edits) and configurable security alerting that surfaces webhook delivery failures.</li>
     <li>Added an always-on Pool Scaling page with a Reclaim-idle-pools action.</li>
@@ -132,7 +132,7 @@ const toc = [
 
   <h3>Database-proxy honeypot layer</h3>
   <ul>
-    <li>Collapsed the honeypot pools into a single eshop with per-request DB routing: one honeypot database per attacker, a spare built on each assignment, and the database named in the <code>X-Honeypot-DB</code> header.</li>
+    <li>Collapsed the honeypot pools into a single eshop with per-request DB routing: one honeypot database per adversary, a spare built on each assignment, and the database named in the <code>X-Honeypot-DB</code> header.</li>
     <li>Made it a selectable honeypot layer alongside the reverse-proxy layer (merged the db-proxy branch); renamed "reverse proxy level" to "WordPress proxy level".</li>
     <li><code>pool_manager</code>: skip building pools when the host is low on resources, reuse idle pools, mount the clean-data override as a file, and restore pool passwords after a Redis flush.</li>
     <li>Identical product order on production and honeypot instances; named the honeypot site; silenced <code>honeypot_db_init</code> errors on absent WooCommerce tables; stopped the reverse proxy health-checking removed pool backends.</li>
@@ -144,7 +144,7 @@ const toc = [
     <li>Services page: start/stop with a PDF resource-graph export; record stop until <code>down</code> exits; peak memory; elapsed starts at 0 on launch; cap <code>init_setup</code> memory and number the event markers.</li>
     <li>Kibana: five distinct dashboards including threat decisions and decay; threat-intelligence enrichment; attribute proxied Suricata alerts via XFF and skip proxy probes; label honeypot pools by their containers in nginx logs.</li>
     <li>Vector: stop the SIEM aggregator dropping event batches on backpressure; only trust cgroup sampling when Docker's PIDs are local containers.</li>
-    <li>Faster Docker Compose startup for the ids and siem stacks; a Learn page and in-app learning aids for students; real IPv4/IPv6 CIDR whitelist matching; identify attackers by a tamper-proof session instead of their IP, keeping NAT neighbours out of an attacker's score; removed the reverse-proxy tarpit so both routes have equal latency; eshop frontend cleanup (homepage products, compact mobile header, stripped header chrome/hero for screenshots, sample product images).</li>
+    <li>Faster Docker Compose startup for the ids and siem stacks; a Learn page and in-app learning aids for students; real IPv4/IPv6 CIDR whitelist matching; identify adversaries by a tamper-proof session instead of their IP, keeping NAT neighbours out of an adversary's score; removed the reverse-proxy tarpit so both routes have equal latency; eshop frontend cleanup (homepage products, compact mobile header, stripped header chrome/hero for screenshots, sample product images).</li>
     <li>Fixes: content-sync duplicate-key and truncation, reverse_proxy redis/health false positives, prewarm/probe and Suricata startup log spam, <code>init_setup</code> writes <code>server.crt</code> on a fresh checkout, and a Start/Restart reentrancy fix (Restart from any state).</li>
   </ul>
 

@@ -147,6 +147,6 @@ const toc = [
   <h2 id="gdpr">GDPR Identity</h2>
   <p>A privacy-preserving second identifier runs alongside the signed SERVERID session cookie. The browser RSA-OAEP-encrypts a payload of characteristics + timestamp into a gdpr_token. The proxy decrypts in memory, checks freshness, and hashes into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
   <p>Consent gates the whole path: the token is only created after the visitor agrees, and the proxy never
-  stores the plaintext payload. The signature is useful for recovering a returning attacker session; it is
+  stores the plaintext payload. The signature is useful for recovering a returning adversary session; it is
   not a tracking identifier for legitimate visitors.</p>
 </DocsLayout>

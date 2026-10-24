@@ -19,6 +19,14 @@ const toc = [
 ];
 ---
 <DocsLayout title="Roadmap" description="What has recently shipped, and the near-, mid- and long-term direction" section="Reference" sidebar={sidebar} toc={toc}>
+  <p>
+    <strong>Direction.</strong> The project begins as a high-interaction honeypot and is heading toward a broader
+    <strong>defensive security platform</strong> — a <strong>security management layer above WordPress + WooCommerce
+    instances</strong> that unifies detection, diversion, hardening and observability for the shops it protects. Every
+    item below stays <strong>strictly defensive</strong>: it may improve how the system observes, diverts, hardens or
+    reports, but the project will <strong>never add offensive tracking or offensive security</strong> — no hack-back,
+    no callbacks to adversary machines, no retaliation.
+  </p>
   <CardGrid columns={4}>
     <DocCard title="Shipped" href="#shipped" icon="check" tag="Done" description="Pool autoscaling, consent-gated device signature, the database-proxy honeypot layer and the generated pattern catalogue." meta="Delivered" />
     <DocCard title="Near-term" href="#near" icon="zap" tag="Next" description="More seeded CVEs, finer behavioural signals, dashboard work and generic pattern refinement." meta="Detection quality" />
@@ -54,9 +62,9 @@ const toc = [
   <h2 id="long">Long-Term</h2>
   <ul>
     <li>ML-based anomaly detection — a deliberate current choice favours explainable rule-based detection; future hybrid approaches remain possible.</li>
-    <li>Multi-environment scaling and multi-tenant support.</li>
+    <li>Multi-environment scaling and multi-tenant support — the first step toward the security-management layer that sits above many WordPress + WooCommerce instances.</li>
     <li>Honeytoken expansion — additional types beyond the current set (API key, database credentials, admin password, S3 URL, JWT secret).</li>
-    <li>Adaptive, content-level responses to attacker input (the LLM-driven dynamic-response design is not implemented today).</li>
+    <li>Adaptive, content-level responses to adversary input (the LLM-driven dynamic-response design is not implemented today).</li>
     <li>Automated <code>eve.json</code> correlation verification for genuine external traffic.</li>
   </ul>
 </DocsLayout>

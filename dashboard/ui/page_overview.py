@@ -143,7 +143,7 @@ class OverviewPage(QWidget):
         self._cards = FlowLayout(cards_host, margin=0, h_spacing=10, v_spacing=10)
         self.card_score = StatCard("Current risk score")
         self.card_health = StatCard("System health")
-        self.card_diverted = StatCard("Attacker IPs diverted")
+        self.card_diverted = StatCard("Adversary IPs diverted")
         self.card_pools = StatCard("Honeypot pools")
         self.card_events = StatCard("Notable events (1h)")
         for card in (self.card_score, self.card_health, self.card_diverted,
@@ -213,7 +213,7 @@ class OverviewPage(QWidget):
         self.feed.score_changed.connect(self._on_score_changed)
 
         # Auto-refresh while visible: time-based cards and the decayed score
-        # recomputed locally, the diverted-attacker and pool cards re-fetched
+        # recomputed locally, the diverted-adversary and pool cards re-fetched
         # from the session store off the GUI thread.
         self.timer = QTimer(self)
         self.timer.setInterval(REFRESH_MS)
@@ -254,7 +254,7 @@ class OverviewPage(QWidget):
 
     def _fetch_redis(self) -> None:
         """One off-thread round-trip to the edge session store for the two
-        live cards (attackers diverted, pool state). Silently leaves the
+        live cards (adversaries diverted, pool state). Silently leaves the
         cards on their last value if the store is unreachable -- the page is
         a glanceable summary, not a place to surface redis errors."""
         if self._redis_busy:

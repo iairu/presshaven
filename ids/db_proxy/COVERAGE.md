@@ -70,7 +70,7 @@ effect is on disk or in the process is therefore *not* isolated.
 | CVE-2025-10142 (PagSeguro **path traversal**, `../../etc/passwd`) | Reads the shared container filesystem, identical for both sides. |
 | GENERIC-WP-001 (**wp-config.php disclosure**) | Leaks the file that contains the **production** DB credentials (production is the default backend), so the user can then connect to the real DB directly. |
 
-A webshell an attacker uploads on a honeypot-routed request is written to the
+A webshell an adversary uploads on a honeypot-routed request is written to the
 same `wp-content/uploads` production serves. When it is later requested with no
 threat signal (`route_decision=production`), it executes **against the
 production database** — the isolation is silently bypassed.
@@ -82,7 +82,7 @@ production included. The old per-pool filesystem contained this; a single shared
 `./production_eshop_files` bind mount does not.
 
 ### 3. Remote code execution defeats the model entirely (fundamental)
-Once an attacker achieves code execution in the shared PHP process (e.g.
+Once an adversary achieves code execution in the shared PHP process (e.g.
 CVE-2025-47577), the per-request header routing is meaningless:
 - `wp-config.php` and the container environment expose **both** the production
   (`DB_*` / `WORDPRESS_DB_*`) and honeypot (`HONEYPOT_DB_*`) credentials.

@@ -108,7 +108,7 @@ notice. Scores slowly <b>decay</b> so innocent users recover.</li>
 </ol>
 <p>Go deeper on the moving parts: the <a href="page:pattern_database">pattern database</a> of
 everything the proxy can recognise, the <a href="page:pool_scaling">honeypot pools</a> that give
-each attacker its own decoy, and the <a href="page:signature_sim">device signature</a> that
+each adversary its own decoy, and the <a href="page:signature_sim">device signature</a> that
 re-recognises a returning visitor without storing anything about them.</p>
 <p><i>Safety note:</i> the pattern presets are real attack patterns. Only fire them at
 systems you run yourself, like this lab.</p>

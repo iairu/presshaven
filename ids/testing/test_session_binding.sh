@@ -3,12 +3,12 @@
 # test_session_binding.sh
 #
 # PURPOSE:
-#   Comprehensive verification that a single attacker (source IP) is bound to
+#   Comprehensive verification that a single adversary (source IP) is bound to
 #   exactly one honeypot pool container for the lifetime of their session --
 #   pool_router.lua's core promise (see reverse_proxy_enhanced/lua/
 #   pool_router.lua's module docstring: "every attacking IP address is
 #   permanently assigned to a specific honeypot pool instance ... so their
-#   actions cannot cross-contaminate other attacker sessions").
+#   actions cannot cross-contaminate other adversary sessions").
 #
 #   This is the live/runtime counterpart to
 #   reverse_proxy_enhanced/lua/tests/test_pool_router_rules.lua, which
@@ -131,7 +131,7 @@ redis_ttl() {
     docker exec "${REDIS_CONTAINER}" redis-cli -a "${REDIS_PASSWORD}" --no-auth-warning TTL "$1" 2>/dev/null
 }
 
-banner "Session Binding Test - One Attacker, One Pool, For the Whole Session"
+banner "Session Binding Test - One Adversary, One Pool, For the Whole Session"
 printf "Target : %s\n" "${BASE_URL}"
 printf "Path   : %s\n\n" "${VULN_PATH}"
 
@@ -197,9 +197,9 @@ for i in 1 2 3 4 5; do
 done
 
 if [ "${STICKY}" = "true" ]; then
-    pass "Same attacker IP bound to pool ${INITIAL_POOL} across all 5 requests (isolation holds: no other attacker's pool was touched)"
+    pass "Same adversary IP bound to pool ${INITIAL_POOL} across all 5 requests (isolation holds: no other adversary's pool was touched)"
 else
-    fail "Attacker IP was NOT consistently bound to a single pool -- cross-contamination risk"
+    fail "Adversary IP was NOT consistently bound to a single pool -- cross-contamination risk"
 fi
 
 # =============================================================================
@@ -243,7 +243,7 @@ fi
 
 printf "\n"
 if [ "${FAIL}" -eq 0 ]; then
-    printf "${GREEN}SESSION BINDING HOLDS -- attacker stayed bound to a single pool container.${NC}\n"
+    printf "${GREEN}SESSION BINDING HOLDS -- adversary stayed bound to a single pool container.${NC}\n"
     exit 0
 else
     printf "${RED}%d SESSION BINDING CHECK(S) FAILED.${NC}\n" "${FAIL}"

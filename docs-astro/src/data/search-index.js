@@ -3,7 +3,7 @@
 // layouts' indexes silently drifting out of sync with the real page tree.
 export const searchIndex = [
   { title: 'Knowledge Hub', url: '/', section: 'Home', content: 'honeypot ids detection observability landing' },
-  { title: 'Documentation', url: '/docs', section: 'Docs', content: 'docs index detection observability operations' },
+  { title: 'Documentation', url: '/docs', section: 'Docs', content: 'docs index detection observability operations defensive security platform security management layer offensive' },
   { title: 'Getting Started', url: '/docs/getting-started', section: 'Getting Started', content: 'installation setup quickstart dashboard commands' },
   { title: 'Architecture', url: '/docs/architecture', section: 'Architecture', content: 'request pipeline two-host lua modules services' },
   { title: 'Honeypot Engine', url: '/docs/engine', section: 'Honeypot Engine', content: 'wordpress woocommerce pooling seeding backups state per-session segmentation' },
@@ -26,9 +26,9 @@ export const searchIndex = [
   { title: 'Testing', url: '/docs/testing', section: 'Testing', content: 'unit tests blind pentest' },
   { title: 'Blind Pentest', url: '/docs/testing/blind-pentest', section: 'Testing', content: 'pentest evaluation protocol' },
   { title: 'Reference', url: '/docs/reference', section: 'Reference', content: 'glossary known issues roadmap' },
-  { title: 'Glossary', url: '/docs/reference/glossary', section: 'Reference', content: 'terms definitions' },
+  { title: 'Glossary', url: '/docs/reference/glossary', section: 'Reference', content: 'terms definitions defensive security offensive security platform' },
   { title: 'Known Issues', url: '/docs/reference/known-issues', section: 'Reference', content: 'bugs workarounds' },
-  { title: 'Roadmap', url: '/docs/reference/roadmap', section: 'Reference', content: 'future plans' },
+  { title: 'Roadmap', url: '/docs/reference/roadmap', section: 'Reference', content: 'future plans direction security platform security management layer defensive only no offensive' },
   { title: 'Changelog', url: '/docs/reference/changelog', section: 'Reference', content: 'history changes' },
   { title: 'Literature', url: '/docs/reference/literature', section: 'Reference', content: 'academic technical references' },
   { title: 'Reference Hub', url: '/reference', section: 'Reference', content: 'quick reference glossary tables' },

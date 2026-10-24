@@ -165,7 +165,7 @@ def posture_score(events: list[dict], half_life: float = DEFAULT_HALF_LIFE_SECON
 
 def unique_diverted_ips(sessions) -> int:
     """How many distinct source IPs are currently routed to a honeypot --
-    i.e. how many real attackers are being diverted right now, from the
+    i.e. how many real adversaries are being diverted right now, from the
     live session store (session_view.SessionSummary.diverted), rather than
     how many diversion *events* have been logged over time. `sessions` is a
     list of SessionSummary (anything with `.ip` and a `.diverted` flag)."""

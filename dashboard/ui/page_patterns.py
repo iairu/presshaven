@@ -475,7 +475,7 @@ class PatternsPage(QWidget):
         toolbar.addWidget(self.unpoison_btn)
 
         # Global reset: unlike "Unpoison host IP" (just this host's own
-        # entries + a proxy restart), this wipes every attacker's scored
+        # entries + a proxy restart), this wipes every adversary's scored
         # session, IP reputation, cached Suricata alerts and sticky pool
         # assignments across the whole session store, plus the dashboard's
         # recorded event history -- a clean slate for a fresh demo/lab.

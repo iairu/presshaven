@@ -23,7 +23,7 @@ const toc = [
     storefront (a coffee eshop with real products and carts). The honeypot is built for and around that
     shop — the reverse-proxy level clones the whole WooCommerce backend per session, and the database
     level swaps only the WooCommerce database — so the deception is tuned to the same WordPress and
-    WooCommerce surface an attacker would actually probe.
+    WooCommerce surface an adversary would actually probe.
   </p>
   <p>
     The <code>ids</code> stack can run its honeypot at one of two layers. Both are the same Compose
@@ -39,7 +39,7 @@ const toc = [
       href="#reverse"
       icon="route"
       tag="Default · Recommended"
-      description="The whole backend is switched: suspicious sessions are routed to separate honeypot WordPress containers (pools). Catches file, upload and code-execution attacks because each attacker has a real decoy to land in."
+      description="The whole backend is switched: suspicious sessions are routed to separate honeypot WordPress containers (pools). Catches file, upload and code-execution attacks because each adversary has a real decoy to land in."
     />
     <DocCard
       title="Database level"
@@ -57,7 +57,7 @@ const toc = [
     <tr><td>What is switched per suspicious session</td><td>The whole backend (separate honeypot WordPress pools)</td><td>Only the database (one eshop, production vs honeypot DB)</td></tr>
     <tr><td>Honeypot pools</td><td>Per-session pools, autoscaled</td><td>None — <code>POOL_COUNT</code> is 0</td></tr>
     <tr><td>Resource cost per pool</td><td>~1536 MB / 1.5 CPU (eshop + database)</td><td>~512 MB / 0.5 CPU (database alone)</td></tr>
-    <tr><td>Isolates file / upload / RCE attacks</td><td>Yes — the attacker runs against a real decoy</td><td>No — there is no separate backend to land in</td></tr>
+    <tr><td>Isolates file / upload / RCE attacks</td><td>Yes — the adversary runs against a real decoy</td><td>No — there is no separate backend to land in</td></tr>
     <tr><td>Honeypot data volume</td><td>Per-pool databases</td><td><code>honeypot_database_proxy_data</code></td></tr>
   </table>
   <p>
@@ -81,9 +81,9 @@ const toc = [
   <p>
     The default, recommended layer. Suspicious sessions are routed to separate honeypot WordPress
     containers — the per-session <a href="/docs/engine#pools">pools</a> described on the Engine page.
-    Because each diverted attacker gets a full, real decoy eshop and database of their own, every
+    Because each diverted adversary gets a full, real decoy eshop and database of their own, every
     class of attack has somewhere to "work": upload a web shell, exploit an RCE, dump the decoy
-    database — all against fake data, fully isolated from production and from other attackers.
+    database — all against fake data, fully isolated from production and from other adversaries.
   </p>
 
   <h2 id="database">Database Level</h2>

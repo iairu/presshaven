@@ -657,7 +657,7 @@ services:
     # database-level exploit cannot be used to pivot beyond this container.
     #
     # no-new-privileges: prevents setuid binaries from gaining additional
-    #   capabilities at runtime (e.g. a SUID shell dropped by an attacker).
+    #   capabilities at runtime (e.g. a SUID shell dropped by an adversary).
     # cap_drop ALL / cap_add minimal set: MySQL only needs CHOWN (own its data
     #   directory), DAC_OVERRIDE (read/write across uid boundaries),
     #   FOWNER (ignore ownership checks for its own files), SETGID/SETUID

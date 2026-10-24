@@ -1226,7 +1226,7 @@ def reassignment_outcome(r: dict) -> tuple[str, str]:
     A window that was diverted must stay diverted: moved to a surviving pool,
     with the same session, and the page must actually load. A 5xx or an error
     page means the router sent it somewhere that no longer answers (the removed
-    pool's container); production or a new session means the attacker walked
+    pool's container); production or a new session means the adversary walked
     out of the honeypot."""
     status = int(r.get("status") or 0)
     pool, route = r.get("pool"), r.get("route") or ""

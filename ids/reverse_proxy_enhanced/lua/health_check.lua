@@ -57,7 +57,7 @@ local HEALTHY_THRESHOLD = 2
 --      (sid:1000056 and sid:1000060). Change it in both places or the
 --      exclusion silently stops matching. It is deliberately NOT the public
 --      resty.http default UA: keying the exclusion off a guessable default
---      would let an attacker evade those two rules by spoofing it.
+--      would let an adversary evade those two rules by spoofing it.
 local HEALTHCHECK_USER_AGENT = "honeypot-internal-healthprobe"
 
 _M.HEALTH_CHECK_INTERVAL = HEALTH_CHECK_INTERVAL

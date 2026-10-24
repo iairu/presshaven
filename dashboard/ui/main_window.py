@@ -86,7 +86,7 @@ PAGE_LABELS = {
     "overview": "Overview",
     "live_events": "Live Events",
     "pipeline": "Log Pipeline",
-    "sessions": "Attacker Sessions",
+    "sessions": "Adversary Sessions",
     "suricata": "Network IDS (Suricata)",
     "detection": "Detection Policy",
     "pool_scaling": "Pool Scaling",

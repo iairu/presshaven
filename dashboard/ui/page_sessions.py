@@ -1,4 +1,4 @@
-"""Sessions page: per-session / per-attacker drill-down. Lists every proxy
+"""Sessions page: per-session / per-adversary drill-down. Lists every proxy
 session (session:* in session_store) with its IP, risk score, request count,
 verdict and honeypot pool, and for the selected one shows a plain-language
 summary, the IP's reputation entry and a timeline of the suspicious requests

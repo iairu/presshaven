@@ -31,7 +31,9 @@ const toc = [
   <h2 id="core">Core Concepts</h2>
   <table>
     <tr><th>Term</th><th>Definition</th></tr>
-    <tr><td>Honeypot</td><td>Decoy system designed to attract and engage attackers. The reverse proxy diverts suspicious requests to isolated honeypot pool instances running fake WordPress environments.</td></tr>
+    <tr><td>Defensive Security</td><td>The project's entire scope: observing, diverting, hardening and recording on the defender's own infrastructure to protect the real store. It purposely performs <strong>no offensive tracking and no offensive security</strong> — no hack-back, no callbacks or beacons to adversary machines, no retaliation. Deception is used only to defend, never to strike back.</td></tr>
+    <tr><td>Security Platform (direction)</td><td>The intended evolution of the project: from today's high-interaction honeypot into a <strong>security management layer above WordPress + WooCommerce instances</strong>, unifying detection, diversion, hardening and observability. See the <a href="/docs/reference/roadmap">Roadmap</a>.</td></tr>
+    <tr><td>Honeypot</td><td>Decoy system designed to attract and engage adversaries. The reverse proxy diverts suspicious requests to isolated honeypot pool instances running fake WordPress environments.</td></tr>
     <tr><td>IDS</td><td>Intrusion Detection System — Suricata network IDS, which generates eve.json alerts parsed by suricata_rules.lua.</td></tr>
     <tr><td>SIEM</td><td>Security Information and Event Management — Elasticsearch/Kibana stack for log ingestion and visualization.</td></tr>
     <tr><td>CVE</td><td>Common Vulnerabilities and Exposures identifier — used to name specific seeded vulnerability patterns.</td></tr>
@@ -82,7 +84,7 @@ const toc = [
     <tr><th>Term</th><th>Definition</th></tr>
     <tr><td>Hardening</td><td>Security posture improvements for production deployment.</td></tr>
     <tr><td>Runbook</td><td>Operational troubleshooting and response procedures.</td></tr>
-    <tr><td>Blind Pentest</td><td>External attacker assessment where the tester has no prior knowledge of the deployment or routing logic. See <a href="/docs/testing/blind-pentest">Blind Pentest</a>.</td></tr>
+    <tr><td>Blind Pentest</td><td>External adversary assessment where the tester has no prior knowledge of the deployment or routing logic. See <a href="/docs/testing/blind-pentest">Blind Pentest</a>.</td></tr>
     <tr><td>Internal Test Secret</td><td>Shared secret (<code>INTERNAL_TEST_SECRET</code>) gating the <code>X-Route-Target</code> / <code>X-Risk-Score</code> diagnostic headers; fail closed when unset, so a blind tester cannot read their own routing/score oracle.</td></tr>
     <tr><td>SIEM Pipeline</td><td>The log path <code>Nginx / Suricata → Vector → Elasticsearch → Kibana</code>; in a two-host deployment the Vector hop is secured with mutual TLS. See <a href="/docs/observability/siem">SIEM</a>.</td></tr>
     <tr><td>Honeypot Layer</td><td>Reverse-proxy deception (separate decoy pools) vs database deception (one eshop, DB swapped per request). See <a href="/docs/engine/layers">Honeypot Layers</a>.</td></tr>

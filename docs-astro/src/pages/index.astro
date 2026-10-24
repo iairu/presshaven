@@ -44,7 +44,7 @@ const dashNav = [
     group: 'Threat Operations',
     items: [
       { id: 'patterns', label: 'Attack Simulation', icon: 'zap', summary: 'Replay real WordPress CVE patterns against the edge and observe detection, scoring and diversion.', widgets: [['Library', '13 CVEs'], ['Replay', 'One click'], ['Outcome', 'Scored live']] },
-      { id: 'sessions', label: 'Attacker Sessions', icon: 'fingerprint', summary: "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.", widgets: [['Scope', 'Per session'], ['Score', 'Trend shown'], ['Routing', 'Divert trace']] },
+      { id: 'sessions', label: 'Adversary Sessions', icon: 'fingerprint', summary: "Per-session drill-down: who each visitor is, how their risk score climbed, and where they were diverted.", widgets: [['Scope', 'Per session'], ['Score', 'Trend shown'], ['Routing', 'Divert trace']] },
       { id: 'suricata', label: 'Network IDS (Suricata)', icon: 'shieldAlert', summary: 'Network IDS view: recent Suricata alerts, top signatures and sources, and the rule set with per-rule switches.', widgets: [['Rules', '70+ SIDs'], ['Alerts', 'Live feed'], ['Toggles', 'Per rule']] },
       { id: 'detection', label: 'Detection Policy', icon: 'crosshair', summary: 'Tune how evidence builds and fades: score decay, IP-reputation weight and shared-address handling.', widgets: [['Decay', 'Tunable'], ['IP rep', 'Weighted'], ['Shared IP', 'Configurable']] },
     ],
@@ -178,10 +178,18 @@ const navigation = [
             <span class="home-hero__title-label">Knowledge Hub</span>
           </h1>
           <p class="home-hero__lead">
-            A high-interaction deception platform built around a <strong>WordPress + WooCommerce</strong> shop
-            as its target demo application. It <strong>scores every request in real time</strong> and quietly
-            diverts suspicious sessions into isolated honeypot clones. Real customers never notice; attackers
-            get a convincing storefront while every move is recorded.
+            A <strong>defensive security platform</strong> built around a <strong>WordPress + WooCommerce</strong> shop
+            as its target demo application — today a high-interaction honeypot, growing into a
+            <strong>security management layer above WordPress + WooCommerce instances</strong>. It
+            <strong>scores every request in real time</strong> and quietly diverts suspicious sessions into
+            isolated honeypot clones. Real customers never notice; adversaries get a convincing storefront while
+            every move is recorded.
+          </p>
+          <p class="home-hero__lead home-hero__lead--note">
+            <strong>Defensive only.</strong> The entire system observes, diverts and records on its own
+            infrastructure. It deliberately performs <strong>no offensive tracking and no offensive security</strong> —
+            no beacons or hack-back, no reaching out to adversary machines, no retaliation. Deception is used solely
+            to protect the real store, never to strike back.
           </p>
           <div class="home-cta">
             <a href="/docs/getting-started" class="btn-sheared">
@@ -199,6 +207,7 @@ const navigation = [
           </div>
           <div class="home-chips">
             <span><Icon name="box" class="w-3.5 h-3.5" /> WordPress + WooCommerce</span>
+            <span><Icon name="shield" class="w-3.5 h-3.5" /> Defensive only</span>
             <span><Icon name="shield" class="w-3.5 h-3.5" /> No tarpit</span>
             <span><Icon name="fingerprint" class="w-3.5 h-3.5" /> Session-bound</span>
             <span><Icon name="lock" class="w-3.5 h-3.5" /> GDPR aware</span>
@@ -813,7 +822,7 @@ const navigation = [
           <ul class="space-y-1 text-sm">
             <li>Multi-layered detection with WSTG mappings</li>
             <li>Explainable, auditable risk scoring</li>
-            <li>Per-attacker isolation via elastic pools</li>
+            <li>Per-adversary isolation via elastic pools</li>
             <li>No tarpit — identical proxy latency</li>
             <li>Privacy-preserving GDPR identity</li>
             <li>Honeytoken injection for high-confidence signals</li>

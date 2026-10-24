@@ -361,7 +361,7 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Tune how evidence builds and fades: score decay, IP-reputation weight and shared-address handling.",
         "Lengthen the decay half-life, save and restart the proxy, then re-run the same pattern.",
         "Detection is configuration. The summary under the form turns the half-life into seconds so you can "
-        "see how long an attacker stays flagged after they stop.",
+        "see how long an adversary stays flagged after they stop.",
     ),
     "pool_scaling": PageGuide(
         "Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.",
@@ -455,7 +455,7 @@ PAGE_GUIDES: dict[str, PageGuide] = {
     "wp_studio": PageGuide(
         "Edit the real WordPress + WooCommerce shop in wp-admin, then push pages, posts, products and safe settings to every honeypot pool at once.",
         "Change a product price or the store address, save, then press “Propagate to honeypot pools” and watch the progress bar fan it out.",
-        "Deception only holds if the decoys match production: an attacker who spots a stale catalog or a different price knows they have been moved. "
+        "Deception only holds if the decoys match production: an adversary who spots a stale catalog or a different price knows they have been moved. "
         "The sync copies content and presentational settings but never user accounts, orders, or secrets (API keys, passwords, payment config) -- "
         "those stay in production so a compromised honeypot leaks nothing of value.",
     ),
@@ -833,7 +833,7 @@ LABS: list[Lab] = [
             LabStep("lab5.restore", "Put the setting back and restart ids.", "settings"),
         )),
     Lab("lab6", "Lab 6: Divert sessions and watch the pools",
-        "See per-session segmentation and pool autoscaling: each attacker gets a decoy of its own.",
+        "See per-session segmentation and pool autoscaling: each adversary gets a decoy of its own.",
         (
             LabStep("lab6.state", "Open Pool Scaling and note how many pools exist now and the "
                     "memory, CPU and pool-count budget.", "pool_scaling"),

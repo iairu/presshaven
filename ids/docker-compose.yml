@@ -65,7 +65,7 @@ services:
       #
       # rsync -a with no --delete: this is a one-directional add/update from
       # source, not a mirror. Anything that exists ONLY in the destination
-      # (attacker-uploaded webshells under wp-content/uploads, other
+      # (adversary-uploaded webshells under wp-content/uploads, other
       # honeypot-side forensic artifacts left by a real session) is
       # deliberately left untouched -- syncing new production files must
       # never destroy evidence of what a user did to a pool.
@@ -1003,7 +1003,7 @@ services:
   # Honeypot pool databases (pool 1, 2, 3)
   # ---------------------------------------------------------------------------
   # Each pool has its own MySQL instance backed by an independent data directory
-  # so that attacker writes (SQL injections, data exfiltration, etc.) are
+  # so that adversary writes (SQL injections, data exfiltration, etc.) are
   # isolated per-pool and never affect other pools or production.
   #
   # All three use identical SCHEMA (enforced by migrations) so pool_router.lua
@@ -1043,7 +1043,7 @@ services:
     # database-level exploit cannot be used to pivot beyond this container.
     #
     # no-new-privileges: prevents setuid binaries from gaining additional
-    #   capabilities at runtime (e.g. a SUID shell dropped by an attacker).
+    #   capabilities at runtime (e.g. a SUID shell dropped by an adversary).
     # cap_drop ALL / cap_add minimal set: MySQL only needs CHOWN (own its data
     #   directory), DAC_OVERRIDE (read/write across uid boundaries),
     #   FOWNER (ignore ownership checks for its own files), SETGID/SETUID
@@ -1216,12 +1216,12 @@ services:
     # -------------------------------------------------------------------------
     # Container hardening for honeypot WordPress instances.
     #
-    # Goal: contain any attacker who achieves code execution (e.g. via RCE
+    # Goal: contain any adversary who achieves code execution (e.g. via RCE
     # through one of the intentionally vulnerable plugins) inside this single
     # container so they cannot pivot to the host or other containers.
     #
     # no-new-privileges: blocks privilege escalation via SUID/SGID binaries.
-    #   An attacker who drops a SUID shell via an upload exploit cannot gain
+    #   An adversary who drops a SUID shell via an upload exploit cannot gain
     #   root with it.
     # cap_drop ALL / cap_add minimal: Apache+PHP only needs CHOWN, DAC_OVERRIDE,
     #   FOWNER (filesystem operations), SETGID/SETUID (drop to www-data) and
@@ -1235,7 +1235,7 @@ services:
     # pids_limit: caps the process tree so fork-bomb payloads cannot exhaust
     #   the host PID namespace.
     # Note: read_only is NOT set because WordPress/Apache must write to the
-    #   filesystem (/tmp, wp-content/uploads, debug.log etc.).  The attacker's
+    #   filesystem (/tmp, wp-content/uploads, debug.log etc.).  The adversary's
     #   ability to write files is intentional — it is part of the honeypot's
     #   attack surface and is monitored via Suricata and ELK.
     # -------------------------------------------------------------------------

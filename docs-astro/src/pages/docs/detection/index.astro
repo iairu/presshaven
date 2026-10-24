@@ -24,7 +24,7 @@ const toc = [
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
-<DocsLayout title="Detection" description="How the honeypot system detects and identifies attackers" section="Detection" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Detection" description="How the honeypot system detects and identifies adversaries" section="Detection" sidebar={sidebar} toc={toc}>
   <p>
     Detection runs entirely inside the request path. Each non-static request is analysed by pure Lua rules,
     scored, and either forwarded to production or diverted to the session's honeypot pool. The same rules
@@ -32,7 +32,7 @@ const toc = [
   </p>
 
   <h2 id="pipeline">Detection Pipeline Overview</h2>
-  <p>The honeypot detection pipeline ingests attacker traffic and produces actionable detection signals through a layered chain, implemented as a series of pure Lua modules (no <code>ngx.*</code> dependency, unit-testable under a plain Lua interpreter) driving an adapter half that performs I/O:</p>
+  <p>The honeypot detection pipeline ingests adversary traffic and produces actionable detection signals through a layered chain, implemented as a series of pure Lua modules (no <code>ngx.*</code> dependency, unit-testable under a plain Lua interpreter) driving an adapter half that performs I/O:</p>
   <ol>
     <li><strong>Traffic Capture</strong> — Nginx reverse proxy forwards HTTP requests; <code>pattern_analyzer.analyze_request()</code> runs once per non-static request.</li>
     <li><strong>Lua Pattern Matching</strong> — <code>pattern_rules.lua</code> and <code>vulnerability_rules.lua</code> match request URIs, headers, and arguments against seeded CVE exploit patterns.</li>

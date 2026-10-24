@@ -501,7 +501,7 @@ def db_proxy_bypass_diagram(family: str = "Serif") -> VectorFigure:
 
     cx = 190
     specs = [
-        ("client", cx - 110, 44, 220, 46, "Attacker", "file upload / traversal / RCE exploit",
+        ("client", cx - 110, 44, 220, 46, "Adversary", "file upload / traversal / RCE exploit",
          "#eef2f7", _INK),
         ("proxy", cx - 130, 130, 260, 62, "Reverse proxy",
          "detects the pattern, tags it for the honeypot", "#e7effa", _BLUE),

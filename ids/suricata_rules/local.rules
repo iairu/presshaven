@@ -17,7 +17,7 @@
 # permanently defeating every rule regardless of payload content. Matching
 # on destination alone (any source, as long as it's hitting our protected
 # $HOME_NET on an HTTP port) is standard practice for asset-centric
-# detection and remains correct for a genuine external attacker too -- it
+# detection and remains correct for a genuine external adversary too -- it
 # just also correctly covers the only test method actually available here.
 # Confirmed live: rules did not fire with the original $EXTERNAL_NET
 # direction even though capture, rule-loading, and full URI/payload
@@ -92,7 +92,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2023-28121 WooCommerce Adm
 # OWASP WSTG-AUTHZ: Authentication bypass via cryptographic weakness
 # Plugin: abandoned-cart-lite
 # Attack: The plugin uses a hardcoded AES key ("qJB0rGtIn5UB1xG03efyCp") to
-#         generate checkout tokens.  An attacker can forge tokens for any user
+#         generate checkout tokens.  An adversary can forge tokens for any user
 #         and authenticate as that user without knowing their password.
 #--------------------------------------------------------------------------
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2023-2986 Abandoned Cart Lite Exploit Attempt"; flow:established,to_server; content:"wcal_action=checkout_link"; http_uri; content:"validate="; http_uri; classtype:web-application-attack; sid:1000003; rev:1;)
@@ -104,7 +104,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2023-2986 Abandoned Cart E
 # OWASP WSTG-INPV-10: Unrestricted File Upload
 # Plugin: drag-and-drop-multiple-file-upload
 # Attack: The supported_type POST parameter is not sanitised, allowing an
-#         attacker to override the server-side MIME-type whitelist and upload
+#         adversary to override the server-side MIME-type whitelist and upload
 #         executable PHP files that can be triggered via a direct URL.
 #--------------------------------------------------------------------------
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2025-4403 DnD File Upload Exploit"; flow:established,to_server; content:"POST"; http_method; content:"dnd-wc-upload-file"; http_client_body; content:"supported_type"; http_client_body; pcre:"/supported_type[^&]*\./i"; classtype:web-application-attack; sid:1000005; rev:1;)
@@ -116,7 +116,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2025-4403 Suspicious File 
 # OWASP WSTG-AUTHZ: Missing authentication for privileged operation
 # Plugin: cwmp
 # Attack: The cwmpUpdateOptions action is accessible without authentication.
-#         An attacker sets users_can_register=1 and default_role=administrator
+#         An adversary sets users_can_register=1 and default_role=administrator
 #         to self-register an admin account and take over the site.
 #--------------------------------------------------------------------------
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2025-2266 WordPress Options Update Exploit"; flow:established,to_server; content:"POST"; http_method; content:"cwmpUpdateOptions"; http_client_body; content:"users_can_register=1"; http_client_body; classtype:web-application-attack; sid:1000007; rev:1;)
@@ -155,7 +155,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2024-2387 Union-based SQL 
 # Plugins: pagseguro-connect-woocommerce (CVE-2025-10142),
 #          wp-file-upload (CVE-2024-50508)
 # Attack: The file[path] parameter is not normalised before being used in a
-#         file-system operation.  An attacker can read /etc/passwd, wp-config.php,
+#         file-system operation.  An adversary can read /etc/passwd, wp-config.php,
 #         or any other file readable by the web server process.
 #--------------------------------------------------------------------------
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"CVE-2025-10142 Unauthorized File Upload"; flow:established,to_server; content:"pc_added_uploaded_image"; http_uri; content:"file[path]"; http_uri; pcre:"/file\[path\][^&]*\//i"; classtype:web-application-attack; sid:1000014; rev:1;)
@@ -274,7 +274,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Malicious User Agent - Burp Su
 # Scanning and Reconnaissance – Version Fingerprinting Probes
 # OWASP WSTG-INFO-02: Fingerprint Web Application Framework
 # Accessing wp-includes/version.php directly reveals the exact WordPress
-# version in plain text, enabling targeted CVE selection by the attacker.
+# version in plain text, enabling targeted CVE selection by the adversary.
 #--------------------------------------------------------------------------
 alert http any any -> $HOME_NET $HTTP_PORTS (msg:"WordPress Version Detection"; flow:established,to_server; content:"wp-includes/version.php"; http_uri; classtype:web-application-attack; sid:1000049; rev:1;)
 
@@ -348,7 +348,7 @@ alert http any any -> $HOME_NET $HTTP_PORTS (msg:"Honeypot Trigger - Automated T
 # each pool to learn whether setup is done (see router.lua's install.php
 # routing). That URI matches the wp-admin branch of the pcre below, so across
 # all pools the proxy's single IP crossed 5 hits/60s and false-fired this
-# "rapid scanning" alert with no attacker present. The probe carries a
+# "rapid scanning" alert with no adversary present. The probe carries a
 # dedicated User-Agent (health_check.lua's HEALTHCHECK_USER_AGENT) real
 # clients never send, so excluding it drops only the probe, not genuine
 # wp-admin/wp-login/xmlrpc scanning by an actual visitor.

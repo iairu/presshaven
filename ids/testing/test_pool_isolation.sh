@@ -8,7 +8,7 @@
 #   wiring) and at runtime (actual credential-level isolation).
 #
 #   Unlike the scenario_NN_*.sh scripts in this directory (which demonstrate
-#   attacker techniques against a single pool), this is a regression/infra
+#   adversary techniques against a single pool), this is a regression/infra
 #   test: it verifies the pooling architecture's own isolation guarantee
 #   holds, independent of any specific attack.
 #
@@ -18,7 +18,7 @@
 #   Isolation therefore depends entirely on each pool's MySQL user having a
 #   DIFFERENT password. Until this was fixed, all three pools (and
 #   production) shared the same MYSQL_PASSWORD, so a compromised pool could
-#   authenticate directly into another attacker's pool database -- see
+#   authenticate directly into another adversary's pool database -- see
 #   docker-compose.yml's honeypot_database_N block and MYSQL_PASSWORD_POOL_2/
 #   MYSQL_PASSWORD_POOL_3 in .env.
 #

@@ -3,9 +3,9 @@
 # scenario_08_backup_deletion_attempt.sh
 #
 # PURPOSE:
-#   Simulates an attacker who has obtained a shell inside a honeypot container
+#   Simulates an adversary who has obtained a shell inside a honeypot container
 #   and attempts to find and destroy backup files.  Verifies that the backup
-#   volume isolation design prevents the attacker from reaching production
+#   volume isolation design prevents the adversary from reaching production
 #   backup data.
 #
 # ATTACK CHAIN OVERVIEW:
@@ -31,7 +31,7 @@
 #   TARGET_PORT  HTTP port of the reverse proxy      (default: 80)
 #
 # EXIT CODES:
-#   0  All containment checks passed (attacker could not destroy backups).
+#   0  All containment checks passed (adversary could not destroy backups).
 #   1  One or more containment checks failed (backup isolation gap found).
 #   2  Prerequisites missing (curl).
 #
@@ -265,7 +265,7 @@ printf "Backup dir  : %s\n\n" "${HOST_BACKUP_DIR}"
 # =============================================================================
 # PHASE 1 – Filesystem Enumeration Inside the Honeypot Container
 # =============================================================================
-# An attacker with a shell inside the honeypot WordPress container would first
+# An adversary with a shell inside the honeypot WordPress container would first
 # enumerate the filesystem to locate backup files, database dumps, and other
 # valuable or destructible data.
 #
@@ -283,7 +283,7 @@ docker_must_succeed \
     "${HP_ESHOP_CONTAINER}" \
     "test -d /var/www/html/wp-content"
 
-# 1b. Confirm wp-config.php is present (attackers read this for DB credentials).
+# 1b. Confirm wp-config.php is present (adversaries read this for DB credentials).
 docker_must_succeed \
     "wp-config.php readable inside honeypot container" \
     "${HP_ESHOP_CONTAINER}" \
@@ -334,7 +334,7 @@ docker_output_check \
 # =============================================================================
 # PHASE 2 – Direct Backup Deletion Attempts from Inside the Container
 # =============================================================================
-# The attacker tries every plausible path where backup files might be located.
+# The adversary tries every plausible path where backup files might be located.
 # All attempts must fail because the backup volume is not mounted.
 # =============================================================================
 banner "Phase 2 – Backup Deletion Attempts from Honeypot Container"
@@ -378,7 +378,7 @@ do
         "ls ${_alt_path} 2>/dev/null && rm -rf ${_alt_path}/*.gz 2>/dev/null"
 done
 
-# 2f. Attempt to use wget/curl to exfiltrate a backup file to attacker server.
+# 2f. Attempt to use wget/curl to exfiltrate a backup file to adversary server.
 #     The outbound connection must be blocked by the network policy.
 docker_must_fail \
     "Backup exfiltration via curl blocked (no outbound internet)" \
@@ -388,7 +388,7 @@ docker_must_fail \
 # =============================================================================
 # PHASE 3 – Network Lateral Movement to Backup Service
 # =============================================================================
-# The attacker discovers the backup_service container on the internal network
+# The adversary discovers the backup_service container on the internal network
 # (via /etc/hosts or DNS enumeration) and attempts to:
 #   a) Connect to its SSH port (none present – container runs /bin/sh).
 #   b) Kill the backup service process remotely.
@@ -430,7 +430,7 @@ docker_must_succeed \
 # =============================================================================
 # PHASE 4 – Attempt to Destroy Production Database
 # =============================================================================
-# The attacker tries to reach the production MySQL database to drop tables or
+# The adversary tries to reach the production MySQL database to drop tables or
 # the entire database.  Network isolation must prevent this.
 # =============================================================================
 banner "Phase 4 – Attempt to Destroy Production Database"
@@ -458,7 +458,7 @@ docker_must_succeed \
 # =============================================================================
 # PHASE 5 – Destructive Actions Within the Honeypot Container
 # =============================================================================
-# The attacker attempts to destroy the WordPress installation inside the
+# The adversary attempts to destroy the WordPress installation inside the
 # honeypot container itself (wiping the fake environment).  While this is
 # allowed from a containment perspective (the honeypot is sacrificial), we
 # verify that these actions do NOT affect the production WordPress instance.
@@ -484,7 +484,7 @@ fi
 
 # 5b. Delete the canary file from inside the honeypot container.
 docker_must_succeed \
-    "Attacker can delete files within the honeypot container (expected)" \
+    "Adversary can delete files within the honeypot container (expected)" \
     "${HP_ESHOP_CONTAINER}" \
     "rm -f /var/www/html/wp-content/uploads/canary_test.txt"
 
@@ -499,7 +499,7 @@ docker_must_fail \
 # 5d. Attempt to delete the honeypot WordPress core files.
 #     This is destructive to the honeypot but should NOT affect production.
 docker_must_succeed \
-    "Attacker can remove wp-includes inside honeypot (honeypot is sacrificial)" \
+    "Adversary can remove wp-includes inside honeypot (honeypot is sacrificial)" \
     "${HP_ESHOP_CONTAINER}" \
     "rm -rf /var/www/html/wp-includes/ID3 2>/dev/null"
 
@@ -513,7 +513,7 @@ docker_must_succeed \
 # PHASE 6 – Host Backup Volume Integrity Check
 # =============================================================================
 # After all the container-level attacks, verify that the backup files on the
-# Docker host volume are intact.  The attacker inside the container had no
+# Docker host volume are intact.  The adversary inside the container had no
 # path to reach these files.
 # =============================================================================
 banner "Phase 6 – Host Backup Volume Integrity Check"
@@ -525,7 +525,7 @@ if [ -d "${HOST_BACKUP_DIR}" ]; then
         2>/dev/null | wc -l | tr -d ' ')
     printf "  ${GREEN}[INFO]${NC} Backup files found on host: %s\n" "${_backup_files}"
     if [ "${_backup_files}" -gt 0 ]; then
-        printf "  ${GREEN}[PASS]${NC} Backup files exist on host volume (not deleted by attacker)\n"
+        printf "  ${GREEN}[PASS]${NC} Backup files exist on host volume (not deleted by adversary)\n"
         PASS=$((PASS + 1))
     else
         printf "  ${YELLOW}[WARN]${NC} No backup files found yet in %s (service may not have run)\n" \
@@ -539,7 +539,7 @@ else
            "${HOST_BACKUP_DIR}"
 fi
 
-# Verify the backup_service container itself is still running (attacker could
+# Verify the backup_service container itself is still running (adversary could
 # not kill it via the honeypot network).
 TOTAL=$((TOTAL + 1))
 if command -v docker >/dev/null 2>&1; then
@@ -641,7 +641,7 @@ fi
 
 printf "\n"
 if [ "${FAIL}" -eq 0 ]; then
-    printf "${GREEN}SCENARIO PASSED – Backup isolation held; attacker could not destroy backups or reach production.${NC}\n"
+    printf "${GREEN}SCENARIO PASSED – Backup isolation held; adversary could not destroy backups or reach production.${NC}\n"
     exit 0
 else
     printf "${RED}SCENARIO FAILED – %d containment check(s) failed.${NC}\n" "${FAIL}"

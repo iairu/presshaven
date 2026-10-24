@@ -37,7 +37,7 @@
 #
 # NOTES:
 #   - Each WSTG category uses a fresh cookie jar to simulate an independent
-#     attacker session so earlier detections do not carry forward.
+#     adversary session so earlier detections do not carry forward.
 #   - Payloads are representative samples; exhaustive fuzzing is out of scope.
 #   - "production" expected routes indicate baseline legitimacy checks that
 #     confirm no false-positive regression occurred after the attack traffic.
@@ -215,7 +215,7 @@ banner "WSTG-INFO (1) – Information Gathering"
 JAR_INFO="$(mktemp /tmp/wstg_info_XXXXXX.txt)"
 
 sub_banner "WSTG-INFO-01: Search Engine Discovery"
-# Robots.txt and sitemap are read by attackers to enumerate hidden paths.
+# Robots.txt and sitemap are read by adversaries to enumerate hidden paths.
 check "${JAR_INFO}" "robots.txt fetch (INFO-01)" "production" \
     --request GET "${BASE_URL}/robots.txt" \
     --header "User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)"
@@ -234,7 +234,7 @@ check_header "X-Powered-By absent on production (INFO-02)" \
     "X-Powered-By" 0 "${BASE_URL}/"
 
 sub_banner "WSTG-INFO-03: Web Application Fingerprinting"
-# readme.html is left on unpatched WordPress installs; attackers fetch it to
+# readme.html is left on unpatched WordPress installs; adversaries fetch it to
 # confirm the major version.  The WPScan UA immediately crosses the threshold.
 check "${JAR_INFO}" "readme.html with scanner UA (INFO-03)" "honeypot" \
     --request GET "${BASE_URL}/readme.html" \
@@ -653,7 +653,7 @@ rm -f "${JAR_AUTHZ}"
 # References: WSTG-SESS-01 through WSTG-SESS-09
 #
 # Goal: Verify that session-based attacks (fixation, hijacking, CSRF) are
-# detected and that the session binding mechanism routes attackers who attempt
+# detected and that the session binding mechanism routes adversaries who attempt
 # to steal or forge sessions to the honeypot.
 # =============================================================================
 banner "WSTG-SESS (6) – Session Management Testing"
@@ -783,7 +783,7 @@ check "${JAR_INPV}" "Stored XSS via comment POST (INPV-02)" "honeypot" \
     --request POST "${BASE_URL}/wp-comments-post.php" \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --header "User-Agent: Mozilla/5.0 (compatible)" \
-    --data "comment=%3Cscript%3Ealert%281%29%3C%2Fscript%3E&author=Attacker&email=atk%40evil.example&url=&submit=Post+Comment&comment_post_ID=1&comment_parent=0"
+    --data "comment=%3Cscript%3Ealert%281%29%3C%2Fscript%3E&author=Adversary&email=atk%40evil.example&url=&submit=Post+Comment&comment_post_ID=1&comment_parent=0"
 
 sub_banner "WSTG-INPV-03: Test HTTP Verb Tampering"
 # Non-standard HTTP method to bypass WAF rules.

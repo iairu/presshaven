@@ -4,7 +4,7 @@ Embeds the production wp-admin panel and, on demand, fans the editor's changes
 out to every honeypot pool with a staged progress bar. The point of the page:
 a single place to manage the WordPress + WooCommerce shop so that pages, posts,
 products and safe settings stay identical between production and the decoys an
-attacker lands in -- without ever copying user accounts, orders or any secret
+adversary lands in -- without ever copying user accounts, orders or any secret
 (API keys, passwords, payment-gateway config).
 
 Two moving parts keep the editing session safe:
@@ -182,7 +182,7 @@ class WpStudioPage(QWidget):
         root.addWidget(muted_label(
             "Edit the real shop below. Changes land in production; press "
             "“Propagate to honeypot pools” to mirror them into every decoy at "
-            "once, so attackers always see the same catalog your customers do."))
+            "once, so adversaries always see the same catalog your customers do."))
 
         self.error_banner = ErrorBanner()
         root.addWidget(self.error_banner)

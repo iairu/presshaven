@@ -174,7 +174,7 @@ printf "Target : %s\n\n" "${BASE_URL}"
 # =============================================================================
 # PHASE 1 – Stripe API Key and Webhook Secret Exposure Probes
 # =============================================================================
-# Attackers look for accidentally exposed Stripe keys in:
+# Adversaries look for accidentally exposed Stripe keys in:
 #   - WordPress option values surfaced via the REST API
 #   - wp-config.php (if readable)
 #   - Plugin settings pages
@@ -309,7 +309,7 @@ rm -f "${JAR_P2}"
 # PHASE 3 – Webhook Signature Bypass / Replay Attack
 # =============================================================================
 # Stripe webhooks are signed with a HMAC-SHA256 signature using the webhook
-# secret.  Attackers may attempt to:
+# secret.  Adversaries may attempt to:
 #   a) Replay a captured legitimate webhook payload with a stale timestamp.
 #   b) Send a forged webhook with an invalid signature (sig bypass).
 #   c) Inject a fake "payment_intent.succeeded" event to mark an order paid
@@ -436,7 +436,7 @@ rm -f "${JAR_P4}"
 # =============================================================================
 # PHASE 5 – Card Testing (Carding Attack Simulation)
 # =============================================================================
-# Attackers use automated bots to test stolen card numbers against a merchant's
+# Adversaries use automated bots to test stolen card numbers against a merchant's
 # checkout with minimal-value transactions.  This phase sends rapid checkout
 # requests with Stripe test card numbers to verify the detection fires and
 # the requests are routed to the honeypot, not the live payment processor.

@@ -23,10 +23,18 @@ const toc = [
 ---
 <DocsLayout title="Documentation" description="Technical documentation for the Honeypot IDS System" section="Docs" sidebar={sidebar} toc={toc}>
   <p>
-    This knowledge hub documents the Honeypot IDS System: a WordPress/WooCommerce storefront behind an
-    OpenResty reverse proxy that scores every request in Lua and diverts suspicious sessions into isolated
-    honeypot pools. The pages are written against the modules and deployment files in
+    This knowledge hub documents the Honeypot IDS System: a <strong>defensive security platform</strong> for a
+    WordPress/WooCommerce storefront behind an OpenResty reverse proxy that scores every request in Lua and diverts
+    suspicious sessions into isolated honeypot pools. Today it is a high-interaction honeypot; the goal is to grow
+    into a <strong>security management layer above WordPress + WooCommerce instances</strong>. The pages are written
+    against the modules and deployment files in
     <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener">github.com/iairu/honeypot-ids</a>.
+  </p>
+  <p>
+    <strong>Defensive only.</strong> Everything here operates on the defender's own infrastructure: it observes,
+    diverts and records. The system performs <strong>no offensive tracking and no offensive security</strong> — no
+    hack-back, no beacons or callbacks to adversary machines, no retaliation. Deception serves solely to protect the
+    real store.
   </p>
 
   <h2 id="start">Start Here</h2>
