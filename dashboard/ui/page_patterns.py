@@ -60,6 +60,7 @@ from core.env_upload import EnvUploadError, load_project_env
 from core.patterns import (COMPONENTS, GDPR_RESTORE_PRESET, PATTERN_PRESETS, KINDS, SURFACES,
                            PatternPreset, build_curl_argv, filter_presets, group_presets,
                            is_gdpr_restore, selection_label)
+from core.pattern_registry import active_presets
 from core import pattern_report_pdf
 from core.pattern_report import ReportError, ReportWorker
 from core.redis_inspect import RedisInspectError, clear_local_threat_state
@@ -153,7 +154,7 @@ def _populate_preset_combo(combo: QComboBox, include_blank: bool = False,
     combo.clear()
     if include_blank:
         combo.addItem("(blank request)", None)
-    for heading, presets in group_presets(PATTERN_PRESETS, kind, component, surface):
+    for heading, presets in group_presets(active_presets(), kind, component, surface):
         if heading:
             _add_group_heading(combo, heading)
         for preset in presets:
@@ -699,7 +700,7 @@ class PatternsPage(QWidget):
     def _selected_presets(self) -> list[PatternPreset]:
         """Every preset the selector lists that can run in the current layer
         (the greyed, non-DB-isolatable ones are left out)."""
-        return [p for p in filter_presets(PATTERN_PRESETS, *self._selection())
+        return [p for p in filter_presets(active_presets(), *self._selection())
                 if p.db_isolated or not honeypot_layer.is_database()]
 
     def _apply_category_filters(self) -> None:
@@ -728,6 +729,13 @@ class PatternsPage(QWidget):
         self._apply_category_filters()
         _populate_preset_combo(self.manual_tab.preset_combo, include_blank=True)
         self.coverage_note.setVisible(honeypot_layer.is_database())
+
+    def reload_patterns(self) -> None:
+        """A pattern was enabled/disabled/added/removed in the Pattern Database:
+        rebuild the selector and the manual preset list so the battery reflects
+        only the patterns that are currently enabled."""
+        self._apply_category_filters()
+        _populate_preset_combo(self.manual_tab.preset_combo, include_blank=True)
 
     # ---- reachability banner (production_eshop, reverse_proxy, and the
     # honeypot pools or both databases, depending on the layer) ----
@@ -1180,7 +1188,7 @@ class PatternsPage(QWidget):
         # its header names the selection. Unlike Multi-run it keeps the
         # non-DB-isolatable ones in the database layer: the report's bypass
         # section is where those are shown.
-        presets = filter_presets(PATTERN_PRESETS, *self._selection())
+        presets = filter_presets(active_presets(), *self._selection())
         if not presets:
             QMessageBox.information(self, "Nothing to export",
                                     "No pattern matches the current selection.")

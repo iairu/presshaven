@@ -47,6 +47,7 @@ from PyQt6.QtWidgets import (
 from core import honeypot_layer, redis_inspect
 from core.docker_ctl import target_for
 from core.patterns import PATTERN_PRESETS, GDPR_RESTORE_PRESET, is_gdpr_restore
+from core.pattern_registry import active_presets
 from core import pool_evidence
 from core.pool_test_report import (COOKIE_FORGERIES, ProductListUnreadable, capacity_warning, CART_PLAN, MAX_ATTEMPTS, MAX_WINDOWS,
                                     MIN_WINDOWS, CartState, ClearEvent, Decision, PatternRun, FrameResult,
@@ -542,7 +543,7 @@ class PoolTestPage(QWidget):
         """The GET patterns a window can open by hand (the same in both
         layers; a report run on the database layer picks which reach the
         honeypot database, see core.pool_test_report.window_plan)."""
-        self._presets = [p for p in PATTERN_PRESETS if p.method.upper() == "GET"]
+        self._presets = [p for p in active_presets() if p.method.upper() == "GET"]
         # Plus the GDPR-signature demonstration: selecting it keeps the per-window
         # attacks (chosen by window_plan) but makes the run force the "clear all
         # site data" tamper on, so at least one diverted window clears and
@@ -559,6 +560,12 @@ class PoolTestPage(QWidget):
         """The Workloads page switched the honeypot layer (only the intro and a
         report run's pattern choice depend on it; the dropdown is the same)."""
         self.intro.setText(self._intro_text())
+
+    def reload_patterns(self) -> None:
+        """A pattern was enabled/disabled/added/removed in the Pattern Database:
+        rebuild the preset dropdown so a disabled pattern can no longer be
+        chosen for a segmentation run."""
+        self._fill_presets()
 
     def _pool_kind(self) -> str:
         return ("a honeypot database cloned from production" if self._layer_db

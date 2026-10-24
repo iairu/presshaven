@@ -308,6 +308,10 @@ class MainWindow(QMainWindow):
         self.kibana_page = KibanaPage(state)
         self.patterns_page = PatternsPage(state)
         self.pattern_database_page = PatternDatabasePage()
+        # Enabling/disabling (or adding/removing) a pattern in the database is
+        # a pattern-plugin change: the pages that run patterns re-read the
+        # registry so a disabled pattern stops being simulated at once.
+        self.pattern_database_page.registry_changed.connect(self._on_pattern_registry_changed)
         # Every pattern run drops a time-aligned marker onto the Resources
         # graphs so its resource impact is visible.
         self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
@@ -768,6 +772,14 @@ class MainWindow(QMainWindow):
         self.patterns_page.set_honeypot_layer()
         self.pool_test_page.set_honeypot_layer()
         self.poller.poll_now()
+
+    def _on_pattern_registry_changed(self) -> None:
+        """The Pattern Database page enabled/disabled/added/removed a pattern:
+        the Attack Simulation battery and the Segmentation Validation preset
+        list both re-read the registry so they only ever run patterns that are
+        currently enabled."""
+        self.patterns_page.reload_patterns()
+        self.pool_test_page.reload_patterns()
 
     def set_poll_interval(self, interval_ms: int) -> None:
         self.state.poll_interval_ms = interval_ms

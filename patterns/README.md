@@ -60,6 +60,29 @@ Each entry has:
 Top-level keys are `version`, `generated`, `source_files`, `sources`, `kinds`,
 `categories`, `counts` and `patterns`.
 
-The `enabled` field is already present and defaults to `true`, but the UI
-controls that would change it are deliberately disabled scaffolding until the
-pattern-plugin registry exists. Export and copy actions are functional today.
+## Registry (the mutable overlay)
+
+`patterns.json` is generated and read-only. The *mutable* layer lives beside it
+in `patterns/registry.json`, owned by `dashboard/core/pattern_registry.py`:
+
+- **overrides** — per-id field changes on a generated pattern (`enabled`
+  included), so disabling or editing a pattern never touches the generated
+  file. Enabling a pattern again prunes the override, so the file only records
+  real deviations.
+- **custom** — full records for patterns the user authored in the Pattern
+  Database page (`kind`/`category`/`severity`/… filled out to the catalogue
+  shape by `normalise_custom`).
+
+`load_catalog(registry)` returns the generated catalogue with the registry
+folded in; that merged catalogue is what the dashboard shows. The Pattern
+Database page is the editor: a per-row checkbox enables/disables, and
+per-pattern and bulk actions add, edit, duplicate, remove, revert and export.
+
+A pattern switched **off** here is dropped from the Attack Simulation battery
+and the Segmentation Validation preset list (`active_presets()` /
+`disabled_preset_cves()`), so "off in the database" means off everywhere it
+runs. The reverse-proxy and Suricata exporters are expected to read the same
+registry next, so the one enable/disable decision reaches the live edge too.
+
+A missing or corrupt `registry.json` loads as an empty registry (every pattern
+enabled, nothing custom): deleting the file is a clean reset.

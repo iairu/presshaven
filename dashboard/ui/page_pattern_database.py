@@ -9,10 +9,13 @@ lesson.
 The catalogue is deliberately read from ``patterns/patterns.json`` (generated
 by ``tools/generate_pattern_catalog.py``) rather than rebuilt from the Lua
 source in the GUI: the same file feeds the documentation site, so both views
-cannot drift apart.  The page is also the scaffold for the upcoming
-"patterns as plugins" workflow -- stable IDs, per-entry metadata, and export
-already exist; the add/edit/remove/enable controls are visible but disabled
-until the engine-side registry lands.
+cannot drift apart.  On top of that read-only catalogue the page applies the
+*pattern-plugin registry* (``core.pattern_registry`` / ``patterns/registry.
+json``), the one mutable layer: each row's checkbox enables or disables a
+pattern, and per-pattern and bulk actions add, edit, duplicate, remove, revert
+and export.  Disabling a pattern here removes it from the Attack Simulation
+battery and the Segmentation Validation run through the ``registry_changed``
+signal, so "off in the database" means off everywhere it runs.
 """
 from __future__ import annotations
 
@@ -21,11 +24,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFontDatabase, QGuiApplication
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView,
-    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
+    QLabel, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
     QScrollArea, QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
@@ -33,7 +36,9 @@ from PyQt6.QtWidgets import (
 from ui import theme
 from core.colors import BLUE, GREY, ORANGE, RED
 from core.pattern_catalog import PatternCatalog
-from ui.common import ErrorBanner, badge_css
+from core.pattern_registry import PatternRegistry, load_catalog
+from ui.common import ErrorBanner, badge_css, confirm
+from ui.pattern_edit_dialog import PatternEditDialog
 from ui.responsive import ResponsiveSplitter
 
 _SEVERITY_COLOR = {
@@ -94,10 +99,17 @@ def _source_labels(catalog: PatternCatalog, pattern: dict, limit: int = 3) -> st
 
 
 class PatternDatabasePage(QWidget):
+    # Emitted after any registry change (enable/disable, add, edit, remove) so
+    # the main window can refresh the pages that run patterns -- Attack
+    # Simulation and Segmentation Validation -- without re-reading the file on
+    # their own.
+    registry_changed = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.catalog = PatternCatalog(patterns=[], by_id={}, sources={}, kinds={},
                                       categories={}, counts={})
+        self.registry = PatternRegistry.load()
         self._filtered: list[dict] = []
         self._selected_id = ""
         self._loading = False
@@ -112,11 +124,12 @@ class PatternDatabasePage(QWidget):
         self.summary.setTextFormat(Qt.TextFormat.RichText)
         self.summary.setWordWrap(True)
         summary_row.addWidget(self.summary, stretch=1)
-        self.plugin_badge = QLabel("PLUGIN-READY")
+        self.plugin_badge = QLabel("PLUGINS LIVE")
         self.plugin_badge.setToolTip(
-            "Every entry has a stable ID, provenance and export shape. "
-            "Add / edit / remove / enable controls will use these IDs when the "
-            "pattern-plugin registry lands.")
+            "Each pattern is a plugin: tick a row to enable/disable it, or use "
+            "the per-pattern and bulk actions to add, edit, remove or export. "
+            "Changes live in patterns/registry.json and reach the Attack "
+            "Simulation and Segmentation Validation pages immediately.")
         summary_row.addWidget(self.plugin_badge, alignment=Qt.AlignmentFlag.AlignTop)
         outer.addLayout(summary_row)
 
@@ -171,20 +184,39 @@ class PatternDatabasePage(QWidget):
         row3.addWidget(self.count_label)
         row3.addStretch(1)
         self.reload_btn = QPushButton("Reload catalogue")
-        self.reload_btn.setToolTip("Re-read patterns/patterns.json from disk")
+        self.reload_btn.setToolTip("Re-read patterns/patterns.json and the registry from disk")
         row3.addWidget(self.reload_btn)
         self.export_btn = QPushButton("Export filtered…")
         self.export_btn.setToolTip("Save the currently filtered catalogue as JSON")
         row3.addWidget(self.export_btn)
         self.add_btn = QPushButton("Add pattern")
-        self.add_btn.setEnabled(False)
-        self.add_btn.setToolTip("Scaffolded for the upcoming pattern-plugin registry")
+        self.add_btn.setToolTip("Author a new custom pattern (stored in patterns/registry.json)")
         row3.addWidget(self.add_btn)
-        self.import_btn = QPushButton("Import")
-        self.import_btn.setEnabled(False)
-        self.import_btn.setToolTip("Scaffolded for the upcoming pattern-plugin registry")
+        self.import_btn = QPushButton("Import…")
+        self.import_btn.setToolTip("Import patterns from a honeypot-ids export file")
         row3.addWidget(self.import_btn)
         filters_layout.addLayout(row3)
+
+        # Bulk actions operate on the ticked/selected rows, falling back to the
+        # whole filtered set when nothing is selected -- so "disable everything
+        # I'm currently looking at" is one click, and the enable/disable
+        # decision reaches the Attack Simulation and Segmentation pages at once.
+        row4 = QHBoxLayout()
+        self.selection_label = QLabel("")
+        self.selection_label.setStyleSheet(f"color: {theme.scheme_colors()['fg_muted']};")
+        row4.addWidget(self.selection_label)
+        row4.addStretch(1)
+        self.bulk_enable_btn = QPushButton("Enable")
+        self.bulk_enable_btn.setToolTip("Enable the selected patterns (or every filtered pattern)")
+        self.bulk_disable_btn = QPushButton("Disable")
+        self.bulk_disable_btn.setToolTip("Disable the selected patterns (or every filtered pattern)")
+        self.bulk_export_btn = QPushButton("Export selected…")
+        self.bulk_remove_btn = QPushButton("Remove…")
+        self.bulk_remove_btn.setToolTip("Delete custom patterns / revert edited ones")
+        for btn in (self.bulk_enable_btn, self.bulk_disable_btn,
+                    self.bulk_export_btn, self.bulk_remove_btn):
+            row4.addWidget(btn)
+        filters_layout.addLayout(row4)
         outer.addWidget(filters)
 
         # ---- table + detail side panel ----------------------------------
@@ -196,7 +228,9 @@ class PatternDatabasePage(QWidget):
             ["Pattern", "Type", "Category", "Severity", "Sources"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.setWordWrap(False)
@@ -211,6 +245,7 @@ class PatternDatabasePage(QWidget):
         self.table.setMinimumWidth(0)
         self.table.setMinimumHeight(330)
         self.table.itemSelectionChanged.connect(self._on_select)
+        self.table.itemChanged.connect(self._on_item_changed)
         self.split.addWidget(self.table)
 
         self.detail_scroll = QScrollArea()
@@ -234,6 +269,12 @@ class PatternDatabasePage(QWidget):
         self.reset_btn.clicked.connect(self._reset_filters)
         self.reload_btn.clicked.connect(self.reload)
         self.export_btn.clicked.connect(self._export_filtered)
+        self.add_btn.clicked.connect(self._add_pattern)
+        self.import_btn.clicked.connect(self._import_patterns)
+        self.bulk_enable_btn.clicked.connect(lambda: self._bulk_set_enabled(True))
+        self.bulk_disable_btn.clicked.connect(lambda: self._bulk_set_enabled(False))
+        self.bulk_export_btn.clicked.connect(self._export_selected)
+        self.bulk_remove_btn.clicked.connect(self._bulk_remove)
 
         theme.on_change(self._theme_changed)
         self._apply_static_theme()
@@ -274,7 +315,8 @@ class PatternDatabasePage(QWidget):
             return
         self._loading = True
         try:
-            self.catalog = PatternCatalog.load()
+            self.registry = PatternRegistry.load()
+            self.catalog = load_catalog(self.registry)
             self.error_banner.set_error(None)
         except Exception as exc:  # noqa: BLE001 -- a missing/stale file must not kill the page
             self.catalog = PatternCatalog(patterns=[], by_id={}, sources={}, kinds={},
@@ -327,15 +369,21 @@ class PatternDatabasePage(QWidget):
             self.summary.setText(f"<span style='color:{muted}'>No pattern catalogue loaded.</span>")
             return
         total = c.get("total", len(self.catalog.patterns))
-        cves = c.get("cves", 0)
+        disabled = c.get("disabled", sum(1 for p in self.catalog.patterns
+                                         if not p.get("enabled", True)))
+        custom = c.get("custom", 0)
         sids = c.get("suricata_sids", 0)
         sources = len(self.catalog.source_options())
         generated = self.catalog.generated or "unknown date"
+        disabled_txt = (f"<span style='color:{muted}'> · </span>"
+                        f"<b style='color:{ORANGE}'>{disabled}</b> "
+                        f"<span style='color:{muted}'>disabled</span>") if disabled else ""
+        custom_txt = (f"<span style='color:{muted}'> · </span>"
+                      f"<b>{custom}</b> <span style='color:{muted}'>custom</span>") if custom else ""
         self.summary.setText(
             f"<span style='font-size:15pt;font-weight:700;color:{accent}'>{total}</span> "
             f"<span style='color:{muted}'>patterns</span>"
-            f"<span style='color:{muted}'> · </span>"
-            f"<b>{cves}</b> <span style='color:{muted}'>CVEs</span>"
+            f"{disabled_txt}{custom_txt}"
             f"<span style='color:{muted}'> · </span>"
             f"<b>{sids}</b> <span style='color:{muted}'>Suricata SIDs</span>"
             f"<span style='color:{muted}'> · </span>"
@@ -365,17 +413,42 @@ class PatternDatabasePage(QWidget):
         shown = len(self._filtered)
         self.count_label.setText(f"{shown} of {total} shown")
         self.export_btn.setEnabled(bool(self._filtered))
+        self._update_selection_label()
 
     def _fill_table(self) -> None:
         previous = self._selected_id
         self.table.blockSignals(True)
         self.table.setRowCount(0)
+        muted = QColor(theme.scheme_colors()["fg_muted"])
+        accent = QColor(theme.scheme_colors()["accent"])
         for pattern in self._filtered:
+            pattern_id = pattern.get("id", "")
+            enabled = bool(pattern.get("enabled", True))
+            is_custom = self.registry.is_custom(pattern_id)
+            is_edited = self.registry.is_edited(pattern_id)
             row = self.table.rowCount()
             self.table.insertRow(row)
-            name_item = QTableWidgetItem(pattern.get("name", pattern.get("id", "")))
-            name_item.setData(_ROLE_ID, pattern.get("id", ""))
-            name_item.setToolTip(f"{pattern.get('id', '')}\n{pattern.get('description', '')}")
+
+            name = pattern.get("name", pattern_id)
+            if is_custom:
+                name = "✎ " + name
+            elif is_edited:
+                name = "• " + name
+            name_item = QTableWidgetItem(name)
+            name_item.setData(_ROLE_ID, pattern_id)
+            # The row's checkbox IS the enable/disable control.
+            name_item.setFlags((name_item.flags() | Qt.ItemFlag.ItemIsUserCheckable))
+            name_item.setCheckState(
+                Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked)
+            tip = [pattern_id, pattern.get("description", "")]
+            if is_custom:
+                tip.append("Custom pattern (stored in patterns/registry.json).")
+            elif is_edited:
+                tip.append("Edited — overlay stored in patterns/registry.json.")
+            if not enabled:
+                tip.append("Disabled — excluded from Attack Simulation and "
+                           "Segmentation Validation.")
+            name_item.setToolTip("\n".join(t for t in tip if t))
             font = name_item.font()
             font.setBold(True)
             name_item.setFont(font)
@@ -393,6 +466,17 @@ class PatternDatabasePage(QWidget):
                 f"{s.get('label', s.get('key', ''))} — {s.get('detail', '')}"
                 for s in pattern.get("sources", [])))
             self.table.setItem(row, 4, sources_item)
+
+            # A disabled pattern reads muted across the whole row; a custom one
+            # keeps its name in the accent colour so authored entries stand out.
+            for col in range(5):
+                item = self.table.item(row, col)
+                if item is None:
+                    continue
+                if not enabled and col != 3:
+                    item.setForeground(muted)
+                elif col == 0 and is_custom and enabled:
+                    item.setForeground(accent)
         self.table.blockSignals(False)
 
         target_row = -1
@@ -419,11 +503,214 @@ class PatternDatabasePage(QWidget):
         if row < 0:
             self._selected_id = ""
             self._show_detail("")
+            self._update_selection_label()
             return
         item = self.table.item(row, 0)
         pattern_id = item.data(_ROLE_ID) if item is not None else ""
         self._selected_id = pattern_id or ""
         self._show_detail(self._selected_id)
+        self._update_selection_label()
+
+    # ------------------------------------------------------------------
+    # enable / disable, selection, bulk and plugin actions
+    # ------------------------------------------------------------------
+    def _selected_ids(self) -> list[str]:
+        """IDs of the highlighted rows (the bulk-action target)."""
+        ids = []
+        for index in self.table.selectionModel().selectedRows():
+            item = self.table.item(index.row(), 0)
+            if item is not None:
+                pid = item.data(_ROLE_ID)
+                if pid:
+                    ids.append(pid)
+        return ids
+
+    def _bulk_target_ids(self) -> list[str]:
+        """What the bulk buttons act on: the selected rows, or every filtered
+        pattern when nothing is selected."""
+        selected = self._selected_ids()
+        if selected:
+            return selected
+        return [p.get("id", "") for p in self._filtered if p.get("id")]
+
+    def _update_selection_label(self) -> None:
+        selected = self._selected_ids()
+        n = len(selected)
+        if n:
+            self.selection_label.setText(f"{n} selected — bulk actions apply to these")
+        else:
+            self.selection_label.setText("No rows selected — bulk actions apply to all shown")
+        removable = any(self.registry.is_custom(i) or self.registry.is_edited(i)
+                        for i in (selected or self._bulk_target_ids()))
+        self.bulk_remove_btn.setEnabled(removable)
+
+    def _on_item_changed(self, item: QTableWidgetItem) -> None:
+        """A row checkbox was toggled: persist the enable/disable and let the
+        rest of the dashboard follow."""
+        if self._loading or item.column() != 0:
+            return
+        pattern_id = item.data(_ROLE_ID)
+        if not pattern_id:
+            return
+        enabled = item.checkState() == Qt.CheckState.Checked
+        if self.registry.is_enabled(pattern_id) == enabled:
+            return
+        self.registry.set_enabled(pattern_id, enabled)
+        self._commit("enabled" if enabled else "disabled", pattern_id)
+
+    def _bulk_set_enabled(self, enabled: bool) -> None:
+        ids = self._bulk_target_ids()
+        if not ids:
+            return
+        self.registry.set_many_enabled(ids, enabled)
+        self._commit(f"{'enabled' if enabled else 'disabled'} {len(ids)} pattern(s)")
+
+    def _bulk_remove(self) -> None:
+        ids = [i for i in self._bulk_target_ids()
+               if self.registry.is_custom(i) or self.registry.is_edited(i)]
+        if not ids:
+            QMessageBox.information(
+                self, "Remove patterns",
+                "Nothing to remove: only custom patterns can be deleted and only "
+                "edited patterns can be reverted. Generated patterns return on "
+                "reload — disable them instead.")
+            return
+        custom = [i for i in ids if self.registry.is_custom(i)]
+        edited = [i for i in ids if not self.registry.is_custom(i)]
+        parts = []
+        if custom:
+            parts.append(f"delete {len(custom)} custom pattern(s)")
+        if edited:
+            parts.append(f"revert {len(edited)} edited pattern(s) to the catalogue")
+        if not confirm(self, "Remove patterns", "This will " + " and ".join(parts) + "."):
+            return
+        for pattern_id in ids:
+            self.registry.remove(pattern_id)
+        self._commit(f"removed {len(ids)} pattern(s)")
+
+    def _add_pattern(self) -> None:
+        dialog = PatternEditDialog(self)
+        if dialog.exec() != PatternEditDialog.DialogCode.Accepted:
+            return
+        record = self.registry.add_custom(dialog.values())
+        self._selected_id = record["id"]
+        self._commit(f"added {record['id']}", record["id"])
+
+    def _edit_pattern(self, pattern: dict) -> None:
+        pattern_id = pattern.get("id", "")
+        generated = not self.registry.is_custom(pattern_id)
+        dialog = PatternEditDialog(self, pattern=pattern, generated=generated)
+        if dialog.exec() != PatternEditDialog.DialogCode.Accepted:
+            return
+        self.registry.override(pattern_id, dialog.values())
+        self._selected_id = pattern_id
+        self._commit(f"edited {pattern_id}", pattern_id)
+
+    def _duplicate_pattern(self, pattern: dict) -> None:
+        clone = {k: pattern.get(k) for k in (
+            "name", "kind", "kind_label", "category", "category_label",
+            "severity", "component", "surface", "description", "trigger",
+            "trigger_type", "notes", "tags", "wstg", "owasp", "mitre",
+            "attack_vector", "detection", "score", "score_note")}
+        clone["id"] = ""  # force a fresh slug
+        clone["name"] = (pattern.get("name", "pattern") + " (copy)")
+        record = self.registry.add_custom(clone)
+        self._selected_id = record["id"]
+        self._commit(f"duplicated as {record['id']}", record["id"])
+
+    def _remove_pattern(self, pattern: dict) -> None:
+        pattern_id = pattern.get("id", "")
+        is_custom = self.registry.is_custom(pattern_id)
+        if not is_custom and not self.registry.is_edited(pattern_id):
+            QMessageBox.information(
+                self, "Remove pattern",
+                "This is a generated pattern with no local edits — it would "
+                "return on the next reload. Disable it instead.")
+            return
+        verb = "Delete this custom pattern?" if is_custom else \
+            "Revert this pattern to its catalogue values?"
+        if not confirm(self, "Remove pattern", verb):
+            return
+        self.registry.remove(pattern_id)
+        self._commit(f"removed {pattern_id}")
+
+    def _revert_pattern(self, pattern_id: str) -> None:
+        if not confirm(self, "Revert pattern",
+                       "Discard local edits and restore the catalogue values?"):
+            return
+        self.registry.clear_override(pattern_id)
+        self._selected_id = pattern_id
+        self._commit(f"reverted {pattern_id}", pattern_id)
+
+    def _import_patterns(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Import patterns", str(Path.home()),
+            "JSON files (*.json);;All files (*)")
+        if not filename:
+            return
+        try:
+            raw = json.loads(Path(filename).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.critical(self, "Import patterns", f"Could not read {filename}:\n{exc}")
+            return
+        records = raw.get("patterns", raw) if isinstance(raw, dict) else raw
+        if not isinstance(records, list):
+            QMessageBox.critical(self, "Import patterns",
+                                 "Unrecognised file: expected a pattern export with a "
+                                 "'patterns' list.")
+            return
+        added = 0
+        for record in records:
+            if isinstance(record, dict) and record.get("name"):
+                self.registry.add_custom({**record, "id": ""})
+                added += 1
+        if not added:
+            QMessageBox.information(self, "Import patterns", "No patterns found to import.")
+            return
+        self._commit(f"imported {added} pattern(s)")
+
+    def _show_context_menu(self, pos) -> None:
+        item = self.table.itemAt(pos)
+        if item is None:
+            return
+        row = item.row()
+        id_item = self.table.item(row, 0)
+        pattern_id = id_item.data(_ROLE_ID) if id_item is not None else ""
+        pattern = self.catalog.by_id.get(pattern_id)
+        if not pattern:
+            return
+        menu = QMenu(self)
+        enabled = bool(pattern.get("enabled", True))
+        toggle = menu.addAction("Disable" if enabled else "Enable")
+        toggle.triggered.connect(lambda: self._toggle_one(pattern_id, not enabled))
+        menu.addAction("Edit…", lambda: self._edit_pattern(pattern))
+        menu.addAction("Duplicate…", lambda: self._duplicate_pattern(pattern))
+        menu.addAction("Export…",
+                       lambda: self._export_patterns([pattern], "selected pattern"))
+        if self.registry.is_custom(pattern_id):
+            menu.addAction("Delete…", lambda: self._remove_pattern(pattern))
+        elif self.registry.is_edited(pattern_id):
+            menu.addAction("Revert edits…", lambda: self._revert_pattern(pattern_id))
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def _toggle_one(self, pattern_id: str, enabled: bool) -> None:
+        self.registry.set_enabled(pattern_id, enabled)
+        self._commit("enabled" if enabled else "disabled", pattern_id)
+
+    def _commit(self, what: str, keep_id: str = "") -> None:
+        """Save the registry, rebuild the view from the merged catalogue and
+        tell the rest of the dashboard a pattern's state changed."""
+        try:
+            self.registry.save()
+        except OSError as exc:
+            QMessageBox.critical(self, "Pattern registry",
+                                 f"Could not write the pattern registry:\n{exc}")
+            return
+        if keep_id:
+            self._selected_id = keep_id
+        self.reload()
+        self.count_label.setText(f"Registry {what}")
+        self.registry_changed.emit()
 
     def _new_detail_host(self) -> None:
         """Swap in a fresh scroll-area body instead of deleteLater()ing the
@@ -606,26 +893,45 @@ class PatternDatabasePage(QWidget):
             self.detail_layout.addWidget(self._section(
                 "Notes", self._body_label(notes, color=c["fg"], size=9)))
 
-        # Plugin scaffold
+        # Plugin controls -- the working enable/disable + edit/remove surface.
+        pattern_id = pattern["id"]
+        is_custom = self.registry.is_custom(pattern_id)
+        is_edited = self.registry.is_edited(pattern_id)
         scaffold = QWidget()
         scaffold_layout = QVBoxLayout(scaffold)
         scaffold_layout.setContentsMargins(0, 0, 0, 0)
         scaffold_layout.setSpacing(5)
         enabled = QCheckBox("Enabled")
         enabled.setChecked(bool(pattern.get("enabled", True)))
-        enabled.setEnabled(False)
-        enabled.setToolTip("Read-only preview: toggles will use this stable ID once the pattern-plugin registry lands.")
+        enabled.setToolTip("When off, this pattern is excluded from Attack "
+                           "Simulation and Segmentation Validation.")
+        enabled.toggled.connect(lambda state, pid=pattern_id: self._toggle_one(pid, state))
         scaffold_layout.addWidget(enabled)
         controls = QHBoxLayout()
-        for label in ("Edit…", "Duplicate…", "Remove…"):
-            button = QPushButton(label)
-            button.setEnabled(False)
-            button.setToolTip("Scaffolded for the upcoming pattern-plugin registry")
-            controls.addWidget(button)
+        edit_btn = QPushButton("Edit…")
+        edit_btn.clicked.connect(lambda: self._edit_pattern(pattern))
+        controls.addWidget(edit_btn)
+        dup_btn = QPushButton("Duplicate…")
+        dup_btn.clicked.connect(lambda: self._duplicate_pattern(pattern))
+        controls.addWidget(dup_btn)
+        if is_custom:
+            remove_btn = QPushButton("Delete…")
+            remove_btn.clicked.connect(lambda: self._remove_pattern(pattern))
+            controls.addWidget(remove_btn)
+        elif is_edited:
+            revert_btn = QPushButton("Revert…")
+            revert_btn.clicked.connect(lambda pid=pattern_id: self._revert_pattern(pid))
+            controls.addWidget(revert_btn)
         controls.addStretch(1)
         scaffold_layout.addLayout(controls)
-        note = QLabel("Pattern plugins are next: the catalogue already provides the contract "
-                      "(stable ID, provenance, export payload, enabled state).")
+        if is_custom:
+            origin = "Custom pattern — authored here, stored in patterns/registry.json."
+        elif is_edited:
+            origin = "Edited — your changes overlay the generated catalogue entry."
+        else:
+            origin = ("Generated from a rule source. Disable it to switch it off, "
+                      "or edit to overlay changes; deletes return on the next reload.")
+        note = QLabel(origin)
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {c['fg_muted']}; font-size: 8.5pt;")
         scaffold_layout.addWidget(note)
@@ -730,3 +1036,11 @@ class PatternDatabasePage(QWidget):
 
     def _export_filtered(self) -> None:
         self._export_patterns(self._filtered, "filtered catalogue")
+
+    def _export_selected(self) -> None:
+        """Bulk export: the selected rows, or the whole filtered set when
+        nothing is selected (same target the other bulk actions use)."""
+        ids = self._bulk_target_ids()
+        patterns = [self.catalog.by_id[i] for i in ids if i in self.catalog.by_id]
+        what = "selected patterns" if self._selected_ids() else "filtered catalogue"
+        self._export_patterns(patterns, what)
