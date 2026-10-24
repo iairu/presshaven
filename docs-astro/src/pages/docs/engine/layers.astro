@@ -59,6 +59,16 @@ const toc = [
     the recorded figures. The database-level run exercises only data-layer patterns and checks the shared
     filesystem afterwards, because it has no separate backend to contain a file write (<code>ids/db_proxy/COVERAGE.md</code>).
   </p>
+  <div class="admonition note">
+    <div class="admonition-title">Budget vs. measured cost</div>
+    <p>The <code>~1536 MB / 1.5 CPU</code> above is the hard <em>container ceiling</em> per reverse-proxy
+    pool (1,024&nbsp;MB eshop + 512&nbsp;MB database), and the scaling budget charges a deliberately
+    generous 768&nbsp;MB per pool as headroom. At rest a pool uses far less: in the 2026-10-24 ten-window
+    run the pool containers peaked at a <strong>measured ~469&nbsp;MB each</strong> (4,687&nbsp;MB across 10
+    pools). Adding a pool took a median 27&nbsp;s (max 40&nbsp;s), dominated by the template copy, and a
+    diverted page load was as fast as production (median 372&nbsp;ms vs 360&nbsp;ms). See
+    <a href="/docs/testing#results">Validation Results</a> for the full figures.</p>
+  </div>
 
   <h2 id="reverse">Reverse-Proxy Level</h2>
   <p>

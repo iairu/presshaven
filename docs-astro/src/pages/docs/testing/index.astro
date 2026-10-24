@@ -105,15 +105,47 @@ bash testing/scenario_*.sh</code></pre>
   forgery attempts — to confirm a window cannot be pushed onto, or steal, another window's pool.</p>
   <table>
     <tr><th>Recorded run</th><th>Honeypot layer</th><th>Windows</th><th>Verdict</th></tr>
-    <tr><td>2026-10-18</td><td>WordPress (reverse-proxy) level</td><td>10, each on its own pool</td><td>EXCLUSIVE</td></tr>
+    <tr><td>2026-10-24</td><td>WordPress (reverse-proxy) level</td><td>10, each on its own pool</td><td>EXCLUSIVE</td></tr>
     <tr><td>2026-10-18</td><td>Database-proxy level</td><td>10, each on its own pool</td><td>EXCLUSIVE</td></tr>
   </table>
   <ul>
-    <li><strong>No shared pools below the resource ceiling.</strong> Every flagged session received an exclusive pool; round-robin reuse only happens once scaling hits <code>POOL_MAX</code> / the memory and CPU budget.</li>
-    <li><strong>Tampering was rejected.</strong> Forged and hijacked session cookies were scored as tampering and refused; a window that cleared its cookies was re-recognised by the passive fingerprint rather than handed a clean slate.</li>
-    <li><strong>Reassignment after scale-down worked.</strong> After a forced idle scale-down to the three Compose-declared pools, released sessions were reassigned to a surviving pool and their carts stayed intact.</li>
+    <li><strong>No shared pools below the resource ceiling.</strong> Every flagged session received an exclusive pool; round-robin reuse only happens once scaling hits <code>POOL_MAX</code> / the memory and CPU budget. In the 2026-10-24 run the limit (10 of <code>POOL_MAX</code>=10) was reached at 2:33, yet <strong>zero</strong> windows ended up sharing a pool — every later diversion still found a free spare.</li>
+    <li><strong>Tampering was rejected.</strong> Forged and hijacked session cookies were scored as tampering and refused; a window that cleared its cookies was re-recognised by the passive fingerprint rather than handed a clean slate. The run injected 5 cookie clearings (all 5 kept their session) and 2 forgeries — 1 browser-storage forgery <em>ignored</em> (the server never reads <code>localStorage</code>/<code>sessionStorage</code>) and 1 cookie hijack <em>rejected</em> (<code>bad_signature</code>, +50 scored as tampering, logged in Redis <code>session_cookie_rejections</code>). The real cookie is <code>SERVERID = &lt;session id&gt;.&lt;HMAC&gt;</code> and only the proxy holds the key, so a forged one cannot be signed.</li>
+    <li><strong>Reassignment after scale-down worked.</strong> After a forced idle scale-down to the three Compose-declared pools, all 7 windows whose pool was removed were reassigned to a surviving pool — HTTP 200, same session, no 502 from the gone container and no fall-through to production. Carts stayed intact except where a window had cleared its own cookies (expected: the cart lives only in the <code>fh_cart</code> cookie, so the server keeps no copy to restore).</li>
     <li><strong>Both <a href="/docs/engine/layers">deception layers</a> pass.</strong> The database-proxy run exercises only data-layer patterns and checks the shared filesystem at the end (see <code>ids/db_proxy/COVERAGE.md</code>), since it cannot isolate file or upload attacks.</li>
   </ul>
+
+  <h4>Scaling and latency (measured, 2026-10-24 WordPress-proxy run)</h4>
+  <p>The run opened 10 windows (3 of them attacking only after pools were pre-built for them) and took
+  5:12, plus 0:31 of clean-up after the reassignment check. <code>pool_manager</code> adds one honeypot
+  pool — an eshop container plus its own database seeded from production — per session that finds no free
+  pool, up to the resource limit; the figures come from its own event log and from the windows themselves
+  (routing read after every step and every 2&nbsp;s while waiting).</p>
+  <table>
+    <tr><th>Measurement</th><th>Value</th></tr>
+    <tr><td>Resource ceiling</td><td>12,288&nbsp;MB, 12 CPUs, <code>POOL_MAX</code>=10 (each pool reserves 768&nbsp;MB / 0.75 CPU in the budget)</td></tr>
+    <tr><td>Pools built during the run</td><td>7 (on top of 3 Compose-declared) — build time median 27&nbsp;s, max 40&nbsp;s</td></tr>
+    <tr><td>Build phases (per pool)</td><td>copy template dominates (10–27&nbsp;s); database start ~3&nbsp;s; rotate password ~1&nbsp;s; content sync 1–2&nbsp;s; WordPress start ~6&nbsp;s; then create/register</td></tr>
+    <tr><td>Borrow while scaling (case A)</td><td>4 windows borrowed a ready pool round-robin, then moved to their own after a median 34&nbsp;s (max 43&nbsp;s)</td></tr>
+    <tr><td>Share at the ceiling (case B)</td><td>0 windows — the limit was hit at 2:33 but a free spare was always available</td></tr>
+    <tr><td>Failed page loads</td><td>16 first-attempt failures, every one <code>ERR_NETWORK_CHANGED</code> while Docker was adding/removing a pool's network interface; all retried with back-off and loaded in the end</td></tr>
+  </table>
+  <p><strong>Pool memory footprint.</strong> The 10 pool containers peaked at a measured
+  <strong>4,687&nbsp;MB (~469&nbsp;MB per pool)</strong> — well under both the 768&nbsp;MB budget charge
+  (deliberate headroom) and the 1,536&nbsp;MB container ceiling (1,024 eshop + 512 database). The host as a
+  whole used 13,191&nbsp;MB of 24,032&nbsp;MB, because it also runs production, Redis, Suricata and the rest.</p>
+  <p><strong>Page-load latency</strong> (the same product page, one window at a time, timed navigation→load
+  finished) was effectively indistinguishable between production and a honeypot pool:</p>
+  <table>
+    <tr><th>Served by</th><th>Median</th><th>p90</th><th>Max</th><th>n</th></tr>
+    <tr><td>Production</td><td>360&nbsp;ms</td><td>382&nbsp;ms</td><td>384&nbsp;ms</td><td>12</td></tr>
+    <tr><td>Own honeypot pool</td><td>372&nbsp;ms</td><td>469&nbsp;ms</td><td>495&nbsp;ms</td><td>16</td></tr>
+  </table>
+  <p><strong>Forced scale-down.</strong> With the idle timeout
+  (<code>POOL_IDLE_TIMEOUT_SECONDS</code>=1800&nbsp;s) too long for a test, the run forced the scale-down:
+  requested at 4:36, finished in 16.2&nbsp;s, dropping from 10 pools to 3 (the Compose-declared 1, 2, 3 are
+  only freed, never removed). Pool-container memory fell 4,687&nbsp;MB&nbsp;→&nbsp;1,515&nbsp;MB
+  (−3,172&nbsp;MB) and running containers 20&nbsp;→&nbsp;6.</p>
 
   <h3>Exploit test-scenario — detection rate per attack class</h3>
   <p>Each seeded CVE is replayed from a freshly reset threat state (Redis and the proxy's shared dicts
