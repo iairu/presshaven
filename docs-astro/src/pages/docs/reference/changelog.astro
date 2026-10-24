@@ -12,66 +12,195 @@ const sidebar = [
   { title: 'Literature', href: '/docs/reference/literature' },
 ];
 const toc = [
-  { id: 'unreleased', text: 'Unreleased', level: 2 },
-  { id: 'historical', text: 'Historical', level: 2 },
+  { id: 'october-2026', text: 'October 2026', level: 2 },
+  { id: 'september-2026', text: 'September 2026', level: 2 },
+  { id: 'august-2026', text: 'August 2026', level: 2 },
+  { id: 'march-2026', text: 'March 2026', level: 2 },
+  { id: 'february-2026', text: 'February 2026', level: 2 },
+  { id: 'november-2025', text: 'November 2025', level: 2 },
+  { id: 'october-2025', text: 'October 2025', level: 2 },
+  { id: 'march-2025', text: 'March 2025', level: 2 },
   { id: 'versioning', text: 'Versioning', level: 2 },
 ];
 ---
-<DocsLayout title="Changelog" description="History of changes to the system" section="Reference" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Changelog" description="History of changes to the system, derived from the full commit history" section="Reference" sidebar={sidebar} toc={toc}>
+  <p>
+    This changelog is reconstructed from the project's complete commit history (553 commits,
+    March&nbsp;2025 to October&nbsp;2026). Entries are grouped by month, newest first, and folded by
+    theme; merge commits and purely iterative fix-ups are rolled into the feature they belong to.
+    The project is not yet formally versioned — see <a href="#versioning">Versioning</a>.
+  </p>
+
   <CardGrid columns={3}>
-    <DocCard title="Detection" href="#historical" icon="radar" tag="Pipeline" description="Pure module extraction, eve.json migration, shared decay policy and sophistication classification." meta="Rules" />
-    <DocCard title="Routing & pooling" href="#historical" icon="route" tag="Edge" description="Twelve-stage decision pipeline, atomic pool assignment, score accumulation and escalation-aware decay." meta="Sessions" />
-    <DocCard title="Security fixes" href="#historical" icon="shield" tag="Fixes" description="Header gating, plugin slug escaping, ngx.null handling, empty-array encoding and private-IP filtering." meta="Hardening" />
+    <DocCard title="Latest cycle" href="#october-2026" icon="radar" tag="Oct 2026" description="Astro knowledge hub, pattern registry, device/GDPR signature, security-operations dashboard and segmentation validation." meta="Current" />
+    <DocCard title="Platform build-out" href="#september-2026" icon="route" tag="Sep 2026" description="Core refactor and tests, PDF/exploit reports, the database-proxy honeypot layer, pool scaling and resource monitoring." meta="Engine" />
+    <DocCard title="Foundations" href="#october-2025" icon="shield" tag="2025" description="Reverse-proxy routing, WordPress/WooCommerce eshop, Suricata, the ELK/SIEM pipeline and the first honeypot migrations." meta="Origins" />
   </CardGrid>
 
-  <h2 id="unreleased">Unreleased</h2>
-  <h3>Features</h3>
+  <h2 id="october-2026">October 2026</h2>
+
+  <h3>Documentation hub &amp; knowledge base</h3>
   <ul>
-    <li>Pool autoscaling — the pool manager builds runtime pools per waiting session plus spares within a memory / CPU / count budget, and retires idle pools after <code>POOL_IDLE_TIMEOUT_SECONDS</code>.</li>
-    <li>Consent-gated device signature — a one-way <code>gdpr_signature</code> re-recognises a returning visitor after a cookie and storage wipe without storing any PII (<code>gdpr_handler.lua</code>, <code>GET /__gdpr/config</code>). See <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</li>
-    <li>Database-proxy honeypot layer — an alternative, lighter deception layer (<code>docker-compose.db-proxy.yml</code>) that swaps the database per request via <code>wp-content/db.php</code> instead of running separate decoy backends. See <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
-    <li>Generated pattern catalogue — one machine-readable <code>patterns/patterns.json</code> now feeds both the dashboard Pattern Database and the <a href="/docs/detection/patterns">documentation</a>, so the two cannot drift.</li>
-    <li>Honeypot threshold raised from 50 to 80 to cut false positives on aggressive but legitimate REST API clients.</li>
-  </ul>
-  <h3>Documentation &amp; Tooling</h3>
-  <ul>
-    <li>Documentation expansion for detection, observability, operations, testing, and reference sections — enriched with Lua code comments and architecture details.</li>
-    <li>Astro knowledge hub with mkdocs-material styling, full-text search, section navigation, table of contents and documentation cards.</li>
-    <li>New pages: Honeypot Layers, Device &amp; GDPR Signature; enriched reference (known issues, roadmap, literature) and the blind-pentest evaluation write-up with Run&nbsp;1 results.</li>
-  </ul>
-  <h3>Security</h3>
-  <ul>
-    <li><code>X-Route-Target</code> / <code>X-Risk-Score</code> response headers gated behind <code>INTERNAL_TEST_SECRET</code> (fail closed) after the blind pentest found they leaked a live routing/score oracle to the client.</li>
+    <li>Replaced the MkDocs site with an Astro knowledge hub: initial port, a neon-terminal theme, homepage and hero-title/section redesign, theme polish and full-text search improvements.</li>
+    <li>Migrated and expanded the documentation into Astro (built up from earlier MkDocs drafts), reordered pages, enriched the in-app dashboard knowledge base and added new pages; removed the old MkDocs site.</li>
+    <li>Folded measurements from generated reports into the knowledge base so the docs cite real numbers.</li>
+    <li>Adopted the <code>impeccable.style</code> design basics across the hub.</li>
+    <li>Project-wide content and wording audit.</li>
   </ul>
 
-  <h2 id="historical">Historical</h2>
-  <h3>Detection Pipeline</h3>
+  <h3>Pattern registry</h3>
   <ul>
-    <li>pattern_analyzer.lua split into pure pattern_rules.lua + adapter.</li>
-    <li>suricata_rules.lua migrated from fast.log regex to structured eve.json JSON parsing.</li>
-    <li>vulnerability_rules.lua, abuseipdb_rules.lua, router_rules.lua, upload_rules.lua, admin_rules.lua, session_rules.lua extracted as pure modules.</li>
-    <li>decay_policy.lua extracted as shared escalation-aware decay module.</li>
-    <li>lua_pattern_utils.lua promoted from duplicated copies (fixing hyphen-escaping bug).</li>
-    <li>sophistication_analyzer.lua added for scripted/ai_assisted/manual/unknown classification.</li>
-    <li>honeytoken_handler.lua added for honeytoken injection and detection.</li>
-    <li>gdpr_rules.lua / gdpr_handler.lua added for consent-gated privacy-preserving identity.</li>
+    <li>Introduced a pattern registry: one machine-readable catalogue drives both the dashboard Pattern Database and the documentation, so the two cannot drift.</li>
+    <li>Added a searchable, grouped checkbox popup selector for patterns on the Attack Simulation and Segmentation Validation pages, with registry-disabled patterns hidden.</li>
+    <li>Added pattern unit tests and documented the registry in the Astro docs.</li>
   </ul>
-  <h3>Routing & Pooling</h3>
+
+  <h3>GDPR &amp; device signature</h3>
   <ul>
-    <li>router.lua decision pipeline with 12 stages.</li>
-    <li>pool_router.lua implemented with exclusive assignment, spare provisioning, scale-up, reuse at resource limit.</li>
-    <li>Score accumulation added (fixing session score laundering bug).</li>
-    <li>Decay system added with offense-scaled half-life and permaflag thresholds.</li>
+    <li>Added consent-gated, privacy-preserving identity: a one-way <code>gdpr_signature</code> re-recognises a returning visitor after a cookie/storage wipe without storing PII, now including the client IP in the computation.</li>
+    <li>Surfaced <code>gdpr_signature</code> in the pattern-analyzer logs and dashboard UI, integrated GDPR into the dashboard, and added a dedicated Signature Simulation page (with an auto-agree fix).</li>
+    <li>Segmentation Validation auto-agrees to the GDPR banner; Attack Simulation gained a session-clearing pattern to exercise the signature path.</li>
+    <li>Added SIEM document clearing for consent flows.</li>
   </ul>
-  <h3>Security Fixes</h3>
+
+  <h3>Security-operations dashboard</h3>
   <ul>
-    <li>admin-ajax.php excluded from is_admin_access() — fixed false-positive escalation.</li>
-    <li>is_vulnerable_plugin_request() hyphen-escaping bug fixed.</li>
-    <li>ngx.null sentinel crash fixed.</li>
-    <li>Empty Lua tables tagged with cjson.empty_array_mt to prevent Elasticsearch mapping conflicts.</li>
-    <li>Suricata private IP filtering added.</li>
+    <li>Added an Overview landing page: unique diverted attackers, pool state, a decayed aggregate risk score (not the last request), auto-refresh every 3&nbsp;s, and corrected health logic. Renamed its card to "Attacker IPs diverted".</li>
+    <li>Added a Live Events page (an in-app event stream independent of Kibana), later backfilled and enriched.</li>
+    <li>Added an Attacker Sessions drill-down page — live, async and actionable.</li>
+    <li>Added a native Network IDS (Suricata) page, later enriched with filters, detail and live refresh.</li>
+    <li>Added a Detection Policy editor (with defaults, and no longer discarding unsaved edits) and configurable security alerting that surfaces webhook delivery failures.</li>
+    <li>Added an always-on Pool Scaling page with a Reclaim-idle-pools action.</li>
+    <li>Added a Log Pipeline page that confirms edge-to-SIEM delivery end-to-end.</li>
+    <li>Added a Forensics log search with export, time range, regex, saved searches and context lines.</li>
+    <li>Added a Ctrl+K command palette with stack-lifecycle actions and an always-visible header button.</li>
+    <li>Made Reporting an export hub routing to each report's page; Workloads defaults to the stack view and locks the honeypot layer while the stack is up; pre-warms Workload Telemetry history before the page opens.</li>
+    <li>Added a global "Clear all attacks" action across the attack pages; dashboard UI gained a triple-dot overflow menu and SVG icons (with an overflow page-opening fix).</li>
+    <li>Added a container-health fix, a staged PDF-export progress bar on Attack Simulation and an auto-updating time estimate on Segmentation Validation.</li>
+  </ul>
+
+  <h3>Pooling &amp; segmentation validation</h3>
+  <ul>
+    <li>Faster pool scaling (including WordPress-layer pooling) and a pool-scaling visualisation; mirrored on the Segmentation Validation page.</li>
+    <li>Extended session validation with cookie/storage forgery and tamper-proofing: random windows clear or forge their session between steps, every multi-window run includes a hijack attempt (targeting a diverted session when one exists), and no window forges its cookie twice.</li>
+    <li>Hardened the run against Docker's network churn: outlast <code>ERR_NETWORK_CHANGED</code> during pool builds, retry an attack page once after a connection error, treat an HTTP error response as a loaded page and never re-send attacks, and re-grab a step screenshot that comes back solid black.</li>
+    <li>Recorded what each window really got after the scale-down, kept the post-scale-down reassignment out of the run timeline, and cleaned up the pools the reassignment check makes <code>pool_manager</code> build.</li>
+    <li>Windows open the shop as their homepage (not <code>about:blank</code>); on the database-proxy layer two thirds of a run reaches the honeypot database and a third slips past to the shared files.</li>
+    <li>Pool router drops assignments to scaled-down pools instead of proxying to them (no more 502); auto-refreshing "ready pools" line; stopped post-run traffic and halved proxy log shipping; transient-error and report-export hotfixes.</li>
+    <li>Softer, more meaningful language used throughout the project.</li>
+  </ul>
+
+  <h3>Pool test report (PDF)</h3>
+  <ul>
+    <li>Explained the run narrative: why each diverted session was diverted, why diverted windows show different scores, why a recovered session returns without its cart, why a scale-down leaves the compose-declared pools, and credited diversions to forged cookies where they preceded the pattern.</li>
+    <li>Described a database-proxy-level run; attributed database-layer pools through MySQL's query log.</li>
+    <li>Figures and tables: stacked Figure&nbsp;2 step numbers, marked removed pools on their build row, rounded resource-use axis ticks, split the pre-build count into built vs already-free pools (counting spares already building), counted borrows too short for the routing samples, and stopped drawing a session-less read as a dip to production.</li>
+    <li>Pagination: build long tables from small chunks so no row splits, keep headings/captions/small tables together, move a table split before its screenshot row, keep three lines of a paragraph with its heading, and shrink a figure to fill the page.</li>
+    <li>Compacted tamper-table rows and the cart grid, listed patterns per round and by window, named the pattern behind a score-based diversion and HTTP-error answers under step screenshots, and dropped noise like "0 storage entries".</li>
+    <li>Ended the run before the post-reassignment clean-up; tracked diagram fixes and resolved issues across several <code>pool_test_report_issues*.md</code> rounds.</li>
+  </ul>
+
+  <h3>Edge, detection &amp; fixes</h3>
+  <ul>
+    <li>Stopped dots and dashes acting as wildcards in URI signatures; Suricata rule spam fixes; broke the Suricata&nbsp;→&nbsp;Vector&nbsp;→&nbsp;Suricata anomaly feedback loop.</li>
+    <li>Proxy stopped rate-limiting the shop's own static assets (which had left the cart page unrendered); fixed WooCommerce attribute reading; added cross-page log caching/handling (including in Kibana) and copy/export-logs on more pages.</li>
+    <li>Health checks every 30&nbsp;s (fast probing only until healthy) instead of every 10&nbsp;s; error badges trust nginx's quiet log levels; one pre-warm summary line per start instead of ~160; services-stop report reads exit codes from Docker die events and lists a marker's events in order; resource sampling keeps <code>docker inspect</code> output when a container is gone.</li>
+    <li>Compose services stop on SIGTERM instead of being killed after 10&nbsp;s.</li>
+    <li>Untested Kibana dashboard-import adjustments.</li>
+  </ul>
+
+  <h2 id="september-2026">September 2026</h2>
+
+  <h3>Core refactor, tests &amp; CI</h3>
+  <ul>
+    <li>Refactored the dashboard to extract shared <code>core/</code> and <code>ui/</code> helpers and remove duplication; added the first unit tests for the Qt-free core, run in CI.</li>
+    <li>Extracted <code>threat_intel.lua</code> (dedup threat-IP read-modify-write), <code>testing/lib/scenario_common.sh</code>, and <code>siem/kibana/_kibana_client.py</code> shared by the dashboard scripts.</li>
+    <li>Added stage-by-stage tests for the router's <code>decide_route()</code>; added tests for the sophistication analyzer (fixing hyphenated-UA fragments never matching); ran the Lua unit tests on every push and PR.</li>
+    <li>Repo weight: stopped committing a second WordPress core and dropped SQL-proxy leftovers; removed stale Lua backups; deleted commented-out dead compose services; capped project log growth so no log can fill the disk.</li>
+    <li>Stopped tracking <code>siem/docker/.env</code> (real passwords); removed retired giveaway files from existing honeypot volumes.</li>
+  </ul>
+
+  <h3>PDF &amp; exploit reports</h3>
+  <ul>
+    <li>Exploits page: category selector (type, target, surface) drives multi-run with dropdown grouping and PDF export, generic attacks, a detection request and resource statistics; greys out CVEs the DB-proxy honeypot can't isolate and explains why.</li>
+    <li>Exploit report: per-request routes with labelled markers above the graphs, "not routed" for requests the proxy answered itself, a Kibana request timeline under each exploit's graphs, each exploit sent in a quiet gap with the serving container highlighted, and a table of contents / exploit list.</li>
+    <li>Resource graphs in reports: keep sampling while the exploit is sent, mark background work on the CPU graphs and leave it out of the statistics, and render charts/diagrams as vector graphics.</li>
+    <li>Threat decay made honest: decayable seed, offense-scaled half-life, measured on a clean IP, with a <code>THREAT_DECAY_ENABLED</code> toggle; raised/clarified the honeypot threshold and dropped the threshold noise.</li>
+    <li>Added 5 more CVEs (Bricks RCE; WP Automatic, Ultimate Member, BookingPress, LayerSlider SQLi).</li>
+    <li>Extras page: auto-generated "Implementation" thesis chapter plus Architecture and CVE-matrix PDF exports, with per-service explanations and a Health-page screenshot; strips PHP comments when condensing; probability metrics beside the statistics; wrap embedded code/curl so long lines don't run off-page; cross-referencing architecture/routing/scoring diagrams.</li>
+  </ul>
+
+  <h3>Database-proxy honeypot layer</h3>
+  <ul>
+    <li>Collapsed the honeypot pools into a single eshop with per-request DB routing: one honeypot database per attacker, a spare built on each assignment, and the database named in the <code>X-Honeypot-DB</code> header.</li>
+    <li>Made it a selectable honeypot layer alongside the reverse-proxy layer (merged the db-proxy branch); renamed "reverse proxy level" to "WordPress proxy level".</li>
+    <li><code>pool_manager</code>: skip building pools when the host is low on resources, reuse idle pools, mount the clean-data override as a file, and restore pool passwords after a Redis flush.</li>
+    <li>Identical product order on production and honeypot instances; named the honeypot site; silenced <code>honeypot_db_init</code> errors on absent WooCommerce tables; stopped the reverse proxy health-checking removed pool backends.</li>
+  </ul>
+
+  <h3>Resource monitoring, SIEM &amp; eshop</h3>
+  <ul>
+    <li>Added a Resources tab (per-container htop-style usage and CPU/memory/log graphs), fixed the GUI freeze, added sub-second cgroup sampling, hover-to-inspect lines, exploit-run markers and a pre-exploit baseline.</li>
+    <li>Services page: start/stop with a PDF resource-graph export; record stop until <code>down</code> exits; peak memory; elapsed starts at 0 on launch; cap <code>init_setup</code> memory and number the event markers.</li>
+    <li>Kibana: five distinct dashboards including threat decisions and decay; threat-intelligence enrichment; attribute proxied Suricata alerts via XFF and skip proxy probes; label honeypot pools by their containers in nginx logs.</li>
+    <li>Vector: stop the SIEM aggregator dropping event batches on backpressure; only trust cgroup sampling when Docker's PIDs are local containers.</li>
+    <li>Faster Docker Compose startup for the ids and siem stacks; a Learn page and in-app learning aids for students; real IPv4/IPv6 CIDR whitelist matching; identify attackers by a tamper-proof session instead of their IP, keeping NAT neighbours out of an attacker's score; removed the reverse-proxy tarpit so both routes have equal latency; eshop frontend cleanup (homepage products, compact mobile header, stripped header chrome/hero for screenshots, sample product images).</li>
+    <li>Fixes: content-sync duplicate-key and truncation, reverse_proxy redis/health false positives, prewarm/probe and Suricata startup log spam, <code>init_setup</code> writes <code>server.crt</code> on a fresh checkout, and a Start/Restart reentrancy fix (Restart from any state).</li>
+  </ul>
+
+  <h2 id="august-2026">August 2026</h2>
+  <ul>
+    <li>Built the Python dashboard GUI (PyQt) with remote-access/connection support, project upload, better settings and an initial-setup wizard with dependency check and <code>.env.example</code> autoparse.</li>
+    <li>Threat analyzer GUI: clearer threat display, colored logs, score-and-status fit to screen, and the exploit page banner.</li>
+    <li>Health page: error-log monitor with filtering, uptime timers, color legend wrapping, conditional refresh and resize, plus a startup fix.</li>
+    <li>Replaced Logstash with Vector for better CPU usage and stability; capped ELK memory (Vector/Elastic had eaten 8&nbsp;GB); AbuseIPDB integration with caching for the low API limit; began the blind virtual pentest and acted on its findings.</li>
+    <li>Suricata rule work; added Suricata rules to the Lua layer; adjusted and de-noised Suricata and nginx error logs.</li>
+    <li>Backups and content sync shown in the dashboard; backup handling and the <code>session_store</code> dialog improved; content replication between production and honeypot; WP-CLI setup instead of Git LFS; sample product images and DB seed fixes.</li>
+    <li>Scoring no longer resets when a user clears cookies; fixed product-page requests to <code>admin-ajax.php</code>; XML-RPC handling; separated Lua patterns into their own file with Lua tests; Docker/hardening audit and mu-plugin fix.</li>
+    <li>Dashboard theming, Kibana integration, Redis/Kibana/exploit panels, an app icon, logo and README/architecture updates.</li>
+  </ul>
+
+  <h2 id="march-2026">March 2026</h2>
+  <ul>
+    <li>Added the project logo and fixed up the README.</li>
+  </ul>
+
+  <h2 id="february-2026">February 2026</h2>
+  <ul>
+    <li>First honeypot pooling (untested), production hardening and a testing harness; working test scenarios with improved pass rate.</li>
+    <li>Fixed the nginx admin handler, the database and Suricata config, and <code>init-setup</code>; general checklists and scenario adjustments.</li>
+  </ul>
+
+  <h2 id="november-2025">November 2025</h2>
+  <h3>Reverse proxy &amp; routing</h3>
+  <ul>
+    <li>Reverse-proxy prewarm and cache; redirect to HTTPS; default ports to nginx; DNS resolver so Redis is reachable from nginx.</li>
+    <li>Static-asset handling: pattern legitimisation, query-parameter allowance and access tuning to reduce 503s; routing thresholds, honeypot routing info logs and manual test URLs; disabled randomized routing; fixed the nginx Lua healthcheck path.</li>
+  </ul>
+  <h3>Database &amp; migrations</h3>
+  <ul>
+    <li>Production→honeypot copy script, a production SQL dump filtered for a clean honeypot migration, a migrations folder, and dummy-data migration; switched WooCommerce to live for public page access; removed end-user rate limits; fixed variable/dollar escapes and cleanup ordering.</li>
+  </ul>
+  <h3>ELK / SIEM / Filebeat</h3>
+  <ul>
+    <li>Added ELK, dockerized it and moved it; Filebeat config and working setup; SIEM boilerplate and improvements; SQL-proxy and admin-handler work-in-progress; a Docker architecture diagram.</li>
+  </ul>
+
+  <h2 id="october-2025">October 2025</h2>
+  <ul>
+    <li>Project inception: thesis, assignment plan, and a demo PrestaShop dual setup without IDS redirection, then the WordPress/WooCommerce production eshop and database data.</li>
+    <li>WooCommerce vulnerability planning; an init script to copy database files to the honeypot instance; a demo with Snort, sessions and nginx Lua redirect.</li>
+    <li>Resource-usage test scaffolding (demo Docker Compose, port mapping), Suricata adoption, Git LFS for DB ibdata files, and a LaTeX CI/CD pipeline.</li>
+  </ul>
+
+  <h2 id="march-2025">March 2025</h2>
+  <ul>
+    <li>Initial commit; added the assignment and plan.</li>
   </ul>
 
   <h2 id="versioning">Versioning</h2>
-  <p>Changes are tracked with semantic versioning for engine, detection, and dashboard components.</p>
+  <p>
+    The project is not yet released under formal version tags; this history is organised by month.
+    Semantic versioning is planned for the engine, detection and dashboard components once interfaces stabilise.
+  </p>
 </DocsLayout>
