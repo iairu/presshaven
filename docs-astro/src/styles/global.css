@@ -2370,6 +2370,11 @@ pre:hover .code-copy-btn { opacity: 1; }
 .pd-callout__grid > div { border: 1px solid var(--color-border); background: var(--color-bg-secondary); padding: 0.6rem; }
 .pd-callout__grid strong { display: block; font-size: 0.76rem; color: var(--color-text-primary); }
 .pd-callout__grid span { display: block; margin-top: 0.2rem; font-size: 0.7rem; line-height: 1.45; color: var(--color-text-secondary); }
+.pd-callout h3 { font-size: 1rem; margin: 1.05rem 0 0.4rem; color: var(--color-text-primary); }
+.pd-callout p { margin-top: 0.75rem; }
+.pd-picker-list { margin: 0.5rem 0 0; padding-left: 1.1rem; max-width: 58rem; }
+.pd-picker-list li { font-size: 0.82rem; line-height: 1.5; margin-bottom: 0.35rem; color: var(--color-text-secondary); }
+.pd-picker-list strong { color: var(--color-text-primary); }
 
 .pd-coverage { margin-top: 2rem; scroll-margin-top: 7.5rem; }
 .pd-coverage__grid {

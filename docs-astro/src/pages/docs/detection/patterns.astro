@@ -22,7 +22,7 @@ const sidebar = [
 const toc = [
   { id: 'overview', text: 'Overview', level: 2 },
   { id: 'browse', text: 'Browse patterns', level: 2 },
-  { id: 'plugin-ready', text: 'Patterns as plugins', level: 2 },
+  { id: 'registry', text: 'Registry & pattern picker', level: 2 },
   { id: 'coverage', text: 'Coverage & provenance', level: 2 },
 ];
 
@@ -202,22 +202,46 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     </noscript>
   </section>
 
-  <section id="plugin-ready" class="pd-callout">
-    <p class="pd-eyebrow">Next step</p>
-    <h2>Patterns as plugins</h2>
+  <section id="registry" class="pd-callout">
+    <p class="pd-eyebrow">Now live</p>
+    <h2>Registry &amp; pattern picker</h2>
     <p>
-      The catalogue already gives every rule the contract a plugin manager needs: a stable
-      ID, source provenance, an <code>enabled</code> state and a self-describing export
-      payload. The dashboard exposes the future add, edit, remove and toggle controls as
-      disabled scaffolding today, so the interaction model is visible without pretending
-      it already changes the Lua or Suricata rule sets.
+      This page is generated and read-only, but the dashboard now layers a mutable
+      <strong>registry</strong> on top of it. <code>patterns/registry.json</code>, owned by
+      <code>dashboard/core/pattern_registry.py</code>, records only deviations from the
+      generated catalogue — so a stable ID, its provenance and its export shape remain the
+      contract, while enable state and edits live separately and never touch
+      <code>patterns.json</code>.
     </p>
     <div class="pd-callout__grid">
-      <div><strong>Stable IDs</strong><span>Deep links and exports use the same key as the future plugin registry.</span></div>
-      <div><strong>One source</strong><span>Docs and dashboard read one generated file; no second list to drift.</span></div>
-      <div><strong>Provenance</strong><span>Every entry names the Lua function, Suricata SID or preset it came from.</span></div>
-      <div><strong>Editable shape</strong><span>Export a filtered set, inspect its JSON and feed it into the next registry.</span></div>
+      <div><strong>Overrides</strong><span>Per-ID field changes on a generated pattern (<code>enabled</code> included). Re-enabling prunes the override, so the file keeps only real deviations.</span></div>
+      <div><strong>Custom records</strong><span>Full patterns authored in the Pattern Database page, filled out to the catalogue shape and merged alongside the generated ones.</span></div>
+      <div><strong>One decision, everywhere</strong><span>A pattern switched off is dropped from the Attack Simulation battery and the Segmentation Validation preset list via <code>active_presets()</code>.</span></div>
+      <div><strong>Clean reset</strong><span>A missing or corrupt <code>registry.json</code> loads as empty — every pattern enabled, nothing custom. Deleting the file resets the overlay.</span></div>
     </div>
+    <p>
+      The <strong>Pattern Database</strong> page is the editor: a per-row checkbox toggles a
+      pattern on or off, and per-pattern and bulk actions add, edit, duplicate, remove,
+      revert and export. Disabling here is authoritative — "off in the database" means off
+      in every run that builds its attack set from the catalogue.
+    </p>
+    <h3>Pattern picker</h3>
+    <p>
+      Attack Simulation and Segmentation Validation select patterns through a shared picker:
+      a button opens a searchable, scrollable checkbox popup capped at half the window height,
+      instead of an unbounded dropdown. Registry-disabled patterns never appear in it.
+    </p>
+    <ul class="pd-picker-list">
+      <li><strong>Checked set = the batch.</strong> On Attack Simulation the checked patterns are the Multi-run and PDF-report battery; on Segmentation Validation they drive the per-window attacks and the "Attack from all" round-robin spread across windows.</li>
+      <li><strong>Highlighted row = single run.</strong> Highlighting one row (without changing the checks) targets just that pattern for a single curl / browser run.</li>
+      <li><strong>GDPR signature restore is highlight-only.</strong> It is marked, not checkable, so it is never swept into a batch — highlight it to fire it deliberately.</li>
+      <li><strong>Uncheck-all is safe.</strong> With nothing checked, Segmentation Validation falls back to the built-in <code>window_plan</code> so a report still produces per-window attacks.</li>
+    </ul>
+    <p class="pd-generated">
+      The reverse-proxy and Suricata exporters are expected to read the same registry next,
+      so the one enable/disable decision reaches the live edge too. See
+      <code>patterns/README.md</code> for the overlay's schema.
+    </p>
   </section>
 
   <section id="coverage" class="pd-coverage">
@@ -402,9 +426,9 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           ${preset}
           ${notes}
           <section class="pd-section pd-plugin-scaffold">
-            <h3>Pattern plugin</h3>
-            <p>This entry is read-only today, but its ID, provenance and export shape are the contract for the upcoming add / edit / remove / enable workflow.</p>
-            <label class="pd-check"><input type="checkbox" checked disabled /> Enabled (scaffold)</label>
+            <h3>Pattern registry</h3>
+            <p>This docs view is read-only, but the dashboard's Pattern Database page edits a mutable registry keyed on this ID — enable / disable, edit, duplicate, remove, revert and export — without touching the generated catalogue.</p>
+            <label class="pd-check"><input type="checkbox" checked disabled /> Enabled (edit in the dashboard)</label>
           </section>`;
       }
 
