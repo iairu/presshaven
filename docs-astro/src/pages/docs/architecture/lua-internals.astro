@@ -1,0 +1,248 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Architecture Overview', href: '/docs/architecture' },
+  { title: 'Lua Internals', href: '/docs/architecture/lua-internals', active: true },
+];
+const toc = [
+  { id: 'phases', text: 'Nginx Phases', level: 2 },
+  { id: 'globals', text: 'Globals and Shared Dicts', level: 2 },
+  { id: 'config', text: 'Configuration Notes', level: 2 },
+  { id: 'timers', text: 'Background Timers', level: 2 },
+  { id: 'redis', text: 'Redis Key Schema', level: 2 },
+  { id: 'assign', text: 'Pool Assignment', level: 2 },
+  { id: 'health', text: 'Health Checks', level: 2 },
+  { id: 'suricata', text: 'Suricata Ingestion', level: 2 },
+  { id: 'identity', text: 'Session Identity', level: 2 },
+  { id: 'gates', text: 'Maintenance and Install Gates', level: 2 },
+  { id: 'honeytokens', text: 'Honeytokens', level: 2 },
+  { id: 'classifiers', text: 'Content Classifiers', level: 2 },
+  { id: 'dblayer', text: 'Database-Layer Variant', level: 2 },
+  { id: 'conventions', text: 'Conventions', level: 2 },
+];
+---
+<DocsLayout title="Lua Internals" description="How the OpenResty Lua code behaves at run time, collected from the modules' own comments" section="Architecture" sidebar={sidebar} toc={toc}>
+  <p>This page collects what the comments in <code>ids/reverse_proxy_enhanced/lua/</code> say about how the
+  modules behave at run time: where state is kept, which timers run, the tuned constants and the bugs behind
+  them. The <a href="/docs/architecture#modules">module table</a> on the Architecture page lists the
+  pure/adapter pairs; the routing stages are in <a href="/docs/architecture#pipeline">Request Pipeline</a>.</p>
+
+  <h2 id="phases">Nginx Phases</h2>
+  <table>
+    <tr><th>Phase</th><th>File</th><th>What runs</th></tr>
+    <tr><td><code>init_by_lua_file</code> (master, once)</td><td><code>init.lua</code></td><td>Builds <code>_G.config</code>, <code>_G.utils</code> and <code>_G.redis_pool</code>, seeds the shared dicts, and generates the session signing key before the workers fork, so every worker shares it.</td></tr>
+    <tr><td><code>init_worker_by_lua_file</code> (each worker)</td><td><code>init_worker.lua</code></td><td>Seeds the random generator, loads the ready-pool list, warms backend connections after 3&nbsp;s, and — in worker 0 only — starts the <a href="#timers">background timers</a>.</td></tr>
+    <tr><td><code>access_by_lua_block</code> (each request)</td><td><code>nginx.conf</code></td><td>Maintenance gate, then honeytoken detection (a hit sets the score to 100), then <code>pattern_analyzer.analyze_request()</code> → <code>session_handler.get_session()</code> → <code>router.decide_route()</code> → <code>pool_router.get_or_assign_pool()</code> → <code>session_handler.update_session()</code>, followed by <code>sophistication_analyzer.classify_session()</code>. The result sets <code>$backend_upstream</code>.</td></tr>
+  </table>
+
+  <h2 id="globals">Globals and Shared Dicts</h2>
+  <ul>
+    <li><code>_G.config</code> — every tunable parameter, mostly overridable from environment variables set in Compose. Passwords must come from the environment.</li>
+    <li><code>_G.utils</code> — IP whitelist check (backed by <code>ip_rules.lua</code>, which handles IPv4, IPv6 and IPv4-mapped IPv6), UUIDs, risk-score sum, security-event logging.</li>
+    <li><code>_G.redis_pool</code> — <code>get_connection()</code> / <code>close_connection()</code> over a per-worker keepalive pool to <code>session_store</code>, with one reconnect retry.</li>
+  </ul>
+  <table>
+    <tr><th>Shared dict</th><th>Size</th><th>Holds</th></tr>
+    <tr><td><code>sessions</code></td><td>10&nbsp;MB</td><td>Worker-local cache of session JSON, saving Redis round-trips.</td></tr>
+    <tr><td><code>threat_intel</code></td><td>10&nbsp;MB</td><td>Flagged IPs and user agents, backend health, the ready-pool list (<code>pool_list</code>), mirrored replication and maintenance flags, the WordPress install state.</td></tr>
+    <tr><td><code>rate_limit</code></td><td>10&nbsp;MB</td><td>Request-rate counters for automation detection.</td></tr>
+    <tr><td><code>honeypot_routes</code></td><td>1&nbsp;MB</td><td>Cached session → pool assignments.</td></tr>
+  </table>
+  <p>The hot path never waits on Redis for flags: anything an external process sets in Redis (replication,
+  maintenance, database-layer pool health) is copied into <code>threat_intel</code> by a timer, and requests read
+  only the shared dict.</p>
+
+  <h2 id="config">Configuration Notes</h2>
+  <table>
+    <tr><th>Setting</th><th>Value</th><th>Why</th></tr>
+    <tr><td><code>redis.timeout</code> / <code>read_timeout</code></td><td>2000 / 5000&nbsp;ms</td><td>Raised from 1000 / 3000. Sporadic read timeouts were host scheduling stalls under load (empty Redis slowlog), not slow Redis; failing a whole background cycle over a 1&nbsp;s hiccup was worse than waiting.</td></tr>
+    <tr><td><code>session.cookie_name</code></td><td><code>SERVERID</code></td><td>Looks like HAProxy's stickiness cookie. The old <code>HONEYPOT_SESSION</code> gave the deception away in the blind pentest. The <code>security</code> log format in <code>nginx.conf</code> hardcodes <code>$cookie_SERVERID</code>.</td></tr>
+    <tr><td><code>session.max_idle_time</code></td><td>3600&nbsp;s</td><td>Matches typical WooCommerce checkout session length.</td></tr>
+    <tr><td><code>session.signing_key</code></td><td><code>SESSION_SIGNING_KEY</code></td><td>Without it a random key is made at start-up: old cookies stop verifying after a restart (sessions are recovered by fingerprint) and a bad MAC is not scored as tampering.</td></tr>
+    <tr><td><code>session.recovery_window</code></td><td>900&nbsp;s</td><td>How long after a session's last request a cookie-less client with the same fingerprint is recovered into it (<code>SESSION_RECOVERY_WINDOW</code>).</td></tr>
+    <tr><td><code>session.tamper_score</code></td><td>50</td><td>Added to a request whose cookie was edited or forged.</td></tr>
+    <tr><td><code>gdpr.timestamp_window</code> / <code>binding_ttl</code></td><td>300 / 3600&nbsp;s</td><td>A replayed token stops matching once it ages out; a binding is prolonged on every match, so only an abandoned one expires.</td></tr>
+    <tr><td><code>threat.honeypot_threshold</code></td><td>80</td><td>Raised from 50 to stop false positives on busy legitimate REST clients (WooCommerce mobile app, Stripe webhooks).</td></tr>
+    <tr><td><code>threat.ip_reputation_cap</code></td><td>10</td><td>Address reputation alone can never divert a session; nothing at all is added once <code>shared_ip_sessions</code> (2) sessions used the address within <code>shared_ip_window</code> (3600&nbsp;s).</td></tr>
+    <tr><td><code>threat.score_decay_half_life_seconds</code></td><td>300&nbsp;s</td><td>Added after one clean request was found to un-stick a session that had just matched a CVE. <code>THREAT_DECAY_ENABLED=false</code> sets it to 0, which disables decay.</td></tr>
+    <tr><td><code>decay_offense_slowdown</code> / <code>permaflag_offenses</code></td><td>0.75 / 5</td><td>Each recorded offense multiplies the half-life by 1.75; at 5 offenses, or a peak at <code>permaflag_score</code>, decay stops (<code>decay_policy.lua</code>).</td></tr>
+  </table>
+  <p>The operator whitelist (loopback, the Tailscale ranges and <code>10.0.0.0/8</code>) gives a −20 reputation and
+  is never diverted.</p>
+
+  <h2 id="timers">Background Timers</h2>
+  <p>All periodic tasks run in worker 0 only. The health-check timer once ran in every worker; their checks
+  fired at the same instant, so one moment of contention counted as several consecutive failures and marked a
+  healthy backend UNHEALTHY. Moving it under the worker-0 guard fixed both the extra load and the false
+  positive.</p>
+  <table>
+    <tr><th>Every</th><th>Task</th></tr>
+    <tr><td>5&nbsp;s</td><td>Refresh the ready-pool list from <code>honeypot_pool:ready</code> into the shared dict (first run after 1&nbsp;s).</td></tr>
+    <tr><td>5&nbsp;s</td><td>Mirror replication, maintenance and (database layer) pool-health flags from Redis into <code>threat_intel</code>.</td></tr>
+    <tr><td>15&nbsp;s</td><td>Health-check <code>production_backend</code> and every ready pool.</td></tr>
+    <tr><td>30&nbsp;s</td><td>Probe <code>/wp-admin/install.php</code> on production for the install state.</td></tr>
+    <tr><td>30&nbsp;s</td><td>Read new Suricata <code>eve.json</code> alerts into <code>threat_ips</code>.</td></tr>
+    <tr><td>60&nbsp;s</td><td>Clean up rate-limit counters.</td></tr>
+    <tr><td>300&nbsp;s</td><td>Evict expired sessions from the local dict (<code>session.cleanup_interval</code>).</td></tr>
+    <tr><td><code>blacklist_refresh_hours</code></td><td>AbuseIPDB blacklist pull (first run after 15&nbsp;s), only when <code>ABUSEIPDB_BLACKLIST_ENABLED</code>. The pull is cached in Redis, so restarts don't spend the daily quota.</td></tr>
+  </table>
+
+  <h2 id="redis">Redis Key Schema</h2>
+  <p><code>pool_router_rules.lua</code> defines the keys <code>pool_manager</code> and the router share; the rest belong to
+  the session and threat modules.</p>
+  <table>
+    <tr><th>Key</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>honeypot_pool:ready</code></td><td>SET</td><td>Pool numbers provisioned and healthy.</td></tr>
+    <tr><td><code>honeypot_pool:free</code></td><td>ZSET</td><td>Ready pools with no owner (score = pool number).</td></tr>
+    <tr><td><code>honeypot_pool:owner:&lt;N&gt;</code></td><td>SET</td><td>Sessions assigned to pool N.</td></tr>
+    <tr><td><code>honeypot_pool:counter</code></td><td>INT</td><td>Round-robin counter for borrowing and sharing.</td></tr>
+    <tr><td><code>honeypot_pool:provision</code></td><td>LIST</td><td>"A session was just assigned" wake-ups for <code>pool_manager</code>.</td></tr>
+    <tr><td><code>honeypot_pool:capped</code></td><td>STR (TTL)</td><td>Set by <code>pool_manager</code> while no further pool may start (budget, <code>POOL_MAX</code>, host load).</td></tr>
+    <tr><td><code>honeypot_pool:waiting</code></td><td>ZSET</td><td>Sessions borrowing a pool until theirs is built (score = when they started waiting); at most 200, oldest dropped.</td></tr>
+    <tr><td><code>honeypot_pool:waiting_seen</code></td><td>HASH</td><td>Last request time of each waiting session; quiet ones are skipped at hand-off.</td></tr>
+    <tr><td><code>honeypot_pool:last_seen</code></td><td>HASH</td><td>Last time a request was routed to each pool, written at most every 10&nbsp;s; drives the idle scale-down.</td></tr>
+    <tr><td><code>honeypot_pool:health</code></td><td>HASH</td><td>Database layer only: each pool database's container state, published by <code>pool_manager</code>.</td></tr>
+    <tr><td><code>honeypot_pool_session:&lt;SID&gt;</code></td><td>STR (24&nbsp;h)</td><td>A session's pool assignment.</td></tr>
+    <tr><td><code>honeypot_pool_replicating:&lt;N&gt;</code></td><td>STR</td><td>Set by the content-replication script while pool N is being synced.</td></tr>
+    <tr><td><code>honeypot_maintenance</code></td><td>STR (TTL)</td><td>Set by the dashboard during a WordPress update.</td></tr>
+    <tr><td><code>fp_session:&lt;fingerprint&gt;</code></td><td>STR</td><td>Passive fingerprint → session, for recovery after cookies are cleared.</td></tr>
+    <tr><td><code>session_cookie_rejections</code></td><td>LIST</td><td>The last 1000 rejected (edited or forged) cookies.</td></tr>
+    <tr><td><code>threat_ips</code></td><td>STR (JSON)</td><td>Per-IP reputation; read-modify-write through <code>threat_intel.lua</code>, which also mirrors it into the shared dict.</td></tr>
+    <tr><td><code>honeytoken:&lt;id&gt;</code></td><td>STR (30&nbsp;days)</td><td>Injected honeytokens and their use counts.</td></tr>
+  </table>
+  <p>Pools 1–3 are declared in Compose with an nginx <code>upstream honeypot_backend_N</code> block; higher numbers
+  (up to a sanity ceiling of 64) are created by <code>pool_manager</code> and reached by container DNS name. The
+  names <code>honeypot_eshop_N</code>, <code>honeypot_database_N</code> and <code>honeypot_backend_N</code> must match
+  Compose exactly.</p>
+
+  <h2 id="assign">Pool Assignment</h2>
+  <p><code>ASSIGN_SCRIPT</code> runs inside Redis with <code>EVAL</code>, so two nginx workers can never hand one free pool
+  to two sessions. It returns a pool number and a mode:</p>
+  <ol>
+    <li><strong>existing / pending</strong> — the session already has a pool; its TTL is refreshed.</li>
+    <li><strong>exclusive</strong> — a free ready pool becomes the session's own, and a wake-up asks
+    <code>pool_manager</code> to build the next spare.</li>
+    <li><strong>pending</strong> — no free pool but growth is allowed: borrow a ready pool round-robin and join
+    the waiting queue (case A).</li>
+    <li><strong>shared</strong> — growth is capped: share a ready pool round-robin for good (case B).</li>
+    <li><strong>none</strong> — no ready pool at all.</li>
+  </ol>
+  <p>Assignments are cached in <code>honeypot_routes</code> for 300&nbsp;s, but a pending one for only 3&nbsp;s, so the
+  move to a session's own pool takes effect quickly. A cached pool that is no longer in the ready list is a
+  cache miss (this fixed the 502s after scale-down). If the assigned pool is unhealthy or being replicated,
+  the request goes to the next healthy pool without changing the stored assignment; if none is healthy it
+  goes to the assigned pool and nginx returns the error. Missing or malformed health data counts as healthy.</p>
+
+  <h2 id="health">Health Checks</h2>
+  <ul>
+    <li>Probe <code>/robots.txt</code> every 15&nbsp;s with an 8&nbsp;s timeout; 5 failures mark a backend unhealthy, 2
+    successes healthy again. Previously 10&nbsp;s / 5&nbsp;s / 3: a post-start load burst flipped all three pools
+    unhealthy on slow renders while Docker still reported them healthy. A truly dead backend is still caught within
+    about 75&nbsp;s.</li>
+    <li>The timeout constant used to be declared but ignored (a hardcoded 2000&nbsp;ms), so tuning it did nothing; a
+    heavy page with 30+ concurrent assets once tripped it.</li>
+    <li>Every internal probe sends the User-Agent <code>honeypot-internal-healthprobe</code>, which Suricata rules
+    sid:1000056 and sid:1000060 exclude so the probes don't raise "High Rate HTTP Requests" or "Rapid
+    Vulnerability Scanning". The string is mirrored in <code>ids/suricata_rules/local.rules</code>; change both. It
+    is deliberately not the public <code>resty.http</code> default, which an adversary could spoof.</li>
+    <li>Production's health is for monitoring only; nginx's own <code>max_fails</code> / <code>fail_timeout</code>
+    handle it. Log lines name the containers behind an upstream, not just the upstream alias.</li>
+  </ul>
+
+  <h2 id="suricata">Suricata Ingestion</h2>
+  <ul>
+    <li>Reads <code>eve.json</code>, not <code>fast.log</code>: the old regex had 8 captures into 7 variables, so
+    <code>src_ip</code> received the classification text and alerts never reached the real IP.</li>
+    <li>Resume position: a Redis error skips the cycle (instead of rescanning a 600&nbsp;MB+ file inside worker 0's
+    event loop); a missing key starts at the end of the file; a position past the end (truncated file) restarts at
+    0. One cycle reads at most 8&nbsp;MB, and a half-written last line is left for the next cycle.</li>
+    <li>A cheap substring check skips the many flow/netflow events before any JSON decode.</li>
+    <li>Score per alert by Suricata severity: 1 → 50, 2 → 25, otherwise 10, capped at 100. The stored score only
+    rises; decay is applied when it is read. The reason carries the matched signature through to the routing
+    reason.</li>
+    <li>Private and loopback <code>src_ip</code> values are container-to-container hops and are not written to
+    <code>threat_ips</code>; the raw alert is still kept (last 1000).</li>
+    <li>A missing or unreadable <code>eve.json</code> is logged at most once per 10 minutes rather than looking like
+    "no alerts".</li>
+  </ul>
+
+  <h2 id="identity">Session Identity</h2>
+  <ul>
+    <li>Session ids are 16 bytes from OpenSSL's CSPRNG (previously a guessable SHA-1 of time, <code>math.random</code>
+    and the worker PID). The cookie is <code>&lt;id&gt;.&lt;HMAC&gt;</code>, compared in constant time; a cookie with a
+    bad MAC is never looked up.</li>
+    <li>A cookie-less request is matched through <code>fp_session:&lt;fingerprint&gt;</code>: the TLS ClientHello
+    (GREASE stripped), HTTP version, User-Agent, Accept-Language/-Encoding, the low-entropy client hints and, by
+    default, the IP. The pointer is refreshed on every session update and lives <code>recovery_window</code> after
+    the last request, so a neighbour behind the same NAT with an identical browser is merged only while the
+    session is active.</li>
+    <li>The GDPR signature runs alongside, never instead. It fails open: a missing key, a forged token or a Redis
+    error just means no GDPR signal for that request. See <a href="/docs/detection/signature">GDPR Signature</a>.</li>
+  </ul>
+
+  <h2 id="gates">Maintenance and Install Gates</h2>
+  <p><strong>Maintenance</strong> (<code>maintenance.lua</code>): during a WordPress update the dashboard sets
+  <code>honeypot_maintenance</code> with a TTL, the mirror timer copies it, and the first thing in the access phase
+  serves a 503 page with <code>Retry-After: 120</code> to production and honeypot alike. Only an explicit
+  <code>"1"</code> counts as on, and the TTL brings the site back on its own if the dashboard dies mid-update. See
+  <a href="/docs/engine/wordpress-management">WordPress Management</a>.</p>
+  <p><strong>Install state</strong> (<code>wp_install_state.lua</code>): <code>install.php</code> is normally scored
+  hard, but it is legitimate before the first-run wizard. Nginx has no MySQL driver, so the probe looks for
+  WordPress's own "already installed" text. Only production is probed, since pool databases are copies of it. Any
+  probe error keeps the previous value, and unknown or stale state counts as installed (strict), so an outage can
+  never open the fast path.</p>
+
+  <h2 id="honeytokens">Honeytokens</h2>
+  <p><code>honeytoken_handler.lua</code> plants fake high-value artefacts in honeypot responses and treats their later
+  use as confirmed compromise:</p>
+  <table>
+    <tr><th>Token</th><th>Planted in</th><th>Detected when</th></tr>
+    <tr><td>HT-APIKEY</td><td>WooCommerce REST <code>/wp-json/wc/v3/</code> responses</td><td>Used in an Authorization header</td></tr>
+    <tr><td>HT-DBCREDS</td><td>A "leaked" <code>wp-config.php</code> on config probes (non-existent internal DB host)</td><td>Host, user or password appear in a POST body</td></tr>
+    <tr><td>HT-ADMINPW</td><td>An admin-note page</td><td>The hash or plaintext appears in a login POST</td></tr>
+    <tr><td>HT-S3URL</td><td>Media library responses</td><td>The URL or its access key id is requested</td></tr>
+    <tr><td>HT-JWTKEY</td><td>Plugin-settings REST response</td><td>JWTs signed with it appear as Bearer tokens</td></tr>
+  </table>
+  <p>Values are SHA-1 derivations of a per-deployment salt, so they are the same across workers and restarts and
+  need no per-variant storage. Detection runs before routing; a hit sets the request's score to 100, logs to ELK and Redis,
+  and records time-to-use from the injection timestamp.</p>
+
+  <h2 id="classifiers">Content Classifiers</h2>
+  <p><strong>Prompt-injection filter</strong>: not wired to any LLM yet (the LLM response feature is planned), but
+  <code>pattern_analyzer</code> runs <code>detect()</code> on every request because injection text is anomalous on a
+  storefront anyway; half its risk score is added. Patterns cover five categories — instruction override, role
+  hijack, prompt exfiltration, context break (code fences, punctuation floods) and base64-encoded payloads.
+  <code>sanitize()</code> exists for the future LLM path.</p>
+  <p><strong>Sophistication analyzer</strong>: a rule-based, auditable classifier (scripted / AI-assisted / manual /
+  unknown) from inter-request timing regularity (gaps over 5 minutes ignored; sub-second pacing is scripted),
+  header completeness, User-Agent category and payload precision. It runs after routing, does no I/O, and returns
+  every contributing signal so the label can be checked in the logs.</p>
+
+  <h2 id="dblayer">Database-Layer Variant</h2>
+  <p><code>ids/db_proxy/reverse_proxy_enhanced/lua/</code> overrides only <code>init_worker.lua</code> and
+  <code>health_check.lua</code>. With one <code>production_eshop</code> choosing the database per request (via
+  <code>wp-content/db.php</code>), there are no <code>honeypot_eshop_N</code> backends to warm, health-check or mirror
+  replication flags for — probing them is what used to log endless "honeypot_backend_N marked as UNHEALTHY".
+  Instead the worker copies <code>honeypot_pool:health</code> into the health cache, so a session whose database is
+  down is steered to another until it returns. See <a href="/docs/engine/layers">Honeypot Layers</a>.</p>
+
+  <h2 id="conventions">Conventions</h2>
+  <ul>
+    <li><strong>Pure/adapter split.</strong> Decisions live in <code>*_rules.lua</code> with no <code>ngx.*</code> or
+    <code>_G.*</code>; adapters do the I/O. <code>router.decide_route()</code> stays in the adapter on purpose: its
+    stages interleave session writes with Redis I/O, and it is the most safety-critical function in the codebase.</li>
+    <li><strong>One implementation per helper.</strong> <code>url_decode</code> and <code>escape_pattern</code> moved to
+    <code>lua_pattern_utils.lua</code> once there were three copies; the two <code>is_static_asset</code> copies disagreed
+    on query strings (<code>style.css?v=123</code>) and the router now uses the stripping one.</li>
+    <li><strong><code>ngx.null</code> is not <code>nil</code>.</strong> A missing Redis key returns the
+    <code>ngx.null</code> sentinel, which once crashed <code>cjson.decode</code> on a fresh Redis;
+    <code>threat_intel.load()</code> handles it once for every caller.</li>
+    <li><strong>Fail safe, in the right direction.</strong> Maintenance, GDPR and health data fail open (site
+    stays up); the install-state gate fails strict. Optional modules are loaded with <code>pcall(require, …)</code>
+    and disable themselves with a log line.</li>
+    <li><strong>No dead code.</strong> A module ships only with a live call path — hence the prompt-injection
+    filter feeding scores today, and upload analysis folded into the session score instead of its own location,
+    where detections never outlived the request.</li>
+  </ul>
+</DocsLayout>

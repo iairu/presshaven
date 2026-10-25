@@ -98,7 +98,7 @@ const toc = [
   </table>
 
   <h2 id="modules">Lua Modules</h2>
-  <p>The system uses 17 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
+  <p>The system uses 18 pure modules and their adapter counterparts. Pure modules contain no <code>ngx.*</code> dependency and are unit-testable under a plain <code>lua</code> interpreter.</p>
   <table>
     <tr><th>Pure Module</th><th>Adapter</th><th>Purpose</th></tr>
     <tr><td>pattern_rules.lua</td><td>pattern_analyzer.lua</td><td>URI/header/CVE pattern scoring</td></tr>
@@ -118,7 +118,11 @@ const toc = [
     <tr><td>shared_ip_rules.lua</td><td>pattern_analyzer.lua</td><td>Shared-address policy</td></tr>
     <tr><td>pool_router_rules.lua</td><td>pool_router.lua</td><td>Pool routing logic</td></tr>
     <tr><td>session_identity_rules.lua</td><td>session_handler.lua</td><td>Session cookie identity</td></tr>
+    <tr><td>maintenance.lua</td><td>nginx.conf</td><td>Scheduled-maintenance gate</td></tr>
   </table>
+  <p>Run-time details collected from the modules' comments — shared dicts, background timers, the Redis key
+  schema, tuned constants and the bugs behind them — are in <a href="/docs/architecture/lua-internals">Lua
+  Internals</a>.</p>
 
   <h2 id="pooling">Pooling System</h2>
   <p>Each user session is permanently assigned to a specific honeypot pool instance (honeypot_eshop_N + honeypot_database_N). Pools are cloned from a pre-built template. Assignment is atomic via Redis EVAL. Scale-up and scale-down are managed by pool_manager.</p>
