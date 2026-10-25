@@ -12,6 +12,7 @@ use Automattic\WooCommerce\Admin\API\Reports\DataStoreInterface;
 use Automattic\WooCommerce\Admin\API\Reports\TimeInterval;
 use Automattic\WooCommerce\Admin\API\Reports\SqlQuery;
 use Automattic\WooCommerce\Admin\API\Reports\Cache as ReportsCache;
+use Automattic\WooCommerce\Enums\OrderItemType;
 
 /**
  * API\Reports\Coupons\DataStore.
@@ -197,13 +198,13 @@ class DataStore extends ReportsDataStore implements DataStoreInterface {
 						'discount_type'    => __( 'N/A', 'woocommerce' ),
 					);
 				} else {
-					$gmt_timzone = new \DateTimeZone( 'UTC' );
+					$gmt_timezone = new \DateTimeZone( 'UTC' );
 
 					$date_expires = $coupon->get_date_expires();
 					if ( is_a( $date_expires, 'DateTime' ) ) {
 						$date_expires     = $date_expires->format( TimeInterval::$iso_datetime_format );
 						$date_expires_gmt = new \DateTime( $date_expires );
-						$date_expires_gmt->setTimezone( $gmt_timzone );
+						$date_expires_gmt->setTimezone( $gmt_timezone );
 						$date_expires_gmt = $date_expires_gmt->format( TimeInterval::$iso_datetime_format );
 					} else {
 						$date_expires     = '';
@@ -214,7 +215,7 @@ class DataStore extends ReportsDataStore implements DataStoreInterface {
 					if ( is_a( $date_created, 'DateTime' ) ) {
 						$date_created     = $date_created->format( TimeInterval::$iso_datetime_format );
 						$date_created_gmt = new \DateTime( $date_created );
-						$date_created_gmt->setTimezone( $gmt_timzone );
+						$date_created_gmt->setTimezone( $gmt_timezone );
 						$date_created_gmt = $date_created_gmt->format( TimeInterval::$iso_datetime_format );
 					} else {
 						$date_created     = '';
@@ -405,7 +406,7 @@ class DataStore extends ReportsDataStore implements DataStoreInterface {
 			)
 		);
 		$existing_items     = array_flip( $existing_items );
-		$coupon_items       = $order->get_items( 'coupon' );
+		$coupon_items       = $order->get_items( OrderItemType::COUPON );
 		$coupon_items_count = count( $coupon_items );
 		$num_updated        = 0;
 		$num_deleted        = 0;

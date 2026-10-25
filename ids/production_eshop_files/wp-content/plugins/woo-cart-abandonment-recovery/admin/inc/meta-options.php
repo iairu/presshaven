@@ -99,7 +99,8 @@ class Meta_Options {
 						'name'         => 'wcf_ca_cron_run_time',
 						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_cron_run_time', 20 ),
 						'desc'         => __( 'Consider cart abandoned after above entered minutes of item being added to cart and order not placed. Minimum value: 10 minutes.', 'woo-cart-abandonment-recovery' ),
-						'after'        => __( 'minutes', 'woo-cart-abandonment-recovery' ),
+						'suffix'       => __( 'minutes', 'woo-cart-abandonment-recovery' ),
+						'className'    => 'w-32 rounded-md',
 						'min'          => '10',
 						'is_fullwidth' => true,
 					],
@@ -109,7 +110,8 @@ class Meta_Options {
 						'name'         => 'wcf_ca_cart_lost_time',
 						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_cart_lost_time', WCF_DEFAULT_CART_LOST_TIME ),
 						'desc'         => __( 'Consider cart lost after above entered days of item being added to cart and order not placed. Minimum value: 10 days.', 'woo-cart-abandonment-recovery' ),
-						'after'        => __( 'days', 'woo-cart-abandonment-recovery' ),
+						'suffix'       => __( 'days', 'woo-cart-abandonment-recovery' ),
+						'className'    => 'w-32 rounded-md',
 						'min'          => '10',
 						'is_fullwidth' => true,
 					],
@@ -139,6 +141,24 @@ class Meta_Options {
 						'name'         => 'wcar_email_admin_on_recovery',
 						'value'        => wcf_ca()->utils->wcar_get_option( 'wcar_email_admin_on_recovery' ),
 						'desc'         => __( 'This option will send an email to admin on new order recovery.', 'woo-cart-abandonment-recovery' ),
+						'is_fullwidth' => true,
+					],
+					'wcf-ca-scheduler-engine'      => [
+						'type'         => 'select',
+						'label'        => __( 'Background task scheduler', 'woo-cart-abandonment-recovery' ),
+						'name'         => 'wcf_ca_scheduler_engine',
+						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_scheduler_engine', 'wp_cron' ),
+						'desc'         => __( 'WP-Cron is used by default. When WP-Cron is disabled on the site (DISABLE_WP_CRON), recovery jobs automatically run via Action Scheduler so emails stay on time. Choose Action Scheduler to always use it for reliable, observable scheduling.', 'woo-cart-abandonment-recovery' ),
+						'options'      => [
+							[
+								'id'   => 'action_scheduler',
+								'name' => __( 'Action Scheduler (recommended)', 'woo-cart-abandonment-recovery' ),
+							],
+							[
+								'id'   => 'wp_cron',
+								'name' => __( 'WP-Cron (legacy)', 'woo-cart-abandonment-recovery' ),
+							],
+						],
 						'is_fullwidth' => true,
 					],
 				],
@@ -226,6 +246,14 @@ class Meta_Options {
 								],
 							],
 						],
+					],
+					'wcf-ca-oos-warning'          => [
+						'type'         => 'toggle',
+						'label'        => __( 'Notify when abandoned cart products go out of stock', 'woo-cart-abandonment-recovery' ),
+						'name'         => 'wcf_ca_send_oos_warning_emails_to_admin',
+						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_send_oos_warning_emails_to_admin', 'off' ),
+						'desc'         => __( 'Email the store admin when products in abandoned carts go out of stock, so recovery emails are not sent for unavailable products. Uses the email address(es) above.', 'woo-cart-abandonment-recovery' ),
+						'is_fullwidth' => true,
 					],
 				],
 				'priority' => 40,
@@ -954,7 +982,8 @@ class Meta_Options {
 						'name'         => 'wcf_ca_cron_run_time',
 						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_cron_run_time', 20 ),
 						'desc'         => __( 'Consider cart abandoned after above entered minutes of item being added to cart and order not placed. Minimum value: 10 minutes.', 'woo-cart-abandonment-recovery' ),
-						'after'        => __( 'minutes', 'woo-cart-abandonment-recovery' ),
+						'suffix'       => __( 'minutes', 'woo-cart-abandonment-recovery' ),
+						'className'    => 'w-32 rounded-md',
 						'min'          => '10',
 						'is_fullwidth' => true,
 					],
@@ -964,7 +993,8 @@ class Meta_Options {
 						'name'         => 'wcf_ca_cart_lost_time',
 						'value'        => wcf_ca()->utils->wcar_get_option( 'wcf_ca_cart_lost_time', WCF_DEFAULT_CART_LOST_TIME ),
 						'desc'         => __( 'Consider cart lost after above entered days of item being added to cart and order not placed. Minimum value: 10 days.', 'woo-cart-abandonment-recovery' ),
-						'after'        => __( 'days', 'woo-cart-abandonment-recovery' ),
+						'suffix'       => __( 'days', 'woo-cart-abandonment-recovery' ),
+						'className'    => 'w-32 rounded-md',
 						'min'          => '10',
 						'is_fullwidth' => true,
 					],
@@ -1124,7 +1154,7 @@ class Meta_Options {
 				'wcf-ca-email-blacklist-status' => [
 					'type'                => 'toggle',
 					'label'               => __( 'Enable Blacklist', 'woo-cart-abandonment-recovery' ),
-					'name'                => 'wcf_ca_phone_gdpr_status',
+					'name'                => 'wcf_ca_email_blacklist_status',
 					'is_fullwidth'        => true,
 					'is_pro'              => true,
 					'pro_upgrade_message' => __( 'Prevent recovery emails from being sent to specific email addresses or domains.', 'woo-cart-abandonment-recovery' ),
@@ -1147,6 +1177,22 @@ class Meta_Options {
 				],
 			],
 			'priority' => 40,
+		];
+
+		$settings['popup-settings'] = [
+			'title'    => __( 'Capture Popup', 'woo-cart-abandonment-recovery' ),
+			'slug'     => 'popup-settings',
+			'fields'   => [
+				'wcf-ca-popup-status' => [
+					'type'                => 'toggle',
+					'label'               => __( 'Enable Email Capture Popup', 'woo-cart-abandonment-recovery' ),
+					'name'                => 'wcf_ca_popup_status',
+					'is_fullwidth'        => true,
+					'is_pro'              => true,
+					'pro_upgrade_message' => __( 'Ask visitors for their email before checkout, so abandoned carts can still be recovered.', 'woo-cart-abandonment-recovery' ),
+				],
+			],
+			'priority' => 45,
 		];
 
 		return $settings;

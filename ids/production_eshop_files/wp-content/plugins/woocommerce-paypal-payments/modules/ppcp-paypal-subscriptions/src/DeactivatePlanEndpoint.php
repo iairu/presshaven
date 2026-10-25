@@ -12,7 +12,8 @@ use Exception;
 use WC_Product;
 use WC_Subscriptions_Product;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\BillingPlans;
-use WooCommerce\PayPalCommerce\Button\Endpoint\RequestData;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\RequestData;
+use WooCommerce\PayPalCommerce\Button\Exception\NonceValidationException;
 /**
  * Class DeactivatePlanEndpoint
  */
@@ -51,7 +52,6 @@ class DeactivatePlanEndpoint
     {
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error('Not admin.', 403);
-            return;
         }
         try {
             $data = $this->request_data->read_request(self::ENDPOINT);
@@ -62,7 +62,7 @@ class DeactivatePlanEndpoint
             $product_id = $data['product_id'] ?? '';
             if ($product_id) {
                 $product = wc_get_product($product_id);
-                if (is_a($product, WC_Product::class) && WC_Subscriptions_Product::is_subscription($product)) {
+                if ($product instanceof WC_Product && WC_Subscriptions_Product::is_subscription($product)) {
                     $product->delete_meta_data('_ppcp_enable_subscription_product');
                     $product->delete_meta_data('_ppcp_subscription_plan_name');
                     $product->delete_meta_data('ppcp_subscription_product');
@@ -71,6 +71,8 @@ class DeactivatePlanEndpoint
                 }
             }
             wp_send_json_success(array('product_id' => (string) $product_id));
+        } catch (NonceValidationException $error) {
+            wp_send_json_error(array('message' => $error->getMessage()), 400);
         } catch (Exception $error) {
             wp_send_json_error();
         }

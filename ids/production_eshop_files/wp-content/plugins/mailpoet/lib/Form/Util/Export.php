@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\Config\Env;
 use MailPoet\Form\Widget;
+use MailPoet\Settings\SettingsController;
 use MailPoet\WP\Functions as WPFunctions;
 
 class Export {
@@ -81,13 +82,16 @@ class Export {
           Env::$assetsUrl . '/dist/js/vendor.js?mp_ver=' . MAILPOET_VERSION .
         '"></script>';
         $output[] = '<script type="text/javascript" src="' .
-          Env::$assetsUrl . '/dist/js/public.js?mp_ver=' . MAILPOET_VERSION .
+          Env::$assetsUrl . '/dist/js/public.min.js?mp_ver=' . MAILPOET_VERSION .
         '"></script>';
 
-        // (JS) variables...
+        $collectSubscriberTimeZones = SettingsController::getInstance()->isSettingEnabled(
+          'collect_subscriber_timezones.enabled'
+        );
         $output[] = '<script type="text/javascript">';
         $output[] = '   var MailPoetForm = MailPoetForm || {';
         $output[] = '       is_rtl: ' . ((int)is_rtl()) . ",";
+        $output[] = '       collect_subscriber_timezones: ' . ($collectSubscriberTimeZones ? 'true' : 'false') . ',';
         $output[] = '       ajax_url: "' . admin_url('admin-ajax.php') . '"';
         $output[] = '   };';
         $output[] = '</script>';

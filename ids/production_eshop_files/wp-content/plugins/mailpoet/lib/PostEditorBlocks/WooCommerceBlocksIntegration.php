@@ -13,6 +13,7 @@ use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Segments\WooCommerce as WooSegment;
 use MailPoet\Settings\SettingsController;
 use MailPoet\Subscribers\SubscribersRepository;
+use MailPoet\Subscribers\TrackingConsentCapture;
 use MailPoet\WooCommerce\Helper as WooHelper;
 use MailPoet\WooCommerce\Subscription as WooCommerceSubscription;
 use MailPoet\WP\Functions as WPFunctions;
@@ -36,13 +37,17 @@ class WooCommerceBlocksIntegration {
   /** @var WooHelper  */
   private $wooHelper;
 
+  /** @var TrackingConsentCapture */
+  private $trackingConsentCapture;
+
   public function __construct(
     WPFunctions $wp,
     SettingsController $settings,
     WooCommerceSubscription $woocommerceSubscription,
     WooSegment $wooSegment,
     SubscribersRepository $subscribersRepository,
-    WooHelper $wooHelper
+    WooHelper $wooHelper,
+    TrackingConsentCapture $trackingConsentCapture
   ) {
     $this->wp = $wp;
     $this->settings = $settings;
@@ -50,6 +55,7 @@ class WooCommerceBlocksIntegration {
     $this->wooSegment = $wooSegment;
     $this->subscribersRepository = $subscribersRepository;
     $this->wooHelper = $wooHelper;
+    $this->trackingConsentCapture = $trackingConsentCapture;
   }
 
   public function init() {
@@ -97,8 +103,12 @@ class WooCommerceBlocksIntegration {
   public function registerCheckoutFrontendBlocks($integration_registry) {
     $integration_registry->register(new MarketingOptinBlock(
       [
-      'defaultText' => $this->settings->get('woocommerce.optin_on_checkout.message', ''),
+      'defaultText' => $this->wp->wpKsesPost((string)$this->settings->get('woocommerce.optin_on_checkout.message', '')),
       'optinEnabled' => $this->settings->get('woocommerce.optin_on_checkout.enabled', false),
+      'trackingConsentEnabled' => $this->trackingConsentCapture->isCaptureEnabled(),
+      'trackingConsentText' => $this->trackingConsentCapture->getCopy(
+        SubscriberEntity::TRACKING_CONSENT_METHOD_WOOCOMMERCE_CHECKOUT
+      ),
       ],
       $this->wp
     ));
@@ -140,6 +150,13 @@ class WooCommerceBlocksIntegration {
               'description' => __('Subscribe to marketing opt-in.', 'mailpoet'),
               'type' => ['boolean', 'null'],
             ],
+            // Deliberately a second field rather than part of 'optin': consent
+            // to open and click tracking may never be bundled with the
+            // marketing opt-in.
+            'tracking_consent' => [
+              'description' => __('Allow tracking of email opens and link clicks.', 'mailpoet'),
+              'type' => ['boolean', 'null'],
+            ],
           ];
         },
       ]
@@ -161,6 +178,10 @@ class WooCommerceBlocksIntegration {
 
   public function processCheckoutBlockOptin(\WC_Order $order, $request) {
     $checkoutOptin = isset($request['extensions']['mailpoet']['optin']) ? (bool)$request['extensions']['mailpoet']['optin'] : false;
+    // The block sends this key as soon as it shows the consent box, ticked or not,
+    // so a request without it comes from a checkout that never asked.
+    $consentFieldRendered = isset($request['extensions']['mailpoet']['tracking_consent']);
+    $trackingConsent = $consentFieldRendered && (bool)$request['extensions']['mailpoet']['tracking_consent'];
 
     // Emulate checkout opt-in triggering for AutomateWoo
     if ($checkoutOptin) {
@@ -178,6 +199,11 @@ class WooCommerceBlocksIntegration {
     // Fetch existing woo subscriber and in case there is not any sync as guest
     $email = $order->get_billing_email();
     $subscriber = $this->subscribersRepository->findOneBy(['email' => $email, 'isWoocommerceUser' => true]);
+    // Deliberately unfiltered by isWoocommerceUser: a subscriber who signed up through a
+    // form and is now checking out as a guest already exists, and the sync only flips
+    // their flag rather than creating a row. Treating them as new would let an unticked
+    // box overwrite consent they gave earlier, which STOMAIL-8305 forbids.
+    $isNewSubscriber = $this->subscribersRepository->findOneBy(['email' => $email]) === null;
     if (!$subscriber instanceof SubscriberEntity) {
       $this->wooSegment->synchronizeGuestCustomer($order->get_id());
       $subscriber = $this->subscribersRepository->findOneBy(['email' => $email, 'isWoocommerceUser' => true]);
@@ -188,6 +214,6 @@ class WooCommerceBlocksIntegration {
       return null;
     }
 
-    $this->woocommerceSubscription->handleSubscriberOptin($subscriber, $checkoutOptin);
+    $this->woocommerceSubscription->handleSubscriberOptin($subscriber, $checkoutOptin, $trackingConsent, $isNewSubscriber, $consentFieldRendered);
   }
 }

@@ -9,9 +9,7 @@ declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\ApiClient\Repository;
 
 use WooCommerce\PayPalCommerce\ApiClient\Helper\DccApplies;
-/**
- * Class PartnerReferralsData
- */
+use WooCommerce\PayPalCommerce\Settings\Data\Definition\FeaturesDefinition;
 class PartnerReferralsData
 {
     /**
@@ -24,23 +22,12 @@ class PartnerReferralsData
      * @var DccApplies
      */
     private DccApplies $dcc_applies;
-    /**
-     * PartnerReferralsData constructor.
-     *
-     * @param DccApplies $dcc_applies The DCC Applies helper.
-     */
-    public function __construct(DccApplies $dcc_applies)
+    protected FeaturesDefinition $features_definition;
+    public function __construct(DccApplies $dcc_applies, FeaturesDefinition $features_definition)
     {
         $this->dcc_applies = $dcc_applies;
-    }
-    /**
-     * Returns a nonce.
-     *
-     * @return string
-     */
-    public function nonce(): string
-    {
-        return 'a1233wtergfsdt4365tzrshgfbaewa36AGa1233wtergfsdt4365tzrshgfbaewa36AG';
+        // @phpstan-ignore property.deprecated
+        $this->features_definition = $features_definition;
     }
     /**
      * Returns the data.
@@ -50,11 +37,13 @@ class PartnerReferralsData
      * @param string   $onboarding_token  A security token to finalize the onboarding process.
      * @param bool     $use_subscriptions If the merchant requires subscription features.
      * @param bool     $use_card_payments If the merchant wants to process credit card payments.
+     * @param string   $seller_nonce      The PKCE code_verifier for the OAuth flow.
      * @return array
      */
-    public function data(array $products = array(), string $onboarding_token = '', ?bool $use_subscriptions = null, bool $use_card_payments = \true): array
+    public function data(array $products = array(), string $onboarding_token = '', ?bool $use_subscriptions = null, bool $use_card_payments = \true, string $seller_nonce = ''): array
     {
         $in_acdc_country = $this->dcc_applies->for_country_currency();
+        // @phpstan-ignore property.deprecated
         if (!$products) {
             $products = array($in_acdc_country ? 'PPCP' : 'EXPRESS_CHECKOUT');
         }
@@ -79,7 +68,11 @@ class PartnerReferralsData
             $first_party_features[] = 'VAULT';
             $first_party_features[] = 'FUTURE_PAYMENT';
         }
-        $payload = array('partner_config_override' => array('return_url' => $return_url, 'return_url_description' => $return_url_label, 'show_add_credit_card' => $use_card_payments), 'products' => $products, 'capabilities' => $capabilities, 'legal_consents' => array(array('type' => 'SHARE_DATA_CONSENT', 'granted' => \true)), 'operations' => array(array('operation' => 'API_INTEGRATION', 'api_integration_preference' => array('rest_api_integration' => array('integration_method' => 'PAYPAL', 'integration_type' => 'FIRST_PARTY', 'first_party_details' => array('features' => $first_party_features, 'seller_nonce' => $this->nonce()))))));
+        if ($this->features_definition->is_feature_eligible(FeaturesDefinition::FEATURE_PAY_UPON_INVOICE)) {
+            $products[] = 'PAYMENT_METHODS';
+            $capabilities[] = 'PAY_UPON_INVOICE';
+        }
+        $payload = array('partner_config_override' => array('return_url' => $return_url, 'return_url_description' => $return_url_label, 'show_add_credit_card' => $use_card_payments), 'products' => $products, 'capabilities' => $capabilities, 'legal_consents' => array(array('type' => 'SHARE_DATA_CONSENT', 'granted' => \true)), 'operations' => array(array('operation' => 'API_INTEGRATION', 'api_integration_preference' => array('rest_api_integration' => array('integration_method' => 'PAYPAL', 'integration_type' => 'FIRST_PARTY', 'first_party_details' => array('features' => $first_party_features, 'seller_nonce' => $seller_nonce))))));
         /**
          * Filter the final partners referrals data collection.
          */

@@ -50,7 +50,7 @@ class Generate_Command extends \ActionScheduler_WPCLI_Command
     protected function generate($schedule_start, $interval, $count, $hook, array $args = array(), $group = '')
     {
         $actions_added = array();
-        $progress_bar = \WP_CLI\Utils\make_progress_bar(sprintf(
+        $progress_bar = \WpifyWooDeps\WP_CLI\Utils\make_progress_bar(sprintf(
             /* translators: %d is number of actions to create */
             _n('Creating %d action', 'Creating %d actions', $count, 'action-scheduler'),
             number_format_i18n($count)
@@ -71,7 +71,7 @@ class Generate_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_success($actions_added, $action_type)
     {
-        \WP_CLI::success(sprintf(
+        \WpifyWooDeps\WP_CLI::success(sprintf(
             /* translators: %1$d refers to the total number of tasks added, %2$s is the action type */
             _n('%1$d %2$s action scheduled.', '%1$d %2$s actions scheduled.', $actions_added, 'action-scheduler'),
             number_format_i18n($actions_added),
@@ -87,7 +87,7 @@ class Generate_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_error(\Exception $e)
     {
-        \WP_CLI::error(sprintf(
+        \WpifyWooDeps\WP_CLI::error(sprintf(
             /* translators: %s refers to the exception error message. */
             __('There was an error creating the scheduled action: %s', 'action-scheduler'),
             $e->getMessage()

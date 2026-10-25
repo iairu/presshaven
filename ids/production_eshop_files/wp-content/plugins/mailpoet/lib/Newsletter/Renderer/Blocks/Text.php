@@ -11,15 +11,15 @@ use MailPoet\Newsletter\Renderer\StylesHelper;
 use MailPoet\Util\pQuery\pQuery;
 
 class Text {
-  public function render($element) {
+  public function render($element, bool $isRtl = false) {
     $html = $element['text'];
     // replace &nbsp; with spaces
     $html = str_replace('&nbsp;', ' ', $html);
     $html = str_replace('\xc2\xa0', ' ', $html);
-    $html = $this->convertBlockquotesToTables($html);
-    $html = $this->convertParagraphsToTables($html);
-    $html = $this->styleLists($html);
-    $html = $this->styleHeadings($html);
+    $html = $this->convertBlockquotesToTables($html, $isRtl);
+    $html = $this->convertParagraphsToTables($html, $isRtl);
+    $html = $this->styleLists($html, $isRtl);
+    $html = $this->styleHeadings($html, $isRtl);
     $html = $this->removeLastLineBreak($html);
     $template = '
       <tr>
@@ -30,7 +30,7 @@ class Text {
     return $template;
   }
 
-  public function convertBlockquotesToTables($html) {
+  public function convertBlockquotesToTables($html, bool $isRtl = false) {
     $dOMParser = new pQuery();
     $DOM = $dOMParser->parseStr($html);
     $blockquotes = $DOM->query('blockquote');
@@ -39,7 +39,7 @@ class Text {
       $paragraphs = $blockquote->query('p, h1, h2, h3, h4', 0);
       foreach ($paragraphs as $index => $paragraph) {
         if (preg_match('/h\d/', $paragraph->getTag())) {
-          $contents[] = $paragraph->getOuterText();
+          $contents[] = $paragraph->toString();
         } else {
           $contents[] = $paragraph->toString(true, true, 1);
         }
@@ -74,7 +74,7 @@ class Text {
     return $DOM->__toString();
   }
 
-  public function convertParagraphsToTables($html) {
+  public function convertParagraphsToTables($html, bool $isRtl = false) {
     $dOMParser = new pQuery();
     $DOM = $dOMParser->parseStr($html);
     $paragraphs = $DOM->query('p');
@@ -105,7 +105,13 @@ class Text {
       }
       $style = (string)$paragraph->style;
       if (!preg_match('/text-align/i', $style)) {
-        $style = 'text-align: left;' . $style;
+        $style = 'text-align: ' . ($isRtl ? 'right' : 'left') . ';' . $style;
+      } elseif (
+        $isRtl
+        && preg_match('/text-align\s*:\s*left/i', $style)
+        && !preg_match('/text-align\s*:\s*(center|justify|right)/i', $style)
+      ) {
+        $style = StylesHelper::joinStyles($style, 'text-align: right;');
       }
       $contents = $paragraph->toString(true, true, 1);
       $paragraph->setTag('table');
@@ -138,7 +144,7 @@ class Text {
     return $DOM->__toString();
   }
 
-  public function styleLists($html) {
+  public function styleLists($html, bool $isRtl = false) {
     $dOMParser = new pQuery();
     $DOM = $dOMParser->parseStr($html);
     $lists = $DOM->query('ol, ul, li');
@@ -151,20 +157,20 @@ class Text {
         $list->class = 'mailpoet_paragraph';
         $list->style = StylesHelper::joinStyles($list->style, 'padding-top:0;padding-bottom:0;margin-top:10px;');
       }
-      $list->style = StylesHelper::applyTextAlignment($list->style);
+      $list->style = StylesHelper::applyTextAlignment($list->style, $isRtl ? 'right' : 'left');
       $list->style = StylesHelper::joinStyles($list->style, 'margin-bottom:10px;');
       $list->style = EHelper::escapeHtmlStyleAttr($list->style);
     }
     return $DOM->__toString();
   }
 
-  public function styleHeadings($html) {
+  public function styleHeadings($html, bool $isRtl = false) {
     $dOMParser = new pQuery();
     $DOM = $dOMParser->parseStr($html);
     $headings = $DOM->query('h1, h2, h3, h4');
     if (!$headings->count()) return $html;
     foreach ($headings as $heading) {
-      $heading->style = StylesHelper::applyTextAlignment($heading->style);
+      $heading->style = StylesHelper::applyTextAlignment($heading->style, $isRtl ? 'right' : 'left');
       $heading->style = StylesHelper::joinStyles($heading->style, 'padding:0;font-style:normal;font-weight:normal;');
       $heading->style = EHelper::escapeHtmlStyleAttr($heading->style);
     }
@@ -176,6 +182,7 @@ class Text {
   }
 
   public function insertLineBreak($element) {
+    if (!$element->parent) return $element;
     $element->parent->insertChild(
       [
         'tag_name' => 'br',

@@ -31,7 +31,7 @@ function submitAndDeactivate(e: Event) {
 
   submitFeedbackForm(domElements.deactivateFeedbackForm)
     .then(() => {
-      if (feedback) {
+      if (feedback && embedder) {
         embedder.postMessage({
           key: ProxyMessages.TrackPluginDeactivation,
           payload: {

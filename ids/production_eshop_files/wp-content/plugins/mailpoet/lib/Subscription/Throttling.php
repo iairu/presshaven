@@ -28,8 +28,10 @@ class Throttling {
   public function throttle() {
     $subscriptionLimitEnabled = $this->wp->applyFilters('mailpoet_subscription_limit_enabled', true);
 
-    $subscriptionLimitWindow = (int)$this->wp->applyFilters('mailpoet_subscription_limit_window', DAY_IN_SECONDS);
-    $subscriptionLimitBase = (int)$this->wp->applyFilters('mailpoet_subscription_limit_base', MINUTE_IN_SECONDS);
+    $window = $this->wp->applyFilters('mailpoet_subscription_limit_window', DAY_IN_SECONDS);
+    $subscriptionLimitWindow = is_numeric($window) ? (int)$window : DAY_IN_SECONDS;
+    $base = $this->wp->applyFilters('mailpoet_subscription_limit_base', MINUTE_IN_SECONDS);
+    $subscriptionLimitBase = is_numeric($base) ? (int)$base : MINUTE_IN_SECONDS;
 
     $subscriberIp = Helpers::getIP();
 
@@ -64,7 +66,8 @@ class Throttling {
 
   public function purge(): void {
     $interval = $this->wp->applyFilters('mailpoet_subscription_purge_window', MONTH_IN_SECONDS);
-    $this->subscriberIPsRepository->deleteCreatedAtBeforeTimeInSeconds($interval);
+    $purgeWindow = is_numeric($interval) ? (int)$interval : MONTH_IN_SECONDS;
+    $this->subscriberIPsRepository->deleteCreatedAtBeforeTimeInSeconds($purgeWindow);
   }
 
   public function secondsToTimeString($seconds): string {
@@ -88,6 +91,11 @@ class Throttling {
     }
     $user = $this->wp->wpGetCurrentUser();
     $roles = $this->wp->applyFilters('mailpoet_subscription_throttling_exclude_roles', ['administrator', 'editor']);
-    return !empty(array_intersect($roles, (array)$user->roles));
+    if (!is_array($roles)) {
+      $roles = ['administrator', 'editor'];
+    }
+    $roles = array_values(array_filter($roles, 'is_string'));
+    $userRoles = array_values(array_filter((array)$user->roles, 'is_string'));
+    return !empty(array_intersect($roles, $userRoles));
   }
 }

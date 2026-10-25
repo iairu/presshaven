@@ -13,7 +13,9 @@ namespace Automattic\WooCommerce\Pinterest\Utilities;
 /**
  * Utilities class.
  *
- * @since 1.1.0
+ * @class   Utilities
+ * @since   1.1.0
+ * @version 1.6.0
  */
 class Utilities {
 
@@ -23,6 +25,7 @@ class Utilities {
 	 * Set the account connection timestamp.
 	 *
 	 * @since 1.1.0
+	 * @return void
 	 */
 	public static function set_account_connection_timestamp() {
 		update_option( self::ACCOUNT_CONNECTION_TIMESTAMP, time() );

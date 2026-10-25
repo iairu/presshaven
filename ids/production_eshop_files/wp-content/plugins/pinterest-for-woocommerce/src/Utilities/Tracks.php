@@ -13,7 +13,9 @@ namespace Automattic\WooCommerce\Pinterest\Utilities;
 /**
  * Trait Tracks
  *
- * @since 1.2.5
+ * @class   Tracks
+ * @since   1.2.5
+ * @version 1.4.27
  */
 trait Tracks {
 
@@ -24,11 +26,10 @@ trait Tracks {
 	 * @param array  $properties Array of properties to include with the event.
 	 */
 	private static function record_event( string $name, array $properties = array() ): void {
-		if ( class_exists( WC_Tracks::class ) ) {
-			WC_Tracks::record_event( $name, $properties );
+		if ( class_exists( '\WC_Tracks' ) ) {
+			\WC_Tracks::record_event( $name, $properties );
 		} elseif ( function_exists( 'wc_admin_record_tracks_event' ) ) {
 			wc_admin_record_tracks_event( $name, $properties );
 		}
 	}
-
 }

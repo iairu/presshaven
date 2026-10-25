@@ -62,7 +62,7 @@ class __TwigTemplate_fbbbbad2941fe4d62ead317e87baf3d52e20e55ee17d90822382ddf13ef
         yield "';
   var mailpoet_show_customers_import = ";
         // line 7
-        yield json_encode(($context["show_customers_import"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["show_customers_import"] ?? null));
         yield ";
   var finish_wizard_url = '";
         // line 8

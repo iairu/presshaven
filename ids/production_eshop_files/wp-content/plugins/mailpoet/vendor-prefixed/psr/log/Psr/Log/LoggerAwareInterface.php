@@ -3,5 +3,5 @@ namespace MailPoetVendor\Psr\Log;
 if (!defined('ABSPATH')) exit;
 interface LoggerAwareInterface
 {
- public function setLogger(LoggerInterface $logger);
+public function setLogger(LoggerInterface $logger);
 }

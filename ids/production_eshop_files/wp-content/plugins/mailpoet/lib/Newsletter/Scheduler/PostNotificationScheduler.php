@@ -171,9 +171,11 @@ class PostNotificationScheduler {
 
     $weekDayOption = $newsletter->getOption(NewsletterOptionFieldEntity::NAME_WEEK_DAY);
     $weekDay = $weekDayOption ? $weekDayOption->getValue() : null;
+    $weekDay = $this->normalizeCronList($weekDay, range(0, 6), '1');
 
     $monthDayOption = $newsletter->getOption(NewsletterOptionFieldEntity::NAME_MONTH_DAY);
     $monthDay = $monthDayOption ? $monthDayOption->getValue() : null;
+    $monthDay = $this->normalizeCronList($monthDay, range(1, 28), '1');
 
     $nthWeekDayOption = $newsletter->getOption(NewsletterOptionFieldEntity::NAME_NTH_WEEK_DAY);
     $nthWeekDay = $nthWeekDayOption ? $nthWeekDayOption->getValue() : null;
@@ -187,7 +189,10 @@ class PostNotificationScheduler {
         $schedule = sprintf('%s %s * * %s', $minute, $hour, $weekDay);
         break;
       case self::INTERVAL_NTHWEEKDAY:
-        $schedule = sprintf('%s %s ? * %s%s', $minute, $hour, $weekDay, $nthWeekDay);
+        // nthWeekDay schedules a single weekday (e.g. "every 1st Monday"),
+        // so reduce the normalized list to its first entry.
+        $firstWeekDay = explode(',', $weekDay)[0];
+        $schedule = sprintf('%s %s ? * %s%s', $minute, $hour, $firstWeekDay, $nthWeekDay);
         break;
       case self::INTERVAL_MONTHLY:
         $schedule = sprintf('%s %s %s * *', $minute, $hour, $monthDay);
@@ -212,5 +217,23 @@ class PostNotificationScheduler {
     $this->newsletterOptionsRepository->persist($scheduleOption);
     $this->newsletterOptionsRepository->flush();
     return $scheduleOption->getValue();
+  }
+
+  private function normalizeCronList($value, array $allowedValues, string $defaultValue): string {
+    $allowedValues = array_map('strval', $allowedValues);
+    $selectedValues = array_filter(
+      array_map('trim', explode(',', (string)$value)),
+      function ($selectedValue) use ($allowedValues) {
+        return in_array($selectedValue, $allowedValues, true);
+      }
+    );
+    $selectedValues = array_unique($selectedValues);
+    sort($selectedValues, SORT_NUMERIC);
+
+    if (empty($selectedValues)) {
+      return $defaultValue;
+    }
+
+    return implode(',', $selectedValues);
   }
 }

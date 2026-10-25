@@ -15,6 +15,9 @@ use Automattic\WooCommerce\Pinterest\SaveToPinterest;
 
 /**
  * Pinterest_For_Woocommerce_Frontend_Scripts Class.
+ *
+ * @class   Pinterest_For_Woocommerce_Frontend_Assets
+ * @version 1.6.0
  */
 class Pinterest_For_Woocommerce_Frontend_Assets {
 
@@ -83,6 +86,7 @@ class Pinterest_For_Woocommerce_Frontend_Assets {
 	 * @param string $tag    The `<script>` tag for the enqueued script.
 	 * @param string $handle The script's registered handle.
 	 * @param string $src    The script's source URL.
+	 * @return string
 	 */
 	public function maybe_defer_scripts( $tag, $handle, $src ) {
 

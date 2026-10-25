@@ -1,59 +1,47 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Property;
 if (!defined('ABSPATH')) exit;
-use MailPoetVendor\Sabberworm\CSS\Comment\Comment;
+use MailPoetVendor\Sabberworm\CSS\Comment\CommentContainer;
 use MailPoetVendor\Sabberworm\CSS\OutputFormat;
+use MailPoetVendor\Sabberworm\CSS\Position\Position;
+use MailPoetVendor\Sabberworm\CSS\Position\Positionable;
+use MailPoetVendor\Sabberworm\CSS\ShortClassNameProvider;
 use MailPoetVendor\Sabberworm\CSS\Value\CSSString;
-class Charset implements AtRule
+class Charset implements AtRule, Positionable
 {
- private $oCharset;
- protected $iLineNo;
- protected $aComments;
- public function __construct(CSSString $oCharset, $iLineNo = 0)
- {
- $this->oCharset = $oCharset;
- $this->iLineNo = $iLineNo;
- $this->aComments = [];
- }
- public function getLineNo()
- {
- return $this->iLineNo;
- }
- public function setCharset($sCharset)
- {
- $sCharset = $sCharset instanceof CSSString ? $sCharset : new CSSString($sCharset);
- $this->oCharset = $sCharset;
- }
- public function getCharset()
- {
- return $this->oCharset->getString();
- }
- public function __toString()
- {
- return $this->render(new OutputFormat());
- }
- public function render(OutputFormat $oOutputFormat)
- {
- return "{$oOutputFormat->comments($this)}@charset {$this->oCharset->render($oOutputFormat)};";
- }
- public function atRuleName()
- {
- return 'charset';
- }
- public function atRuleArgs()
- {
- return $this->oCharset;
- }
- public function addComments(array $aComments)
- {
- $this->aComments = \array_merge($this->aComments, $aComments);
- }
- public function getComments()
- {
- return $this->aComments;
- }
- public function setComments(array $aComments)
- {
- $this->aComments = $aComments;
- }
+use CommentContainer;
+use Position;
+use ShortClassNameProvider;
+private $charset;
+public function __construct(CSSString $charset, ?int $lineNumber = null)
+{
+$this->charset = $charset;
+$this->setPosition($lineNumber);
+}
+public function setCharset($charset): void
+{
+$charset = $charset instanceof CSSString ? $charset : new CSSString($charset);
+$this->charset = $charset;
+}
+public function getCharset(): string
+{
+return $this->charset->getString();
+}
+public function render(OutputFormat $outputFormat): string
+{
+return "{$outputFormat->getFormatter()->comments($this)}@charset {$this->charset->render($outputFormat)};";
+}
+public function atRuleName(): string
+{
+return 'charset';
+}
+public function atRuleArgs(): CSSString
+{
+return $this->charset;
+}
+public function getArrayRepresentation(): array
+{
+return ['class' => $this->getShortClassName(), 'charset' => $this->charset->getArrayRepresentation()];
+}
 }

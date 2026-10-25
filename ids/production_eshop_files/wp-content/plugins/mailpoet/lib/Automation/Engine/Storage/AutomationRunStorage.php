@@ -141,11 +141,38 @@ class AutomationRunStorage {
           JOIN %i AS subjects ON runs.id = subjects.automation_run_id
           WHERE runs.automation_id = %d
           AND subjects.hash = %s
+          AND subjects.key = %s
         ',
         $this->table,
         $this->subjectTable,
         $automation->getId(),
-        $subject->getHash()
+        $subject->getHash(),
+        $subject->getKey()
+      )
+    );
+
+    return $result ? (int)current($result) : 0;
+  }
+
+  public function getCountByAutomationTriggerAndSubject(Automation $automation, string $triggerKey, Subject $subject): int {
+    global $wpdb;
+
+    $result = $wpdb->get_col(
+      $wpdb->prepare(
+        '
+          SELECT count(DISTINCT runs.id) AS count FROM %i AS runs
+          JOIN %i AS subjects ON runs.id = subjects.automation_run_id
+          WHERE runs.automation_id = %d
+          AND runs.trigger_key = %s
+          AND subjects.hash = %s
+          AND subjects.key = %s
+        ',
+        $this->table,
+        $this->subjectTable,
+        $automation->getId(),
+        $triggerKey,
+        $subject->getHash(),
+        $subject->getKey()
       )
     );
 
@@ -236,14 +263,22 @@ class AutomationRunStorage {
     $result = array_fill_keys($automationIds, null);
 
     foreach ($runs as $runData) {
+      if (!is_array($runData)) {
+        continue;
+      }
+      $runId = is_numeric($runData['id'] ?? null) ? (int)$runData['id'] : 0;
       $runData['subjects'] = array_values(array_filter(
         is_array($subjects) ? $subjects : [],
-        function($subjectData) use ($runData): bool {
-          /** @var array $subjectData */
-          return (int)$subjectData['automation_run_id'] === (int)$runData['id'];
+        function ($subjectData) use ($runId): bool {
+          if (!is_array($subjectData)) {
+            return false;
+          }
+          $subjectRunId = $subjectData['automation_run_id'] ?? null;
+          return is_numeric($subjectRunId) && (int)$subjectRunId === $runId;
         }
       ));
-      $result[(int)$runData['automation_id']] = AutomationRun::fromArray($runData);
+      $automationId = is_numeric($runData['automation_id'] ?? null) ? (int)$runData['automation_id'] : 0;
+      $result[$automationId] = AutomationRun::fromArray($runData);
     }
 
     return $result;
@@ -285,6 +320,23 @@ class AutomationRunStorage {
     if ($result === false) {
       $this->throwDatabaseError();
     }
+  }
+
+  public function getNextStepId(int $id): ?string {
+    global $wpdb;
+    $result = $wpdb->get_row(
+      $wpdb->prepare(
+        'SELECT next_step_id FROM %i WHERE id = %d',
+        $this->table,
+        $id
+      ),
+      ARRAY_A
+    );
+    if (!is_array($result) || !array_key_exists('next_step_id', $result)) {
+      return null;
+    }
+    $value = $result['next_step_id'];
+    return $value !== null ? (string)$value : null;
   }
 
   public function getAutomationStepStatisticForTimeFrame(int $automationId, string $status, \DateTimeImmutable $after, \DateTimeImmutable $before, ?int $versionId = null): array {

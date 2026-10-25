@@ -28,17 +28,19 @@ class WC_REST_Stripe_Account_Controller extends WC_Stripe_REST_Base_Controller {
 	/**
 	 * Stripe payment gateway.
 	 *
-	 * @var WC_Gateway_Stripe
+	 * @var WC_Stripe_UPE_Payment_Gateway
 	 */
 	private $gateway;
 
-	public function __construct( WC_Gateway_Stripe $gateway, WC_Stripe_Account $account ) {
+	public function __construct( WC_Stripe_UPE_Payment_Gateway $gateway, WC_Stripe_Account $account ) {
 		$this->gateway = $gateway;
 		$this->account = $account;
 	}
 
 	/**
 	 * Configure REST API routes.
+	 *
+	 * @return void
 	 */
 	public function register_routes() {
 		register_rest_route(
@@ -124,6 +126,7 @@ class WC_REST_Stripe_Account_Controller extends WC_Stripe_REST_Base_Controller {
 
 		return new WP_REST_Response(
 			[
+				'id'                       => $account['id'] ?? null,
 				'has_pending_requirements' => $this->account->has_pending_requirements(),
 				'has_overdue_requirements' => $this->account->has_overdue_requirements(),
 				'current_deadline'         => $account['requirements']['current_deadline'] ?? null,
@@ -155,12 +158,14 @@ class WC_REST_Stripe_Account_Controller extends WC_Stripe_REST_Base_Controller {
 	}
 
 	/**
-	 * Clears the cached account data and returns the updated one.
+	 * Refreshes the cached account data, re-evaluates Payment Method Configuration availability, and returns the updated account data.
 	 *
 	 * @return WP_REST_Response
 	 */
 	public function refresh_account() {
-		$this->account->clear_cache();
+		$this->account->refresh_cache();
+
+		WC_Stripe_Payment_Method_Configurations::refresh_pmc_availability();
 
 		// calling the same "get" method, so that the data format is the same.
 		return $this->get_account();

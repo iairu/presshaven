@@ -6,13 +6,13 @@ use MailPoetVendor\Twig\Compiler;
 #[YieldReady]
 class TextNode extends Node implements NodeOutputInterface
 {
- public function __construct(string $data, int $lineno)
- {
- parent::__construct([], ['data' => $data], $lineno);
- }
- public function compile(Compiler $compiler) : void
- {
- $compiler->addDebugInfo($this);
- $compiler->write('yield ')->string($this->getAttribute('data'))->raw(";\n");
- }
+public function __construct(string $data, int $lineno)
+{
+parent::__construct([], ['data' => $data], $lineno);
+}
+public function compile(Compiler $compiler): void
+{
+$compiler->addDebugInfo($this);
+$compiler->write('yield ')->string($this->getAttribute('data'))->raw(";\n");
+}
 }

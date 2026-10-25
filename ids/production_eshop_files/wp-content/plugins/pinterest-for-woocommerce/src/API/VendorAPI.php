@@ -16,6 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Base Class for registering our endpoints.
+ *
+ * @class   VendorAPI
+ * @version 1.6.0
  */
 class VendorAPI {
 
@@ -90,6 +93,7 @@ class VendorAPI {
 	 * Register endpoint Routes
 	 *
 	 * @since 1.0.0
+	 * @return void
 	 */
 	public function register_routes() {
 		if ( $this->supports_multiple_endpoints ) {
@@ -106,6 +110,7 @@ class VendorAPI {
 	 * @param string $endpoint_callback The endpoint's callback.
 	 *
 	 * @since 1.0.13
+	 * @return void
 	 */
 	public function register_router_single_method( $methods = '', $endpoint_callback = '' ) {
 		$namespace         = $this->api_namespace . $this->api_version;
@@ -128,6 +133,7 @@ class VendorAPI {
 	 * Register endpoint route with multiple methods
 	 *
 	 * @since 1.0.13
+	 * @return void
 	 */
 	public function register_router_multiple_methods() {
 		foreach ( $this->endpoint_callbacks_map as $callback => $method ) {

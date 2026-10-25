@@ -1,3 +1,20 @@
+Version 2.2.1 - Friday, 16th October 2026
+- Fix: Fixed an issue which was introduced in 2.2.0 where the plugin stopped working after updating on some older databases.
+
+Version 2.2.0 - Thursday, 15th October 2026
+- New: Added an admin warning email when products in abandoned carts go out of stock.
+- New: Added a bulk Unsubscribe action to Follow-Up reports.
+- Improvement: Abandoned cart processing now switches to Action Scheduler automatically when WP-Cron is disabled, with an option to always use Action Scheduler.
+- Improvement: Redesigned the dashboard, onboarding wizard, follow-up templates, reports, settings and integrations screens, with better accessibility.
+- Improvement: The email product table now follows the store's tax display setting.
+- Fix: Fixed an issue where Exclude Products was not saving on follow-up email templates.
+- Fix: Fixed broken recovery links on stores with very large checkout IDs.
+- Fix: Fixed the onboarding wizard showing the Add-Ons step when all add-ons were already active.
+- Security: Improved overall plugin security.
+
+Version 2.1.4 - Friday, 9th October 2026
+- Security: Hardened cart abandonment tracking.
+
 Version 2.1.3 - Friday, 19th June 2026
 - New: Added a per-template option to send the admin a CC or BCC copy of each recovery email.
 - Fix: Fixed an issue where false Admin Recovery Notification emails were sent for normal orders placed by users with custom roles.

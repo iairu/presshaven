@@ -8,6 +8,7 @@
 
 use Automattic\WooCommerce\Grow\Tools\CompatChecker\v0_0_1\Checker;
 use Automattic\WooCommerce\Admin\Features\OnboardingTasks\TaskLists;
+use Automattic\WooCommerce\Admin\Marketing\MarketingChannels;
 use Automattic\WooCommerce\Admin\Notes\NotesUnavailableException;
 use Automattic\WooCommerce\Pinterest;
 use Automattic\WooCommerce\Pinterest\AdCredits;
@@ -27,13 +28,21 @@ use Automattic\WooCommerce\Pinterest\ProductFeedStatus;
 use Automattic\WooCommerce\Pinterest\Tracking;
 use Automattic\WooCommerce\Pinterest\Tracking\Conversions;
 use Automattic\WooCommerce\Pinterest\Tracking\Data\User;
+use Automattic\WooCommerce\Pinterest\Tracking\PageVisit;
 use Automattic\WooCommerce\Pinterest\Tracking\Tag;
 use Automattic\WooCommerce\Pinterest\Utilities\Tracks;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 	/**
 	 * Base Plugin class holding generic functionality
+	 *
+	 * @class   Pinterest_For_Woocommerce
+	 * @version 1.6.0
 	 */
 	final class Pinterest_For_Woocommerce {
 
@@ -74,8 +83,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 */
 		const PLUGIN_REQUIREMENTS = array(
 			'php_version'      => '7.4',
-			'wp_version'       => '5.6',
-			'wc_version'       => '5.3',
+			'wp_version'       => '7.0',
+			'wc_version'       => '11.1.0',
 			'action_scheduler' => '3.3.0',
 		);
 
@@ -89,7 +98,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		/**
 		 * The single instance of the class.
 		 *
-		 * @var Pinterest_For_Woocommerce
+		 * @var Pinterest_For_Woocommerce|null
 		 * @since 1.0.0
 		 */
 		protected static $instance = null;
@@ -97,7 +106,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		/**
 		 * The initialized state of the class.
 		 *
-		 * @var Pinterest_For_Woocommerce
+		 * @var bool
 		 * @since 1.0.0
 		 */
 		protected static $initialized = false;
@@ -114,16 +123,25 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * When set to true, the settings have been
 		 * changed and the runtime cached must be flushed
 		 *
-		 * @var Pinterest_For_Woocommerce
+		 * @var array<string, bool>
 		 * @since 1.0.0
 		 */
 		protected static $dirty_settings = array();
 
 		/**
+		 * Whether disconnect() is running, so that a 401 raised by its own cleanup requests
+		 * cannot start another disconnect.
+		 *
+		 * @var bool
+		 * @since 1.5.4
+		 */
+		private static $disconnecting = false;
+
+		/**
 		 * The default settings that will be created
 		 * with the given values, if they don't exist.
 		 *
-		 * @var array
+		 * @var array<string, bool>
 		 * @since 1.0.0
 		 */
 		protected static $default_settings = array(
@@ -177,6 +195,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 		/**
 		 * Pinterest_For_Woocommerce Initializer.
+		 *
+		 * @return void
 		 */
 		public function maybe_init_plugin() {
 			if ( self::$initialized ) {
@@ -200,6 +220,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 		/**
 		 * Define Pinterest_For_Woocommerce Constants.
+		 *
+		 * @return void
 		 */
 		private function define_constants() {
 			define( 'PINTEREST_FOR_WOOCOMMERCE_PREFIX', 'pinterest-for-woocommerce' );
@@ -241,6 +263,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 		/**
 		 * Include required core files used in admin and on the frontend.
+		 *
+		 * @return void
 		 */
 		private function includes() {
 
@@ -259,6 +283,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Include plugins files and hook into actions and filters.
 		 *
 		 * @since  1.0.0
+		 * @return void
 		 */
 		public function init_plugin() {
 
@@ -272,9 +297,11 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 			add_action( 'rest_api_init', array( $this, 'init_api_endpoints' ) );
 			add_action( 'wp_head', array( $this, 'maybe_inject_verification_code' ) );
 			add_action( 'wp_head', array( Pinterest\RichPins::class, 'maybe_inject_rich_pins_opengraph_tags' ) );
+			add_action( 'template_redirect', array( Pinterest\RichPins::class, 'prevent_protected_product_caching' ) );
 			add_action( 'wp', array( Pinterest\SaveToPinterest::class, 'maybe_init' ) );
 
 			add_action( 'init', array( $this, 'init' ), 0 );
+			PageVisit::init_hooks();
 
 			// ActionScheduler is activated on init 1 so lets make sure we are updating after that.
 			add_action( 'init', array( $this, 'maybe_update_plugin' ), 5 );
@@ -287,8 +314,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 			add_action( 'init', array( Pinterest\RefreshToken::class, 'schedule_event' ) );
 			add_action( 'init', array( Pinterest\CommerceIntegration::class, 'init' ) );
 
-			// Register the marketing channel if the feature is included.
-			if ( defined( 'WC_MCM_EXISTS' ) ) {
+			// Register the marketing channel if WooCommerce provides the marketing channels API.
+			if ( class_exists( MarketingChannels::class ) ) {
 				add_action(
 					'init',
 					array( Pinterest\MultichannelMarketing\MarketingChannelRegistrar::class, 'register' )
@@ -318,6 +345,10 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 			// Hook the setup task. The hook admin_init is not triggered when the WC fetches the tasks using the endpoint: wp-json/wc-admin/onboarding/tasks and hence hooking into init.
 			add_action( 'init', array( $this, 'add_onboarding_task' ), 20 );
+
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				WP_CLI::add_command( 'wc pinterest feed', Pinterest\CLI\FeedCommand::class );
+			}
 		}
 
 		/**
@@ -368,6 +399,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 		/**
 		 * Init Pinterest_For_Woocommerce when WordPress initializes.
+		 *
+		 * @return void
 		 */
 		public function init() {
 			/**
@@ -388,6 +421,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 
 		/**
 		 * Init classes for admin interface.
+		 *
+		 * @return void
 		 */
 		public function admin_init() {
 			$view_factory         = new Pinterest\View\PHPViewFactory();
@@ -406,6 +441,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Init marketing notifications.
 		 *
 		 * @since 1.1.0
+		 * @return void
 		 */
 		public function init_marketing_notifications() {
 			$notifications = new MarketingNotifications();
@@ -493,6 +529,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Locales found in:
 		 *      - WP_LANG_DIR/pinterest-for-woocommerce/pinterest-for-woocommerce-LOCALE.mo
 		 *      - WP_LANG_DIR/plugins/pinterest-for-woocommerce-LOCALE.mo
+		 *
+		 * @return void
 		 */
 		private function load_plugin_textdomain() {
 			/**
@@ -554,7 +592,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * @param boolean $force  Controls whether to force getting a fresh value instead of one from the runtime cache.
 		 * @param string  $option Controls which option to read/write to.
 		 *
-		 * @return array
+		 * @return mixed The stored option value: usually an array, false when the option is not stored.
 		 */
 		public static function get_settings( $force = false, $option = PINTEREST_FOR_WOOCOMMERCE_OPTION_NAME ) {
 
@@ -707,6 +745,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Add API endpoints
 		 *
 		 * @since 1.0.0
+		 * @return void
 		 */
 		public function init_api_endpoints() {
 			new Pinterest\API\Advertisers();
@@ -812,47 +851,105 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * @return bool True if disconnection was successful.
 		 */
 		public static function disconnect(): bool {
-			// Reset Feed file generation telemetry.
-			ProductFeedStatus::deregister();
-			Pinterest\CommerceIntegration::maybe_unregister_retries();
-
 			/*
-			 * If there is no business connected, disconnecting merchant will throw error.
-			 * Just need to clean account data in these cases.
+			 * Every 401 fires the auth-failure action, which resets the connection. Without this
+			 * guard a rejected token makes the remote cleanup below re-enter this method from
+			 * its own failing requests, without bound, until PHP's execution time runs out.
 			 */
-			if ( ! self::is_business_connected() ) {
-				self::flush_options();
-				// At this point we're disconnected.
-				return true;
+			if ( self::$disconnecting ) {
+				return false;
 			}
+			self::$disconnecting = true;
 
 			try {
-				// Delete all the feeds for the merchant.
-				FeedRegistration::maybe_delete_stale_feeds_for_merchant( '' );
-				// Delete Commerce Integration.
-				self::delete_commerce_integration();
-				// Remove stored data.
-				self::flush_options();
+				/*
+				 * If there is no business connected, disconnecting merchant will throw error.
+				 * Just need to clean account data in these cases.
+				 */
+				if ( self::is_business_connected() ) {
+					$cleanup_failed  = false;
+					$remote_cleanups = array(
+						// Delete all the feeds for the merchant.
+						'feed deletion'                 => function () {
+							FeedRegistration::maybe_delete_stale_feeds_for_merchant( '' );
+						},
+						// Delete Commerce Integration.
+						'commerce integration deletion' => function () {
+							self::delete_commerce_integration();
+						},
+					);
+
+					/*
+					 * Each remote cleanup is attempted on its own, so a failure never skips the next
+					 * one. Pinterest API errors are handled inside the cleanups; anything else is
+					 * unexpected, so the local data is kept for a retry. A rejected token never gets
+					 * here: its 401 already reset the connection through reset_connection().
+					 */
+					foreach ( $remote_cleanups as $what => $cleanup ) {
+						try {
+							$cleanup();
+						} catch ( Throwable $th ) {
+							$cleanup_failed = true;
+							Logger::log( sprintf( 'Remote %1$s failed while disconnecting: %2$s', $what, $th->getMessage() ), 'error' );
+						}
+					}
+
+					if ( $cleanup_failed ) {
+						return false;
+					}
+				}
+
+				self::clear_connection_data();
 				// At this point we're disconnected.
 				return true;
-			} catch ( Exception $th ) {
-				// There was an error disconnecting merchant.
-				return false;
+			} finally {
+				self::$disconnecting = false;
 			}
 		}
 
 		/**
-		 * Resets the connection by clearing the local connection data.
+		 * Resets the connection after Pinterest rejected the token (HTTP 401).
+		 *
+		 * Only the local connection data is cleared: with a rejected token every request the
+		 * remote cleanup would make fails with another 401, which fires this handler again.
 		 *
 		 * @since 1.4.4
+		 * @since 1.5.4 No longer calls the Pinterest API.
 		 *
 		 * @return void
 		 * @throws \Automattic\WooCommerce\Admin\Notes\NotesUnavailableException If the notes API is not available.
 		 */
 		public static function reset_connection() {
-			self::disconnect();
+			self::clear_connection_data();
 
-			TokenInvalidFailure::possibly_add_note();
+			/*
+			 * The init hook adds the ad credits currency info back on the next request. Add it now
+			 * too, so the landing page served by this very request (where a 401 reset happens
+			 * during admin_init) gets the account data shape its ad credits section expects.
+			 * Not in clear_connection_data(): disconnect() also runs on deactivation and uninstall,
+			 * where WooCommerce may be inactive and get_woocommerce_currency() undefined.
+			 */
+			self::add_currency_credits_info_to_account_data();
+
+			// A 401 raised by a deliberate disconnect's own cleanup must not leave a "reconnect" note behind.
+			if ( ! self::$disconnecting ) {
+				TokenInvalidFailure::possibly_add_note();
+			}
+		}
+
+		/**
+		 * Clears every local trace of the connection: feed telemetry, scheduled retries,
+		 * stored data and the connection settings.
+		 *
+		 * @since 1.5.4
+		 *
+		 * @return void
+		 */
+		private static function clear_connection_data() {
+			// Reset Feed file generation telemetry.
+			ProductFeedStatus::deregister();
+			Pinterest\CommerceIntegration::maybe_unregister_retries();
+			self::flush_options();
 		}
 
 		/**
@@ -861,8 +958,9 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * @return void
 		 */
 		private static function flush_options() {
-			// Flush the whole data option.
+			// Flush the whole data option, and make the runtime cache in get_settings() reload it.
 			delete_option( PINTEREST_FOR_WOOCOMMERCE_DATA_NAME );
+			self::$dirty_settings[ PINTEREST_FOR_WOOCOMMERCE_DATA_NAME ] = true;
 			UserInteraction::flush_options();
 
 			// Remove settings that may cause issues if stale on disconnect.
@@ -904,8 +1002,8 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $context The context parameter.
-		 * @param string $args    Additional arguments like 'view' or 'business_id'.
+		 * @param string       $context The context parameter.
+		 * @param string|array $args    Additional arguments like 'view' or 'business_id'.
 		 *
 		 * @return string
 		 */
@@ -942,6 +1040,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Injects needed meta tags to the site's header
 		 *
 		 * @since 1.0.0
+		 * @return void
 		 */
 		public function maybe_inject_verification_code() {
 
@@ -1070,7 +1169,10 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 				Pinterest_For_Woocommerce()::save_setting( 'account_data', $data );
 				return $data;
 			} catch ( Throwable $th ) {
-				self::disconnect();
+				$saved_account_data = self::get_setting( 'account_data' );
+				if ( empty( $saved_account_data['id'] ) || ( $th instanceof PinterestApiException && 401 === $th->getCode() ) ) {
+					self::disconnect();
+				}
 				throw new Exception( esc_html__( 'There was an error getting the account data.', 'pinterest-for-woocommerce' ) );
 			}
 		}
@@ -1129,7 +1231,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		public static function get_billing_setup_info_from_account_data() {
 			$account_data = self::get_setting( 'account_data' );
 
-			return (bool) $account_data['is_billing_setup'];
+			return is_array( $account_data ) && ! empty( $account_data['is_billing_setup'] );
 		}
 
 		/**
@@ -1141,13 +1243,18 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * @return void
 		 */
 		public static function add_redeem_credits_info_to_account_data() {
-			$account_data = self::get_setting( 'account_data' );
-			$offer_code   = AdCreditsCoupons::get_coupon_for_merchant();
+			$offer_code = AdCreditsCoupons::get_coupon_for_merchant();
 
 			// Redeem the coupon.
 			$error_code    = false;
 			$error_message = '';
 			$redeem_status = AdCredits::redeem_credits( $offer_code, $error_code, $error_message );
+
+			// Redeeming can invalidate billing or disconnect the merchant; save on top of the stored data.
+			$account_data = self::get_setting( 'account_data', true );
+			if ( ! is_array( $account_data ) || empty( $account_data['id'] ) ) {
+				return;
+			}
 
 			$redeem_information = array(
 				'redeem_status' => $redeem_status,
@@ -1273,6 +1380,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Hook the parse_request action and serve the html
 		 *
 		 * @param WP $wp Current WordPress environment instance.
+		 * @return void
 		 */
 		public function verification_request( $wp ) {
 			$verification_data = self::get_data( 'verification_data' );
@@ -1360,7 +1468,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		/**
 		 * Returns the Terms object for the currently configured base country.
 		 *
-		 * @return array
+		 * @return array{tos_id: int, terms_url: string}
 		 */
 		public static function get_applicable_tos() {
 
@@ -1372,7 +1480,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		/**
 		 * Helper function to return the country set in WC's settings using wc_get_base_location().
 		 *
-		 * @param string $default_country Default country code to return if no country is set.
+		 * @param string|null $default_country Default country code to return if no country is set.
 		 *
 		 * @return mixed|string|null
 		 */
@@ -1390,9 +1498,10 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce' ) ) :
 		 * Adds the onboarding task to the Tasklists.
 		 *
 		 * @since 1.2.11
+		 * @return void
 		 */
 		public function add_onboarding_task() {
-			if ( class_exists( TaskLists::class ) ) { // compatibility-code "< WC 5.9". This is added for backward compatibility.
+			if ( class_exists( TaskLists::class ) ) {
 				TaskLists::add_task(
 					'extended',
 					new Onboarding(

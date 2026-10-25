@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) exit;
 
 use Automattic\WooCommerce\EmailEditor\Email_Editor_Container;
 use Automattic\WooCommerce\EmailEditor\Engine\Personalizer;
+use MailPoet\EmailEditor\Integrations\MailPoet\PersonalizationTagManager;
+use MailPoet\EmailEditor\Integrations\MailPoet\PersonalizationTags\PersonalizationTagLinkResolver;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Mailer\MailerFactory;
@@ -38,13 +40,24 @@ class SendPreviewController {
   /** @var Personalizer */
   private $personalizer;
 
+  /** @var PersonalizationTagManager */
+  private $personalizationTagManager;
+
+  /** @var WooCommerceDummyData */
+  private $wooCommerceDummyData;
+
+  private PersonalizationTagLinkResolver $personalizationTagLinkResolver;
+
   public function __construct(
     MailerFactory $mailerFactory,
     MetaInfo $mailerMetaInfo,
     Renderer $renderer,
     WPFunctions $wp,
     SubscribersRepository $subscribersRepository,
-    Shortcodes $shortcodes
+    Shortcodes $shortcodes,
+    PersonalizationTagManager $personalizationTagManager,
+    WooCommerceDummyData $wooCommerceDummyData,
+    PersonalizationTagLinkResolver $personalizationTagLinkResolver
   ) {
     $this->mailerFactory = $mailerFactory;
     $this->mailerMetaInfo = $mailerMetaInfo;
@@ -53,24 +66,27 @@ class SendPreviewController {
     $this->shortcodes = $shortcodes;
     $this->subscribersRepository = $subscribersRepository;
     $this->personalizer = Email_Editor_Container::container()->get(Personalizer::class);
+    $this->personalizationTagManager = $personalizationTagManager;
+    $this->wooCommerceDummyData = $wooCommerceDummyData;
+    $this->personalizationTagLinkResolver = $personalizationTagLinkResolver;
   }
 
   public function sendPreview(NewsletterEntity $newsletter, string $emailAddress) {
     $renderedNewsletter = $this->renderer->renderAsPreview($newsletter);
-    $divider = '***MailPoet***';
-    $dataForShortcodes = array_merge(
-      [$newsletter->getSubject()],
-      $renderedNewsletter
-    );
-
-    $body = implode($divider, $dataForShortcodes);
-
     $subscriber = $this->subscribersRepository->getCurrentWPUser();
     $this->shortcodes->setNewsletter($newsletter);
     if ($subscriber instanceof SubscriberEntity) {
       $this->shortcodes->setSubscriber($subscriber);
     }
     $this->shortcodes->setWpUserPreview(true);
+
+    $divider = '***MailPoet***';
+    $dataForShortcodes = array_merge(
+      [$this->shortcodes->replace($newsletter->getSubject(), $renderedNewsletter['html'], null, $isPlainText = true)],
+      $renderedNewsletter
+    );
+
+    $body = implode($divider, $dataForShortcodes);
 
     [
       $renderedNewsletter['subject'],
@@ -79,14 +95,27 @@ class SendPreviewController {
     ] = explode($divider, $this->shortcodes->replace($body));
 
     if ($newsletter->getWpPostId()) {
-      $this->personalizer->set_context([
+      $context = [
         'recipient_email' => $subscriber ? $subscriber->getEmail() : $emailAddress,
         'newsletter_id' => $newsletter->getId(),
         'is_preview' => true,
-      ]);
-      $renderedNewsletter['subject'] = $this->personalizer->personalize_content($renderedNewsletter['subject']);
-      $renderedNewsletter['body']['html'] = $this->personalizer->personalize_content($renderedNewsletter['body']['html']);
-      $renderedNewsletter['body']['text'] = $this->personalizer->personalize_content($renderedNewsletter['body']['text']);
+      ];
+
+      // For automation emails, add sample WooCommerce order/customer data for preview
+      if ($newsletter->isAutomation() || $newsletter->isAutomationTransactional()) {
+        $automationId = $newsletter->getOptionValue('automationId');
+        if ($automationId) {
+          // Extend personalization tags based on automation subjects before personalizing
+          $this->personalizationTagManager->extendPersonalizationTagsByAutomationSubjects((int)$automationId);
+          $context = $this->addSampleDataToContext($context);
+        }
+      }
+
+      $this->personalizer->set_context($context);
+      $renderedNewsletter['subject'] = $this->personalizer->personalize_content($renderedNewsletter['subject'], Personalizer::RENDERING_CONTEXT_TEXT);
+      $renderedNewsletter['body']['html'] = $this->personalizer->personalize_content($renderedNewsletter['body']['html'], Personalizer::RENDERING_CONTEXT_HTML);
+      $renderedNewsletter['body']['text'] = $this->personalizer->personalize_content($renderedNewsletter['body']['text'], Personalizer::RENDERING_CONTEXT_TEXT);
+      $renderedNewsletter['body']['text'] = $this->personalizationTagLinkResolver->resolveMarkdownLinks($renderedNewsletter['body']['text'], $context);
     }
 
     $renderedNewsletter['id'] = $newsletter->getId();
@@ -105,5 +134,29 @@ class SendPreviewController {
       );
       throw new SendPreviewException($error);
     }
+  }
+
+  /**
+   * Add sample WooCommerce order/customer data to context for preview.
+   *
+   * @param array<string, mixed> $context Existing context
+   * @return array<string, mixed> Context with sample data added
+   */
+  private function addSampleDataToContext(array $context): array {
+    $order = $this->wooCommerceDummyData->getOrder();
+    if ($order instanceof \WC_Order) {
+      $context['order'] = $order;
+    }
+
+    $customer = $this->wooCommerceDummyData->getCustomer();
+    if ($customer instanceof \WC_Customer) {
+      $context['customer'] = $customer;
+    }
+
+    // Allow extensions (like premium plugin) to add additional sample data for preview
+    /** @var array<string, mixed> $context */
+    $context = $this->wp->applyFilters('mailpoet_automation_email_preview_sample_data', $context);
+
+    return $context;
   }
 }

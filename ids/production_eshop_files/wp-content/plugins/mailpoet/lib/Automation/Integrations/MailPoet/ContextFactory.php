@@ -5,11 +5,17 @@ namespace MailPoet\Automation\Integrations\MailPoet;
 if (!defined('ABSPATH')) exit;
 
 
+use Automattic\WooCommerce\EmailEditor\Email_Editor_Container;
+use Automattic\WooCommerce\EmailEditor\Engine\Dependency_Check;
+use MailPoet\Automation\Integrations\Core\Actions\DelayAction;
+use MailPoet\Automation\Integrations\MailPoet\Actions\SendEmailAction;
 use MailPoet\Config\ServicesChecker;
 use MailPoet\Segments\SegmentsRepository;
 use MailPoet\Services\AuthorizedEmailsController;
 use MailPoet\Services\AuthorizedSenderDomainController;
 use MailPoet\Services\Bridge;
+use MailPoet\Settings\SettingsController;
+use MailPoet\Settings\UserFlagsController;
 
 class ContextFactory {
   /** @var SegmentsRepository */
@@ -27,25 +33,45 @@ class ContextFactory {
   /** @var AuthorizedEmailsController */
   private $authorizedEmailsController;
 
+  private Dependency_Check $dependencyCheck;
+
+  private SettingsController $settings;
+
+  private UserFlagsController $userFlagsController;
+
   public function __construct(
     SegmentsRepository $segmentsRepository,
     Bridge $bridge,
     ServicesChecker $servicesChecker,
     AuthorizedSenderDomainController $authorizedSenderDomainController,
-    AuthorizedEmailsController $authorizedEmailsController
+    AuthorizedEmailsController $authorizedEmailsController,
+    SettingsController $settings,
+    UserFlagsController $userFlagsController
   ) {
     $this->segmentsRepository = $segmentsRepository;
     $this->servicesChecker = $servicesChecker;
     $this->bridge = $bridge;
     $this->authorizedSenderDomainController = $authorizedSenderDomainController;
     $this->authorizedEmailsController = $authorizedEmailsController;
+    $this->dependencyCheck = Email_Editor_Container::container()->get(Dependency_Check::class);
+    $this->settings = $settings;
+    $this->userFlagsController = $userFlagsController;
   }
 
   /** @return mixed[] */
   public function getContextData(): array {
+    $blockEmailEditorEnabled = $this->dependencyCheck->are_dependencies_met(); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    $rememberEditorChoice = $this->userFlagsController->get('remember_email_editor_choice');
+    $showEditorChoiceModal = $rememberEditorChoice === null ? $this->settings->get('editor_choice_modal.enabled', false) : !(bool)$rememberEditorChoice;
     $data = [
       'segments' => $this->getSegments(),
       'userRoles' => $this->getUserRoles(),
+      'transactional_triggers' => SendEmailAction::TRANSACTIONAL_TRIGGERS,
+      'delay_action_key' => DelayAction::KEY,
+      'block_email_editor_enabled' => $blockEmailEditorEnabled,
+      'editor_choice_modal_enabled' => $blockEmailEditorEnabled && (bool)$showEditorChoiceModal,
+      'last_email_editor_choice' => $this->userFlagsController->get('last_email_editor_choice'),
+      'has_remembered_email_editor_choice' => (bool)$rememberEditorChoice,
     ];
 
     if ($this->isMSSEnabled()) {

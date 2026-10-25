@@ -279,8 +279,9 @@ class QRPaymentModule extends AbstractModule {
 								'options'      => function ( $args ) {
 									return $this->woocommerce_integration->get_countries_select( $args );
 								},
-								'async'        => true,
-								'async_params' => array(
+								'async'         => true,
+								'cache_options' => false,
+								'async_params'  => array(
 									'tab'       => 'wpify-woo-settings',
 									'section'   => $this->id(),
 									'module_id' => $this->id(),

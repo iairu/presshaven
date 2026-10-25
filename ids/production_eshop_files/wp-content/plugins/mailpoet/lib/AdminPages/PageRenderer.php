@@ -137,14 +137,11 @@ class PageRenderer {
    */
   public function displayPage($template, array $data = []) {
     $installer = new Installer(Installer::PREMIUM_PLUGIN_SLUG);
-    $premiumDownloadUrl = $this->subscribersFeature->hasValidPremiumKey()
-      ? $installer->generatePluginDownloadUrl()
-      : null;
 
     $wpSegment = $this->segmentRepository->getWPUsersSegment();
     $wpSegmentState = ($wpSegment instanceof SegmentEntity) && $wpSegment->getDeletedAt() === null ?
       SegmentEntity::SEGMENT_ENABLED : SegmentEntity::SEGMENT_DISABLED;
-    $installedAtDiff = (new \DateTime($this->settings->get('installed_at')))->diff(new \DateTime());
+    $installedAtDiff = (new \DateTime((string)$this->settings->get('installed_at')))->diff(new \DateTime());
     $subscriberCount = $this->subscribersFeature->getSubscribersCount();
     $subscribersCacheCreatedAt = Carbon::now();
     if ($this->subscribersFeature->isSubscribersCountEnoughForCache($subscriberCount)) {
@@ -152,7 +149,7 @@ class PageRenderer {
     }
 
     $defaults = [
-      'current_page' => sanitize_text_field(wp_unslash($_GET['page'] ?? '')),
+      'current_page' => sanitize_text_field(wp_unslash(is_string($_GET['page'] ?? null) ? $_GET['page'] : '')),
       'site_name' => $this->wp->wpSpecialcharsDecode($this->wp->getOption('blogname'), ENT_QUOTES),
       'main_page' => Menu::MAIN_PAGE_SLUG,
       'site_url' => $this->wp->siteUrl(),
@@ -171,6 +168,7 @@ class PageRenderer {
       'transactional_emails_opt_in_notice_dismissed' => (bool)$this->userFlags->get('transactional_emails_opt_in_notice_dismissed'),
       'track_wizard_loaded_via_woocommerce' => (bool)$this->settings->get(WelcomeWizard::TRACK_LOADDED_VIA_WOOCOMMERCE_SETTING_NAME),
       'track_wizard_loaded_via_woocommerce_marketing_dashboard' => (bool)$this->settings->get(WelcomeWizard::TRACK_LOADDED_VIA_WOOCOMMERCE_MARKETING_DASHBOARD_SETTING_NAME),
+      // @phpstan-ignore-next-line function.alreadyNarrowedType -- is_callable() detects functions disabled at runtime via disable_functions
       'mail_function_enabled' => function_exists('mail') && is_callable('mail'),
       'admin_plugins_url' => WPFunctions::get()->adminUrl('plugins.php'),
 
@@ -179,7 +177,6 @@ class PageRenderer {
       'link_premium' => $this->wp->getSiteUrl(null, '/wp-admin/admin.php?page=mailpoet-upgrade'),
       'premium_plugin_installed' => Installer::isPluginInstalled(Installer::PREMIUM_PLUGIN_SLUG),
       'premium_plugin_active' => $this->servicesChecker->isPremiumPluginActive(),
-      'premium_plugin_download_url' => $premiumDownloadUrl,
       'premium_plugin_activation_url' => $installer->generatePluginActivationUrl(Installer::PREMIUM_PLUGIN_PATH),
       'has_valid_api_key' => $this->subscribersFeature->hasValidApiKey(),
       'has_valid_premium_key' => $this->subscribersFeature->hasValidPremiumKey(),
@@ -204,7 +201,7 @@ class PageRenderer {
         'automationTemplates' => admin_url('admin.php?page=mailpoet-automation-templates'),
         'automationAnalytics' => admin_url('admin.php?page=mailpoet-automation-analytics'),
       ],
-      'woocommerce_store_config' => $this->wooCommerceHelper->isWooCommerceActive() ? $this->getWoocommerceStoreConfig() : null,
+      'woocommerce_store_config' => $this->wooCommerceHelper->isWooCommerceActive() ? $this->wooCommerceHelper->getWoocommerceStoreConfig() : null,
       'tags' => array_map(function (TagEntity $tag): array {
         return [
         'id' => $tag->getId(),
@@ -215,7 +212,6 @@ class PageRenderer {
       'is_woocommerce_subscriptions_active' => $this->wooCommerceSubscriptionsHelper->isWooCommerceSubscriptionsActive(),
       'is_woocommerce_bookings_active' => $this->wooCommerceBookingsHelper->isWooCommerceBookingsActive(),
       'cron_trigger_method' => $this->settings->get('cron_trigger.method'),
-      'use_block_email_editor_for_automation_emails' => $this->useBlockEmailEditorForAutomationNewsletter(),
     ];
 
     if (!$defaults['premium_plugin_active']) {
@@ -229,7 +225,7 @@ class PageRenderer {
       ) {
         DIPanel::init();
       }
-      if (is_admin() && $this->subscribersCountCacheRecalculation->shouldBeScheduled()) {
+      if ($this->wp->isAdmin() && $this->subscribersCountCacheRecalculation->shouldBeScheduled()) {
         $this->subscribersCountCacheRecalculation->schedule();
       }
 
@@ -247,28 +243,8 @@ class PageRenderer {
     }
   }
 
-  private function getWoocommerceStoreConfig() {
-
-    return [
-      'precision' => $this->wooCommerceHelper->wcGetPriceDecimals(),
-      'decimalSeparator' => $this->wooCommerceHelper->wcGetPriceDecimalSeperator(),
-      'thousandSeparator' => $this->wooCommerceHelper->wcGetPriceThousandSeparator(),
-      'code' => $this->wooCommerceHelper->getWoocommerceCurrency(),
-      'symbol' => html_entity_decode($this->wooCommerceHelper->getWoocommerceCurrencySymbol(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401),
-      'symbolPosition' => $this->wp->getOption('woocommerce_currency_pos'),
-      'priceFormat' => $this->wooCommerceHelper->getWoocommercePriceFormat(),
-
-    ];
-  }
-
   public function displayChatBotWidget(): bool {
     $display = $this->wp->applyFilters('mailpoet_display_docsbot_widget', $this->settings->get('3rd_party_libs.enabled') === '1');
     return (bool)$display;
-  }
-
-  public function useBlockEmailEditorForAutomationNewsletter(): bool {
-    $default = $this->settings->get('use_block_email_editor_for_automation_emails.enabled') === '1';
-    $status = $this->wp->applyFilters('mailpoet_use_block_email_editor_for_automation_emails', $default);
-    return (bool)$status;
   }
 }

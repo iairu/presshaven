@@ -394,16 +394,23 @@ const TestMessage = ( {
 
 	return (
 		<FieldWrapper title={ title } description={ description } type="block">
-			<div className="flex gap-2 items-center">
+			<div className="flex flex-wrap gap-2 items-center">
 				<div className="min-w-32">
 					<Select
 						onChange={ ( val ) => setCode( val ) }
 						value={ code?.text }
 						size="md"
 						combobox={ true }
-						searchPlaceholder="Search..."
+						searchPlaceholder={ __(
+							'Search…',
+							'woo-cart-abandonment-recovery'
+						) }
 					>
 						<Select.Button
+							aria-label={ __(
+								'Country code',
+								'woo-cart-abandonment-recovery'
+							) }
 							placeholder={ __(
 								'Country Code',
 								'woo-cart-abandonment-recovery'
@@ -421,10 +428,14 @@ const TestMessage = ( {
 						</Select.Options>
 					</Select>
 				</div>
-				<div className="flex-1">
+				<div className="flex-1 min-w-32">
 					<Input
 						className="w-full focus:[&>input]:ring-focus"
-						type="text"
+						aria-label={ __(
+							'Phone number',
+							'woo-cart-abandonment-recovery'
+						) }
+						type="tel"
 						size="md"
 						value={ phone }
 						onChange={ setPhone }
@@ -436,7 +447,7 @@ const TestMessage = ( {
 				</div>
 
 				<Button
-					className="w-fit bg-primary-25 text-primary-600 outline-primary-300 hover:bg-primary-25 hover:outline-primary-300"
+					className="w-fit max-sm:w-full bg-primary-25 text-primary-600 outline-primary-300 hover:bg-primary-25 hover:outline-primary-300"
 					size="md"
 					tag="button"
 					variant="outline"

@@ -25,6 +25,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Endpoint returning the current state of the XML feed.
+ *
+ * @class   FeedState
+ * @version 1.6.0
  */
 class FeedState extends VendorAPI {
 
@@ -44,6 +47,8 @@ class FeedState extends VendorAPI {
 
 	/**
 	 * Add feed state hooks.
+	 *
+	 * @return void
 	 */
 	private function hooks() {
 		add_filter( 'pinterest_for_woocommerce_feed_state', array( $this, 'add_local_feed_status' ) );
@@ -108,7 +113,15 @@ class FeedState extends VendorAPI {
 			 * Returns feed state.
 			 * phpcs:disable WooCommerce.Commenting.CommentHooks.MissingSinceComment
 			 */
-			return apply_filters( 'pinterest_for_woocommerce_feed_state', array() );
+			$result = apply_filters( 'pinterest_for_woocommerce_feed_state', array() );
+			if ( is_array( $result ) && isset( $result['workflow'] ) && is_array( $result['workflow'] ) ) {
+				foreach ( $result['workflow'] as $key => $row ) {
+					if ( is_array( $row ) && isset( $row['extra_info'] ) ) {
+						$result['workflow'][ $key ]['extra_info'] = is_scalar( $row['extra_info'] ) ? wp_kses_post( (string) $row['extra_info'] ) : '';
+					}
+				}
+			}
+			return $result;
 
 		} catch ( \Throwable $th ) {
 
@@ -356,9 +369,9 @@ class FeedState extends VendorAPI {
 			);
 		} else {
 			$processing_status = $recent_feed_processing_results['status'] ?? '';
-			$status            = static::map_status_into_status( $processing_status );
-			$status_label      = static::map_status_into_label( $processing_status );
-			$extra_info        = static::map_status_into_extra_info( $recent_feed_processing_results );
+			$status            = self::map_status_into_status( $processing_status );
+			$status_label      = self::map_status_into_label( $processing_status );
+			$extra_info        = self::map_status_into_extra_info( $recent_feed_processing_results );
 		}
 		$result['overview'] = Pinterest\FeedStatusService::get_processing_result_overview_stats( $recent_feed_processing_results );
 
@@ -437,11 +450,15 @@ class FeedState extends VendorAPI {
 	 */
 	private static function map_status_into_extra_info( array $processing_results ): string {
 		$status                  = $processing_results['status'] ?? '';
-		$original_products_count = (int) $processing_results['product_counts']['original'] ?? 0;
-		$processing_date         = date_create_from_format(
-			'Y-m-d\TH:i:s',
-			$processing_results['created_at'] ?? gmdate( 'Y-m-d\TH:i:s' )
-		);
+		$original_products_count = (int) ( $processing_results['product_counts']['original'] ?? 0 );
+		$created_at              = $processing_results['created_at'] ?? gmdate( 'Y-m-d\TH:i:s' );
+		$processing_date         = date_create_from_format( 'Y-m-d\TH:i:s', $created_at );
+		if ( false === $processing_date ) {
+			// Pinterest documents ISO 8601 timestamps with a timezone suffix, e.g. 2022-03-14T15:15:22Z.
+			$processing_date = date_create( $created_at );
+		}
+		// Use the current time for an unparsable date, as for a missing one.
+		$processing_timestamp = $processing_date ? $processing_date->getTimestamp() : time();
 
 		switch ( $status ) {
 			case 'COMPLETED':
@@ -449,14 +466,14 @@ class FeedState extends VendorAPI {
 				return sprintf(
 					/* Translators: %1$s Time difference string, %2$s number of products */
 					esc_html__( '%1$s ago, containing %2$d products', 'pinterest-for-woocommerce' ),
-					human_time_diff( $processing_date->getTimestamp() ),
+					human_time_diff( $processing_timestamp ),
 					$original_products_count
 				);
 			case 'FAILED':
 				$info = sprintf(
 					/* Translators: %1$s Time difference string */
 					esc_html__( '%1$s ago', 'pinterest-for-woocommerce' ),
-					human_time_diff( $processing_date->getTimestamp() )
+					human_time_diff( $processing_timestamp )
 				);
 				$global_error = Pinterest\FeedStatusService::get_processing_results_global_error( $processing_results );
 				return $info . ( $global_error ? ' - ' . $global_error : '' );
@@ -474,7 +491,7 @@ class FeedState extends VendorAPI {
 				$info = sprintf(
 					/* Translators: The status text returned by the API. */
 					esc_html__( 'Pinterest returned an unknown feed status: %1$s', 'pinterest-for-woocommerce' ),
-					$status ?? '<empty string>'
+					esc_html( $status )
 				);
 				$global_error = Pinterest\FeedStatusService::get_processing_results_global_error( $processing_results );
 				return $info . ( $global_error ? ' - ' . $global_error : '' );

@@ -20,14 +20,12 @@ use WooCommerce\PayPalCommerce\ApiClient\Factory\PurchaseUnitFactory;
 use WooCommerce\PayPalCommerce\ApiClient\Factory\ShippingPreferenceFactory;
 use WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder;
 use WooCommerce\PayPalCommerce\ApiClient\Entity\Order;
+use WooCommerce\PayPalCommerce\ApiClient\Helper\ReturnUrlSecret;
 use WooCommerce\PayPalCommerce\WcGateway\Endpoint\ReturnUrlEndpoint;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\Environment;
-use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\GatewaySettingsRendererTrait;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\TransactionUrlProvider;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\OrderMetaTrait;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\OrderProcessor;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\SettingsRenderer;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\ProcessPaymentTrait;
 use WooCommerce\PayPalCommerce\WcGateway\Exception\GatewayGenericException;
 use WooCommerce\PayPalCommerce\Session\SessionHandler;
@@ -40,33 +38,14 @@ use DomainException;
 class AxoGateway extends WC_Payment_Gateway
 {
     use OrderMetaTrait;
-    use GatewaySettingsRendererTrait;
     use ProcessPaymentTrait;
     const ID = 'ppcp-axo-gateway';
-    /**
-     * The Settings Renderer.
-     *
-     * @var SettingsRenderer
-     */
-    protected $settings_renderer;
-    /**
-     * The settings.
-     *
-     * @var ContainerInterface
-     */
-    protected $ppcp_settings;
     /**
      * Gateway configuration object, providing relevant settings.
      *
      * @var CardPaymentsConfiguration
      */
     protected CardPaymentsConfiguration $dcc_configuration;
-    /**
-     * The WcGateway module URL.
-     *
-     * @var string
-     */
-    protected $wcgateway_module_url;
     /**
      * The processor for orders.
      *
@@ -134,12 +113,11 @@ class AxoGateway extends WC_Payment_Gateway
      */
     protected $settings_model;
     /**
-     * AXOGateway constructor.
-     *
-     * @param SettingsRenderer          $settings_renderer           The settings renderer.
-     * @param ContainerInterface        $ppcp_settings               The settings.
+     * Issues the single-use secret that the 3DS return URL carries.
+     */
+    protected ReturnUrlSecret $return_url_secret;
+    /**
      * @param CardPaymentsConfiguration $dcc_configuration           The DCC Gateway configuration.
-     * @param string                    $wcgateway_module_url        The WcGateway module URL.
      * @param SessionHandler            $session_handler             The Session Handler.
      * @param OrderProcessor            $order_processor             The Order processor.
      * @param array                     $card_icons                  The card icons.
@@ -151,19 +129,20 @@ class AxoGateway extends WC_Payment_Gateway
      * @param LoggerInterface           $logger                      The logger.
      * @param ExperienceContextBuilder  $experience_context_builder  The experience context builder.
      * @param SettingsModel             $settings_model              The settings model.
+     * @param ReturnUrlSecret|null      $return_url_secret           Issues the return URL secret.
+     *                                                               Defaults to a real instance, so the
+     *                                                               3DS return URL always carries proof.
      */
-    public function __construct(SettingsRenderer $settings_renderer, ContainerInterface $ppcp_settings, CardPaymentsConfiguration $dcc_configuration, string $wcgateway_module_url, SessionHandler $session_handler, OrderProcessor $order_processor, array $card_icons, OrderEndpoint $order_endpoint, PurchaseUnitFactory $purchase_unit_factory, ShippingPreferenceFactory $shipping_preference_factory, TransactionUrlProvider $transaction_url_provider, Environment $environment, LoggerInterface $logger, ExperienceContextBuilder $experience_context_builder, SettingsModel $settings_model)
+    public function __construct(CardPaymentsConfiguration $dcc_configuration, SessionHandler $session_handler, OrderProcessor $order_processor, array $card_icons, OrderEndpoint $order_endpoint, PurchaseUnitFactory $purchase_unit_factory, ShippingPreferenceFactory $shipping_preference_factory, TransactionUrlProvider $transaction_url_provider, Environment $environment, LoggerInterface $logger, ExperienceContextBuilder $experience_context_builder, SettingsModel $settings_model, ?ReturnUrlSecret $return_url_secret = null)
     {
         $this->id = self::ID;
-        $this->settings_renderer = $settings_renderer;
-        $this->ppcp_settings = $ppcp_settings;
         $this->dcc_configuration = $dcc_configuration;
-        $this->wcgateway_module_url = $wcgateway_module_url;
         $this->session_handler = $session_handler;
         $this->order_processor = $order_processor;
         $this->card_icons = $card_icons;
         $this->experience_context_builder = $experience_context_builder;
         $this->settings_model = $settings_model;
+        $this->return_url_secret = $return_url_secret ?? new ReturnUrlSecret();
         $this->method_title = __('Fastlane Debit & Credit Cards', 'woocommerce-paypal-payments');
         $this->method_description = __('Fastlane accelerates the checkout experience for guest shoppers and autofills their details so they can pay in seconds. When enabled, Fastlane is presented as the default payment method for guests.', 'woocommerce-paypal-payments');
         if (apply_filters('woocommerce_paypal_payments_axo_gateway_should_update_enabled', \true)) {
@@ -171,7 +150,12 @@ class AxoGateway extends WC_Payment_Gateway
             $this->update_option('enabled', $is_axo_enabled ? 'yes' : 'no');
         }
         $description = $this->get_option('description', __('Enter your email address above to continue.', 'woocommerce-paypal-payments'));
-        $this->title = apply_filters('woocommerce_paypal_payments_axo_gateway_title', $this->dcc_configuration->gateway_title($this->get_option('title', $this->method_title)), $this);
+        // Fastlane's own title wins; the card gateway's is only inherited by a
+        // store that never set one, which is what reading it as a fallback used
+        // to do in reverse.
+        $own_title = $this->get_option('title', '');
+        $title = $own_title ?: $this->dcc_configuration->gateway_title($this->method_title);
+        $this->title = apply_filters('woocommerce_paypal_payments_axo_gateway_title', $title, $this);
         $this->description = apply_filters('woocommerce_paypal_payments_axo_gateway_description', $description, $this);
         $this->init_form_fields();
         $this->init_settings();
@@ -200,7 +184,7 @@ class AxoGateway extends WC_Payment_Gateway
     public function process_payment($order_id)
     {
         $wc_order = wc_get_order($order_id);
-        if (!is_a($wc_order, WC_Order::class)) {
+        if (!$wc_order instanceof WC_Order) {
             return $this->handle_payment_failure(null, new GatewayGenericException(new Exception('WC order was not found.')));
         }
         // phpcs:disable WordPress.Security.NonceVerification
@@ -226,6 +210,10 @@ class AxoGateway extends WC_Payment_Gateway
             // If 3DS verification is required, redirect with token in return URL.
             if ($payer_action) {
                 $return_url = add_query_arg('token', $order->id(), home_url(WC_AJAX::get_endpoint(ReturnUrlEndpoint::ENDPOINT)));
+                // ReturnUrlEndpoint refuses a return with no proof. build_order_data()
+                // already bound a secret to this same order, so reuse it: issuing a
+                // second one would replace it and invalidate the URL built there.
+                $return_url = add_query_arg('ppcp_return_nonce', $this->return_url_secret->secret_for($order->id()), $return_url);
                 $redirect_url = add_query_arg('redirect_uri', rawurlencode($return_url), $payer_action);
                 return array('result' => 'success', 'redirect' => $redirect_url);
             }
@@ -263,6 +251,24 @@ class AxoGateway extends WC_Payment_Gateway
             $paypal_order = $this->order_endpoint->order($token);
             if (!$paypal_order->status()->is(OrderStatus::COMPLETED)) {
                 return array('result' => 'failure', 'message' => __('3D Secure authentication was not completed successfully. Please try again.', 'woocommerce-paypal-payments'));
+            }
+            $purchase_units = $paypal_order->purchase_units();
+            $purchase_unit = $purchase_units[0] ?? null;
+            if (null === $purchase_unit) {
+                $this->logger->error(sprintf('[AXO] 3DS return validation failed: PayPal order has no purchase units. WC order ID: %s', $wc_order->get_id()));
+                return array('result' => 'failure', 'message' => __('Payment validation failed. Please try again.', 'woocommerce-paypal-payments'));
+            }
+            /*
+             * If the custom_id === order_id condition is true, we know that the PayPal order
+             * and our WC order match, and there's no need for other checks.
+             *
+             * Specifically, we do not compare the WC_Order total amount against the
+             * purchase unit's value, as the PU value can deviate from the WC order total, which
+             * might reject legitimate payments.
+             */
+            if ($purchase_unit->custom_id() !== (string) $wc_order->get_id()) {
+                $this->logger->error(sprintf('[AXO] 3DS return validation failed: custom_id mismatch. Token: %s, WC order ID: %s, PayPal custom_id: %s', $token, $wc_order->get_id(), $purchase_unit->custom_id()));
+                return array('result' => 'failure', 'message' => __('Payment validation failed. Please try again.', 'woocommerce-paypal-payments'));
             }
             /**
              * This filter controls if the method 'process()' from OrderProcessor will be called.
@@ -337,7 +343,7 @@ class AxoGateway extends WC_Payment_Gateway
         // Build payment source with 3DS verification if needed.
         $payment_source_properties = $this->build_payment_source_properties($payment_token);
         $payment_source = new PaymentSource('card', $payment_source_properties);
-        return $this->order_endpoint->create(array($purchase_unit), $shipping_preference, null, self::ID, $this->build_order_data(), $payment_source, $wc_order);
+        return $this->order_endpoint->create(array($purchase_unit), $shipping_preference, null, self::ID, $this->build_order_data(), $payment_source);
     }
     /**
      * Build payment source properties.
@@ -425,14 +431,5 @@ class AxoGateway extends WC_Payment_Gateway
             }
         }
         return parent::get_title();
-    }
-    /**
-     * Returns the settings renderer.
-     *
-     * @return SettingsRenderer
-     */
-    protected function settings_renderer(): SettingsRenderer
-    {
-        return $this->settings_renderer;
     }
 }

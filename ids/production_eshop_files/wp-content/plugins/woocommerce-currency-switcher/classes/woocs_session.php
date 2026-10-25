@@ -1,20 +1,21 @@
 <?php
+
 defined( 'ABSPATH' ) || exit;
 
 class WOOCS_SESSION {
+
 	protected $_cookie;
 	protected $_session_expiring;
 	protected $_session_expiration;
 	protected $_has_cookie = false;
 	protected $_table;
 	protected $_dirty = false;
-	protected $_data = array();
+	protected $_data  = array();
 	protected $_customer_id;
-	
+
 	public function __construct() {
 		$this->_cookie = apply_filters( 'woocs_cookie', 'wp_woocs_session_' . COOKIEHASH );
 		$this->_table  = $GLOBALS['wpdb']->prefix . 'woocommerce_sessions';
-
 	}
 
 	public function init() {
@@ -22,7 +23,7 @@ class WOOCS_SESSION {
 
 		add_action( 'shutdown', array( $this, 'save_data' ), 20 );
 
-		$this->set_customer_session_cookie(true);
+		$this->set_customer_session_cookie( true );
 	}
 
 	public function init_session_cookie() {
@@ -75,11 +76,11 @@ class WOOCS_SESSION {
 	}
 
 	protected function use_secure_cookie() {
-		return apply_filters( 'wc_session_use_secure_cookie', (false !== strstr( get_option( 'home' ), 'https:' )) && is_ssl() );
+		return apply_filters( 'wc_session_use_secure_cookie', ( false !== strstr( get_option( 'home' ), 'https:' ) ) && is_ssl() );
 	}
 
 	public function has_session() {
-		return isset( $_COOKIE[ $this->_cookie ] ) || $this->_has_cookie; // @codingStandardsIgnoreLine.
+        return isset($_COOKIE[$this->_cookie]) || $this->_has_cookie; // @codingStandardsIgnoreLine.
 	}
 
 	public function set_session_expiration() {
@@ -90,8 +91,8 @@ class WOOCS_SESSION {
 	public function generate_customer_id() {
 		$customer_id = '';
 
-
 		if ( empty( $customer_id ) ) {
+			// @phpstan-ignore-next-line
 			require_once ABSPATH . 'wp-includes/class-phpass.php';
 			$hasher      = new PasswordHash( 8, false );
 			$customer_id = 't_' . substr( md5( $hasher->get_random_bytes( 32 ) ), 2 );
@@ -131,7 +132,7 @@ class WOOCS_SESSION {
 	}
 
 	public function get_session_cookie() {
-		$cookie_value = isset( $_COOKIE[ $this->_cookie ] ) ? wp_unslash( $_COOKIE[ $this->_cookie ] ) : false; // @codingStandardsIgnoreLine.
+        $cookie_value = isset($_COOKIE[$this->_cookie]) ? wp_unslash($_COOKIE[$this->_cookie]) : false; // @codingStandardsIgnoreLine.
 
 		if ( empty( $cookie_value ) || ! is_string( $cookie_value ) ) {
 			return false;
@@ -159,10 +160,11 @@ class WOOCS_SESSION {
 	}
 
 	private function get_cache_prefix() {
-		return "woocs_storage_";
+		return 'woocs_storage_';
 	}
+
 	private function get_cache_group() {
-		return "woocs_storage_cache";
+		return 'woocs_storage_cache';
 	}
 
 	public function save_data( $old_session_key = 0 ) {
@@ -182,12 +184,12 @@ class WOOCS_SESSION {
 
 			wp_cache_set( $this->get_cache_prefix() . $this->_customer_id, $this->_data, $this->get_cache_group(), $this->_session_expiration - time() );
 			$this->_dirty = false;
-			//if ( get_current_user_id() != $old_session_key && ! is_object( get_user_by( 'id', $old_session_key ) ) ) {
-			//$this->delete_session( $old_session_key );
-			//}
+			// if ( get_current_user_id() != $old_session_key && ! is_object( get_user_by( 'id', $old_session_key ) ) ) {
+			// $this->delete_session( $old_session_key );
+			// }
 		}
 	}
-	
+
 	public function destroy_session() {
 		$this->delete_session( $this->_customer_id );
 		$this->forget_session();
@@ -201,14 +203,13 @@ class WOOCS_SESSION {
 		$this->_customer_id = $this->generate_customer_id();
 	}
 
-
 	public function get_session( $customer_id, $default = false ) {
 		global $wpdb;
 
 		$value = wp_cache_get( $this->get_cache_prefix() . $customer_id, $this->get_cache_group() );
 
 		if ( false === $value ) {
-			$value = $wpdb->get_var( $wpdb->prepare( "SELECT session_value FROM $this->_table WHERE session_key = %s", $customer_id ) ); // @codingStandardsIgnoreLine.
+            $value = $wpdb->get_var($wpdb->prepare("SELECT session_value FROM $this->_table WHERE session_key = %s", $customer_id)); // @codingStandardsIgnoreLine.
 
 			if ( is_null( $value ) ) {
 				$value = $default;
@@ -252,6 +253,7 @@ class WOOCS_SESSION {
 			)
 		);
 	}
+
 	public function __get( $key ) {
 		return $this->get( $key );
 	}
@@ -286,10 +288,12 @@ class WOOCS_SESSION {
 	public function get_customer_id() {
 		return $this->_customer_id;
 	}
+
 	private function _hash( $data, $scheme = 'auth' ) {
 
-		return hash_hmac( 'md5', $data, AUTH_KEY);
+		return hash_hmac( 'md5', $data, AUTH_KEY );
 	}
+
 	private function _setcookie( $name, $value, $expire = 0, $secure = false, $httponly = false ) {
 
 		if ( ! apply_filters( 'woocommerce_set_cookie_enabled', true, $name, $value, $expire, $secure ) ) {
@@ -314,7 +318,6 @@ class WOOCS_SESSION {
 			} else {
 				setcookie( $name, $value, $options['expires'], $options['path'], $options['domain'], $options['secure'], $options['httponly'] );
 			}
-		} 
-	}	
+		}
+	}
 }
-

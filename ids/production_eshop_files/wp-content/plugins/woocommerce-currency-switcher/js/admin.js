@@ -68,7 +68,7 @@ function woocs_check_api_key_field() {
     if (typeof aggregator == 'undefined') {
 	return;
     }
-    var is_api = ['free_converter', 'fixer', 'currencylayer', 'openexchangerates', 'currencyapi'];
+    var is_api = ['free_converter', 'fixer', 'currencylayer', 'openexchangerates', 'currencyapi', 'pulseverity'];
     let tr = document.querySelector('input[name=woocs_aggregator_key]').closest('tr');
     if (jQuery.inArray(aggregator, is_api) != -1) {
         jQuery(tr).show();

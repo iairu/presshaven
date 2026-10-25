@@ -2086,17 +2086,17 @@
         },
         {
             "name": "wpify\/custom-fields",
-            "version": "4.8.0",
-            "version_normalized": "4.8.0.0",
+            "version": "4.12.1",
+            "version_normalized": "4.12.1.0",
             "source": {
                 "type": "git",
                 "url": "https:\/\/github.com\/wpify\/custom-fields.git",
-                "reference": "6383261ac4e79ed9f2de103d1de61b217948e7b5"
+                "reference": "c6275e4b9859ce624b010768bafd002d5f690c7f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https:\/\/api.github.com\/repos\/wpify\/custom-fields\/zipball\/6383261ac4e79ed9f2de103d1de61b217948e7b5",
-                "reference": "6383261ac4e79ed9f2de103d1de61b217948e7b5",
+                "url": "https:\/\/api.github.com\/repos\/wpify\/custom-fields\/zipball\/c6275e4b9859ce624b010768bafd002d5f690c7f",
+                "reference": "c6275e4b9859ce624b010768bafd002d5f690c7f",
                 "shasum": ""
             },
             "require": {
@@ -2104,13 +2104,28 @@
                 "php": "^8.1"
             },
             "require-dev": {
+                "composer\/installers": "^2.2",
                 "dealerdirect\/phpcodesniffer-composer-installer": "^0.7",
                 "phpcompatibility\/phpcompatibility-wp": "*",
+                "phpunit\/phpunit": "^9.6",
+                "roots\/wordpress-core-installer": "^1.100",
+                "roots\/wordpress-no-content": "^6.7",
                 "squizlabs\/php_codesniffer": "^3.10",
-                "wp-coding-standards\/wpcs": "^3.0"
+                "wp-coding-standards\/wpcs": "^3.0",
+                "wp-phpunit\/wp-phpunit": "^6.7",
+                "wpackagist-plugin\/woocommerce": "^9.0",
+                "yoast\/phpunit-polyfills": "^2.0"
             },
-            "time": "2026-05-07T15:38:21+00:00",
+            "time": "2026-10-13T07:50:24+00:00",
             "type": "library",
+            "extra": {
+                "installer-paths": {
+                    "vendor\/wordpress\/wp-content\/plugins\/{$name}\/": [
+                        "type:wordpress-plugin"
+                    ]
+                },
+                "wordpress-install-dir": "vendor\/wordpress"
+            },
             "installation-source": "dist",
             "autoload": {
                 "files": [
@@ -2127,7 +2142,7 @@
             "description": "WPify Custom Fields",
             "support": {
                 "issues": "https:\/\/github.com\/wpify\/custom-fields\/issues",
-                "source": "https:\/\/github.com\/wpify\/custom-fields\/tree\/4.8.0"
+                "source": "https:\/\/github.com\/wpify\/custom-fields\/tree\/4.12.1"
             },
             "install-path": "..\/wpify\/custom-fields"
         },
@@ -2348,6 +2363,6 @@
             "install-path": "..\/wpify\/woo-core"
         }
     ],
-    "dev": true,
+    "dev": false,
     "dev-package-names": []
 }

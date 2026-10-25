@@ -48,7 +48,7 @@ class HeadersAlreadySentNotice {
   }
 
   public function areHeadersAlreadySent() {
-    return !get_transient(self::OPTION_NAME)
+    return !$this->wp->getTransient(self::OPTION_NAME)
       && ($this->headersSent() || $this->isWhitespaceInBuffer());
   }
 

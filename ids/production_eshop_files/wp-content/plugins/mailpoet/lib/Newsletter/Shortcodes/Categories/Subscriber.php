@@ -5,6 +5,7 @@ namespace MailPoet\Newsletter\Shortcodes\Categories;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Entities\CustomFieldEntity;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\SendingQueueEntity;
 use MailPoet\Entities\SubscriberCustomFieldEntity;
@@ -21,12 +22,17 @@ class Subscriber implements CategoryInterface {
   /** @var SubscriberCustomFieldRepository */
   private $subscriberCustomFieldRepository;
 
+  /** @var WPFunctions */
+  private $wp;
+
   public function __construct(
     SubscribersRepository $subscribersRepository,
-    SubscriberCustomFieldRepository $subscriberCustomFieldRepository
+    SubscriberCustomFieldRepository $subscriberCustomFieldRepository,
+    WPFunctions $wp
   ) {
     $this->subscribersRepository = $subscribersRepository;
     $this->subscriberCustomFieldRepository = $subscriberCustomFieldRepository;
+    $this->wp = $wp;
   }
 
   public function process(
@@ -45,17 +51,19 @@ class Subscriber implements CategoryInterface {
       '';
     switch ($shortcodeDetails['action']) {
       case 'firstname':
-        return (!empty($subscriber->getFirstName())) ? htmlspecialchars($subscriber->getFirstName(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401) : $defaultValue;
+        return htmlspecialchars((!empty($subscriber->getFirstName())) ? $subscriber->getFirstName() : $defaultValue, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
       case 'lastname':
-        return !empty($subscriber->getLastName()) ? htmlspecialchars($subscriber->getLastName(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401) : $defaultValue;
+        return htmlspecialchars(!empty($subscriber->getLastName()) ? $subscriber->getLastName() : $defaultValue, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
       case 'email':
-        return $subscriber->getEmail();
+        return htmlspecialchars((string)$subscriber->getEmail(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
       case 'displayname':
         if ($subscriber->getWpUserId()) {
           $wpUser = WPFunctions::get()->getUserdata($subscriber->getWpUserId());
-          return $wpUser->user_login; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+          if ($wpUser instanceof \WP_User) {
+            return htmlspecialchars((string)$wpUser->display_name, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8', false); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+          }
         }
-        return $defaultValue;
+        return htmlspecialchars($defaultValue, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
       case 'count':
         return (string)$this->getSubscribersCountWithSubscribedStatus();
       default:
@@ -67,9 +75,31 @@ class Subscriber implements CategoryInterface {
             'subscriber' => $subscriber,
             'customField' => $customField[1],
           ]);
-          return ($customField instanceof SubscriberCustomFieldEntity && !empty($customField->getValue()))
-            ? htmlspecialchars($customField->getValue(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401)
-            : $defaultValue;
+          if (!($customField instanceof SubscriberCustomFieldEntity) || empty($customField->getValue())) {
+            return $defaultValue;
+          }
+          $customFieldDefinition = $customField->getCustomField();
+          if (
+            $shortcodeDetails['action_argument'] === 'format'
+            && $customFieldDefinition instanceof CustomFieldEntity
+            && $customFieldDefinition->getType() === CustomFieldEntity::TYPE_DATE
+          ) {
+            $timestamp = strtotime($customField->getValue());
+            if ($timestamp !== false) {
+              return $this->wp->dateI18n($shortcodeDetails['action_argument_value'], $timestamp);
+            }
+            return $defaultValue;
+          }
+          if (
+            $customFieldDefinition instanceof CustomFieldEntity &&
+            $customFieldDefinition->getType() === CustomFieldEntity::TYPE_CHECKBOX &&
+            $customField->getValue() === '1'
+          ) {
+            $params = $customFieldDefinition->getParams();
+            $label = (is_array($params) && isset($params['values'][0]['value'])) ? (string)$params['values'][0]['value'] : '';
+            return $label !== '' ? htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401) : $defaultValue;
+          }
+          return htmlspecialchars($customField->getValue(), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
         }
         return null;
     }

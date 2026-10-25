@@ -7,5 +7,5 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 exec docker run --rm \
   -e ELASTIC_HOSTS=https://es01:9200 -e ELASTIC_USERNAME=test -e ELASTIC_PASSWORD=test \
   -v "$here:/etc/vector:ro" \
-  "timberio/vector:${VECTOR_VERSION:-0.43.0}-debian" \
+  "timberio/vector:${VECTOR_VERSION:-0.60.0}-debian" \
   test /etc/vector/vector.yaml "/etc/vector/tests/*.yaml"

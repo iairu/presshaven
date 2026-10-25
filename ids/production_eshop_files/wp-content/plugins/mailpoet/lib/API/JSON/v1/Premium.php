@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\API\JSON\Endpoint as APIEndpoint;
 use MailPoet\API\JSON\Error as APIError;
+use MailPoet\API\JSON\Response;
 use MailPoet\Config\AccessControl;
 use MailPoet\Config\Installer;
 use MailPoet\Config\ServicesChecker;
@@ -44,6 +45,10 @@ class Premium extends APIEndpoint {
   }
 
   public function installPlugin() {
+    if (!$this->wp->currentUserCan('install_plugins')) {
+      return $this->forbidden();
+    }
+
     $premiumKeyValid = $this->servicesChecker->isPremiumKeyValid(false);
     if (!$premiumKeyValid) {
       return $this->error(__('Premium key is not valid.', 'mailpoet'));
@@ -61,7 +66,7 @@ class Premium extends APIEndpoint {
       // Do nothing and continue with a regular installation
     }
 
-    $result = $this->wp->installPlugin($this->premiumInstaller->generatePluginDownloadUrl());
+    $result = $this->wp->installPlugin($this->premiumInstaller->buildDownloadUrl());
     if ($result !== true) {
       return $this->error(__('Error when installing MailPoet Premium plugin.', 'mailpoet'));
     }
@@ -69,6 +74,10 @@ class Premium extends APIEndpoint {
   }
 
   public function activatePlugin() {
+    if (!$this->wp->currentUserCan('activate_plugins')) {
+      return $this->forbidden();
+    }
+
     $premiumKeyValid = $this->servicesChecker->isPremiumKeyValid(false);
     if (!$premiumKeyValid) {
       return $this->error(__('Premium key is not valid.', 'mailpoet'));
@@ -79,6 +88,12 @@ class Premium extends APIEndpoint {
       return $this->error(__('Error when activating MailPoet Premium plugin.', 'mailpoet'));
     }
     return $this->successResponse();
+  }
+
+  private function forbidden() {
+    return $this->errorResponse([
+      APIError::FORBIDDEN => __('You do not have the required permissions.', 'mailpoet'),
+    ], [], Response::STATUS_FORBIDDEN);
   }
 
   private function error($message) {

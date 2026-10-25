@@ -79,9 +79,9 @@ jQuery( function( $ ) {
 					field.find( '.select2-selection__placeholder' ).text( fieldLocale.label );
 				}
 
-				// Required.
+				// Required. A field the locale hides is not required, as on the server.
 				if ( typeof fieldLocale.required !== 'undefined' ) {
-					field_is_required( field, fieldLocale.required );
+					field_is_required( field, fieldLocale.required && true !== fieldLocale.hidden );
 				} else {
 					field_is_required( field, false );
 				}
@@ -91,13 +91,12 @@ jQuery( function( $ ) {
 					field.data( 'priority', fieldLocale.priority );
 				}
 
-				// Hidden fields.
-				if ( 'state' !== key ) {
-					if ( typeof fieldLocale.hidden !== 'undefined' && true === fieldLocale.hidden ) {
-						field.hide().find( ':input' ).val( '' );
-					} else {
-						field.show();
-					}
+				// Hidden fields. State visibility (show) is managed by
+				// country-select.js, but locale can still hide it.
+				if ( true === fieldLocale.hidden ) {
+					field.hide().find( ':input' ).val( '' );
+				} else if ( 'state' !== key ) {
+					field.show();
 				}
 
 				// Class changes.

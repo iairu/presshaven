@@ -9,9 +9,14 @@ use MailPoet\Automation\Engine\Data\Automation;
 use MailPoet\Automation\Engine\Data\AutomationTemplate;
 use MailPoet\Automation\Engine\Templates\AutomationBuilder;
 use MailPoet\Automation\Integrations\WooCommerce\WooCommerce;
+use MailPoet\Config\Env;
+use MailPoet\WooCommerce\Helper as WooCommerceHelper;
+use MailPoet\WooCommerce\WooCommerceBookings\Helper as WooCommerceBookingsHelper;
 use MailPoet\WooCommerce\WooCommerceSubscriptions\Helper as WooCommerceSubscriptions;
 
 class TemplatesFactory {
+  private const MIN_WOOCOMMERCE_VERSION_FOR_GENERATED_COUPON_BLOCK = '10.8.0';
+
   /** @var AutomationBuilder */
   private $builder;
 
@@ -21,20 +26,24 @@ class TemplatesFactory {
   /** @var WooCommerceSubscriptions */
   private $woocommerceSubscriptions;
 
-  /** @var EmailFactory */
-  /** @phpstan-ignore-next-line Property is reserved for future use */
-  private $emailFactory;
+  /** @var WooCommerceBookingsHelper */
+  private $woocommerceBookingsHelper;
+
+  /** @var WooCommerceHelper */
+  private $woocommerceHelper;
 
   public function __construct(
     AutomationBuilder $builder,
     WooCommerce $woocommerce,
     WooCommerceSubscriptions $woocommerceSubscriptions,
-    EmailFactory $emailFactory
+    WooCommerceBookingsHelper $woocommerceBookingsHelper,
+    WooCommerceHelper $woocommerceHelper
   ) {
     $this->builder = $builder;
     $this->woocommerce = $woocommerce;
     $this->woocommerceSubscriptions = $woocommerceSubscriptions;
-    $this->emailFactory = $emailFactory;
+    $this->woocommerceBookingsHelper = $woocommerceBookingsHelper;
+    $this->woocommerceHelper = $woocommerceHelper;
   }
 
   public function createTemplates(): array {
@@ -48,13 +57,14 @@ class TemplatesFactory {
     if ($this->woocommerce->isWooCommerceActive()) {
       $templates[] = $this->createFirstPurchaseTemplate();
       $templates[] = $this->createThankLoyalCustomersTemplate();
-      $templates[] = $this->createWinBackCustomersTemplate();
       $templates[] = $this->createAbandonedCartTemplate();
       $templates[] = $this->createAbandonedCartCampaignTemplate();
       $templates[] = $this->createPurchasedProductTemplate();
       $templates[] = $this->createPurchasedProductWithTagTemplate();
       $templates[] = $this->createPurchasedInCategoryTemplate();
-      $templates[] = $this->createAskForReviewTemplate();
+      if ($this->woocommerceHelper->wcSupportsOrderReviewUrl()) {
+        $templates[] = $this->createAskForReviewTemplate();
+      }
       $templates[] = $this->createFollowUpPositiveReviewTemplate();
       $templates[] = $this->createFollowUpNegativeReviewTemplate();
       if ($this->woocommerceSubscriptions->isWooCommerceSubscriptionsActive()) {
@@ -65,9 +75,51 @@ class TemplatesFactory {
         $templates[] = $this->createFollowUpWhenTrialEndsTemplate();
         $templates[] = $this->createWinBackChurnedSubscribersTemplate();
       }
+      if ($this->woocommerceBookingsHelper->isWooCommerceBookingsActive()) {
+        $templates[] = $this->createWcBookingAbandonedSpotTemplate();
+        $templates[] = $this->createWcBookingNewBookingFollowUpTemplate();
+        $templates[] = $this->createWcBookingPreVisitReminderTemplate();
+        $templates[] = $this->createWcBookingPreVisitDripTemplate();
+        $templates[] = $this->createWcBookingPostVisitReviewTemplate();
+        $templates[] = $this->createWcBookingNextBookingNudgeTemplate();
+      }
     }
 
+    $templates[] = $this->createBirthdayEmailTemplate();
+
     return $templates;
+  }
+
+  private function createBirthdayEmailTemplate(): AutomationTemplate {
+    $usesDiscountPattern = $this->woocommerce->isWooCommerceActive() && $this->supportsGeneratedCouponBlock();
+
+    return new AutomationTemplate(
+      'birthday-email',
+      'celebrations',
+      __('Birthday email', 'mailpoet'),
+      __('Send a birthday email to your subscribers on their special day.', 'mailpoet'),
+      function () use ($usesDiscountPattern): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          $usesDiscountPattern ? 'birthday-email-with-discount' : 'birthday-email-content',
+          $usesDiscountPattern ? __('A birthday treat from us', 'mailpoet') : __('Happy birthday!', 'mailpoet'),
+          $usesDiscountPattern ? __('A birthday treat from us', 'mailpoet') : __('Happy birthday!', 'mailpoet'),
+          $usesDiscountPattern ? __('Enjoy 10% off your next order', 'mailpoet') : __('Wishing you a wonderful day', 'mailpoet')
+        );
+
+        return $this->builder->createFromSequence(
+          __('Birthday email', 'mailpoet'),
+          [
+            ['key' => 'mailpoet:annual-date'],
+            ['key' => 'mailpoet:send-email', 'args' => $emailArgs],
+          ]
+        );
+      },
+      [
+        'automationSteps' => 1,
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'heart'
+    );
   }
 
   private function createSubscriberWelcomeEmailTemplate(): AutomationTemplate {
@@ -80,12 +132,19 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'welcome-email-content',
+          __('Welcome email', 'mailpoet'),
+          __('Welcome to our community!', 'mailpoet'),
+          __('Thanks for subscribing', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Welcome new subscribers', 'mailpoet'),
           [
             ['key' => 'mailpoet:someone-subscribes'],
             ['key' => 'core:delay', 'args' => ['delay' => 1, 'delay_type' => 'MINUTES']],
-            ['key' => 'mailpoet:send-email'],
+            ['key' => 'mailpoet:send-email', 'args' => $emailArgs],
           ],
           [
             'mailpoet:run-once-per-subscriber' => true,
@@ -95,7 +154,10 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'megaphone',
+      'wordpress',
+      true
     );
   }
 
@@ -109,12 +171,19 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'welcome-email-content',
+          __('Welcome email', 'mailpoet'),
+          __('Welcome to our community!', 'mailpoet'),
+          __('Thanks for joining us', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Welcome new WordPress users', 'mailpoet'),
           [
             ['key' => 'mailpoet:wp-user-registered'],
             ['key' => 'core:delay', 'args' => ['delay' => 1, 'delay_type' => 'MINUTES']],
-            ['key' => 'mailpoet:send-email'],
+            ['key' => 'mailpoet:send-email', 'args' => $emailArgs],
           ],
           [
             'mailpoet:run-once-per-subscriber' => true,
@@ -124,7 +193,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'megaphone'
     );
   }
 
@@ -146,7 +216,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 2, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'megaphone'
     );
   }
 
@@ -168,7 +239,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 2, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'megaphone'
     );
   }
 
@@ -182,6 +254,13 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'first-purchase-thank-you',
+          __('First purchase thank you', 'mailpoet'),
+          __('Thank you for your first order!', 'mailpoet'),
+          __('Welcome to the family! Check out what’s next for you.', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Celebrate first-time buyers', 'mailpoet'),
           [
@@ -201,10 +280,7 @@ class TemplatesFactory {
             ],
             [
               'key' => 'mailpoet:send-email',
-              'args' => [
-                'name' => __('Thank you', 'mailpoet'),
-                'subject' => __('Thank You for Choosing Us!', 'mailpoet'),
-              ],
+              'args' => $emailArgs,
             ],
           ],
           [
@@ -215,7 +291,10 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'people',
+      'wordpress',
+      true
     );
   }
 
@@ -229,37 +308,48 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'post-purchase-thank-you',
+          __('Thank you for your loyalty', 'mailpoet'),
+          __('Thank you for your loyalty', 'mailpoet'),
+          __('We appreciate your continued support', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Thank loyal customers', 'mailpoet'),
-          []
+          [
+            [
+              'key' => 'woocommerce:order-completed',
+              'filters' => [
+                'operator' => 'and',
+                'groups' => [
+                  [
+                    'operator' => 'and',
+                    'filters' => [
+                      [
+                        'field' => 'woocommerce:customer:order-count',
+                        'condition' => 'greater-than',
+                        'value' => 5,
+                        'params' => ['in_the_last' => ['number' => 365, 'unit' => 'days']],
+                      ],
+                    ],
+                  ],
+                ],
+              ],
+            ],
+            ['key' => 'core:delay', 'args' => ['delay' => 1, 'delay_type' => 'DAYS']],
+            [
+              'key' => 'mailpoet:send-email',
+              'args' => $emailArgs,
+            ],
+          ]
         );
       },
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
-    );
-  }
-
-  private function createWinBackCustomersTemplate(): AutomationTemplate {
-    return new AutomationTemplate(
-      'win-back-customers',
-      'purchase',
-      __('Win back customers', 'mailpoet'),
-      __(
-        'Rekindle the relationship with past customers by reminding them of their favorite products and showcasing what’s new, encouraging a return to your brand.',
-        'mailpoet'
-      ),
-      function (): Automation {
-        return $this->builder->createFromSequence(
-          __('Win back customers', 'mailpoet'),
-          []
-        );
-      },
-      [
-        'automationSteps' => 4, // trigger and all delay steps are excluded
-      ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'people'
     );
   }
 
@@ -273,16 +363,20 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'abandoned-cart-content',
+          __('Abandoned cart reminder', 'mailpoet'),
+          __('You left something behind!', 'mailpoet'),
+          __('Complete your purchase today', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Abandoned cart reminder', 'mailpoet'),
           [
             ['key' => 'woocommerce:abandoned-cart'],
             [
               'key' => 'mailpoet:send-email',
-              'args' => [
-                'name' => __('Abandoned cart', 'mailpoet'),
-                'subject' => __('Looks like you forgot something', 'mailpoet'),
-              ],
+              'args' => $emailArgs,
             ],
           ]
         );
@@ -290,7 +384,10 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      Env::$assetsUrl . '/img/icons/cart.svg',
+      'svg',
+      true
     );
   }
 
@@ -312,7 +409,9 @@ class TemplatesFactory {
       [
         'automationSteps' => 5, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      Env::$assetsUrl . '/img/icons/cart.svg',
+      'svg'
     );
   }
 
@@ -326,6 +425,13 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'product-purchase-follow-up',
+          __('Important information about your order', 'mailpoet'),
+          __('Important information about your order', 'mailpoet'),
+          __('A few details about your purchase', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Purchased a product', 'mailpoet'),
           [
@@ -334,10 +440,7 @@ class TemplatesFactory {
             ],
             [
               'key' => 'mailpoet:send-email',
-              'args' => [
-                'name' => __('Important information about your order', 'mailpoet'),
-                'subject' => __('Important information about your order', 'mailpoet'),
-              ],
+              'args' => $emailArgs,
             ],
           ]
         );
@@ -345,7 +448,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'store'
     );
   }
 
@@ -359,6 +463,13 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'tag-purchase-follow-up',
+          __('Important information about your order', 'mailpoet'),
+          __('Important information about your order', 'mailpoet'),
+          __('A few details about your purchase', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Purchased a product with a tag', 'mailpoet'),
           [
@@ -367,10 +478,7 @@ class TemplatesFactory {
             ],
             [
               'key' => 'mailpoet:send-email',
-              'args' => [
-                'name' => __('Important information about your order', 'mailpoet'),
-                'subject' => __('Important information about your order', 'mailpoet'),
-              ],
+              'args' => $emailArgs,
             ],
           ]
         );
@@ -378,7 +486,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'store'
     );
   }
 
@@ -392,6 +501,13 @@ class TemplatesFactory {
         'mailpoet'
       ),
       function (): Automation {
+        $emailArgs = $this->createTemplateEmailArgs(
+          'category-purchase-follow-up',
+          __('Important information about your order', 'mailpoet'),
+          __('Important information about your order', 'mailpoet'),
+          __('A few details about your purchase', 'mailpoet')
+        );
+
         return $this->builder->createFromSequence(
           __('Purchased in a category', 'mailpoet'),
           [
@@ -400,10 +516,7 @@ class TemplatesFactory {
             ],
             [
               'key' => 'mailpoet:send-email',
-              'args' => [
-                'name' => __('Important information about your order', 'mailpoet'),
-                'subject' => __('Important information about your order', 'mailpoet'),
-              ],
+              'args' => $emailArgs,
             ],
           ]
         );
@@ -411,7 +524,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_DEFAULT
+      AutomationTemplate::TYPE_DEFAULT,
+      'store'
     );
   }
 
@@ -433,7 +547,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 2, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'starFilled'
     );
   }
 
@@ -455,7 +570,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'starFilled'
     );
   }
 
@@ -477,7 +593,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'starFilled'
     );
   }
 
@@ -499,7 +616,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
   }
 
@@ -521,7 +639,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
   }
 
@@ -543,7 +662,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
   }
 
@@ -565,7 +685,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
   }
 
@@ -587,7 +708,8 @@ class TemplatesFactory {
       [
         'automationSteps' => 1, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
   }
 
@@ -609,7 +731,180 @@ class TemplatesFactory {
       [
         'automationSteps' => 2, // trigger and all delay steps are excluded
       ],
-      AutomationTemplate::TYPE_PREMIUM
+      AutomationTemplate::TYPE_PREMIUM,
+      'payment'
     );
+  }
+
+  private function createWcBookingAbandonedSpotTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-abandoned-spot',
+      'bookings',
+      __('Abandoned booking reminder', 'mailpoet'),
+      __(
+        'Remind customers who left a booking in their cart to complete their reservation.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Abandoned booking reminder', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 1, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function createWcBookingNewBookingFollowUpTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-new-booking-follow-up',
+      'bookings',
+      __('Follow-up after a new booking', 'mailpoet'),
+      __(
+        'Send a confirmation email after a new booking is created.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Follow-up after a new booking', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 1, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function createWcBookingPreVisitReminderTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-pre-visit-reminder',
+      'bookings',
+      __('Pre-visit reminder', 'mailpoet'),
+      __(
+        'Send a reminder before a booking starts. Customize the timing in the trigger settings.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Pre-visit reminder', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 1, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function createWcBookingPreVisitDripTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-pre-visit-drip',
+      'bookings',
+      __('Educational drip after booking', 'mailpoet'),
+      __(
+        'Send a series of emails after a booking is created to help customers prepare for their visit.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Educational drip after booking', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 2, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function createWcBookingPostVisitReviewTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-post-visit-review',
+      'bookings',
+      __('Post-booking review request', 'mailpoet'),
+      __(
+        'Ask for feedback after a booking is completed.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Post-booking review request', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 1, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function createWcBookingNextBookingNudgeTemplate(): AutomationTemplate {
+    return new AutomationTemplate(
+      'wc-booking-next-booking-nudge',
+      'bookings',
+      __('Next booking nudge', 'mailpoet'),
+      __(
+        'Encourage customers to rebook after their booking is completed.',
+        'mailpoet'
+      ),
+      function (): Automation {
+        return $this->builder->createFromSequence(
+          __('Next booking nudge', 'mailpoet'),
+          []
+        );
+      },
+      [
+        'automationSteps' => 1, // trigger and all delay steps are excluded
+      ],
+      AutomationTemplate::TYPE_PREMIUM,
+      'calendar'
+    );
+  }
+
+  private function supportsGeneratedCouponBlock(): bool {
+    $wooCommerceVersion = $this->woocommerceHelper->getWooCommerceVersion();
+    if (!$wooCommerceVersion) {
+      return false;
+    }
+
+    $numericVersionLength = strspn($wooCommerceVersion, '0123456789.');
+    $numericVersion = substr($wooCommerceVersion, 0, $numericVersionLength);
+    if ($numericVersion === '') {
+      return false;
+    }
+
+    return version_compare($numericVersion, self::MIN_WOOCOMMERCE_VERSION_FOR_GENERATED_COUPON_BLOCK, '>=');
+  }
+
+  /**
+   * The email is created when the user first opens the step and picks an editor.
+   *
+   * @return array<string, mixed>
+   */
+  private function createTemplateEmailArgs(
+    string $pattern,
+    string $name,
+    string $subject,
+    string $preheader
+  ): array {
+    return [
+      'name' => $name,
+      'subject' => $subject,
+      'preheader' => $preheader,
+      'pattern' => $pattern,
+    ];
   }
 }

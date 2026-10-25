@@ -87,9 +87,10 @@ class Fraud_Prevention_Service {
 			return;
 		}
 
-		// Don't add the token if the user isn't on the cart, checkout, product or pay for order page.
+		// Don't add the token if the user isn't on the cart, checkout, product, pay for order, or add payment method page.
 		// Checking the product and cart page too because the user can pay quickly via the payment buttons on that page.
-		if ( ! is_checkout() && ! has_block( 'woocommerce/checkout' ) && ! is_cart() && ! is_product() && ! $instance->is_pay_for_order_page() ) {
+		// Checking add payment method page to protect against card testing via setup intents.
+		if ( ! is_checkout() && ! has_block( 'woocommerce/checkout' ) && ! is_cart() && ! is_product() && ! $instance->is_pay_for_order_page() && ! is_add_payment_method_page() ) {
 			return;
 		}
 
@@ -137,7 +138,7 @@ class Fraud_Prevention_Service {
 	 * For the first page load generates the token,
 	 * for consecutive loads - takes from session.
 	 *
-	 * @return string|mixed
+	 * @return string
 	 */
 	public function get_token(): string {
 		$fraud_prevention_token = $this->session->get( self::TOKEN_NAME );

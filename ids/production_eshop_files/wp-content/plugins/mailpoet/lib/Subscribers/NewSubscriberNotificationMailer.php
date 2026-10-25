@@ -69,7 +69,7 @@ class NewSubscriberNotificationMailer {
     if (!isset($settings['enabled'])) {
       return true;
     }
-    if (!isset($settings['address'])) {
+    if (!isset($settings['address']) || !is_string($settings['address'])) {
       return true;
     }
     if (empty(trim($settings['address']))) {
@@ -90,7 +90,10 @@ class NewSubscriberNotificationMailer {
     $context = [
       'subscriber_email' => $subscriber->getEmail(),
       'segments_names' => $segmentNames,
-      'link_settings' => WPFunctions::get()->getSiteUrl(null, '/wp-admin/admin.php?page=mailpoet-settings'),
+      'link_settings' => WPFunctions::get()->applyFilters(
+        'mailpoet_new_subscriber_notification_link_settings',
+        WPFunctions::get()->getSiteUrl(null, '/wp-admin/admin.php?page=mailpoet-settings')
+      ),
       'link_premium' => WPFunctions::get()->getSiteUrl(null, '/wp-admin/admin.php?page=mailpoet-upgrade'),
     ];
     return [

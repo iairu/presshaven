@@ -250,7 +250,7 @@ function JetpackLikesMessageListener( event ) {
 					left: rect.left + win.pageXOffset,
 				};
 
-				let containerLeft = 0;
+				let containerLeft;
 				container.style.top = offset.top + data.position.top - 1 + 'px';
 
 				if ( isRtl ) {
@@ -262,15 +262,6 @@ function JetpackLikesMessageListener( event ) {
 					containerLeft = offset.left + data.position.left;
 				}
 				container.style.left = containerLeft + 'px';
-
-				// Container width - padding
-				const initContainerWidth = data.width - 20;
-				const rowLength = Math.floor( initContainerWidth / 37 );
-				// # of rows + (avatar + avatar padding) + text above + container padding
-				let height = Math.ceil( data.likers.length / rowLength ) * 37 + 17 + 22;
-				if ( height > 204 ) {
-					height = 204;
-				}
 
 				// If the popup overflows viewport width, we should show it on the next line.
 				// Push it offscreen to calculated rendered width.
@@ -343,12 +334,20 @@ function JetpackLikesWidgetQueueHandler() {
 	var wrapperID;
 
 	if ( ! jetpackLikesMasterReady ) {
+		// The master iframe emits `masterReady` a single time, when it finishes loading. On
+		// script-heavy pages it can finish loading — and emit — before this script attaches its
+		// message listener above, so that one event is missed and the queue never starts. Ping the
+		// master iframe while we wait so it re-emits `masterReady` once both it and our listener
+		// are ready.
+		JetpackLikesPostMessage( { event: 'queryMasterReady' }, window.frames[ 'likes-master' ] );
 		setTimeout( JetpackLikesWidgetQueueHandler, 500 );
 		return;
 	}
 
 	// Restore widgets to initial unloaded state when they are scrolled out of view.
 	jetpackUnloadScrolledOutWidgets();
+
+	jetpackObserveUnloadedWidgets();
 
 	var unloadedWidgetsInView = jetpackGetUnloadedWidgetsInView();
 
@@ -415,10 +414,23 @@ function jetpackLoadLikeWidgetIframe( wrapperID ) {
 	wrapper.classList.add( 'jetpack-likes-widget-loading' );
 
 	wrapper.querySelector( 'iframe' ).addEventListener( 'load', e => {
+		// A widget scrolled out of view mid-load has its iframe dropped, and a reloaded one
+		// replaces it, either of which leaves this closure holding a detached iframe. Acting on
+		// it would hide a placeholder that is now the only thing the widget has left to show.
+		if ( ! wrapper.contains( e.target ) ) {
+			return;
+		}
+
 		JetpackLikesPostMessage(
 			{ event: 'loadLikeWidget', name: e.target.name, width: e.target.width },
 			window.frames[ 'likes-master' ]
 		);
+
+		// The stylesheet is otherwise the only thing that hides the placeholder, so one that never
+		// applies leaves "Loading…" sitting over a widget that loaded fine.
+		if ( placeholder ) {
+			placeholder.style.display = 'none';
+		}
 
 		wrapper.classList.remove( 'jetpack-likes-widget-loading' );
 		wrapper.classList.add( 'jetpack-likes-widget-loaded' );
@@ -455,6 +467,14 @@ function jetpackUnloadScrolledOutWidgets() {
 			widgetWrapper.classList.remove( 'jetpack-likes-widget-loading' );
 			widgetWrapper.classList.add( 'jetpack-likes-widget-unloaded' );
 
+			// An empty string removes the inline declaration rather than setting one, handing the
+			// placeholder back to the stylesheet. The `display: none` set on load would otherwise
+			// outrank it, leaving an unloaded widget with neither an iframe nor a placeholder.
+			const placeholder = widgetWrapper.querySelector( '.likes-widget-placeholder' );
+			if ( placeholder ) {
+				placeholder.style.display = '';
+			}
+
 			// Remove it from the list of loaded widgets.
 			jetpackCommentLikesLoadedWidgets.splice( i, 1 );
 
@@ -473,6 +493,31 @@ var jetpackWidgetsDelayedExec = function ( after, fn ) {
 };
 
 var jetpackOnScrollStopped = jetpackWidgetsDelayedExec( 250, JetpackLikesWidgetQueueHandler );
+
+// Scrolling is not the only thing that brings a widget into range. A stylesheet that lands late
+// reflows the page without firing a scroll event, and the queue would never look at that widget
+// again, leaving it on "Loading…" until the reader happens to scroll.
+var jetpackLikesWidgetObserver =
+	typeof IntersectionObserver === 'function'
+		? new IntersectionObserver( jetpackOnScrollStopped, {
+				rootMargin: `${ jetpackLikesLookAhead }px`,
+				// jetpackIsScrolledIntoView() wants the widget fully inside the band, so ask to be
+				// told when it gets there - crossing into partial overlap alone would not load it.
+				threshold: [ 0, 1 ],
+			} )
+		: null;
+
+// Observing an element twice is a no-op, so every queue pass can call this to pick up widgets
+// added after load.
+function jetpackObserveUnloadedWidgets() {
+	if ( ! jetpackLikesWidgetObserver ) {
+		return;
+	}
+
+	document
+		.querySelectorAll( 'div.jetpack-likes-widget-unloaded' )
+		.forEach( widget => jetpackLikesWidgetObserver.observe( widget ) );
+}
 
 // Load initial batch of widgets, prior to any scrolling events.
 JetpackLikesWidgetQueueHandler();

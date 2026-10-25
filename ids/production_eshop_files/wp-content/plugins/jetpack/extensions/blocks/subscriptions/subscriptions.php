@@ -79,20 +79,31 @@ function register_block() {
 		'post',
 		META_NAME_FOR_POST_LEVEL_ACCESS_SETTINGS,
 		array(
-			'show_in_rest'  => true,
-			'single'        => true,
-			'type'          => 'string',
-			'auth_callback' => function () {
+			'show_in_rest'      => true,
+			'single'            => true,
+			'type'              => 'string',
+			// The REST schema already rejects non-strings, but non-REST writers
+			// (importers, XML-RPC, WP-CLI, direct update_post_meta, sync) only pass
+			// through sanitize_meta(). Coerce anything that isn't a string to ''
+			// ("everybody") so a corrupt value can't be persisted and later fatal the
+			// strict string-typed access checks.
+			'sanitize_callback' => function ( $value ) {
+				return is_string( $value ) ? $value : '';
+			},
+			'auth_callback'     => function () {
 				return wp_get_current_user()->has_cap( 'edit_posts' );
 			},
 		)
 	);
 
+	// The meta is a "don't send" flag, so invert the blog option (which defaults to true = "send").
+	$dont_email_default = ! get_option( 'wpcom_newsletter_send_default', true );
+
 	register_post_meta(
 		'post',
 		META_NAME_FOR_POST_DONT_EMAIL_TO_SUBS,
 		array(
-			'default'       => false,
+			'default'       => $dont_email_default,
 			'show_in_rest'  => true,
 			'single'        => true,
 			'type'          => 'boolean',
@@ -138,6 +149,8 @@ function register_block() {
 					META_NAME_FOR_POST_LEVEL_ACCESS_SETTINGS,
 					META_NAME_FOR_POST_DONT_EMAIL_TO_SUBS,
 					META_NAME_CONTAINS_PAYWALLED_CONTENT,
+					META_NAME_FOR_POST_TIER_ID_SETTINGS,
+					META_NAME_CONTAINS_PAID_CONTENT,
 				)
 			);
 		}
@@ -152,9 +165,6 @@ function register_block() {
 
 	// Hide existing comments
 	add_filter( 'get_comment', __NAMESPACE__ . '\maybe_gate_existing_comments' );
-
-	// Gate the excerpt for a post
-	add_filter( 'get_the_excerpt', __NAMESPACE__ . '\jetpack_filter_excerpt_for_newsletter', 10, 2 );
 
 	// Add a 'Newsletter' column to the Edit posts page
 	// We only display the "Newsletter" column if we have configured the paid newsletter plan
@@ -231,7 +241,8 @@ function add_paywalled_content_post_meta( int $post_id, \WP_Post $post ) {
 
 	$access_level = get_post_meta( $post_id, META_NAME_FOR_POST_LEVEL_ACCESS_SETTINGS, true );
 
-	$is_paywalled = false;
+	// A Paywall block gates the post whatever the stored access level; see Jetpack_Memberships::get_post_access_level().
+	$is_paywalled = has_block( \Automattic\Jetpack\Extensions\Paywall\BLOCK_NAME, $post );
 	switch ( $access_level ) {
 		case Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS_ALL_TIERS:
 		case Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS:
@@ -257,7 +268,7 @@ function render_newsletter_access_rows( $column_id, $post_id ) {
 		return;
 	}
 
-	$access_level = get_post_meta( $post_id, META_NAME_FOR_POST_LEVEL_ACCESS_SETTINGS, true );
+	$access_level = Jetpack_Memberships::get_post_access_level( $post_id );
 
 	switch ( $access_level ) {
 		case Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS_ALL_TIERS:
@@ -307,7 +318,7 @@ function fetch_subscriber_counts() {
 					'status'  => 'failed',
 					'code'    => $xml->getErrorCode(),
 					'message' => $xml->getErrorMessage(),
-					'value'   => ( isset( $subs_count['value'] ) ) ? $subs_count['value'] : array(
+					'value'   => $subs_count['value'] ?? array(
 						'total_subscribers' => 0,
 						'email_subscribers' => 0,
 						'social_followers'  => 0,
@@ -824,6 +835,7 @@ function render_for_website( $data, $classes, $styles ) {
 									required="required"
 									type="email"
 									name="email"
+									autocomplete="email"
 									%1$s
 									style="%2$s"
 									placeholder="%3$s"
@@ -979,28 +991,6 @@ function render_email( $block_content, array $parsed_block, $rendering_context )
 		$button_parsed_block,
 		$rendering_context
 	);
-}
-
-/**
- * Filter excerpts looking for subscription data.
- *
- * @param string   $excerpt The extrapolated excerpt string.
- * @param \WP_Post $post    The current post being processed (in `get_the_excerpt`).
- *
- * @return mixed
- */
-function jetpack_filter_excerpt_for_newsletter( $excerpt, $post = null ) {
-	// The blogmagazine theme is overriding WP core `get_the_excerpt` filter and only passing the excerpt
-	// TODO: Until this is fixed, return the excerpt without gating. See https://github.com/Automattic/jetpack/pull/28102#issuecomment-1369161116
-	if ( $post instanceof \WP_Post && str_contains( $post->post_content, '<!-- wp:jetpack/subscriptions -->' ) ) {
-		$excerpt .= sprintf(
-			// translators: %s is the permalink url to the current post.
-			__( "<p><a href='%s'>View post</a> to subscribe to site newsletter.</p>", 'jetpack' ),
-			get_post_permalink()
-		);
-	}
-
-	return $excerpt;
 }
 
 /**

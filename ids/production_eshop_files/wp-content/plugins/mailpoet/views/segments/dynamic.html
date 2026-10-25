@@ -4,8 +4,7 @@
   <div id="dynamic_segments_container"></div>
 
   <script type="text/javascript">
-    var mailpoet_dynamic_segment_count = <%= dynamic_segment_count %>;
-    var mailpoet_listing_per_page = <%= items_per_page %>;
+    var mailpoet_segments_api = <%= json_encode(api) %>;
     var mailpoet_custom_fields = <%= json_encode(custom_fields) %>;
     var mailpoet_static_segments_list = <%= json_encode(static_segments_list) %>;
     var wordpress_editable_roles_list = <%= json_encode(wordpress_editable_roles_list)  %>;
@@ -15,6 +14,7 @@
     var mailpoet_product_categories = <%= json_encode(product_categories)  %>;
     var mailpoet_product_tags = <%= json_encode(product_tags) %>;
     var mailpoet_products = <%= json_encode(products) %>;
+    var mailpoet_variable_products = <%= json_encode(variable_products) %>;
     var mailpoet_membership_plans = <%= json_encode(membership_plans) %>;
     var mailpoet_subscription_products = <%= json_encode(subscription_products) %>;
     var mailpoet_can_use_woocommerce_memberships = <%= json_encode(can_use_woocommerce_memberships)  %>;

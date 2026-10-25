@@ -6,8 +6,8 @@ use Action_Scheduler\Migration\Config;
 use Action_Scheduler\Migration\Runner;
 use Action_Scheduler\Migration\Scheduler;
 use Action_Scheduler\Migration\Controller;
-use WP_CLI;
-use WP_CLI_Command;
+use WpifyWooDeps\WP_CLI;
+use WpifyWooDeps\WP_CLI_Command;
 /**
  * Class Migration_Command
  *

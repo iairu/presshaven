@@ -5,7 +5,7 @@ namespace WpifyWooDeps;
 /**
  * Abstract for WP-CLI commands.
  */
-abstract class ActionScheduler_WPCLI_Command extends \WP_CLI_Command
+abstract class ActionScheduler_WPCLI_Command extends \WpifyWooDeps\WP_CLI_Command
 {
     const DATE_FORMAT = 'Y-m-d H:i:s O';
     /**

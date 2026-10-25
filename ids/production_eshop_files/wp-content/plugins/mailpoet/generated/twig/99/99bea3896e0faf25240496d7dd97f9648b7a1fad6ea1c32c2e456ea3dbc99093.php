@@ -63,7 +63,7 @@ class __TwigTemplate_cc8efaa8d3c388c3a2e0e52f0b49037b3b775dd64304859aa3e0b97b4d7
         yield "
 ";
         // line 11
-        yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["link_settings"] ?? null), "html", null, true);
+        yield ($context["link_settings"] ?? null);
         yield "
 
 ";
@@ -75,7 +75,7 @@ class __TwigTemplate_cc8efaa8d3c388c3a2e0e52f0b49037b3b775dd64304859aa3e0b97b4d7
             yield "
     ";
             // line 15
-            yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["link_premium"] ?? null), "html", null, true);
+            yield ($context["link_premium"] ?? null);
             yield "
 ";
         }

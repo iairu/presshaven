@@ -63,7 +63,7 @@ class DashboardPage
     public function get_plugins_overview(): string
     {
         $installed_plugins = $this->settings->get_plugins();
-        $extensions = $this->get_cached_remote_data('wpify_core_all_plugins', 'https://wpify.cz/wp-json/wpify/v1/plugins-list', 2 * HOUR_IN_SECONDS, 15 * MINUTE_IN_SECONDS, 'plugins');
+        $extensions = $this->get_cached_remote_data('wpify_core_all_plugins', 'https://wpify.cz/wp-json/wpify/v1/plugins-list', 2 * \HOUR_IN_SECONDS, 15 * \MINUTE_IN_SECONDS, 'plugins');
         $extensions_map = array();
         if (is_array($extensions)) {
             foreach ($extensions as $extension) {
@@ -83,7 +83,7 @@ class DashboardPage
                     unset($extensions_map[$slug]);
                 } else {
                     $check_url = add_query_arg(['update_action' => 'get_metadata', 'update_slug' => $slug, 'installed_version' => $plugin['version'], 'locale' => get_locale(), 'checking_for_updates' => '1'], 'https://wpify.cz');
-                    $data = $this->get_cached_remote_data('wpify_core_plugin_update_data_' . $slug, $check_url, 6 * HOUR_IN_SECONDS, 15 * MINUTE_IN_SECONDS);
+                    $data = $this->get_cached_remote_data('wpify_core_plugin_update_data_' . $slug, $check_url, 6 * \HOUR_IN_SECONDS, 15 * \MINUTE_IN_SECONDS);
                     $update_data = ['name' => $data['name'] ?? '', 'version' => $data['version'] ?? '', 'requires_php' => $data['requires_php'] ?? '', 'requires_wp' => $data['requires'] ?? '', 'changelog' => $data['sections']['changelog'] ?? ''];
                     if ($update_data) {
                         $installed_plugins[$slug]['plugin_info'] = $update_data;
@@ -302,7 +302,7 @@ class DashboardPage
      */
     public function render_news_posts(): void
     {
-        $posts = $this->get_cached_remote_data('wpify_core_news', 'https://wpify.cz/wp-json/wp/v2/posts?per_page=4&_embed', DAY_IN_SECONDS, 15 * MINUTE_IN_SECONDS, null, \false);
+        $posts = $this->get_cached_remote_data('wpify_core_news', 'https://wpify.cz/wp-json/wp/v2/posts?per_page=4&_embed', \DAY_IN_SECONDS, 15 * \MINUTE_IN_SECONDS, null, \false);
         if (empty($posts)) {
             return;
         }

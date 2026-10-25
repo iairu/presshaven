@@ -2,62 +2,57 @@
 declare (strict_types=1);
 namespace MailPoetVendor\Pelago\Emogrifier\Utilities;
 if (!defined('ABSPATH')) exit;
-class CssConcatenator
+use MailPoetVendor\Pelago\Emogrifier\Css\RuleSet;
+use MailPoetVendor\Pelago\Emogrifier\Css\RuleSetList;
+final class CssConcatenator
 {
- private $mediaRules = [];
- public function append(array $selectors, string $declarationsBlock, string $media = '') : void
- {
- $selectorsAsKeys = \array_flip($selectors);
- $mediaRule = $this->getOrCreateMediaRuleToAppendTo($media);
- $ruleBlocks = $mediaRule->ruleBlocks;
- $lastRuleBlock = \end($ruleBlocks);
- $hasSameDeclarationsAsLastRule = \is_object($lastRuleBlock) && $declarationsBlock === $lastRuleBlock->declarationsBlock;
- if ($hasSameDeclarationsAsLastRule) {
- $lastRuleBlock->selectorsAsKeys += $selectorsAsKeys;
- } else {
- $lastRuleBlockSelectors = \is_object($lastRuleBlock) ? $lastRuleBlock->selectorsAsKeys : [];
- $hasSameSelectorsAsLastRule = \is_object($lastRuleBlock) && self::hasEquivalentSelectors($selectorsAsKeys, $lastRuleBlockSelectors);
- if ($hasSameSelectorsAsLastRule) {
- $lastDeclarationsBlockWithoutSemicolon = \rtrim(\rtrim($lastRuleBlock->declarationsBlock), ';');
- $lastRuleBlock->declarationsBlock = $lastDeclarationsBlockWithoutSemicolon . ';' . $declarationsBlock;
- } else {
- $mediaRule->ruleBlocks[] = (object) \compact('selectorsAsKeys', 'declarationsBlock');
- }
- }
- }
- public function getCss() : string
- {
- return \implode('', \array_map([self::class, 'getMediaRuleCss'], $this->mediaRules));
- }
- private function getOrCreateMediaRuleToAppendTo(string $media) : object
- {
- $lastMediaRule = \end($this->mediaRules);
- if (\is_object($lastMediaRule) && $media === $lastMediaRule->media) {
- return $lastMediaRule;
- }
- $newMediaRule = (object) ['media' => $media, 'ruleBlocks' => []];
- $this->mediaRules[] = $newMediaRule;
- return $newMediaRule;
- }
- private static function hasEquivalentSelectors(array $selectorsAsKeys1, array $selectorsAsKeys2) : bool
- {
- return \count($selectorsAsKeys1) === \count($selectorsAsKeys2) && \count($selectorsAsKeys1) === \count($selectorsAsKeys1 + $selectorsAsKeys2);
- }
- private static function getMediaRuleCss(object $mediaRule) : string
- {
- $ruleBlocks = $mediaRule->ruleBlocks;
- $css = \implode('', \array_map([self::class, 'getRuleBlockCss'], $ruleBlocks));
- $media = $mediaRule->media;
- if ($media !== '') {
- $css = $media . '{' . $css . '}';
- }
- return $css;
- }
- private static function getRuleBlockCss(object $ruleBlock) : string
- {
- $selectorsAsKeys = $ruleBlock->selectorsAsKeys;
- $selectors = \array_keys($selectorsAsKeys);
- $declarationsBlock = $ruleBlock->declarationsBlock;
- return \implode(',', $selectors) . '{' . $declarationsBlock . '}';
- }
+private $ruleSetLists = [];
+public function append(array $selectors, string $declarationBlock, string $atRule = ''): void
+{
+$ruleSetList = $this->getOrCreateRuleSetListToAppendTo($atRule);
+$ruleSets = $ruleSetList->getRuleSets();
+$lastRuleSet = \end($ruleSets);
+$hasSameDeclarationsAsLastRule = $lastRuleSet instanceof RuleSet && $declarationBlock === $lastRuleSet->getDeclarationBlock();
+if ($hasSameDeclarationsAsLastRule) {
+$lastRuleSet->addSelectors($selectors);
+} else {
+$hasSameSelectorsAsLastRule = $lastRuleSet instanceof RuleSet && $lastRuleSet->hasEquivalentSelectors($selectors);
+if ($hasSameSelectorsAsLastRule) {
+$lastDeclarationBlockWithoutSemicolon = \rtrim(\rtrim($lastRuleSet->getDeclarationBlock()), ';');
+$lastRuleSet->setDeclarationBlock($lastDeclarationBlockWithoutSemicolon . ';' . $declarationBlock);
+} else {
+$ruleSetList->appendRuleSet(new RuleSet($selectors, $declarationBlock));
+}
+}
+}
+public function getCss(): string
+{
+return \implode('', \array_map([self::class, 'getRuleSetListCss'], $this->ruleSetLists));
+}
+private function getOrCreateRuleSetListToAppendTo(string $atRule): RuleSetList
+{
+$lastRuleSetList = \end($this->ruleSetLists);
+if ($lastRuleSetList instanceof RuleSetList && $atRule === $lastRuleSetList->getAtRule()) {
+return $lastRuleSetList;
+}
+$newRuleSetList = new RuleSetList($atRule);
+$this->ruleSetLists[] = $newRuleSetList;
+return $newRuleSetList;
+}
+private static function getRuleSetListCss(RuleSetList $ruleSetList): string
+{
+$ruleSets = $ruleSetList->getRuleSets();
+$css = \implode('', \array_map([self::class, 'getRuleSetCss'], $ruleSets));
+$atRule = $ruleSetList->getAtRule();
+if ($atRule !== '') {
+$css = $atRule . '{' . $css . '}';
+}
+return $css;
+}
+private static function getRuleSetCss(RuleSet $ruleSet): string
+{
+$selectors = $ruleSet->getSelectors();
+$declarationBlock = $ruleSet->getDeclarationBlock();
+return \implode(',', $selectors) . '{' . $declarationBlock . '}';
+}
 }

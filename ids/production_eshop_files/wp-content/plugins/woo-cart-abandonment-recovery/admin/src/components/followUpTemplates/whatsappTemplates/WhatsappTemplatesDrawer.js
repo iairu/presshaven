@@ -1,89 +1,65 @@
-import { useState, useEffect } from 'react';
-import { Drawer, Button, toast } from '@bsf/force-ui';
-import { CheckIcon } from '@heroicons/react/24/outline';
+import { useEffect, useState } from 'react';
+import { Drawer, toast } from '@bsf/force-ui';
 import { __ } from '@wordpress/i18n';
 import parse from 'html-react-parser';
 
 import { doApiFetch } from '@Store';
 
-import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
 import WhatsappTemplatesDrawerBody from './WhatsappTemplatesDrawerBody';
+import TemplateDrawerHeader from '../shared/TemplateDrawerHeader';
+import TemplateDrawerShell, {
+	useTemplateDrawer,
+} from '../shared/TemplateDrawerShell';
+import {
+	focusFirstInvalid,
+	getRuleEngineError,
+	isFormDirty,
+} from '../shared/templateDrawerUtils';
 
-const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
-	const [ formState, setFormState ] = useState( {
-		template_name: '',
-		whatsapp_template: '',
-		whatsapp_template_header_variables: '',
-		whatsapp_template_body_variables: '',
-		whatsapp_frequency: 10,
-		whatsapp_frequency_unit: 'MINUTE',
-		is_activated: false,
-		override_global_coupon: false,
-		discount_type: 'percent',
-		coupon_amount: '',
-		coupon_expiry_date: 1,
-		coupon_expiry_unit: 'days',
-		auto_coupon: false,
-		free_shipping_coupon: false,
-		individual_use_only: false,
-		exclude_product_ids: '',
-		enable_whatsapp_rule_engine: false,
-		whatsapp_rule_engine: [],
-	} );
+const NEW_TEMPLATE_STATE = {
+	template_name: '',
+	whatsapp_template: '',
+	whatsapp_template_header_variables: '',
+	whatsapp_template_body_variables: '',
+	whatsapp_frequency: 10,
+	whatsapp_frequency_unit: 'MINUTE',
+	is_activated: false,
+	override_global_coupon: false,
+	discount_type: 'percent',
+	coupon_amount: '',
+	coupon_expiry_date: 1,
+	coupon_expiry_unit: 'days',
+	auto_coupon: false,
+	free_shipping_coupon: false,
+	individual_use_only: false,
+	exclude_product_ids: '',
+	enable_whatsapp_rule_engine: false,
+	whatsapp_rule_engine: [],
+};
 
+// Lives inside the Drawer, which only mounts its content while open: the state below is
+// seeded from the template on every open, so the first frame already shows the right data.
+const WhatsappTemplateForm = ( { template, onSave } ) => {
+	const { setDirty, markSaved } = useTemplateDrawer();
+	const [ formState, setFormState ] = useState(
+		() => template ? { ...template } : NEW_TEMPLATE_STATE
+	);
+	// What was loaded or last saved, to tell whether closing would lose anything.
+	const [ savedState, setSavedState ] = useState( formState );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
-	const [ isLoading, setIsLoading ] = useState( true );
 	const [ errors, setErrors ] = useState( {} );
 
 	useEffect( () => {
-		setIsLoading( true );
-		if ( template ) {
-			setFormState( {
-				...template,
-			} );
-		} else {
-			// Reset form for new template with default values
-			setFormState( {
-				template_name: '',
-				whatsapp_template: '',
-				whatsapp_template_header_variables: '',
-				whatsapp_template_body_variables: '',
-				whatsapp_frequency: 10,
-				whatsapp_frequency_unit: 'MINUTE',
-				is_activated: false,
-				override_global_coupon: false,
-				discount_type: 'percent',
-				coupon_amount: '',
-				coupon_expiry_date: 1,
-				coupon_expiry_unit: 'days',
-				auto_coupon: false,
-				free_shipping_coupon: false,
-				individual_use_only: false,
-				exclude_product_ids: '',
-				enable_whatsapp_rule_engine: false,
-				whatsapp_rule_engine: [],
-			} );
-		}
-		setErrors( {} );
-		setIsLoading( false );
-	}, [ template, open ] );
+		setDirty( isFormDirty( formState, savedState ) );
+	}, [ formState, savedState ] );
 
 	const handleChange = ( name, value ) => {
-		setFormState( ( prev ) => {
-			return { ...prev, [ name ]: value };
-		} );
+		setFormState( ( prev ) => ( { ...prev, [ name ]: value } ) );
 
 		// Clear error for this field if it exists
 		if ( errors[ name ] ) {
 			setErrors( { ...errors, [ name ]: null } );
 		}
-	};
-
-	const isEmptyStringOrArray = ( val ) => {
-		return (
-			( typeof val === 'string' && val.trim() === '' ) ||
-			( Array.isArray( val ) && val.length === 0 )
-		);
 	};
 
 	const validateForm = () => {
@@ -97,11 +73,12 @@ const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 		}
 
 		if ( ! formState.whatsapp_template.trim() ) {
-			newErrors.email_body = __(
+			newErrors.whatsapp_template = __(
 				'WhatsApp template is required',
 				'woo-cart-abandonment-recovery'
 			);
 		}
+
 		if ( formState.whatsapp_frequency < 1 ) {
 			newErrors.whatsapp_frequency = __(
 				'Time should be minimum 1 min.',
@@ -109,48 +86,20 @@ const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 			);
 		}
 
-		if (
-			! [ '', '0', false ].includes(
-				formState?.enable_whatsapp_rule_engine
-			)
-		) {
-			let rules = formState.whatsapp_rule_engine || [];
-			if ( typeof rules === 'string' ) {
-				try {
-					rules = JSON.parse( rules );
-				} catch ( e ) {
-					newErrors.whatsapp_rule_engine = __(
-						'Invalid JSON in rule engine',
-						'woo-cart-abandonment-recovery'
-					);
-					return false;
-				}
-			}
-			if (
-				rules.length === 0 ||
-				rules.some(
-					( group ) =>
-						group.rules &&
-						group.rules.some(
-							( rule ) =>
-								isEmptyStringOrArray( rule.condition ) ||
-								isEmptyStringOrArray( rule.value ) ||
-								isEmptyStringOrArray( rule.operator )
-						)
-				)
-			) {
-				newErrors.whatsapp_rule_engine = __(
-					'Missing fields in rule: condition, operator, or value.',
-					'woo-cart-abandonment-recovery'
-				);
-			}
+		const ruleEngineError = getRuleEngineError(
+			formState?.enable_whatsapp_rule_engine,
+			formState.whatsapp_rule_engine
+		);
+		if ( ruleEngineError ) {
+			newErrors.whatsapp_rule_engine = ruleEngineError;
 		}
 
 		setErrors( newErrors );
 		if ( Object.keys( newErrors ).length !== 0 ) {
-			toast.error( 'Error!', {
+			toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 				description: parse( Object.values( newErrors ).join( '<br>' ) ),
 			} );
+			focusFirstInvalid( newErrors );
 			return false;
 		}
 
@@ -250,15 +199,17 @@ const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 			( response ) => {
 				if ( response.success ) {
 					// Call the parent's onSave callback with the updated template
+					setSavedState( formState );
+					markSaved();
 					onSave( response.data.template );
-					toast.success( 'Success!', {
+					toast.success( __( 'Success!', 'woo-cart-abandonment-recovery' ), {
 						description: __(
 							'Template saved successfully',
 							'woo-cart-abandonment-recovery'
 						),
 					} );
 				} else {
-					toast.success( 'Error!', {
+					toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 						description:
 							response.data.message ||
 							__(
@@ -269,7 +220,7 @@ const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 				}
 			},
 			( error ) => {
-				toast.error( 'Error!', {
+				toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 					description:
 						error.message ||
 						__(
@@ -279,138 +230,43 @@ const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 				} );
 			},
 			true
-		).finally( () => {
-			setIsSubmitting( false );
-		} );
-	};
-
-	const truncateText = ( text, maxLength = 60 ) => {
-		return text.length > maxLength
-			? text.slice( 0, maxLength ) + '...'
-			: text;
+		)
+			.catch( () => {} )
+			.finally( () => {
+				setIsSubmitting( false );
+			} );
 	};
 
 	return (
-		<Drawer
-			open={ open }
-			design="simple"
-			exitOnEsc
-			position="right"
-			scrollLock
-			setOpen={ () => setOpen( ( prev ) => ! prev ) }
-			transitionDuration={ 0.2 }
-			className="z-[100000]"
-		>
-			<Drawer.Panel className="w-full md:w-4/5 lg:w-2/5">
-				<Drawer.Header className="flex flex-col gpa-2 z-10 bg-white">
-					<div className="flex items-center justify-between">
-						{ isLoading ? (
-							<>
-								<SkeletonLoader height="1rem" width="30%" />
-								<div className="flex items-center gap-3">
-									<SkeletonLoader
-										height="2rem"
-										width="5rem"
-									/>
-									<Drawer.CloseButton as="span" />
-								</div>
-							</>
-						) : (
-							<>
-								<Drawer.Title className="text-lg text-gray-900 z-10">
-									{ truncateText(
-										formState?.template_name
-											? formState.template_name
-											: 'New WhatsApp Template'
-									) }
-								</Drawer.Title>
-								<div className="flex items-center gap-3">
-									<Button
-										className="whitespace-nowrap hidden xs:flex"
-										icon={
-											<CheckIcon
-												className="h-4 w-4"
-												aria-label="icon"
-												role="img"
-											/>
-										}
-										iconPosition="left"
-										size="sm"
-										tag="button"
-										type="button"
-										variant="primary"
-										onClick={ handleSubmit }
-										disabled={ isSubmitting }
-									>
-										{ isSubmitting
-											? 'Saving...'
-											: 'Save Changes' }
-									</Button>
-									<Drawer.CloseButton as="span" />
-								</div>
-							</>
-						) }
-					</div>
-					<Button
-						className="xs:hidden"
-						icon={
-							<CheckIcon
-								className="h-4 w-4"
-								aria-label="icon"
-								role="img"
-							/>
-						}
-						iconPosition="left"
-						size="sm"
-						tag="button"
-						type="button"
-						variant="primary"
-						onClick={ handleSubmit }
-						disabled={ isSubmitting }
-					>
-						{ isSubmitting ? 'Saving...' : 'Save Changes' }
-					</Button>
-				</Drawer.Header>
-				<Drawer.Body className="overflow-x-hidden">
-					{ isLoading ? (
-						<div className="space-y-4">
-							<SkeletonLoader height="2rem" className="mb-6" />
-							<SkeletonLoader height="1.5rem" width="50%" />
-							<SkeletonLoader height="3rem" />
-							<SkeletonLoader height="1.5rem" width="70%" />
-							<SkeletonLoader height="8rem" />
-							<SkeletonLoader height="1.5rem" width="60%" />
-							<SkeletonLoader height="3rem" />
-							<SkeletonLoader height="1.5rem" width="40%" />
-							<SkeletonLoader height="3rem" />
-						</div>
-					) : (
-						<>
-							{ errors.submit && (
-								<div className="mb-4 rounded-md bg-red-50 p-4">
-									<div className="flex">
-										<div className="ml-3">
-											<h3 className="text-sm font-medium text-red-800">
-												{ errors.submit }
-											</h3>
-										</div>
-									</div>
-								</div>
-							) }
-							<WhatsappTemplatesDrawerBody
-								formState={ formState }
-								handleChange={ handleChange }
-								errors={ errors }
-								isLoading={ isSubmitting }
-							/>
-						</>
-					) }
-				</Drawer.Body>
-			</Drawer.Panel>
-			<Drawer.Backdrop />
-		</Drawer>
+		<>
+			<TemplateDrawerHeader
+				title={
+					formState?.template_name
+						? formState.template_name
+						: __( 'New WhatsApp Template', 'woo-cart-abandonment-recovery' )
+				}
+				isSubmitting={ isSubmitting }
+				onSave={ handleSubmit }
+			/>
+			<Drawer.Body className="overflow-x-hidden">
+				<WhatsappTemplatesDrawerBody
+					formState={ formState }
+					handleChange={ handleChange }
+					errors={ errors }
+				/>
+			</Drawer.Body>
+		</>
 	);
 };
 
-export default WhatsappTemplatesDrawer;
+const WhatsappTemplatesDrawer = ( { open, setOpen, template, onSave } ) => (
+	<TemplateDrawerShell open={ open } setOpen={ setOpen }>
+		<WhatsappTemplateForm
+			key={ template?.id ?? 'new' }
+			template={ template }
+			onSave={ onSave }
+		/>
+	</TemplateDrawerShell>
+);
 
+export default WhatsappTemplatesDrawer;

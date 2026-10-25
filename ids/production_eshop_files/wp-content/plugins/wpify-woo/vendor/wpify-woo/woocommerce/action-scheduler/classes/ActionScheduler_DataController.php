@@ -137,10 +137,10 @@ class ActionScheduler_DataController
     {
         if (0 < self::$sleep_time) {
             /* translators: %d: amount of time */
-            \WP_CLI::warning(\sprintf(\_n('Stopped the insanity for %d second', 'Stopped the insanity for %d seconds', self::$sleep_time, 'action-scheduler'), self::$sleep_time));
+            \WpifyWooDeps\WP_CLI::warning(\sprintf(\_n('Stopped the insanity for %d second', 'Stopped the insanity for %d seconds', self::$sleep_time, 'action-scheduler'), self::$sleep_time));
             \sleep(self::$sleep_time);
         }
-        \WP_CLI::warning(\__('Attempting to reduce used memory...', 'action-scheduler'));
+        \WpifyWooDeps\WP_CLI::warning(\__('Attempting to reduce used memory...', 'action-scheduler'));
         /**
          * Globals.
          *

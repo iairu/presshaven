@@ -3,6 +3,8 @@
  * A class of utilities for dealing with orders.
  */
 
+declare( strict_types=1 );
+
 namespace Automattic\WooCommerce\Utilities;
 
 use Automattic\WooCommerce\Caches\OrderCacheController;
@@ -63,6 +65,21 @@ final class OrderUtil {
 	 */
 	public static function is_custom_order_tables_in_sync(): bool {
 		return wc_get_container()->get( COTMigrationUtil::class )->is_custom_order_tables_in_sync();
+	}
+
+	/**
+	 * Checks whether the real-time data sync between the posts and orders tables is enabled.
+	 *
+	 * Unlike is_custom_order_tables_in_sync(), this only reflects whether the sync setting is enabled (a cheap
+	 * option read) and does not run a query to check whether the tables are currently fully synchronized. Use
+	 * this when you only need to know if sync is turned on, not whether every order is currently in sync.
+	 *
+	 * @since 11.0.0
+	 *
+	 * @return bool True if data sync is enabled, false otherwise.
+	 */
+	public static function custom_orders_table_data_sync_is_enabled(): bool {
+		return wc_get_container()->get( COTMigrationUtil::class )->custom_orders_table_data_sync_is_enabled();
 	}
 
 	/**
@@ -214,18 +231,16 @@ final class OrderUtil {
 
 		if ( null === $count_per_status ) {
 			if ( self::custom_orders_table_usage_is_enabled() ) {
-				// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared
-				$results = $wpdb->get_results(
+				$orders_table = self::get_table_for_orders();
+				$results      = $wpdb->get_results(
 					$wpdb->prepare(
-						'SELECT `status`, COUNT(*) AS `count` FROM ' . self::get_table_for_orders() . ' WHERE `type` = %s GROUP BY `status`',
+						// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- trusted table name.
+						"SELECT status, COUNT(*) AS count FROM {$orders_table} WHERE type = %s GROUP BY status",
 						$order_type
 					),
 					ARRAY_A
 				);
-				// phpcs:enable
-
 				$count_per_status = array_map( 'absint', array_column( $results, 'count', 'status' ) );
-
 			} else {
 				$count_per_status = (array) wp_count_posts( $order_type );
 			}
@@ -270,5 +285,15 @@ final class OrderUtil {
 			return 'no' === $uses_old_full_refund_data;
 		}
 		return version_compare( $db_version, '10.2.0', '>=' ) && 'no' === $uses_old_full_refund_data;
+	}
+
+	/**
+	 * Checks if the data store currently in use for orders is unknown (none of the ones managed by WooCommerce core).
+	 *
+	 * @return bool True if the data store currently in use for orders is neither the HPOS one nor the CPT one.
+	 */
+	public static function unknown_orders_data_store_in_use(): bool {
+		return ! self::custom_orders_table_usage_is_enabled() &&
+			( \WC_Order_Data_Store_CPT::class !== \WC_Data_Store::load( 'order' )->get_current_class_name() );
 	}
 }

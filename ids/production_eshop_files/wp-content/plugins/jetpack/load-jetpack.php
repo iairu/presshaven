@@ -56,11 +56,31 @@ Jetpack_XMLRPC_Methods::init();
 require_once JETPACK__PLUGIN_DIR . 'class-jetpack-connection-status.php';
 Jetpack_Connection_Status::init();
 
-require_once JETPACK__PLUGIN_DIR . '_inc/lib/class-jetpack-recommendations.php';
+require_once JETPACK__PLUGIN_DIR . '_inc/lib/class-jetpack-application-password-extras.php';
+Jetpack_Application_Password_Extras::init();
+
+// Also required directly by the AI extension files because on WordPress.com
+// Simple this bootstrap never runs. The class self-initializes when loaded.
+require_once JETPACK__PLUGIN_DIR . '_inc/lib/class-jetpack-ai-settings.php';
+require_once JETPACK__PLUGIN_DIR . '_inc/lib/class-jetpack-ai-feature-flags.php';
+require_once JETPACK__PLUGIN_DIR . '_inc/lib/class-jetpack-settings-feature-flags.php';
+
+\Automattic\Jetpack\Newsletter\Settings::register_feature_flags();
 
 if ( is_admin() ) {
 	require_once JETPACK__PLUGIN_DIR . 'class.jetpack-admin.php';
 	require_once JETPACK__PLUGIN_DIR . '_inc/lib/debugger.php';
+
+	// Initialize Newsletter Settings (always-loaded so the settings page URL works even when module is inactive).
+	\Automattic\Jetpack\Newsletter\Settings::init();
+
+	\Automattic\Jetpack\Newsletter\Writing_Prompt_Widget::init();
+
+	// Settings > Sharing owns its own screen, so it exists whichever modules are active.
+	\Automattic\Jetpack\Sharing_Likes\Settings\Settings_Page::init();
+	\Automattic\Jetpack\Sharing_Likes\Settings\Post_Handler::init();
+
+	\Automattic\Jetpack\Plugin\Jetpack_Script_Data::configure();
 }
 
 // Play nice with https://wp-cli.org/.
@@ -70,8 +90,13 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 require_once JETPACK__PLUGIN_DIR . '_inc/lib/class.core-rest-api-endpoints.php';
 require_once JETPACK__PLUGIN_DIR . '_inc/blogging-prompts.php';
+if ( is_admin() ) {
+	require_once JETPACK__PLUGIN_DIR . '_inc/content-guidelines-ai.php';
+}
 
-add_action( 'updating_jetpack_version', array( 'Jetpack', 'do_version_bump' ), 10, 2 );
+add_action( 'updating_jetpack_version', array( 'Jetpack', 'activate_subscriptions_module_for_existing_sites' ), 10, 2 );
+add_action( 'updating_jetpack_version', array( 'Jetpack', 'cleanup_seo_module_state_options' ) );
+add_action( 'updating_jetpack_version', array( 'Jetpack', 'seed_seo_visibility_cohort' ), 10, 2 );
 add_filter( 'is_jetpack_site', '__return_true' );
 
 require_once JETPACK__PLUGIN_DIR . '3rd-party/3rd-party.php';

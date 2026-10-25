@@ -93,6 +93,17 @@ class API {
       [$this, 'setupAjax']
     );
 
+    // fresh-token endpoint for cached pages (e.g. edge-cached signup forms);
+    // intentionally separate from setupAjax() to break the chicken-and-egg of needing a token to fetch a token
+    WPFunctions::get()->addAction(
+      'wp_ajax_mailpoet_token',
+      [$this, 'getToken']
+    );
+    WPFunctions::get()->addAction(
+      'wp_ajax_nopriv_mailpoet_token',
+      [$this, 'getToken']
+    );
+
     // nonce refreshing via heartbeats
     WPFunctions::get()->addAction(
       'wp_refresh_nonces',
@@ -194,7 +205,13 @@ class API {
       }
 
       $endpoint = $this->container->get($this->requestEndpointClass);
-      if (!method_exists($endpoint, $this->requestMethod)) {
+      if (!$endpoint instanceof Endpoint) {
+        throw new \Exception(__('Invalid API endpoint.', 'mailpoet'));
+      }
+      if (
+        !method_exists($endpoint, $this->requestMethod)
+        || !$this->isDispatchableEndpointMethod($endpoint, $this->requestMethod)
+      ) {
         throw new \Exception(__('Invalid API endpoint method.', 'mailpoet'));
       }
 
@@ -219,6 +236,9 @@ class API {
         return $errorResponse;
       }
       $response = $endpoint->{$this->requestMethod}($this->requestData);
+      if (!$response instanceof Response) {
+        throw new \Exception(__('Invalid API endpoint method.', 'mailpoet'));
+      }
       return $response;
     } catch (Exception $e) {
       $this->logError($e);
@@ -232,6 +252,28 @@ class API {
       $errorResponse = $this->createErrorResponse(Error::BAD_REQUEST, $errorMessage, Response::STATUS_BAD_REQUEST);
       return $errorResponse;
     }
+  }
+
+  /**
+   * The response-builder helpers on the Endpoint base class are framework plumbing,
+   * blocked by name so that a subclass override cannot re-expose them. Non-public
+   * methods are never dispatchable.
+   */
+  private function isDispatchableEndpointMethod(Endpoint $endpoint, string $requestMethod): bool {
+    // Magic methods (__construct, __call, __get, __invoke, ...) are never actions.
+    if (strpos($requestMethod, '__') === 0) {
+      return false;
+    }
+    if (method_exists(Endpoint::class, $requestMethod)) {
+      return false;
+    }
+    $method = new \ReflectionMethod($endpoint, $requestMethod);
+    // PHP resolves method names case-insensitively; require the exact declared casing
+    // so that every name-keyed lookup downstream matches the method that runs.
+    if ($method->getName() !== $requestMethod) {
+      return false;
+    }
+    return $method->isPublic();
   }
 
   public function validatePermissions($requestMethod, $permissions) {
@@ -250,6 +292,21 @@ class API {
       esc_js($this->wp->wpCreateNonce('mailpoet_token')),
       esc_js(self::CURRENT_VERSION)
     );
+  }
+
+  public function getToken() {
+    // Bypass intermediate caches so the token is always fresh; the embedded form
+    // token in HTML can be served stale by edge caches and expire by submit time.
+    if (!headers_sent()) {
+      header('Cache-Control: no-store, max-age=0');
+      header('Content-Type: application/json; charset=UTF-8');
+    }
+
+    echo wp_json_encode([
+      'token' => $this->wp->wpCreateNonce('mailpoet_token'),
+      'api_version' => self::CURRENT_VERSION,
+    ]);
+    $this->wp->wpDie();
   }
 
   public function addTokenToHeartbeatResponse($response) {
@@ -300,7 +357,9 @@ class API {
   private function logError(Throwable $e): void {
     // logging to the php log
     if (function_exists('error_log')) {
+      // phpcs:disable QITStandard.PHP.DebugCode.DebugFunctionFound
       error_log((string)$e); // phpcs:ignore Squiz.PHP.DiscouragedFunctions
+      // phpcs:enable QITStandard.PHP.DebugCode.DebugFunctionFound
     }
     // logging to the MailPoet table
     $this->loggerFactory->getLogger(LoggerFactory::TOPIC_API)->warning($e->getMessage(), [

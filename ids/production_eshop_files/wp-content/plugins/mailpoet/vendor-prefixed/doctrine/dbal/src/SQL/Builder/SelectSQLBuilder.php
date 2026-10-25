@@ -5,5 +5,5 @@ use MailPoetVendor\Doctrine\DBAL\Exception;
 use MailPoetVendor\Doctrine\DBAL\Query\SelectQuery;
 interface SelectSQLBuilder
 {
- public function buildSQL(SelectQuery $query) : string;
+public function buildSQL(SelectQuery $query): string;
 }

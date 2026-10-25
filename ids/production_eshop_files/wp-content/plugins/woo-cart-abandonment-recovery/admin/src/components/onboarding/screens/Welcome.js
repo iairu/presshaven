@@ -1,7 +1,8 @@
-import { Button, Text } from '@bsf/force-ui';
 import { __ } from '@wordpress/i18n';
-import { Check } from 'lucide-react';
-import { useOnboardingNavigation } from '../hooks';
+import { CheckIcon } from '@heroicons/react/24/outline';
+
+import Header from '@Components/onboarding/Header';
+import NavigationButtons from '@Components/onboarding/NavigationButtons';
 
 const features = [
 	__(
@@ -23,56 +24,59 @@ const features = [
 	),
 ];
 
-const Welcome = () => {
-	const { navigateToNextRoute } = useOnboardingNavigation();
+const Welcome = () => (
+	<>
+		<Header
+			size="lg"
+			heading={ __(
+				'Welcome to Cart Abandonment Recovery',
+				'woo-cart-abandonment-recovery'
+			) }
+			badge={ __( '≈ 3 min setup', 'woo-cart-abandonment-recovery' ) }
+			subHeading={ __(
+				'Track abandoned carts in real time & recover lost revenue automatically.',
+				'woo-cart-abandonment-recovery'
+			) }
+		/>
 
-	return (
-		<div className="space-y-6">
-			<div className="space-y-1.5">
-				<Text as="h2" size={ 30 } weight={ 600 }>
-					{ __(
-						'Welcome to Cart Abandonment Recovery',
-						'woo-cart-abandonment-recovery'
-					) }
-				</Text>
-				<Text size={ 16 } weight={ 500 } color="secondary">
-					{ __(
-						'Track abandoned carts in real time & recover lost revenue automatically.',
-						'woo-cart-abandonment-recovery'
-					) }
-				</Text>
-			</div>
+		{ /* Muted is required — browsers block autoplay with sound. */ }
+		<div className="rounded-lg overflow-hidden aspect-video">
 			<iframe
-				className="w-full aspect-video rounded-lg"
+				className="w-full h-full"
 				src="https://www.youtube.com/embed/EXz2joiA6Uc?autoplay=1&mute=1"
-				title="YouTube video player"
+				title={ __(
+					'Cart Abandonment Recovery walkthrough',
+					'woo-cart-abandonment-recovery'
+				) }
 				frameBorder="0"
 				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 				allowFullScreen
 			></iframe>
-			<ul>
-				{ features.map( ( feature, index ) => (
-					<li key={ index } className="flex items-center gap-1">
-						<Check
-							className="size-3 text-gray-600"
-							strokeWidth={ 1.5 }
-						/>
-						<Text size={ 16 } weight={ 500 } color="secondary">
-							{ feature }
-						</Text>
-					</li>
-				) ) }
-			</ul>
-
-			<Button className="mb-4" onClick={ navigateToNextRoute }>
-				{ __(
-					'Get Started with Onboarding',
-					'woo-cart-abandonment-recovery'
-				) }
-			</Button>
 		</div>
-	);
-};
+
+		<ul className="list-none pl-0 m-0 space-y-2.5">
+			{ features.map( ( feature ) => (
+				<li
+					key={ feature }
+					className="flex items-start gap-2 text-sm font-medium text-text-secondary"
+				>
+					<CheckIcon
+						className="size-4 text-icon-interactive shrink-0 mt-0.5"
+						aria-hidden="true"
+					/>
+					<span>{ feature }</span>
+				</li>
+			) ) }
+		</ul>
+
+		<NavigationButtons
+			nextFullWidth
+			nextLabel={ __(
+				'Set Up My Cart Recovery',
+				'woo-cart-abandonment-recovery'
+			) }
+		/>
+	</>
+);
 
 export default Welcome;
-

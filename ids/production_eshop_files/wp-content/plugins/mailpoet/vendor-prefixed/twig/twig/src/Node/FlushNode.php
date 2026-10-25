@@ -6,12 +6,12 @@ use MailPoetVendor\Twig\Compiler;
 #[YieldReady]
 class FlushNode extends Node
 {
- public function __construct(int $lineno, string $tag)
- {
- parent::__construct([], [], $lineno, $tag);
- }
- public function compile(Compiler $compiler) : void
- {
- $compiler->addDebugInfo($this)->write("flush();\n");
- }
+public function __construct(int $lineno, string $tag)
+{
+parent::__construct([], [], $lineno, $tag);
+}
+public function compile(Compiler $compiler): void
+{
+$compiler->addDebugInfo($this)->write("flush();\n");
+}
 }

@@ -1333,10 +1333,10 @@ $aggregators = apply_filters('woocs_announce_aggregator', $aggregators);
                     <hr />
 
                     <?php
-                    $rate_url = 'https://codecanyon.net/downloads#item-8085217';
-                    if ($WOOCS->notes_for_free) {
+                    //$rate_url = 'https://codecanyon.net/downloads#item-8085217';
+                    //if ($WOOCS->notes_for_free) {
                         $rate_url = 'https://wordpress.org/support/plugin/woocommerce-currency-switcher/reviews/#new-post';
-                    }
+                    //}
                     ?>
 
                     <b><?php printf(__("We work hard to make this plugin more effective tool for your e-shops, and ready to %s hear your review, suggestions and opinions %s, please share it with us!", 'woocommerce-currency-switcher'), '<a href="' . $rate_url . '" target="_blank" class="woocs-orange">', '</a>') ?></b>
@@ -1358,8 +1358,8 @@ $aggregators = apply_filters('woocs_announce_aggregator', $aggregators);
                     <h3><?php esc_html_e("More power for your shop", 'woocommerce-currency-switcher') ?></h3>
 
 
-                    <a href="https://pluginus.net/affiliate/woocommerce-products-filter" target="_blank"><img width="300" src="<?php echo WOOCS_LINK ?>img/woof_banner.png" /></a>&nbsp;
-                    <a href="https://pluginus.net/affiliate/woocommerce-bulk-editor" target="_blank"><img width="300" src="<?php echo WOOCS_LINK ?>img/woobe_banner.png" /></a>
+                    <a href="https://products-filter.com/downloads" target="_blank"><img width="300" src="<?php echo WOOCS_LINK ?>img/woof_banner.png" /></a>&nbsp;
+                    <a href="https://bulk-editor.com/downloads" target="_blank"><img width="300" src="<?php echo WOOCS_LINK ?>img/woobe_banner.png" /></a>
                     <a href="https://codecanyon.pluginus.net/item/woot-woocommerce-products-tables/27928580" target="_blank"><img width="300" src="<?php echo WOOCS_LINK ?>img/woot_banner.png" /></a>
 
 
@@ -1369,7 +1369,7 @@ $aggregators = apply_filters('woocs_announce_aggregator', $aggregators);
                         <div id="plugin_warning" style="display: none;">
                             <div class="plugin_warning_head"><strong class="woocs_settings_red" >IF YOU BOUGHT WOOCS ON CODECANYON - DO NOT READ AND IGNORE NEXT MESSAGE!<BR />ATTENTION MESSAGE FROM THE PLUGIN AUTHOR TO ALL USERS WHO USES PIRATE VERSION OF THE PLUGIN!</strong>!<br></div>
                             <br />
-                            GET YOUR COPY OF THE PLUGIN <em> <span class="woocs_settings_underline"><span class="woocs_settings_ff"><strong>ONLY</strong></span></span></em> FROM <a href="https://pluginus.net/affiliate/woocommerce-currency-switcher" target="_blank"><span class="woocs_settings_green"><strong>CODECANYON.NET</strong></span></a> OR <span class="woocs_settings_green"><strong><a href="https://wordpress.org/plugins/woocommerce-currency-switcher/" target="_blank">WORDPRESS.ORG</a></strong></span> IF YOU DO NOT WANT TO BE AN AFFILIATE OF ANY VIRUS SITE.<br>
+                            GET YOUR COPY OF THE PLUGIN <em> <span class="woocs_settings_underline"><span class="woocs_settings_ff"><strong>ONLY</strong></span></span></em> FROM <a href="https://currency-switcher.com/downloads" target="_blank"><span class="woocs_settings_green"><strong>CODECANYON.NET</strong></span></a> OR <span class="woocs_settings_green"><strong><a href="https://wordpress.org/plugins/woocommerce-currency-switcher/" target="_blank">WORDPRESS.ORG</a></strong></span> IF YOU DO NOT WANT TO BE AN AFFILIATE OF ANY VIRUS SITE.<br>
                             <br>
                             <strong>DID YOU CATCH A VIRUS DOWNLOADING THE PLUGIN FROM ANOTHER (PIRATE) SITES<span class="woocs_settings_ff">?</span></strong> THIS IS YOUR TROUBLES AND <em>DO NOT WRITE TO SUPPORT THAT GOOGLE DOWN YOUR SITE TO ZERO BECAUSE OF &nbsp;ANY VIRUS</em>!!<br>
                             <br>
@@ -1414,23 +1414,23 @@ $aggregators = apply_filters('woocs_announce_aggregator', $aggregators);
     <?php if ($WOOCS->notes_for_free): ?>
         <hr />
 
-        <div class="woocs-notice"><i><?php printf(__('In the free version of the plugin %s you can operate with 2 ANY currencies only%s! If you want to use more currencies %s you can make upgrade to the premium version%s of the plugin', 'woocommerce-currency-switcher'), '<b class="woocs_settings_red">', '</b>', '<a href="https://pluginus.net/affiliate/woocommerce-currency-switcher" target="_blank">', '</a>') ?></i></div><br />
+        <div class="woocs-notice"><i><?php printf(__('In the free version of the plugin %s you can operate with 2 ANY currencies only%s! If you want to use more currencies %s you can make upgrade to the premium version%s of the plugin', 'woocommerce-currency-switcher'), '<b class="woocs_settings_red">', '</b>', '<a href="https://currency-switcher.com/downloads" target="_blank">', '</a>') ?></i></div><br />
 
         <table class="woocs_settings_promotion" >
             <tr>
                 <td >
                     <h3 class="woocs_settings_red"><?php esc_html_e("UPGRADE to Full version", 'woocommerce-currency-switcher') ?>:</h3>
-                    <a href="https://pluginus.net/affiliate/woocommerce-currency-switcher" target="_blank"><img width="240" src="<?php echo WOOCS_LINK ?>img/woocs_banner.png" alt="<?php esc_html_e("full version of the plugin", 'woocommerce-currency-switcher'); ?>" /></a>
+                    <a href="https://currency-switcher.com/downloads" target="_blank"><img width="240" src="<?php echo WOOCS_LINK ?>img/woocs_banner.png" alt="<?php esc_html_e("full version of the plugin", 'woocommerce-currency-switcher'); ?>" /></a>
                 </td>
 
                 <td >
                     <h3><?php esc_html_e("WOOF - WooCommerce Products Filter", 'woocommerce-currency-switcher') ?>:</h3>
-                    <a href="https://pluginus.net/affiliate/woocommerce-products-filter" target="_blank"><img width="240" src="<?php echo WOOCS_LINK ?>img/woof_banner.png" alt="<?php esc_html_e("WOOF - WooCommerce Products Filter", 'woocommerce-currency-switcher'); ?>" /></a>
+                    <a href="https://products-filter.com/downloads" target="_blank"><img width="240" src="<?php echo WOOCS_LINK ?>img/woof_banner.png" alt="<?php esc_html_e("WOOF - WooCommerce Products Filter", 'woocommerce-currency-switcher'); ?>" /></a>
                 </td>
 
                 <td >
                     <h3><?php esc_html_e("WOOBE - WooCommerce Bulk Editor Professional", 'woocommerce-currency-switcher') ?>:</h3>
-                    <a href="https://pluginus.net/affiliate/woocommerce-bulk-editor" target="_blank"><img src="<?php echo WOOCS_LINK ?>img/woobe_banner.png" width="240" alt="<?php esc_html_e("WOOBE - WooCommerce Bulk Editor Professional", 'woocommerce-currency-switcher'); ?>" /></a>
+                    <a href="https://bulk-editor.com/downloads" target="_blank"><img src="<?php echo WOOCS_LINK ?>img/woobe_banner.png" width="240" alt="<?php esc_html_e("WOOBE - WooCommerce Bulk Editor Professional", 'woocommerce-currency-switcher'); ?>" /></a>
                 </td>
 
                 <td >

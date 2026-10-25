@@ -57,11 +57,11 @@ class __TwigTemplate_1453f1606febf8a9b6e30a893bcc22827936ceb21531b5a8f8a196260a5
   ";
         // line 8
         yield "    var mailpoet_welcome_wizard_url = ";
-        yield json_encode(($context["welcome_wizard_url"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["welcome_wizard_url"] ?? null));
         yield ";
     var mailpoet_welcome_wizard_current_step = ";
         // line 9
-        yield json_encode(($context["welcome_wizard_current_step"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["welcome_wizard_current_step"] ?? null));
         yield ";
   ";
         // line 11

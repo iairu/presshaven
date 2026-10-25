@@ -9,7 +9,6 @@ use MailPoet\Config\AccessControl;
 use MailPoet\Cron\Workers\StatsNotifications\NewsletterLinkRepository;
 use MailPoet\Entities\SendingQueueEntity;
 use MailPoet\Newsletter\Links\Links;
-use MailPoet\Newsletter\NewslettersRepository;
 use MailPoet\Newsletter\Sending\SendingQueuesRepository;
 use MailPoet\Statistics\Track\Clicks;
 use MailPoet\Statistics\Track\Opens;
@@ -44,9 +43,6 @@ class Track {
   /** @var SubscribersRepository */
   private $subscribersRepository;
 
-  /** @var NewslettersRepository */
-  private $newslettersRepository;
-
   /** @var NewsletterLinkRepository */
   private $newsletterLinkRepository;
 
@@ -58,7 +54,6 @@ class Track {
     Opens $opens,
     SendingQueuesRepository $sendingQueuesRepository,
     SubscribersRepository $subscribersRepository,
-    NewslettersRepository $newslettersRepository,
     NewsletterLinkRepository $newsletterLinkRepository,
     LinkTokens $linkTokens,
     Links $links
@@ -68,7 +63,6 @@ class Track {
     $this->linkTokens = $linkTokens;
     $this->sendingQueuesRepository = $sendingQueuesRepository;
     $this->subscribersRepository = $subscribersRepository;
-    $this->newslettersRepository = $newslettersRepository;
     $this->newsletterLinkRepository = $newsletterLinkRepository;
     $this->links = $links;
   }
@@ -92,17 +86,15 @@ class Track {
     }
     $data->queue = $this->sendingQueuesRepository->findOneById($data->queue_id);// phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
     $data->subscriber = $this->subscribersRepository->findOneById($data->subscriber_id); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-    $data->newsletter = (isset($data->newsletter_id)) ? $this->newslettersRepository->findOneById($data->newsletter_id) : null; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-    if (!$data->newsletter && ($data->queue instanceof SendingQueueEntity)) {
-      $data->newsletter = $data->queue->getNewsletter();
-    }
+    $data->newsletter = ($data->queue instanceof SendingQueueEntity) ? $data->queue->getNewsletter() : null;
+    $data->link = null;
     if (!empty($data->link_hash)) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
       $data->link = $this->newsletterLinkRepository->findOneBy([
         'hash' => $data->link_hash, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         'queue' => $data->queue_id, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
       ]);
     }
-    $data->userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : null;
+    $data->userAgent = isset($_SERVER['HTTP_USER_AGENT']) && is_string($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : null;
     return $this->_validateTrackData($data);
   }
 

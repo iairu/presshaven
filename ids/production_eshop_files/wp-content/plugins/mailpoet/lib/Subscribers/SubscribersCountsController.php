@@ -72,10 +72,24 @@ class SubscribersCountsController {
     if (!$result) {
       $segment = $this->segmentsRepository->findOneById($segmentId);
       if (!$segment) {
-        throw new InvalidStateException();
+        throw new InvalidStateException("Segment with ID $segmentId not found");
       }
       $result = $this->recalculateSegmentStatisticsCache($segment);
     }
+    return $result;
+  }
+
+  public function getGlobalStatusStatisticsCount(): array {
+    $result = $this->getCacheItem(TransientCache::SUBSCRIBERS_GLOBAL_STATISTICS_COUNT_KEY, 0)['item'] ?? null;
+    if (!$result) {
+      $result = $this->recalculateGlobalStatusStatisticsCache();
+    }
+    return $result;
+  }
+
+  public function recalculateGlobalStatusStatisticsCache(): array {
+    $result = $this->subscribersRepository->getStatusStatisticsCount();
+    $this->setCacheItem(TransientCache::SUBSCRIBERS_GLOBAL_STATISTICS_COUNT_KEY, $result, 0);
     return $result;
   }
 
@@ -125,6 +139,12 @@ class SubscribersCountsController {
       return (int)$segment->getId();
     }, $segments);
     foreach ($this->transientCache->getItems(TransientCache::SUBSCRIBERS_STATISTICS_COUNT_KEY) as $id => $item) {
+      // id 0 is the "subscribers without a list" entry, not an orphaned segment —
+      // keep it, otherwise every cache warm deletes it right after building it and
+      // the (expensive) count is recomputed live on the next page load.
+      if ($id === 0) {
+        continue;
+      }
       if (!in_array($id, $segmentIds)) {
         $this->transientCache->invalidateItem(TransientCache::SUBSCRIBERS_STATISTICS_COUNT_KEY, $id);
       }

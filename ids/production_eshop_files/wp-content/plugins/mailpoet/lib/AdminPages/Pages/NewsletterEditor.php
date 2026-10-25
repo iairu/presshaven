@@ -7,15 +7,17 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\AdminPages\AssetsController;
 use MailPoet\AdminPages\PageRenderer;
+use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Form\Util\CustomFonts;
+use MailPoet\Newsletter\NewslettersRepository;
 use MailPoet\Newsletter\Renderer\Blocks\Coupon;
 use MailPoet\Newsletter\Shortcodes\ShortcodesHelper;
 use MailPoet\NewsletterTemplates\BrandStyles;
 use MailPoet\Settings\SettingsController;
 use MailPoet\Settings\UserFlagsController;
-use MailPoet\Subscribers\ConfirmationEmailCustomizer;
 use MailPoet\Subscribers\SubscribersRepository;
+use MailPoet\Subscribers\TrackingConsentController;
 use MailPoet\WooCommerce\Helper as WooCommerceHelper;
 use MailPoet\WooCommerce\TransactionalEmailHooks;
 use MailPoet\WooCommerce\TransactionalEmails;
@@ -40,6 +42,8 @@ class NewsletterEditor {
   private AssetsController $assetsController;
   private BrandStyles $brandStyles;
   private WooTransactionalEmailTemplate $template;
+  private NewslettersRepository $newslettersRepository;
+  private TrackingConsentController $trackingConsentController;
 
   public function __construct(
     PageRenderer $pageRenderer,
@@ -55,7 +59,9 @@ class NewsletterEditor {
     CustomFonts $customFonts,
     AssetsController $assetsController,
     WooTransactionalEmailTemplate $template,
-    BrandStyles $brandStyles
+    BrandStyles $brandStyles,
+    NewslettersRepository $newslettersRepository,
+    TrackingConsentController $trackingConsentController
   ) {
     $this->pageRenderer = $pageRenderer;
     $this->settings = $settings;
@@ -71,12 +77,14 @@ class NewsletterEditor {
     $this->assetsController = $assetsController;
     $this->template = $template;
     $this->brandStyles = $brandStyles;
+    $this->newslettersRepository = $newslettersRepository;
+    $this->trackingConsentController = $trackingConsentController;
   }
 
   public function render() {
     $this->setupImageSize();
     $this->assetsController->setupNewsletterEditorDependencies();
-    $newsletterId = (isset($_GET['id']) ? (int)$_GET['id'] : 0);
+    $newsletterId = isset($_GET['id']) && is_numeric($_GET['id']) ? (int)$_GET['id'] : 0;
     $woocommerceTemplateId = (int)$this->settings->get(TransactionalEmails::SETTING_EMAIL_ID, null);
     if (
       $woocommerceTemplateId
@@ -128,7 +136,9 @@ class NewsletterEditor {
       $woocommerceData = array_merge($wcEmailSettings, $woocommerceData);
     }
 
-    $confirmationEmailTemplateId = (int)$this->settings->get(ConfirmationEmailCustomizer::SETTING_EMAIL_ID, null);
+    // Check if newsletter is a confirmation email type (includes per-list confirmation emails)
+    $newsletter = $newsletterId ? $this->newslettersRepository->findOneById($newsletterId) : null;
+    $isConfirmationEmailType = $newsletter && $newsletter->getType() === NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER;
 
     $data = [
       'customFontsEnabled' => $this->customFonts->displayCustomFonts(),
@@ -138,13 +148,18 @@ class NewsletterEditor {
       'current_wp_user' => array_merge($subscriberData, $this->wp->wpGetCurrentUser()->to_array()),
       'woocommerce' => $woocommerceData,
       'is_wc_transactional_email' => $newsletterId === $woocommerceTemplateId,
-      'is_confirmation_email_template' => $newsletterId === $confirmationEmailTemplateId,
+      'is_confirmation_email_type' => $isConfirmationEmailType,
+      'is_tracking_consent_ask_all' => $this->trackingConsentController->getSubscriberChoice() === TrackingConsentController::CHOICE_ASK_ALL,
       'is_confirmation_email_customizer_enabled' => (bool)$this->settings->get('signup_confirmation.use_mailpoet_editor', false),
       'original_template_body' => $originalTemplateBody,
       'product_categories' => $this->wpPostListLoader->getWooCommerceCategories(),
       'products' => $this->wpPostListLoader->getProducts(),
       'brand_styles' => [
         'available' => $this->brandStyles->isAvailable(),
+      ],
+      'api' => [
+        'root' => rtrim($this->wp->escUrlRaw($this->wp->restUrl()), '/'),
+        'nonce' => $this->wp->wpCreateNonce('wp_rest'),
       ],
     ];
     $this->wp->wpEnqueueMedia();

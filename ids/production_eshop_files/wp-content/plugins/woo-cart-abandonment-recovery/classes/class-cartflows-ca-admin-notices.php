@@ -27,7 +27,8 @@ class Cartflows_Ca_Admin_Notices {
 	 */
 	public function __construct() {
 
-		add_action( 'admin_init', [ $this, 'show_admin_notices' ] );
+		// Must run after `set_current_screen()`, which core calls *after* `admin_init`.
+		add_action( 'admin_head', [ $this, 'show_admin_notices' ] );
 		add_action( 'admin_footer', array( $this, 'show_nps_notice' ), 999 );
 
 		add_action( 'admin_notices', [ $this, 'show_weekly_report_email_settings_notice' ] );
@@ -57,7 +58,12 @@ class Cartflows_Ca_Admin_Notices {
 	 */
 	public function show_admin_notices(): void {
 
-		if ( ! $this->allowed_screen_for_notices() ) {
+		if ( ! $this->allowed_screen_for_notices() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// Return if no notice class found.
+		if ( ! class_exists( 'Astra_Notices' ) ) {
 			return;
 		}
 
@@ -70,32 +76,35 @@ class Cartflows_Ca_Admin_Notices {
 				'type'                 => 'info',
 				'class'                => 'cartflows-ca-5-star',
 				'show_if'              => true,
-				/* translators: %1$s white label plugin name and %2$s deactivation link */
+				/* translators: %1$s logo image, %2$s heading text, %3$s description text, %4$s review link, %5$s review button text, %6$s repeat notice after, %7$s maybe later text, %8$s already did text */
 				'message'              => sprintf(
-					'<div class="notice-image" style="display: flex;">
-                        <img src="%1$s" class="custom-logo" alt="CartFlows Icon" itemprop="logo" style="max-width: 90px;"></div>
+					'<div class="notice-image">
+                        <img src="%1$s" class="custom-logo" alt="Cart Abandonment Recovery for WooCommerce Icon" itemprop="logo"></div>
                         <div class="notice-content">
                             <div class="notice-heading">
                                 %2$s
                             </div>
-                            %3$s<br />
+                            <div class="notice-description">
+                                %3$s
+                            </div>
                             <div class="astra-review-notice-container">
                                 <a href="%4$s" class="astra-notice-close astra-review-notice button-primary" target="_blank">
-                                %5$s
+                                    <span class="dashicons dashicons-yes"></span>
+                                    %5$s
                                 </a>
-                            <span class="dashicons dashicons-calendar"></span>
                                 <a href="#" data-repeat-notice-after="%6$s" class="astra-notice-close astra-review-notice">
-                                %7$s
+                                    <span class="dashicons dashicons-calendar"></span>
+                                    %7$s
                                 </a>
-                            <span class="dashicons dashicons-smiley"></span>
                                 <a href="#" class="astra-notice-close astra-review-notice">
-                                %8$s
+                                    <span class="dashicons dashicons-smiley"></span>
+                                    %8$s
                                 </a>
                             </div>
                         </div>',
 					$image_path,
-					__( 'Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts. &mdash; Thanks a ton!', 'woo-cart-abandonment-recovery' ),
-					__( 'Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the CartFlows cart abandonment plugin.', 'woo-cart-abandonment-recovery' ),
+					__( 'Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts &mdash; Thanks a ton!', 'woo-cart-abandonment-recovery' ),
+					__( 'Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the Cart Abandonment Recovery for WooCommerce!', 'woo-cart-abandonment-recovery' ),
 					$review_url,
 					__( 'Ok, you deserve it', 'woo-cart-abandonment-recovery' ),
 					MONTH_IN_SECONDS,
@@ -103,7 +112,7 @@ class Cartflows_Ca_Admin_Notices {
 					__( 'I already did', 'woo-cart-abandonment-recovery' )
 				),
 				'repeat-notice-after'  => MONTH_IN_SECONDS,
-				'display-notice-after' => 3 * WEEK_IN_SECONDS, // Display notice after 2 weeks.
+				'display-notice-after' => ( 2 * WEEK_IN_SECONDS ), // Display notice after 2 weeks.
 			]
 		);
 	}

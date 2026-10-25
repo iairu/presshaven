@@ -190,3 +190,33 @@ $omega_storefront_custom_css = "";
 				}
 			";
 		}
+
+		/*-------------------- Menu Color CSS -------------------*/
+
+		$omega_storefront_header_menus_color = get_theme_mod('omega_storefront_header_menus_color');
+		if($omega_storefront_header_menus_color != false){
+			$omega_storefront_custom_css .='.site-navigation .primary-menu a{';
+				$omega_storefront_custom_css .='color: '.esc_attr($omega_storefront_header_menus_color).'!important;';
+			$omega_storefront_custom_css .='}';
+		}
+
+		$omega_storefront_header_menus_hover_color = get_theme_mod('omega_storefront_header_menus_hover_color');
+		if($omega_storefront_header_menus_hover_color != false){
+			$omega_storefront_custom_css .='.site-navigation .primary-menu a:hover{';
+				$omega_storefront_custom_css .='color: '.esc_attr($omega_storefront_header_menus_hover_color).'!important;';
+			$omega_storefront_custom_css .='}';
+		}
+
+		$omega_storefront_header_submenus_color = get_theme_mod('omega_storefront_header_submenus_color');
+		if($omega_storefront_header_submenus_color != false){
+			$omega_storefront_custom_css .='.site-navigation .primary-menu ul.sub-menu li a,.site-navigation .primary-menu li ul li a{';
+				$omega_storefront_custom_css .='color: '.esc_attr($omega_storefront_header_submenus_color).'!important;';
+			$omega_storefront_custom_css .='}';
+		}
+
+		$omega_storefront_header_submenus_hover_color = get_theme_mod('omega_storefront_header_submenus_hover_color');
+		if($omega_storefront_header_submenus_hover_color != false){
+			$omega_storefront_custom_css .='.site-navigation .primary-menu > li ul.sub-menu a:hover,.site-navigation .primary-menu li ul li a:hover{';
+				$omega_storefront_custom_css .='color: '.esc_attr($omega_storefront_header_submenus_hover_color).'!important;';
+			$omega_storefront_custom_css .='}';
+		}

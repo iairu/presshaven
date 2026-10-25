@@ -1,35 +1,39 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Comment;
 if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Sabberworm\CSS\OutputFormat;
+use MailPoetVendor\Sabberworm\CSS\Position\Position;
+use MailPoetVendor\Sabberworm\CSS\Position\Positionable;
 use MailPoetVendor\Sabberworm\CSS\Renderable;
-class Comment implements Renderable
+use MailPoetVendor\Sabberworm\CSS\ShortClassNameProvider;
+class Comment implements Positionable, Renderable
 {
- protected $iLineNo;
- protected $sComment;
- public function __construct($sComment = '', $iLineNo = 0)
- {
- $this->sComment = $sComment;
- $this->iLineNo = $iLineNo;
- }
- public function getComment()
- {
- return $this->sComment;
- }
- public function getLineNo()
- {
- return $this->iLineNo;
- }
- public function setComment($sComment)
- {
- $this->sComment = $sComment;
- }
- public function __toString()
- {
- return $this->render(new OutputFormat());
- }
- public function render(OutputFormat $oOutputFormat)
- {
- return '/*' . $this->sComment . '*/';
- }
+use Position;
+use ShortClassNameProvider;
+protected $commentText;
+public function __construct(string $commentText = '', ?int $lineNumber = null)
+{
+$this->commentText = $commentText;
+$this->setPosition($lineNumber);
+}
+public function getComment(): string
+{
+return $this->commentText;
+}
+public function setComment(string $commentText): void
+{
+$this->commentText = $commentText;
+}
+public function render(OutputFormat $outputFormat): string
+{
+return '/*' . $this->commentText . '*/';
+}
+public function getArrayRepresentation(): array
+{
+return [
+'class' => $this->getShortClassName(),
+'contents' => $this->commentText,
+];
+}
 }

@@ -3,6 +3,7 @@ import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import { Input } from '@bsf/force-ui';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const TextField = ( {
@@ -11,6 +12,7 @@ const TextField = ( {
 	name,
 	value,
 	badge,
+	placeholder,
 	handleChange,
 	autoSave = true,
 	error,
@@ -61,10 +63,13 @@ const TextField = ( {
 		}
 	}
 
+	const a11y = useFieldA11y( { description, error } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
@@ -74,18 +79,18 @@ const TextField = ( {
 					className={ `${
 						badge ? 'w-24 ' : 'w-full'
 					} focus:[&>input]:ring-focus ${
-						error ? 'border-red-500' : ''
+						error ? 'border-support-error' : ''
 					}` }
+					{ ...a11y.controlProps }
 					type="text"
 					size="md"
+					placeholder={ placeholder }
 					name={ name }
 					value={ textValue }
 					onChange={ handleOnChange }
 					disabled={ isPro && isFeatureBlocked }
 				/>
-				{ error && (
-					<p className="text-red-500 text-sm mt-1">{ error }</p>
-				) }
+				<FieldError id={ a11y.errorId }>{ error }</FieldError>
 			</div>
 		</FieldWrapper>
 	);

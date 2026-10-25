@@ -40,6 +40,9 @@ class LoggerFactory {
   const TOPIC_PROVISIONING = 'provisioning';
   const TOPIC_SEGMENTS = 'segments';
   const TOPIC_EMAIL_EDITOR = 'email-editor';
+  const TOPIC_MIGRATIONS = 'migrations';
+  const TOPIC_PAGES = 'pages';
+  const TOPIC_CAPTCHA = 'captcha';
 
   /** @var LoggerFactory */
   private static $instance;

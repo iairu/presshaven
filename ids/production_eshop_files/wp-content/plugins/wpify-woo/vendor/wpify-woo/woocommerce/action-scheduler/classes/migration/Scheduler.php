@@ -78,7 +78,7 @@ class Scheduler
             return $next;
         }
         if (empty($when)) {
-            $when = time() + MINUTE_IN_SECONDS;
+            $when = time() + \MINUTE_IN_SECONDS;
         }
         return as_schedule_single_action($when, self::HOOK, array(), self::GROUP);
     }

@@ -19,6 +19,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Singleton pattern used.
  * Prevent application from having multiple instances of configuration.
  * At the same time allow distributed use of configurations.
+ *
+ * @phpstan-consistent-constructor
+ * @class   LocalFeedConfigs
+ * @version 1.6.0
  */
 class LocalFeedConfigs {
 
@@ -66,6 +70,7 @@ class LocalFeedConfigs {
 	 *
 	 * @since 1.0.10
 	 * @param array $locations Array of location to generate the feed files for.
+	 * @return void
 	 */
 	private function initialize_local_feeds_config( $locations ) {
 		$feed_ids = Pinterest_For_Woocommerce()::get_data( 'local_feed_ids' );
@@ -90,8 +95,11 @@ class LocalFeedConfigs {
 		// Store generated ids for each location.
 		Pinterest_For_Woocommerce()::save_data( 'local_feed_ids', $feed_ids );
 
-		$file_name_base = trailingslashit( wp_get_upload_dir()['basedir'] ) . PINTEREST_FOR_WOOCOMMERCE_LOG_PREFIX . '-';
-		$url_base       = trailingslashit( wp_get_upload_dir()['baseurl'] ) . PINTEREST_FOR_WOOCOMMERCE_LOG_PREFIX . '-';
+		$upload_dir     = wp_get_upload_dir();
+		$file_name_base = trailingslashit( $upload_dir['basedir'] ) . PINTEREST_FOR_WOOCOMMERCE_LOG_PREFIX . '-';
+		// Some sites may be misconfigured and return an HTTP scheme for the feed location URL. We force it to become HTTPS.
+		$upload_baseurl_https = set_url_scheme( $upload_dir['baseurl'], 'https' );
+		$url_base             = trailingslashit( $upload_baseurl_https ) . PINTEREST_FOR_WOOCOMMERCE_LOG_PREFIX . '-';
 		array_walk(
 			$feed_ids,
 			function ( &$id ) use ( $file_name_base, $url_base ) {
@@ -108,6 +116,8 @@ class LocalFeedConfigs {
 
 	/**
 	 * Cleanup local feed configs.
+	 *
+	 * @return void
 	 */
 	public static function deregister() {
 		Pinterest_For_Woocommerce()::save_data( 'local_feed_ids', false );

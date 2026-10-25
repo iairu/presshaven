@@ -5,7 +5,9 @@ namespace MailPoet\Settings;
 if (!defined('ABSPATH')) exit;
 
 
-use MailPoet\Cron\Workers\InactiveSubscribers;
+use MailPoet\Cron\CronWorkerScheduler;
+use MailPoet\Cron\Workers\InactiveSubscribersMaintenance;
+use MailPoet\Cron\Workers\UnconfirmedSubscribersCleanup;
 use MailPoet\Cron\Workers\WooCommerceSync;
 use MailPoet\Entities\ScheduledTaskEntity;
 use MailPoet\Mailer\Mailer;
@@ -28,16 +30,21 @@ class SettingsChangeHandler {
   /** @var SubscribersCountReporter */
   private $subscribersCountReporter;
 
+  /** @var CronWorkerScheduler */
+  private $cronWorkerScheduler;
+
   public function __construct(
     ScheduledTasksRepository $scheduledTasksRepository,
     SettingsController $settingsController,
     Bridge $bridge,
-    SubscribersCountReporter $subscribersCountReporter
+    SubscribersCountReporter $subscribersCountReporter,
+    CronWorkerScheduler $cronWorkerScheduler
   ) {
     $this->scheduledTasksRepository = $scheduledTasksRepository;
     $this->settingsController = $settingsController;
     $this->bridge = $bridge;
     $this->subscribersCountReporter = $subscribersCountReporter;
+    $this->cronWorkerScheduler = $cronWorkerScheduler;
   }
 
   public function onSubscribeOldWoocommerceCustomersChange(): void {
@@ -56,23 +63,40 @@ class SettingsChangeHandler {
   }
 
   public function onInactiveSubscribersIntervalChange(): void {
-    $task = $this->scheduledTasksRepository->findOneBy([
-      'type' => InactiveSubscribers::TASK_TYPE,
-      'status' => ScheduledTaskEntity::STATUS_SCHEDULED,
-      'deletedAt' => null,
-    ], ['createdAt' => 'DESC']);
-    if (!($task instanceof ScheduledTaskEntity)) {
-      $task = $this->createScheduledTask(InactiveSubscribers::TASK_TYPE);
+    // Start a clean pass from subscriber 0 with the new interval: remove any pending run
+    // (scheduled or in-progress) instead of resuming one that was partway through the old interval.
+    $pendingTasks = array_merge(
+      $this->scheduledTasksRepository->findBy([
+        'type' => InactiveSubscribersMaintenance::TASK_TYPE,
+        'status' => ScheduledTaskEntity::STATUS_SCHEDULED,
+        'deletedAt' => null,
+      ]),
+      $this->scheduledTasksRepository->findBy([
+        'type' => InactiveSubscribersMaintenance::TASK_TYPE,
+        'status' => null,
+        'deletedAt' => null,
+      ])
+    );
+    $pendingTaskIds = array_map(function(ScheduledTaskEntity $task): int {
+      return (int)$task->getId();
+    }, $pendingTasks);
+    if ($pendingTaskIds) {
+      $this->scheduledTasksRepository->deleteByIds($pendingTaskIds);
     }
-    $datetime = Carbon::now()->millisecond(0);
-    $task->setScheduledAt($datetime->subMinute());
+
+    $task = $this->createScheduledTask(InactiveSubscribersMaintenance::TASK_TYPE);
+    $task->setScheduledAt(Carbon::now()->millisecond(0)->subMinute());
     $this->scheduledTasksRepository->persist($task);
     $this->scheduledTasksRepository->flush();
   }
 
+  public function onUnconfirmedSubscribersCleanupEnable(): void {
+    $this->cronWorkerScheduler->scheduleImmediatelyIfNotRunning(UnconfirmedSubscribersCleanup::TASK_TYPE);
+  }
+
   public function onMSSActivate($newSettings) {
     // see mailpoet/assets/js/src/wizard/create_sender_settings.jsx:freeAddress
-    $httpHost = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : '';
+    $httpHost = isset($_SERVER['HTTP_HOST']) && is_string($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : '';
     $domain = str_replace('www.', '', $httpHost);
     if (
       isset($newSettings['sender']['address'])

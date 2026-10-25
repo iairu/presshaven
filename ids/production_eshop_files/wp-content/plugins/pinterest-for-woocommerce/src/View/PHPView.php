@@ -16,6 +16,9 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Class PHPView
+ *
+ * @class   PHPView
+ * @version 1.6.0
  */
 class PHPView implements View {
 
@@ -252,6 +255,7 @@ class PHPView implements View {
 	 * Sanitize context variable.
 	 *
 	 * @param mixed $var Variable to sanitize.
+	 * @return mixed
 	 */
 	protected function sanitize_context_variable( $var ) {
 		if ( is_array( $var ) ) {

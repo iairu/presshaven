@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { __ } from '@wordpress/i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Container, Sidebar, Menu, Label } from '@bsf/force-ui';
+import { Container, Sidebar, Menu } from '@bsf/force-ui';
 import { useStateValue } from '@Store';
 import {
 	Cog6ToothIcon,
@@ -14,6 +14,7 @@ import {
 	KeyIcon,
 	NoSymbolIcon,
 	BanknotesIcon,
+	WindowIcon,
 } from '@heroicons/react/24/outline';
 import TabWrapper from '@Components/common/TabWrapper';
 import RenderFields from '@Components/RenderFields';
@@ -32,6 +33,7 @@ const iconMap = {
 	'banner-settings': (
 		<BanknotesIcon className="h-6 w-6 text-gray-500" />
 	),
+	'popup-settings': <WindowIcon className="h-6 w-6 text-gray-500" />,
 	'gdpr-settings': (
 		<ChatBubbleBottomCenterIcon className="h-6 w-6 text-gray-500" />
 	),
@@ -58,16 +60,17 @@ const Settings = () => {
 		? {
 			title: __( 'My Account', 'woo-cart-abandonment-recovery' ),
 			slug: 'license-settings',
-			priority: -1, // Ensure it appears first
 			component: <LicenseSettings />,
 			// eslint-disable-next-line no-mixed-spaces-and-tabs
 		  }
 		: null;
 
 	const tabs = [
+		...Object.values( fieldSettings ).sort(
+			( a, b ) => a.priority - b.priority
+		),
 		...( licenseTab ? [ licenseTab ] : [] ),
-		...Object.values( fieldSettings ),
-	].sort( ( a, b ) => a.priority - b.priority );
+	];
 
 	const slugs = tabs.map( ( tab ) => tab.slug );
 	const active = slugs.includes( query.get( 'tab' ) )
@@ -96,7 +99,7 @@ const Settings = () => {
 				icon: iconMap[ tab.slug ] || (
 					<KeyIcon className="h-6 w-6 text-gray-500" />
 				),
-				component: tab.component,
+				render: () => tab.component,
 			};
 		}
 
@@ -107,7 +110,7 @@ const Settings = () => {
 			icon: iconMap[ tab.slug ] || (
 				<Cog6ToothIcon className="h-6 w-6 text-gray-500" />
 			),
-			component: (
+			render: () => (
 				<TabWrapper title={ tab.title }>
 					{ tab.fields &&
 						Object.keys( tab.fields ).map( ( field ) => {
@@ -147,6 +150,11 @@ const Settings = () => {
 										<Menu.Item
 											key={ item.slug }
 											active={ active === item.slug }
+											aria-current={
+												active === item.slug
+													? 'page'
+													: undefined
+											}
 											onClick={ () =>
 												navigateTo( item.slug )
 											}
@@ -157,88 +165,24 @@ const Settings = () => {
 											} hover:bg-flamingo-50` }
 										>
 											{ item.icon }
-											<span className="lg:block hidden text-gray-900">
+											<span className="sr-only lg:not-sr-only text-gray-900">
 												{ item.name }
 											</span>
 										</Menu.Item>
 									) ) }
 								</Menu.List>
 							</Menu>
-							<Container
-								containerType="flex"
-								direction="column"
-								gap="xs"
-								className="lg:p-4 mt-7 lg:border lg:border-solid lg:border-flamingo-400 rounded-md"
-							>
-								<Container.Item className="lg:flex gap-2 items-center hidden">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										strokeWidth={ 2 }
-										stroke="currentColor"
-										className="h-5 w-5 text-flamingo-400"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-									>
-										<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"></path>
-										<path d="M21 16v2a4 4 0 0 1-4 4h-5"></path>
-									</svg>
-									<Label size="md" className="font-semibold">
-										{ __(
-											'Need Support?',
-											'woo-cart-abandonment-recovery'
-										) }
-									</Label>
-								</Container.Item>
-								<Container.Item className="lg:block hidden">
-									<p className="font-normal text-sm text-text-secondary m-0 pb-2">
-										{ __(
-											"We're happy to help!",
-											'woo-cart-abandonment-recovery'
-										) }
-									</p>
-								</Container.Item>
-								<Container.Item>
-									<a
-										href="https://cartflows.com/support"
-										target="_blank"
-										rel="noreferrer"
-										className="flex justify-center p-2.5 no-underline text-white hover:text-white bg-primary-600 hover:bg-primary-600 rounded-md box-content outline-0 hover:outline-0 focus:ring-0 focus-visible:ring-1 ring-black"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											strokeWidth={ 1.7 }
-											stroke="currentColor"
-											className="h-5 w-5 block lg:hidden"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-										>
-											<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"></path>
-											<path d="M21 16v2a4 4 0 0 1-4 4h-5"></path>
-										</svg>
-										<span className="text-center w-full text-sm font-semibold lg:block hidden p-0">
-											{ __(
-												'Request Support',
-												'woo-cart-abandonment-recovery'
-											) }
-										</span>
-									</a>
-								</Container.Item>
-							</Container>
 						</Sidebar.Item>
 					</Sidebar.Body>
 				</Sidebar>
 			</div>
 			<Container
-				className="w-full max-w-[43.5rem] mx-auto mt-8 pr-4 pb-5 gap-0"
+				className="w-full min-w-0 max-w-[43.5rem] mx-auto mt-8 pr-4 pb-5 gap-0"
 				direction="column"
 			>
 				{
 					navigation.find( ( item ) => item.slug === active )
-						?.component
+						?.render()
 				}
 			</Container>
 		</div>

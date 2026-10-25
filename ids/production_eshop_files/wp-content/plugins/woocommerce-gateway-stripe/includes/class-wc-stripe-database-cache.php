@@ -80,7 +80,21 @@ class WC_Stripe_Database_Cache {
 	 * @return void
 	 */
 	public static function set( $key, $data, $ttl = HOUR_IN_SECONDS ) {
-		$prefixed_key = self::add_key_prefix( $key );
+		self::set_with_mode( $key, $data, $ttl, null );
+	}
+
+	/**
+	 * Stores a value in the cache for the specified mode.
+	 *
+	 * @param string $key The key to store the value under.
+	 * @param mixed  $data The value to store.
+	 * @param int    $ttl  The TTL of the cache. Dafault 1 hour.
+	 * @param string|null $mode The mode to use as prefix for the key. Default is null, which means the current plugin mode.
+	 *
+	 * @return void
+	 */
+	public static function set_with_mode( $key, $data, $ttl = HOUR_IN_SECONDS, ?string $mode = null ) {
+		$prefixed_key = self::add_key_prefix( $key, $mode );
 		self::write_to_cache( $prefixed_key, $data, $ttl );
 	}
 
@@ -94,14 +108,32 @@ class WC_Stripe_Database_Cache {
 	 * @return mixed|null The cache contents. NULL if the cache value is expired or missing.
 	 */
 	public static function get( $key ) {
-		$prefixed_key = self::add_key_prefix( $key );
+		return self::get_with_mode( $key, null );
+	}
+
+	/**
+	 * Gets a value from the cache for the specified mode.
+	 *
+	 * The key is automatically prefixed with "wcstripe_cache_[mode]_".
+	 *
+	 * @param string $key       The key to look for.
+	 * @param string|null $mode The mode to use as prefix for the key. Default is null, which means the current plugin mode.
+	 *
+	 * @return mixed|null The cache contents. NULL if the cache value is expired or missing.
+	 */
+	public static function get_with_mode( $key, ?string $mode = null ) {
+		$mode           = self::resolve_mode( $mode );
+		$prefixed_key   = self::add_key_prefix( $key, $mode );
 		$cache_contents = self::get_from_cache( $prefixed_key );
 		if ( is_array( $cache_contents ) && array_key_exists( 'data', $cache_contents ) ) {
 			if ( self::is_expired( $prefixed_key, $cache_contents ) ) {
 				return null;
 			}
 
-			self::maybe_trigger_prefetch( $key, $cache_contents );
+			// Prefetch handlers refresh the active mode, so another mode would update the wrong cache.
+			if ( self::resolve_mode() === $mode ) {
+				self::maybe_trigger_prefetch( $key, $cache_contents );
+			}
 
 			return $cache_contents['data'];
 		}
@@ -119,8 +151,19 @@ class WC_Stripe_Database_Cache {
 	 * @return void
 	 */
 	public static function delete( $key ) {
-		$prefixed_key = self::add_key_prefix( $key );
+		self::delete_with_mode( $key, null );
+	}
 
+	/**
+	 * Deletes a value from the cache for the specified mode.
+	 *
+	 * @param string $key  The key to delete.
+	 * @param string $mode The mode to use as prefix for the key. Default is null, which means the current plugin mode.
+	 *
+	 * @return void
+	 */
+	public static function delete_with_mode( $key, ?string $mode = null ): void {
+		$prefixed_key = self::add_key_prefix( $key, $mode );
 		self::delete_from_cache( $prefixed_key );
 	}
 
@@ -231,8 +274,6 @@ class WC_Stripe_Database_Cache {
 		 * @param bool   $is_expired Whether the cache is expired.
 		 * @param string $prefixed_key The cache key (with prefix).
 		 * @param array  $cache_contents The cache contents.
-		 *
-		 * @return bool Whether the cache is expired.
 		 */
 		return apply_filters( 'wc_stripe_database_cache_is_expired', $expires < $now, $prefixed_key, $cache_contents );
 	}
@@ -284,13 +325,27 @@ class WC_Stripe_Database_Cache {
 	 * Adds the CACHE_KEY_PREFIX + plugin mode prefix to the key.
 	 * Ex: "wcstripe_cache_[mode]_[key].
 	 *
-	 * @param string $key The key to add the prefix to.
+	 * @param string $key       The key to add the prefix to.
+	 * @param string|null $mode The mode to use as prefix for the key. Default is null, which means the current plugin mode.
 	 *
 	 * @return string The key with the prefix.
 	 */
-	private static function add_key_prefix( $key ) {
-		$mode = WC_Stripe_Mode::is_test() ? 'test_' : 'live_';
-		return self::CACHE_KEY_PREFIX . $mode . $key;
+	private static function add_key_prefix( string $key, ?string $mode = null ): string {
+		return self::CACHE_KEY_PREFIX . self::resolve_mode( $mode ) . '_' . $key;
+	}
+
+	/**
+	 * Resolves the cache mode while preserving the existing fallback for invalid values.
+	 *
+	 * @param string|null $mode The requested mode.
+	 * @return string The resolved mode.
+	 */
+	private static function resolve_mode( ?string $mode = null ): string {
+		if ( null === $mode ) {
+			return WC_Stripe_Mode::is_test() ? 'test' : 'live';
+		}
+
+		return in_array( $mode, [ 'test', 'live' ], true ) ? $mode : 'test';
 	}
 
 	/**
@@ -325,14 +380,14 @@ class WC_Stripe_Database_Cache {
 		$query_args = [ self::CACHE_KEY_PREFIX . '%' ];
 
 		if ( null !== $last_key ) {
-			$raw_query .= ' AND option_name > %s';
+			$raw_query   .= ' AND option_name > %s';
 			$query_args[] = $last_key;
 		}
 
 		$raw_query .= ' ORDER BY option_name ASC';
 
 		if ( $max_rows > 0 ) {
-			$raw_query .= ' LIMIT %d';
+			$raw_query   .= ' LIMIT %d';
 			$query_args[] = $max_rows;
 		}
 
@@ -341,14 +396,14 @@ class WC_Stripe_Database_Cache {
 
 		foreach ( $cached_rows as $cached_row ) {
 			$result['last_key'] = $cached_row->option_name;
-			$result['processed']++;
+			++$result['processed'];
 
 			// We fetched the raw contents, so check if we need to unserialize the data.
 			$cache_contents = maybe_unserialize( $cached_row->option_value );
 
 			if ( self::is_expired( $cached_row->option_name, $cache_contents ) ) {
 				self::delete_from_cache( $cached_row->option_name );
-				$result['deleted']++;
+				++$result['deleted'];
 			}
 		}
 
@@ -429,7 +484,7 @@ class WC_Stripe_Database_Cache {
 		}
 
 		$one_am_tomorrow = strtotime( 'tomorrow 01:00' );
-		$schedule_id = as_schedule_recurring_action( $one_am_tomorrow, DAY_IN_SECONDS, self::ASYNC_CLEANUP_ACTION, [], 'woocommerce-gateway-stripe' );
+		$schedule_id     = as_schedule_recurring_action( $one_am_tomorrow, DAY_IN_SECONDS, self::ASYNC_CLEANUP_ACTION, [], 'woocommerce-gateway-stripe' );
 
 		if ( 0 === $schedule_id ) {
 			WC_Stripe_Logger::error( 'Failed to schedule daily asynchronous cache cleanup' );
@@ -449,7 +504,7 @@ class WC_Stripe_Database_Cache {
 			return;
 		}
 
-		as_unschedule_all_actions( self::ASYNC_CLEANUP_ACTION, null, 'woocommerce-gateway-stripe' );
+		as_unschedule_all_actions( self::ASYNC_CLEANUP_ACTION, [], 'woocommerce-gateway-stripe' );
 
 		WC_Stripe_Logger::info( 'Unscheduled daily asynchronous cache cleanup' );
 	}
@@ -470,11 +525,11 @@ class WC_Stripe_Database_Cache {
 
 		if ( ! isset( $job_data['run_id'] ) || ! is_int( $job_data['run_id'] ) ) {
 			$job_data = [
-				'run_id'     => rand( 1, 1000000 ),
-				'processed'  => 0,
-				'deleted'    => 0,
-				'job_runs'   => 1,
-				'last_key'   => null,
+				'run_id'    => wp_rand( 1, 1000000 ),
+				'processed' => 0,
+				'deleted'   => 0,
+				'job_runs'  => 1,
+				'last_key'  => null,
 			];
 
 			WC_Stripe_Logger::info(
@@ -504,14 +559,14 @@ class WC_Stripe_Database_Cache {
 				]
 			);
 
-			$job_data['job_runs']++;
+			++$job_data['job_runs'];
 		}
 
 		$delete_result = self::delete_stale_entries( $max_rows, $job_data['last_key'] );
 
 		$job_data['processed'] += $delete_result['processed'];
 		$job_data['deleted']   += $delete_result['deleted'];
-		$job_data['last_key']  = $delete_result['last_key'];
+		$job_data['last_key']   = $delete_result['last_key'];
 
 		if ( $delete_result['more_entries'] && null !== $delete_result['last_key'] ) {
 			$job_delay = MINUTE_IN_SECONDS;
@@ -519,8 +574,8 @@ class WC_Stripe_Database_Cache {
 			WC_Stripe_Logger::info(
 				"Asynchronous cache cleanup progress update [run_id: {$job_data['run_id']}]. Scheduling next run in {$job_delay} seconds.",
 				[
-					'max_rows'  => $max_rows,
-					'job_data'  => $job_data,
+					'max_rows' => $max_rows,
+					'job_data' => $job_data,
 				]
 			);
 

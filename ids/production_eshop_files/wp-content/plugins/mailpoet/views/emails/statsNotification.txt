@@ -16,7 +16,7 @@
 <%= __('You need to upgrade now to be able to continue using MailPoet.') %>
 
 <%= __('Upgrade Now') %>
-  <%= upgradeNowLink %>
+  <%= upgradeNowLink|raw %>
 <% endif %>
 
 <%= stats_number_format_i18n(clicked) %>% <%= __('clicked') %>
@@ -30,6 +30,14 @@
 
 <%= stats_number_format_i18n(bounced) %>% <%= __('bounced') %>
 
+<% if notTracked > 0 %>
+<% if trackedSent > 0 %>
+  <%= _n('%1$s of your recipients is not tracked, so open and click rates are based on the other %2$s.', '%1$s of your recipients are not tracked, so open and click rates are based on the other %2$s.', notTracked)|replace({'%1$s': notTracked, '%2$s': trackedSent}) %>
+<% else %>
+  <%= _n('Your %1$s recipient is not tracked, so open and click rates cannot be measured.', 'None of your %1$s recipients are tracked, so open and click rates cannot be measured.', notTracked)|replace({'%1$s': notTracked}) %>
+<% endif %>
+<% endif %>
+
 <% if topLinkClicks > 0 %>
 <%= __('Most clicked link') %>
   <%= topLink %>
@@ -38,6 +46,5 @@
 <% endif %>
 
 <%= __('View all stats') %>
-  <%= linkStats %>
-
+  <%= linkStats|raw %>
 <% endblock %>

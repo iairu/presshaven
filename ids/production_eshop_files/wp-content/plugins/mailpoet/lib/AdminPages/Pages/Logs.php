@@ -5,53 +5,56 @@ namespace MailPoet\AdminPages\Pages;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\AdminPages\AssetsController;
 use MailPoet\AdminPages\PageRenderer;
 use MailPoet\Logging\LogRepository;
+use MailPoet\Logging\LogsDownload;
+use MailPoet\WP\Functions as WPFunctions;
 use MailPoetVendor\Carbon\Carbon;
 
 class Logs {
+  /** @var AssetsController */
+  private $assetsController;
+
   /** @var PageRenderer */
   private $pageRenderer;
+
+  /** @var WPFunctions */
+  private $wp;
 
   /** @var LogRepository */
   private $logRepository;
 
   public function __construct(
-    LogRepository $logRepository,
-    PageRenderer $pageRenderer
+    AssetsController $assetsController,
+    PageRenderer $pageRenderer,
+    WPFunctions $wp,
+    LogRepository $logRepository
   ) {
+    $this->assetsController = $assetsController;
     $this->pageRenderer = $pageRenderer;
+    $this->wp = $wp;
     $this->logRepository = $logRepository;
   }
 
   public function render() {
-    $search = isset($_GET['search']) ? sanitize_text_field(wp_unslash($_GET['search'])) : null;
-    $from = isset($_GET['from']) ? sanitize_text_field(wp_unslash($_GET['from'])) : null;
-    $to = isset($_GET['to']) ? sanitize_text_field(wp_unslash($_GET['to'])) : null;
-    $offset = isset($_GET['offset']) ? sanitize_text_field(wp_unslash($_GET['offset'])) : null;
-    $limit = isset($_GET['limit']) ? sanitize_text_field(wp_unslash($_GET['limit'])) : null;
+    $this->assetsController->setupDataViewsDependencies();
+
     $dateFrom = (new Carbon())->subDays(7);
-    $defaultFrom = $dateFrom->format('Y-m-d');
-    if (isset($from)) {
-      $dateFrom = new Carbon($from);
-    }
-    $dateTo = null;
-    if (isset($to)) {
-      $dateTo = new Carbon($to);
-    }
-    $logs = $this->logRepository->getLogs($dateFrom, $dateTo, $search, $offset, $limit);
     $data = [
-      'logs' => [],
-      'logs_default_from' => $defaultFrom,
+      'logs_default_from' => $dateFrom->format('Y-m-d'),
+      'logs_filter_options' => [
+        'names' => $this->logRepository->getDistinctNames(),
+      ],
+      'api' => [
+        'root' => rtrim($this->wp->escUrlRaw($this->wp->restUrl()), '/'),
+        'nonce' => $this->wp->wpCreateNonce('wp_rest'),
+      ],
+      'download' => [
+        'action_url' => $this->wp->adminUrl('admin-post.php'),
+        'nonce' => LogsDownload::createNonce($this->wp),
+      ],
     ];
-    foreach ($logs as $log) {
-      $data['logs'][] = [
-        'id' => $log->getId(),
-        'name' => $log->getName(),
-        'message' => $log->getMessage(),
-        'created_at' => ($createdAt = $log->getCreatedAt()) ? $createdAt->format('Y-m-d H:i:s') : null,
-      ];
-    }
     $this->pageRenderer->displayPage('logs.html', $data);
   }
 }

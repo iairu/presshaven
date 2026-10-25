@@ -8,7 +8,7 @@
  * or theme author for support.
  *
  * @package   TGM-Plugin-Activation
- * @version   2.6.1 for parent theme Omega Storefront for publication on WordPress.org
+ * @version   2.6.1 for parent theme Omega Storefront for publication on wordpress.org
  * @link      http://tgmpluginactivation.com/
  * @author    Thomas Griffin, Gary Jones, Juliette Reinders Folmer
  * @copyright Copyright (c) 2011, Thomas Griffin
@@ -64,7 +64,7 @@ if ( ! class_exists( 'TGM_Plugin_Activation' ) ) {
 		 *
 		 * @since 2.5.0
 		 */
-		const WP_REPO_REGEX = '|^http[s]?://wordpress\.org/(?:extend/)?plugins/|';
+		const WP_REPO_REGEX = '|^http[s]?://WordPress\.org/(?:extend/)?plugins/|';
 
 		/**
 		 * Arbitrary regular expression to test if a string starts with a URL.
@@ -223,7 +223,7 @@ if ( ! class_exists( 'TGM_Plugin_Activation' ) ) {
 		public $strings = array();
 
 		/**
-		 * Holds the version of WordPress.
+		 * Holds the version of wordpress.
 		 *
 		 * @since 2.4.0
 		 *
@@ -298,7 +298,7 @@ if ( ! class_exists( 'TGM_Plugin_Activation' ) ) {
 		}
 
 		/**
-		 * Initialise the interactions between this class and WordPress.
+		 * Initialise the interactions between this class and wordpress.
 		 *
 		 * Hooks in three new methods for the class: admin_menu, notices and styles.
 		 *

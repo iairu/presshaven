@@ -11,6 +11,9 @@ namespace Automattic\WooCommerce\Pinterest\Exception;
 
 /**
  * Trait ValidateInterface
+ *
+ * @class   ValidateInterface
+ * @version 1.6.0
  */
 trait ValidateInterface {
 
@@ -19,12 +22,13 @@ trait ValidateInterface {
 	 *
 	 * @param string $class     The class name.
 	 * @param string $interface The interface name.
+	 * @return void
 	 *
-	 * @throws InvalidClass When the given class does not implement the interface.
+	 * @throws InvalidClass When the given class does not implement the interface or does not exist.
 	 */
 	protected function validate_interface( string $class, string $interface ) {
 		$implements = class_implements( $class );
-		if ( ! array_key_exists( $interface, $implements ) ) {
+		if ( false === $implements || ! array_key_exists( $interface, $implements ) ) {
 			throw InvalidClass::should_implement( $class, $interface );
 		}
 	}
@@ -34,6 +38,7 @@ trait ValidateInterface {
 	 *
 	 * @param object $object    The object to validate.
 	 * @param string $interface The interface name.
+	 * @return void
 	 *
 	 * @throws InvalidClass When the given object does not implement the interface.
 	 */
@@ -53,6 +58,7 @@ trait ValidateInterface {
 	 *
 	 * @param object $object    The object to validate.
 	 * @param string $interface The interface name.
+	 * @return void
 	 *
 	 * @throws InvalidClass When the given object implements the interface.
 	 */

@@ -10,7 +10,9 @@ namespace WooCommerce\PayPalCommerce\Button\Endpoint;
 
 use Exception;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
+use WooCommerce\PayPalCommerce\Button\Exception\NonceValidationException;
 use WooCommerce\PayPalCommerce\Button\Helper\CheckoutFormSaver;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\RequestData;
 /**
  * Class SaveCheckoutFormEndpoint
  */
@@ -42,7 +44,7 @@ class SaveCheckoutFormEndpoint implements \WooCommerce\PayPalCommerce\Button\End
      * @param CheckoutFormSaver $checkout_form_saver The checkout form saver.
      * @param LoggerInterface   $logger The logger.
      */
-    public function __construct(\WooCommerce\PayPalCommerce\Button\Endpoint\RequestData $request_data, CheckoutFormSaver $checkout_form_saver, LoggerInterface $logger)
+    public function __construct(RequestData $request_data, CheckoutFormSaver $checkout_form_saver, LoggerInterface $logger)
     {
         $this->request_data = $request_data;
         $this->checkout_form_saver = $checkout_form_saver;
@@ -59,20 +61,18 @@ class SaveCheckoutFormEndpoint implements \WooCommerce\PayPalCommerce\Button\End
     }
     /**
      * Handles the request.
-     *
-     * @return bool
      */
-    public function handle_request(): bool
+    public function handle_request(): void
     {
         try {
             $data = $this->request_data->read_request($this->nonce());
             $this->checkout_form_saver->save($data['form']);
             wp_send_json_success();
-            return \true;
+        } catch (NonceValidationException $error) {
+            wp_send_json_error(array('message' => $error->getMessage()), 400);
         } catch (Exception $error) {
             $this->logger->error('Checkout form saving failed: ' . $error->getMessage());
             wp_send_json_error(array('message' => $error->getMessage()));
-            return \false;
         }
     }
 }

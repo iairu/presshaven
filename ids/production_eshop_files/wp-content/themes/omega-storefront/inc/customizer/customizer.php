@@ -25,6 +25,7 @@ function omega_storefront_customize_register( $wp_customize ) {
 	require get_template_directory() . '/inc/customizer/homepage-content.php';
 	require get_template_directory() . '/inc/customizer/additional-woocommerce.php';
 	require get_template_directory() . '/inc/customizer/404-page-settings.php';
+	require get_template_directory() . '/inc/customizer/nothing-found-page-settings.php';
 
 	$wp_customize->get_setting( 'blogname' )->transport         = 'postMessage';
 	$wp_customize->get_setting( 'blogdescription' )->transport  = 'postMessage';

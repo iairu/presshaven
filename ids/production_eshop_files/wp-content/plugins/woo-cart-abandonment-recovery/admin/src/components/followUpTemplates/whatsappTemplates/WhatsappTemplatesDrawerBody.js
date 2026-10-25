@@ -1,6 +1,11 @@
 import React from 'react';
 import RenderFields from '@Components/RenderFields';
 import ConditionsHelper from '@Utils/conditions';
+import { cn } from '@Utils/helper';
+import {
+	getDrawerFieldData,
+	getFieldCardClass,
+} from '../shared/templateDrawerUtils';
 
 const WhatsappTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 	const whatsappFields =
@@ -26,10 +31,13 @@ const WhatsappTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 						return (
 							<div
 								key={ field }
-								className="px-4 rounded-md bg-white shadow-sm"
+								className={ cn(
+									'px-4 rounded-md bg-white shadow-sm',
+									getFieldCardClass( data?.type )
+								) }
 							>
 								<RenderFields
-									data={ data }
+									data={ getDrawerFieldData( field, data ) }
 									value={
 										[
 											'time',

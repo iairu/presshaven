@@ -3,6 +3,7 @@ namespace Leadin\admin\widgets;
 
 use Leadin\data\Filters;
 use Leadin\data\Portal_Options;
+use Leadin\utils\ShortcodeRenderUtils;
 use Elementor\Plugin;
 use Elementor\Widget_Base;
 
@@ -115,10 +116,11 @@ class ElementorForm extends Widget_Base {
 	 * Render the widget
 	 */
 	protected function render() {
-		$settings = $this->get_settings_for_display();
-		$content  = $settings['content'];
+		$settings     = $this->get_settings_for_display();
+		$content      = $settings['content'];
+		$is_edit_mode = Plugin::$instance->editor->is_edit_mode();
 
-		if ( Plugin::$instance->editor->is_edit_mode() ) {
+		if ( $is_edit_mode ) {
 
 			?>
 				<div class="hubspot-form-edit-mode" data-attributes="<?php echo esc_attr( wp_json_encode( $content ) ); ?>">
@@ -138,7 +140,13 @@ class ElementorForm extends Widget_Base {
 				$portal_id = $content['portalId'];
 				$form_id   = $content['formId'];
 				$version   = isset( $content['embedVersion'] ) ? $content['embedVersion'] : '';
-				echo do_shortcode( '[hubspot portal="' . $portal_id . '" id="' . $form_id . '" type="form" version="' . $version . '"]' );
+				$embed = do_shortcode( '[hubspot portal="' . $portal_id . '" id="' . $form_id . '" type="form" version="' . $version . '"]' );
+
+				if ( $is_edit_mode ) {
+					$embed = ShortcodeRenderUtils::wrap_embed_for_elementor_editor( $embed );
+				}
+
+				echo $embed; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- shortcode output.
 		}
 	}
 }

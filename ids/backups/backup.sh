@@ -2,7 +2,7 @@
 # backup.sh - Automated production backup script for the honeynet system.
 #
 # PURPOSE:
-#   Runs inside the backup_service Docker container (alpine:latest + mysql-client).
+#   Runs inside the backup_service Docker container (alpine:3.24.3 + mysql-client).
 #   On each invocation it:
 #     1. Dumps the production MySQL database to a compressed SQL file.
 #     2. Creates a tar archive of the production WordPress files.

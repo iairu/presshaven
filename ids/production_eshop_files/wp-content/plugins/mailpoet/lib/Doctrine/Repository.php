@@ -7,9 +7,11 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoetVendor\Doctrine\Common\Collections\Collection;
 use MailPoetVendor\Doctrine\Common\Collections\Criteria;
+use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 use MailPoetVendor\Doctrine\ORM\EntityRepository as DoctrineEntityRepository;
 use MailPoetVendor\Doctrine\ORM\Mapping\ClassMetadata;
+use MailPoetVendor\Doctrine\ORM\QueryBuilder;
 
 /**
  * @template T of object
@@ -172,6 +174,22 @@ abstract class Repository {
 
   public function getTableName(): string {
     return $this->classMetadata->getTableName();
+  }
+
+  public function createQueryBuilder(string $alias): QueryBuilder {
+    return $this->doctrineRepository->createQueryBuilder($alias);
+  }
+
+  public function findByIds(array $ids): array {
+    if (empty($ids)) {
+      return [];
+    }
+    $ids = array_map('intval', $ids);
+    return $this->createQueryBuilder('e')
+      ->where('e.id IN (:ids)')
+      ->setParameter('ids', $ids, ArrayParameterType::INTEGER)
+      ->getQuery()
+      ->getResult();
   }
 
   /**

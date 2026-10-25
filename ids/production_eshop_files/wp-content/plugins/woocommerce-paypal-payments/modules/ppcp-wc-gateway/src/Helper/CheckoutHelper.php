@@ -45,7 +45,7 @@ class CheckoutHelper
             if (isset($wp->query_vars['order-pay']) && absint($wp->query_vars['order-pay']) > 0) {
                 $order_id = absint($wp->query_vars['order-pay']);
                 $order = wc_get_order($order_id);
-                if (is_a($order, WC_Order::class)) {
+                if ($order instanceof WC_Order) {
                     $order_total = (float) $order->get_total();
                     if ($order_total < $minimum || $order_total > $maximum) {
                         return \false;
@@ -54,6 +54,23 @@ class CheckoutHelper
             }
         }
         return \true;
+    }
+    /**
+     * Returns the first non-empty phone number found among the submitted fields.
+     *
+     * @param string ...$field_ids The submitted field ids, in order of precedence.
+     * @return string
+     */
+    public function submitted_phone(string ...$field_ids): string
+    {
+        foreach ($field_ids as $field_id) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing
+            $phone = wc_clean(wp_unslash($_POST[$field_id] ?? ''));
+            if (is_string($phone) && '' !== $phone) {
+                return $phone;
+            }
+        }
+        return '';
     }
     /**
      * Ensures date is valid and at least 18 years back.

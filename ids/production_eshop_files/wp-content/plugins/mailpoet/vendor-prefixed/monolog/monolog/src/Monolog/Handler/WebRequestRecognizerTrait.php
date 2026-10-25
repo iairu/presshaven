@@ -4,8 +4,8 @@ namespace MailPoetVendor\Monolog\Handler;
 if (!defined('ABSPATH')) exit;
 trait WebRequestRecognizerTrait
 {
- protected function isWebRequest() : bool
- {
- return 'cli' !== \PHP_SAPI && 'phpdbg' !== \PHP_SAPI;
- }
+protected function isWebRequest(): bool
+{
+return 'cli' !== \PHP_SAPI && 'phpdbg' !== \PHP_SAPI;
+}
 }

@@ -74,10 +74,31 @@ class Cartflows_Ca_Email_Schedule {
 
 				$cart_items = maybe_unserialize( $email_data->cart_contents );
 				if ( $this->cart_contains_out_of_stock_products( $cart_items ) ) {
+					/**
+					 * Fires when an email follow-up is skipped because the cart
+					 * contains an out-of-stock product. Used by Pro to log a
+					 * skipped row in the Activity Log.
+					 *
+					 * @param string $channel    Always 'email'.
+					 * @param object $email_data Email row.
+					 * @param string $reason     Human-readable skip reason.
+					 * @since 2.0.8
+					 */
+					do_action( 'wcf_ca_send_skipped', 'email', $email_data, __( 'Out-of-stock product in cart', 'woo-cart-abandonment-recovery' ) );
 					return false;
 				}
 
 				if ( ! $this->check_if_already_purchased_by_email_product_ids( $email_data, $email_data->cart_contents ) ) {
+					/**
+					 * Fires when an email follow-up is skipped because the
+					 * customer already purchased the products in the cart.
+					 *
+					 * @param string $channel    Always 'email'.
+					 * @param object $email_data Email row.
+					 * @param string $reason     Human-readable skip reason.
+					 * @since 2.0.8
+					 */
+					do_action( 'wcf_ca_send_skipped', 'email', $email_data, __( 'Already purchased', 'woo-cart-abandonment-recovery' ) );
 					return false;
 				}
 				
@@ -335,9 +356,10 @@ class Cartflows_Ca_Email_Schedule {
 	 * @param  string $cart_contents     User cart contents details.
 	 * @param  float  $cart_total        User cart total.
 	 * @param  int    $email_template_id Email template id used to look up per-template overrides.
+	 * @param  string $context           Where the table is used: 'email' or 'webhook'.
 	 * @return string
 	 */
-	public function get_email_product_block( $cart_contents, $cart_total, $email_template_id = 0 ) {
+	public function get_email_product_block( $cart_contents, $cart_total, $email_template_id = 0, $context = 'email' ) {
 
 		$cart_items = maybe_unserialize( $cart_contents );
 
@@ -345,22 +367,32 @@ class Cartflows_Ca_Email_Schedule {
 			return;
 		}
 
-		// Defaults preserve the original hardcoded behaviour when the master toggle is off.
+		// Defaults preserve the original hardcoded behaviour when the master toggle is off;
+		// emails follow the store's cart tax display, webhooks default to excl. tax.
 		$default_columns = [ 'image', 'name', 'quantity', 'price', 'subtotal' ];
 		$px              = 42;
-		$with_tax        = false;
-		$modify_table    = false;
+		$taxes_enabled   = wc_tax_enabled();
+		$with_tax        = 'webhook' !== $context && 'incl' === get_option( 'woocommerce_tax_display_cart' );
 		$visible         = $default_columns;
+
+		/**
+		 * Filter whether the product table shows prices including tax when the
+		 * template does not override it.
+		 *
+		 * @param bool   $with_tax Whether prices include tax.
+		 * @param string $context  Where the table is used: 'email' or 'webhook'.
+		 * @since 2.2.0
+		 */
+		$with_tax = (bool) apply_filters( 'cartflows_ca_product_table_prices_include_tax', $with_tax, $context );
 
 		if ( $email_template_id ) {
 			$templates_obj = Cartflows_Ca_Email_Templates::get_instance();
 			$gate          = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'modify_product_table' );
 
 			if ( ! empty( $gate->meta_value ) ) {
-				$modify_table = true;
-				$size_row     = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'product_image_size' );
-				$tax_row      = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'show_prices_with_tax' );
-				$columns_row  = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'visible_columns' );
+				$size_row    = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'product_image_size' );
+				$tax_row     = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'show_prices_with_tax' );
+				$columns_row = $templates_obj->get_email_template_meta_by_key( $email_template_id, 'visible_columns' );
 
 				$size_map = [
 					'small'  => 32,
@@ -379,8 +411,9 @@ class Cartflows_Ca_Email_Schedule {
 			}
 		}
 
+		$with_tax   = $taxes_enabled && $with_tax;
 		$tax_suffix = '';
-		if ( $modify_table ) {
+		if ( $taxes_enabled ) {
 			$tax_suffix = $with_tax
 				? ' <small>' . esc_html__( '(incl. tax)', 'woo-cart-abandonment-recovery' ) . '</small>'
 				: ' <small>' . esc_html__( '(excl. tax)', 'woo-cart-abandonment-recovery' ) . '</small>';
@@ -420,11 +453,14 @@ class Cartflows_Ca_Email_Schedule {
 					$image_url = CARTFLOWS_CA_URL . 'admin/assets/images/image-placeholder.png';
 				}
 
-				$row_total = $cart_item['line_total'] + ( $with_tax ? floatval( $cart_item['line_tax'] ?? 0 ) : 0 );
-				$quantity  = ! empty( $cart_item['quantity'] ) ? $cart_item['quantity'] : 1;
+				// Pre-discount amounts, as the cart shows them; older carts may lack them.
+				$line_subtotal     = floatval( $cart_item['line_subtotal'] ?? $cart_item['line_total'] );
+				$line_subtotal_tax = floatval( $cart_item['line_subtotal_tax'] ?? ( $cart_item['line_tax'] ?? 0 ) );
 
-				// Price = per-unit; Subtotal = line total. Previously both cells
-				// rendered the line total, so the two columns showed the same value.
+				$row_total = $line_subtotal + ( $with_tax ? $line_subtotal_tax : 0 );
+				$quantity  = floatval( $cart_item['quantity'] );
+				$quantity  = $quantity > 0 ? $quantity : 1;
+
 				$unit_price = wc_price( $row_total / $quantity );
 				$row_price  = wc_price( $row_total );
 
@@ -436,7 +472,7 @@ class Cartflows_Ca_Email_Schedule {
 					$row .= '<td style="' . $style . '">' . wp_kses_post( $product_name ) . '</td>';
 				}
 				if ( $show( 'quantity' ) ) {
-					$row .= '<td style="' . $style . '"> ' . $cart_item['quantity'] . ' </td>';
+					$row .= '<td style="' . $style . '"> ' . esc_html( (string) $quantity ) . ' </td>';
 				}
 				if ( $show( 'price' ) ) {
 					$row .= '<td style="' . $style . '">' . $unit_price . $tax_suffix . '</td>';
@@ -620,6 +656,32 @@ class Cartflows_Ca_Email_Schedule {
 					'scheduled_time' => $scheduled_time,
 				]
 			); // db call ok; no-cache ok.
+
+			/**
+			 * Fires after a recovery message is scheduled. Used by the Activity Log
+			 * (Pro) to record a `scheduled` event. Reused by SMS and WhatsApp.
+			 *
+			 * @param array $args {
+			 *     @type string $channel        'email' | 'sms' | 'whatsapp'.
+			 *     @type int    $ca_session_id  Abandoned cart session id.
+			 *     @type int    $template_id    Template id.
+			 *     @type string $template_name  Template name.
+			 *     @type string $recipient      Email or phone.
+			 *     @type string $scheduled_time MySQL datetime when the send is due.
+			 * }
+			 * @since 2.0.8
+			 */
+			do_action(
+				'wcf_ca_message_scheduled',
+				[
+					'channel'        => 'email',
+					'ca_session_id'  => (string) $checkout_details->session_id,
+					'template_id'    => (int) $template->id,
+					'template_name'  => isset( $template->template_name ) ? (string) $template->template_name : '',
+					'recipient'      => isset( $checkout_details->email ) ? (string) $checkout_details->email : '',
+					'scheduled_time' => $scheduled_time,
+				]
+			);
 		}
 	}
 

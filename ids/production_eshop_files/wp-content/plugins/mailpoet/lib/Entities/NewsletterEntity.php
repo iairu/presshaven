@@ -12,7 +12,6 @@ use MailPoet\Doctrine\EntityTraits\CreatedAtTrait;
 use MailPoet\Doctrine\EntityTraits\DeletedAtTrait;
 use MailPoet\Doctrine\EntityTraits\SafeToOneAssociationLoadTrait;
 use MailPoet\Doctrine\EntityTraits\UpdatedAtTrait;
-use MailPoet\Util\Helpers;
 use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\Common\Collections\ArrayCollection;
 use MailPoetVendor\Doctrine\Common\Collections\Collection;
@@ -53,6 +52,15 @@ class NewsletterEntity {
    */
   const TYPES_WITH_RESETTABLE_BODY = [
     NewsletterEntity::TYPE_STANDARD,
+  ];
+
+  /**
+   * Emails MailPoet creates on the user's behalf. Their presence does not mean
+   * the user has any emails of their own.
+   */
+  const AUTO_CREATED_TYPES = [
+    NewsletterEntity::TYPE_WC_TRANSACTIONAL_EMAIL,
+    NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER,
   ];
 
   /**
@@ -206,24 +214,6 @@ class NewsletterEntity {
     $this->newsletterSegments = new ArrayCollection();
     $this->options = new ArrayCollection();
     $this->queues = new ArrayCollection();
-  }
-
-  /**
-   * @deprecated This is here only for backward compatibility with custom shortcodes https://kb.mailpoet.com/article/160-create-a-custom-shortcode
-   * This can be removed after 2026-01-01
-   */
-  public function __get($key) {
-    $getterName = 'get' . Helpers::underscoreToCamelCase($key, $capitaliseFirstChar = true);
-    $callable = [$this, $getterName];
-    if (is_callable($callable)) {
-      // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_trigger_error -- Intended for deprecation warnings
-      trigger_error(
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- if the function is callable, it's safe to output
-        "Direct access to \$newsletter->{$key} is deprecated and will be removed after 2026-01-01. Use \$newsletter->{$getterName}() instead.",
-        E_USER_DEPRECATED
-      );
-      return call_user_func($callable);
-    }
   }
 
   public function __clone() {
@@ -567,7 +557,10 @@ class NewsletterEntity {
     if ($body === null) {
       return null;
     }
-    return $body['globalStyles'][$category][$style] ?? null;
+    $value = $body['globalStyles'][$category][$style] ?? null;
+    // A saved style can be any JSON type; honor the ?string contract instead of
+    // letting an array-valued style throw a TypeError during rendering.
+    return is_scalar($value) ? (string)$value : null;
   }
 
   public function setGlobalStyle(string $category, string $style, $value): void {

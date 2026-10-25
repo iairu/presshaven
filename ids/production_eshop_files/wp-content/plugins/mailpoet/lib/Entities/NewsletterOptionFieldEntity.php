@@ -29,6 +29,9 @@ class NewsletterOptionFieldEntity {
   public const NAME_ROLE = 'role';
   public const NAME_SCHEDULE = 'schedule';
   public const NAME_SCHEDULED_AT = 'scheduledAt';
+  public const NAME_SCHEDULE_MODE = 'scheduleMode';
+  public const NAME_SCHEDULED_LOCAL_DATE = 'scheduledLocalDate';
+  public const NAME_SCHEDULED_LOCAL_TIME = 'scheduledLocalTime';
   public const NAME_SEGMENT = 'segment';
   public const NAME_SEND_TO = 'sendTo';
   public const NAME_TIME_OF_DAY = 'timeOfDay';
@@ -36,6 +39,8 @@ class NewsletterOptionFieldEntity {
   public const NAME_AUTOMATION_ID = 'automationId';
   public const NAME_AUTOMATION_STEP_ID = 'automationStepId';
   public const NAME_FILTER_SEGMENT_ID = 'filterSegmentId';
+  public const NAME_SHARE_VISIBILITY = 'shareVisibility';
+  public const NAME_EXCLUDE_FROM_ARCHIVE = 'excludeFromArchive';
 
   use AutoincrementedIdTrait;
   use CreatedAtTrait;

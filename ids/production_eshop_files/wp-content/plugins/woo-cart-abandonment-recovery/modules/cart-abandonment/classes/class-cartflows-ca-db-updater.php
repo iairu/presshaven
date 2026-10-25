@@ -3,9 +3,9 @@
  * Cart Abandonment DB Updater.
  *
  * Handles schema upgrades for existing installs without altering the
- * CREATE TABLE logic. New columns are added through an explicit,
- * consented migration (admin notice + background AJAX) rather than a
- * silent dbDelta ALTER on page load.
+ * CREATE TABLE logic. New columns and column-type changes are applied
+ * through an explicit, consented migration (admin notice + background
+ * AJAX) rather than a silent dbDelta ALTER on page load.
  *
  * @package Woocommerce-Cart-Abandonment-Recovery
  * @since   2.1.3
@@ -88,7 +88,7 @@ if ( ! class_exists( 'Cartflows_Ca_Db_Updater' ) ) {
 				return false;
 			}
 
-			if ( $this->revenue_columns_present() ) {
+			if ( $this->schema_up_to_date() ) {
 				update_option( 'wcar_db_version', CARTFLOWS_CA_DB_VER );
 				return false;
 			}
@@ -196,7 +196,9 @@ if ( ! class_exists( 'Cartflows_Ca_Db_Updater' ) ) {
 		 * @return bool
 		 */
 		public function run_update(): bool {
-			$success = $this->add_revenue_columns();
+			$columns_added        = $this->add_revenue_columns();
+			$checkout_id_migrated = $this->modify_checkout_id_column();
+			$success              = $columns_added && $checkout_id_migrated;
 
 			if ( $success ) {
 				update_option( 'wcar_db_version', CARTFLOWS_CA_DB_VER );
@@ -239,6 +241,24 @@ if ( ! class_exists( 'Cartflows_Ca_Db_Updater' ) ) {
 			}
 
 			$this->run_update();
+		}
+
+		/**
+		 * Whether the table already carries every schema change this version ships.
+		 *
+		 * Used by the self-heal in needs_db_update(): only advances the stored
+		 * version once both the revenue columns and the widened checkout_id are
+		 * in place.
+		 *
+		 * @since 2.2.0
+		 * @return bool
+		 */
+		private function schema_up_to_date(): bool {
+			global $wpdb;
+
+			$table = $wpdb->prefix . CARTFLOWS_CA_CART_ABANDONMENT_TABLE;
+
+			return $this->revenue_columns_present() && $this->checkout_id_is_bigint( $table );
 		}
 
 		/**
@@ -294,6 +314,59 @@ if ( ! class_exists( 'Cartflows_Ca_Db_Updater' ) ) {
 			}
 
 			return $all_present;
+		}
+
+		/**
+		 * Widen checkout_id from the legacy INT to BIGINT(20) UNSIGNED.
+		 *
+		 * The old INT(11) column silently clamps any checkout page post ID above
+		 * 2147483647 to that max, breaking recovery links. Idempotent: the column
+		 * type is checked before the ALTER, so re-running is safe.
+		 *
+		 * @since 2.2.0
+		 * @return bool True when checkout_id is BIGINT afterwards.
+		 */
+		private function modify_checkout_id_column(): bool {
+			global $wpdb;
+
+			$table = $wpdb->prefix . CARTFLOWS_CA_CART_ABANDONMENT_TABLE;
+
+			$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ); // db call ok; no-cache ok.
+			if ( empty( $table_exists ) ) {
+				return false;
+			}
+
+			if ( $this->checkout_id_is_bigint( $table ) ) {
+				return true;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange
+			$altered = $wpdb->query( "ALTER TABLE `{$table}` MODIFY COLUMN `checkout_id` BIGINT(20) UNSIGNED NOT NULL" );
+
+			return false !== $altered;
+		}
+
+		/**
+		 * Whether checkout_id is already a BIGINT column.
+		 *
+		 * @since 2.2.0
+		 * @param string $table Full table name.
+		 * @return bool
+		 */
+		private function checkout_id_is_bigint( $table ): bool {
+			global $wpdb;
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$data_type = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+					DB_NAME,
+					$table,
+					'checkout_id'
+				)
+			);
+
+			return 'bigint' === strtolower( (string) $data_type );
 		}
 
 		/**

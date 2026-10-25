@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
-import { Input, toast } from '@bsf/force-ui';
+import { Input } from '@bsf/force-ui';
+import { __ } from '@wordpress/i18n';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { cn } from '@Utils/helper';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
 
 const EmailField = ( {
 	title,
@@ -25,6 +28,7 @@ const EmailField = ( {
 			? value ?? ''
 			: settingsValues[ name ] ?? value ?? '';
 	const [ email, setEmail ] = useState( currentValue );
+	const [ invalid, setInvalid ] = useState( false );
 	const debouncedUpdate = useDebounceDispatch(
 		dispatch,
 		name,
@@ -43,11 +47,12 @@ const EmailField = ( {
 
 	const handleOnChange = ( val ) => {
 		setEmail( val );
+		setInvalid( false );
 	};
 
 	const handleBlur = () => {
 		if ( ! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( email ) ) {
-			toast.error( 'Please enter a valid email address' );
+			setInvalid( true );
 			return false;
 		}
 		if ( email !== currentValue ) {
@@ -64,15 +69,30 @@ const EmailField = ( {
 		}
 	};
 
+	let validationError = error;
+	if ( invalid ) {
+		validationError = __(
+			'Enter a valid email address, like name@example.com.',
+			'woo-cart-abandonment-recovery'
+		);
+	}
+	const a11y = useFieldA11y( { description, error: validationError } );
+
 	return (
-		<FieldWrapper title={ title } description={ description } type="block">
+		<FieldWrapper
+			title={ title }
+			description={ description }
+			fieldId={ a11y.id }
+			type="block"
+		>
 			<div>
 				<Input
-					className={ `${
-						badge ? 'w-24 ' : 'w-full'
-					} focus:[&>input]:ring-focus ${
-						error ? 'border-red-500' : ''
-					}` }
+					className={ cn(
+						badge ? 'w-24' : 'w-full',
+						'focus:[&>input]:ring-focus',
+						validationError && 'border-support-error'
+					) }
+					{ ...a11y.controlProps }
 					type="email"
 					size="md"
 					name={ name }
@@ -80,9 +100,7 @@ const EmailField = ( {
 					onChange={ handleOnChange }
 					onBlur={ handleBlur }
 				/>
-				{ error && (
-					<p className="text-red-500 text-sm mt-1">{ error }</p>
-				) }
+				<FieldError id={ a11y.errorId }>{ validationError }</FieldError>
 			</div>
 		</FieldWrapper>
 	);

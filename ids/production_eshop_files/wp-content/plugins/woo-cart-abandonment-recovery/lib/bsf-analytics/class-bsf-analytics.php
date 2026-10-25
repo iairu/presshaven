@@ -93,7 +93,7 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 		public function set_actions() {
 
 			foreach ( $this->entities as $key => $data ) {
-				add_action( 'astra_notice_before_markup_' . $key . '-optin-notice', array( $this, 'enqueue_assets' ) );
+				add_action( 'bsf_admin_notice_before_markup_' . $key . '-optin-notice', array( $this, 'enqueue_assets' ) );
 				add_action( 'update_option_' . $key . '_usage_optin', array( $this, 'update_analytics_option_callback' ), 10, 3 );
 				add_action( 'add_option_' . $key . '_usage_optin', array( $this, 'add_analytics_option_callback' ), 10, 2 );
 			}
@@ -235,6 +235,9 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 		 * @since 1.0.0
 		 */
 		public function option_notice() {
+			if ( ! class_exists( 'BSF_Admin_Notices' ) ) {
+				return;
+			}
 
 			if ( ! current_user_can( 'manage_options' ) ) {
 				return;
@@ -268,17 +271,18 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 				/* translators: %s product name */
 				$notice_string = sprintf(
 					__(
-						'Help shape the future of %1$s!<br><br>Become a contributor by sharing how you use %1$s — so we can build features that matter to you, fix issues faster, and make smarter decisions. We only collect <strong>non-sensitive</strong> information like your PHP version and which features you use.', 'woo-cart-abandonment-recovery' ),
-					'<strong>' . esc_html( $data['product_name'] ) . '</strong>'
+						'<strong>Help shape the future of %1$s.</strong><br><br>Share how you use the plugin so we can build features that matter, fix issues faster, and make smarter decisions.'
+					),
+					esc_html( $data['product_name'] )
 				);
 				
 				if ( is_multisite() ) {
-					$notice_string .= __( 'This will be applicable for all sites from the network.', 'woo-cart-abandonment-recovery' );
+					$notice_string .= __( 'This will be applicable for all sites from the network.' );
 				}
 
 				$language_dir = is_rtl() ? 'rtl' : 'ltr';
 
-				Astra_Notices::add_notice(
+				BSF_Admin_Notices::add_notice(
 					array(
 						'id'                         => $key . '-optin-notice',
 						'type'                       => '',
@@ -297,7 +301,7 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 									</div>
 								</div>',
 							/* translators: %s usage doc link */
-							sprintf( $notice_string . '<span dir="%1s"> <a href="%2s" target="_blank" rel="noreferrer noopener">%3s</a><span><br><br>', $language_dir, esc_url( $usage_doc_link ), __( 'Learn more.', 'woo-cart-abandonment-recovery' ) ),
+							sprintf( $notice_string . '<span dir="%1s"> <a href="%2s" target="_blank" rel="noreferrer noopener">%3s</a><span><br><br>', $language_dir, esc_url( $usage_doc_link ), __( 'Learn more.' ) ),
 							esc_url(
 								add_query_arg(
 									array(
@@ -307,7 +311,7 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 									)
 								)
 							),
-							__( 'Sure, count me in!', 'woo-cart-abandonment-recovery' ),
+							__( 'Happy to help!' ),
 							esc_url(
 								add_query_arg(
 									array(
@@ -318,7 +322,7 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 								)
 							),
 							MONTH_IN_SECONDS,
-							__( 'No, thanks', 'woo-cart-abandonment-recovery' )
+							__( 'Skip' )
 						),
 						'show_if'                    => true,
 						'repeat-notice-after'        => false,
@@ -496,7 +500,7 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 
 				add_settings_field(
 					$key . '-usage-optin',       // Field ID.
-					__( 'Usage Tracking', 'woo-cart-abandonment-recovery' ),       // Field title.
+					__( 'Usage Tracking' ),       // Field title.
 					array( $this, 'render_settings_field_html' ), // Field callback function.
 					'general',
 					'default',                   // Settings page slug.
@@ -541,15 +545,15 @@ if ( ! class_exists( 'BSF_Analytics' ) ) {
 				<input id="<?php echo esc_attr( $args['id'] ); ?>" type="checkbox" value="1" name="<?php echo esc_attr( $args['name'] ); ?>" <?php checked( $is_checked ); ?>>
 				<?php
 				/* translators: %s Product title */
-				echo esc_html( sprintf( __( 'Help improve %s by sharing non-sensitive usage data — like PHP version and features used.', 'woo-cart-abandonment-recovery' ), $args['title'] ) );// phpcs:ignore WordPress.WP.I18n.NonSingularStringLiteralText
+				echo esc_html( sprintf( __( 'Help improve %s by sharing non-sensitive usage data — like PHP version and features used.' ), $args['title'] ) );// phpcs:ignore WordPress.WP.I18n.NonSingularStringLiteralText
 
 				if ( is_multisite() ) {
-					esc_html_e( ' This will be applicable for all sites from the network.', 'woo-cart-abandonment-recovery' );
+					esc_html_e( ' This will be applicable for all sites from the network.' );
 				}
 				?>
 			</label>
 			<?php
-			echo wp_kses_post( sprintf( '<a href="%1s" target="_blank" rel="noreferrer noopener">%2s</a>', esc_url( $args['usage_doc_link'] ), __( 'Learn More.', 'woo-cart-abandonment-recovery' ) ) );
+			echo wp_kses_post( sprintf( '<a href="%1s" target="_blank" rel="noreferrer noopener">%2s</a>', esc_url( $args['usage_doc_link'] ), __( 'Learn More.' ) ) );
 			?>
 			</fieldset>
 			<?php

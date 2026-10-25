@@ -10,7 +10,6 @@ use MailPoet\Entities\DynamicSegmentFilterEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Util\DBCollationChecker;
 use MailPoet\Util\Security;
-use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
 use MailPoetVendor\Doctrine\DBAL\Query\QueryBuilder;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
@@ -33,14 +32,19 @@ class WooCommerceNumberOfOrders implements Filter {
   /** @var WooFilterHelper */
   private $wooFilterHelper;
 
+  /** @var FilterHelper */
+  private $filterHelper;
+
   public function __construct(
     EntityManager $entityManager,
     DBCollationChecker $collationChecker,
-    WooFilterHelper $wooFilterHelper
+    WooFilterHelper $wooFilterHelper,
+    FilterHelper $filterHelper
   ) {
     $this->entityManager = $entityManager;
     $this->collationChecker = $collationChecker;
     $this->wooFilterHelper = $wooFilterHelper;
+    $this->filterHelper = $filterHelper;
   }
 
   public function apply(QueryBuilder $queryBuilder, DynamicSegmentFilterEntity $filter): QueryBuilder {
@@ -53,7 +57,6 @@ class WooCommerceNumberOfOrders implements Filter {
     /** @var string $count - for PHPStan because intval() doesn't accept a value of mixed */
     $count = $filterData->getParam('number_of_orders_count');
     $count = intval($count);
-    $isAllTime = $filterData->getParam('timeframe') === DynamicSegmentFilterData::TIMEFRAME_ALL_TIME;
     $parameterSuffix = $filter->getId() ?? Security::generateRandomString();
     $collation = $this->collationChecker->getCollateIfNeeded(
       $subscribersTable,
@@ -62,12 +65,12 @@ class WooCommerceNumberOfOrders implements Filter {
       'email'
     );
 
-    $days = $filterData->getParam('days');
-    $date = Carbon::now()->subDays($days);
+    $dateCondition = $this->filterHelper->getDatePeriodCondition($queryBuilder, 'orderStats.date_created', $filterData);
 
-    $joinCondition = $isAllTime
-      ? 'customer.customer_id = orderStats.customer_id AND orderStats.status NOT IN (:excludedStatuses' . $parameterSuffix . ')'
-      : 'customer.customer_id = orderStats.customer_id AND orderStats.date_created >= :date' . $parameterSuffix . ' AND orderStats.status NOT IN (:excludedStatuses' . $parameterSuffix . ')';
+    $joinCondition = 'customer.customer_id = orderStats.customer_id AND orderStats.status NOT IN (:excludedStatuses' . $parameterSuffix . ')';
+    if ($dateCondition !== null) {
+      $joinCondition .= " AND $dateCondition";
+    }
 
     $subQuery = $this->entityManager->getConnection()
       ->createQueryBuilder()
@@ -100,7 +103,6 @@ class WooCommerceNumberOfOrders implements Filter {
         'joinCondition' => "$subscribersTable.email = selectedCustomers.email $collation",
       ],
     ], \true)
-      ->setParameter('date' . $parameterSuffix, $date->toDateTimeString())
       ->setParameter('excludedStatuses' . $parameterSuffix, $this->wooFilterHelper->defaultExcludedStatuses(), ArrayParameterType::STRING)
       ->groupBy('inner_subscriber_id');
 

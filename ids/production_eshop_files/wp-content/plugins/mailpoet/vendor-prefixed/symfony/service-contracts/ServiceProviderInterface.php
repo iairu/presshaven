@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Psr\Container\ContainerInterface;
 interface ServiceProviderInterface extends ContainerInterface
 {
- public function getProvidedServices() : array;
+public function getProvidedServices(): array;
 }

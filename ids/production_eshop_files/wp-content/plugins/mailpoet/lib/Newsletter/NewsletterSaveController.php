@@ -5,6 +5,7 @@ namespace MailPoet\Newsletter;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\API\JSON\Error as APIError;
 use MailPoet\Cron\Workers\SendingQueue\Tasks\Newsletter as NewsletterQueueTask;
 use MailPoet\EmailEditor\Integrations\MailPoet\EmailEditor;
 use MailPoet\Entities\NewsletterEntity;
@@ -21,6 +22,8 @@ use MailPoet\Newsletter\Scheduler\PostNotificationScheduler;
 use MailPoet\Newsletter\Scheduler\Scheduler;
 use MailPoet\Newsletter\Segment\NewsletterSegmentRepository;
 use MailPoet\Newsletter\Sending\ScheduledTasksRepository;
+use MailPoet\Newsletter\Sending\TimeZoneCampaignScheduler;
+use MailPoet\Newsletter\Sharing\ShareVisibility;
 use MailPoet\NewsletterTemplates\NewsletterTemplatesRepository;
 use MailPoet\NotFoundException;
 use MailPoet\Services\AuthorizedEmailsController;
@@ -29,7 +32,6 @@ use MailPoet\UnexpectedValueException;
 use MailPoet\Util\Security;
 use MailPoet\WP\Emoji;
 use MailPoet\WP\Functions as WPFunctions;
-use MailPoet\WPCOM\DotcomHelperFunctions;
 use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 
@@ -82,7 +84,11 @@ class NewsletterSaveController {
   /*** @var NewsletterCoupon */
   private $newsletterCoupon;
 
-  private DotcomHelperFunctions $dotcomHelperFunctions;
+  /** @var TimeZoneCampaignScheduler */
+  private $timeZoneCampaignScheduler;
+
+  /** @var ShareVisibility */
+  private $shareVisibility;
 
   public function __construct(
     AuthorizedEmailsController $authorizedEmailsController,
@@ -101,7 +107,8 @@ class NewsletterSaveController {
     ApiDataSanitizer $dataSanitizer,
     Scheduler $scheduler,
     NewsletterCoupon $newsletterCoupon,
-    DotcomHelperFunctions $dotcomHelperFunctions
+    TimeZoneCampaignScheduler $timeZoneCampaignScheduler,
+    ShareVisibility $shareVisibility
   ) {
     $this->authorizedEmailsController = $authorizedEmailsController;
     $this->emoji = $emoji;
@@ -119,7 +126,14 @@ class NewsletterSaveController {
     $this->dataSanitizer = $dataSanitizer;
     $this->scheduler = $scheduler;
     $this->newsletterCoupon = $newsletterCoupon;
-    $this->dotcomHelperFunctions = $dotcomHelperFunctions;
+    $this->timeZoneCampaignScheduler = $timeZoneCampaignScheduler;
+    $this->shareVisibility = $shareVisibility;
+  }
+
+  public function decodeAndSanitizeBody(string $body): ?array {
+    $newslettersTableName = $this->newslettersRepository->getTableName();
+    $decodedBody = json_decode($this->emoji->encodeForUTF8Column($newslettersTableName, 'body', $body), true);
+    return is_array($decodedBody) ? $this->dataSanitizer->sanitizeBody($decodedBody) : null;
   }
 
   public function save(array $data = []): NewsletterEntity {
@@ -131,10 +145,7 @@ class NewsletterSaveController {
     }
 
     if (!empty($data['body'])) {
-      $newslettersTableName = $this->newslettersRepository->getTableName();
-      $body = $this->emoji->encodeForUTF8Column($newslettersTableName, 'body', $data['body']);
-      $body = $this->dataSanitizer->sanitizeBody(json_decode($body, true));
-      $data['body'] = json_encode($body);
+      $data['body'] = $this->decodeAndSanitizeBody($data['body']) ?? [];
     }
 
     $newsletter = isset($data['id']) ? $this->getNewsletter($data) : $this->createNewsletter($data);
@@ -164,6 +175,13 @@ class NewsletterSaveController {
     if ($this->isNewEditor($data)) {
       $this->ensureWpPost($newsletter);
     }
+    return $newsletter;
+  }
+
+  public function updateShareVisibility(NewsletterEntity $newsletter, string $visibility): NewsletterEntity {
+    $this->updateOptions($newsletter, [
+      NewsletterOptionFieldEntity::NAME_SHARE_VISIBILITY => $visibility,
+    ]);
     return $newsletter;
   }
 
@@ -222,14 +240,24 @@ class NewsletterSaveController {
     // duplicate wp post data
     $post = !is_null($newsletter->getWpPostId()) ? $this->wp->getPost($newsletter->getWpPostId()) : null;
     if ($post instanceof \WP_Post) {
-      $newPostId = $this->wp->wpInsertPost([
-        'post_status' => NewsletterEntity::STATUS_DRAFT,
+      // Automation emails use 'private' status to prevent them from appearing in public queries
+      $isAutomation = $duplicate->getType() === NewsletterEntity::TYPE_AUTOMATION;
+      $postStatus = $isAutomation ? 'private' : NewsletterEntity::STATUS_DRAFT;
+      $postData = [
+        'post_status' => $postStatus,
         'post_author' => $this->wp->getCurrentUserId(),
         'post_content' => $post->post_content, // @phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         'post_type' => $post->post_type, // @phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         // translators: %s is the campaign name of the mail which has been copied.
         'post_title' => sprintf(__('Copy of %s', 'mailpoet'), $post->post_title), // @phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-      ]);
+      ];
+
+      // Set meta flag for automation emails to prevent other plugins from creating duplicate newsletters
+      if ($isAutomation) {
+        $postData['meta_input'] = ['_mailpoet_is_automation_email' => '1'];
+      }
+
+      $newPostId = $this->wp->wpInsertPost($postData);
       // Post meta duplication
       $originalPostMeta = $this->wp->getPostMeta($post->ID);
       foreach ($originalPostMeta as $key => $values) {
@@ -260,6 +288,10 @@ class NewsletterSaveController {
     $ignoredOptions = [
       NewsletterOptionFieldEntity::NAME_IS_SCHEDULED,
       NewsletterOptionFieldEntity::NAME_SCHEDULED_AT,
+      NewsletterOptionFieldEntity::NAME_SCHEDULE_MODE,
+      NewsletterOptionFieldEntity::NAME_SCHEDULED_LOCAL_DATE,
+      NewsletterOptionFieldEntity::NAME_SCHEDULED_LOCAL_TIME,
+      NewsletterOptionFieldEntity::NAME_EXCLUDE_FROM_ARCHIVE,
     ];
     foreach ($newsletter->getOptions() as $newsletterOption) {
       $optionField = $newsletterOption->getOptionField();
@@ -281,12 +313,13 @@ class NewsletterSaveController {
 
   private function getNewsletter(array $data): NewsletterEntity {
     if (!isset($data['id'])) {
-      throw new UnexpectedValueException();
+      throw new UnexpectedValueException('Missing newsletter ID in data');
     }
 
     $newsletter = $this->newslettersRepository->findOneById((int)$data['id']);
     if (!$newsletter) {
-      throw new NotFoundException();
+      throw (new NotFoundException('Newsletter not found'))
+        ->withError(APIError::NOT_FOUND, __('This email does not exist.', 'mailpoet'));
     }
     return $newsletter;
   }
@@ -328,7 +361,8 @@ class NewsletterSaveController {
     }
 
     if (array_key_exists('body', $data)) {
-      $newsletter->setBody(json_decode($data['body'], true));
+      $body = is_string($data['body']) ? json_decode($data['body'], true) : $data['body'];
+      $newsletter->setBody(is_array($body) ? $body : null);
     }
 
     if (array_key_exists('ga_campaign', $data)) {
@@ -359,7 +393,7 @@ class NewsletterSaveController {
   private function updateSegments(NewsletterEntity $newsletter, array $segments) {
     $newsletterSegments = [];
     foreach ($segments as $segmentData) {
-      if (!is_array($segmentData) || !isset($segmentData['id'])) {
+      if (!is_array($segmentData) || !isset($segmentData['id']) || !is_numeric($segmentData['id'])) {
         continue;
       }
 
@@ -398,7 +432,8 @@ class NewsletterSaveController {
   private function updateOptions(NewsletterEntity $newsletter, array $options) {
     $optionFields = $this->newsletterOptionFieldsRepository->findBy(['newsletterType' => $newsletter->getType()]);
     foreach ($optionFields as $optionField) {
-      if (!isset($options[$optionField->getName()])) {
+      $name = $optionField->getName();
+      if (!isset($options[$name])) {
         continue;
       }
 
@@ -411,7 +446,11 @@ class NewsletterSaveController {
         $option = new NewsletterOptionEntity($newsletter, $optionField);
         $this->newsletterOptionsRepository->persist($option);
       }
-      $option->setValue($options[$optionField->getName()]);
+      $value = $options[$name];
+      if ($name === NewsletterOptionFieldEntity::NAME_SHARE_VISIBILITY) {
+        $value = $this->shareVisibility->sanitize((string)$value);
+      }
+      $option->setValue($value);
 
       if (!$newsletter->getOptions()->contains($option)) {
         $newsletter->getOptions()->add($option);
@@ -459,9 +498,27 @@ class NewsletterSaveController {
 
     // if newsletter was previously scheduled and is now unscheduled, set its status to DRAFT and delete associated queue record
     if ($newsletter->getStatus() === NewsletterEntity::STATUS_SCHEDULED && isset($options['isScheduled']) && empty($options['isScheduled'])) {
+      if ($this->timeZoneCampaignScheduler->isTimeZoneQueue($queue)) {
+        $this->timeZoneCampaignScheduler->deleteScheduledCampaignQueues($newsletter);
+        $newsletter->setStatus(NewsletterEntity::STATUS_DRAFT);
+        $this->entityManager->flush();
+        return;
+      }
       $this->entityManager->remove($queue);
       $newsletter->setStatus(NewsletterEntity::STATUS_DRAFT);
     } else {
+      if ($this->timeZoneCampaignScheduler->isTimeZoneQueue($queue)) {
+        if (!$this->timeZoneCampaignScheduler->canReplaceScheduledCampaign($newsletter)) {
+          throw new InvalidStateException(__('This email can no longer be edited because one or more time zone batches have already started.', 'mailpoet'));
+        }
+        foreach ($this->timeZoneCampaignScheduler->getCampaignQueues($queue) as $campaignQueue) {
+          $campaignQueue->setNewsletterRenderedSubject(null);
+          $campaignQueue->setNewsletterRenderedBody(null);
+          $this->entityManager->persist($campaignQueue);
+        }
+        $this->entityManager->flush();
+        return;
+      }
       $queue->setNewsletterRenderedSubject(null);
       $queue->setNewsletterRenderedBody(null);
       $this->entityManager->persist($queue);
@@ -470,7 +527,7 @@ class NewsletterSaveController {
       $task = $queue->getTask();
 
       if (!$task instanceof ScheduledTaskEntity) {
-        throw new InvalidStateException();
+        throw new InvalidStateException('Newsletter queue has no associated scheduled task');
       }
 
       $newsletterQueueTask->preProcessNewsletter($newsletter, $task);
@@ -483,22 +540,24 @@ class NewsletterSaveController {
       return;
     }
 
-    $postStatus = 'draft';
-    // The automation emails need to be private in the Garden environment for the correct display in the email editor.
-    if (
-      $newsletter->getType() === NewsletterEntity::TYPE_AUTOMATION
-      && $this->dotcomHelperFunctions->isGarden()
-    ) {
-      $postStatus = 'private';
-    }
+    // Automation emails use 'private' status to prevent them from appearing in public queries
+    $isAutomation = $newsletter->getType() === NewsletterEntity::TYPE_AUTOMATION;
+    $postStatus = $isAutomation ? 'private' : 'draft';
 
-    $newPostId = $this->wp->wpInsertPost([
+    $postData = [
       'post_content' => '',
       'post_type' => EmailEditor::MAILPOET_EMAIL_POST_TYPE,
       'post_status' => $postStatus,
       'post_author' => $this->wp->getCurrentUserId(),
       'post_title' => __('New Email', 'mailpoet'),
-    ]);
+    ];
+
+    // Set meta flag for automation emails to prevent other plugins from creating duplicate newsletters
+    if ($isAutomation) {
+      $postData['meta_input'] = ['_mailpoet_is_automation_email' => '1'];
+    }
+
+    $newPostId = $this->wp->wpInsertPost($postData);
     $newsletter->setWpPost($this->entityManager->getReference(WpPostEntity::class, $newPostId));
     $this->entityManager->flush();
   }

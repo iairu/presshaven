@@ -1969,7 +1969,7 @@ div.wp-picker-holder {
     line-height: 1.5;
     font-weight: 600;
     text-align: right;
-    margin-top: -3px;
+    margin-top: 3px;
 }
 .woocs_settings_powered h5 {
     font-size: 12px;
@@ -2748,7 +2748,7 @@ div.wp-picker-holder {
 .woocs__button,
 .woocs-panel-button{
     display: inline-block;
-    padding: 4px 12px;
+    padding: 6px 12px;
     outline: none;
     text-decoration: none;
     font-size: 14px;
@@ -2862,9 +2862,7 @@ span.select2-container .select2-selection--single .select2-selection__rendered {
     height: auto;
     border-color: #dee2e6;
 }
-[class*=wc-wp-version-gte] span.select2-container .select2-selection--single .select2-selection__rendered {
-    line-height: inherit;
-}
+
 [class*=wc-wp-version-gte] span.select2-container .select2-selection--single .select2-selection__arrow {
     top: 0;
     height: 100%;
@@ -3256,8 +3254,8 @@ span[class^='icon-']{
 }
 
 #woocs-head svg {
-    width: 35px;
-    height: 35px;
+    width: 45px;
+    height: 45px;
     position: absolute;
 }
 /* modal*/
@@ -3324,5 +3322,15 @@ nav.woocs__tabs-nav{
 
 .woocommerce-save-button{
     margin-left: 11px;
+}
+
+
+div#wpfooter{
+    position: relative !important;
+}
+
+
+#wpwrap .woocs__tab-pane .select2-container .select2-selection--multiple .select2-selection__rendered{
+    display: inline-block !important;
 }
 

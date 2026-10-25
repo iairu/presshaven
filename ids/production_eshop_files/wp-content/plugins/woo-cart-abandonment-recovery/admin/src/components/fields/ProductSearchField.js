@@ -11,6 +11,8 @@
 import FieldWrapper from '@Components/common/FieldWrapper';
 import { Badge, SearchBox } from '@bsf/force-ui';
 import { useEffect, useState } from 'react';
+import { __ } from '@wordpress/i18n';
+import { useFieldA11y } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const ProductSearchField = ( {
@@ -23,6 +25,7 @@ const ProductSearchField = ( {
 	isPro = false,
 	proUpgradeMessage = '',
 } ) => {
+	const a11y = useFieldA11y( { description } );
 	const { shouldBlockProFeatures } = useProAccess();
 	const isFeatureBlocked = shouldBlockProFeatures();
 	const [ selectedProductIDs, setSelectedProductIDs ] = useState( [] );
@@ -137,12 +140,33 @@ const ProductSearchField = ( {
 		handleChange( name, ids );
 	};
 
+	// Shown under the help text, after the search box, so the order reads: control, help, choices.
+	const selectedChips = selectedProducts.length > 0 && (
+		// Capped so a long list scrolls instead of pushing the rest of the form down.
+		<div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 -mx-1 -mb-1">
+			{ selectedProducts.map( ( product ) => (
+				<Badge
+					closable
+					onClose={ () => removeProduct( product.id ) }
+					key={ product.id }
+					label={ product.name }
+					size="md"
+					type="pill"
+					variant="neutral"
+					className="[&_[role=button]]:-m-1.5 [&_[role=button]]:p-1.5"
+				/>
+			) ) }
+		</div>
+	);
+
 	return (
 		<FieldWrapper
 			type="block"
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			name={ name }
+			afterControl={ selectedChips || null }
 			disableStyle={ disableStyle }
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
@@ -157,6 +181,9 @@ const ProductSearchField = ( {
 					size="md"
 				>
 					<SearchBox.Input
+						id={ a11y.id }
+						name={ name }
+						aria-describedby={ a11y.controlProps[ 'aria-describedby' ] }
 						className="w-full box-border [&_span]:hidden"
 						onChange={ ( val ) =>
 							setSearchTerm(
@@ -205,8 +232,14 @@ const ProductSearchField = ( {
 								) : (
 									<SearchBox.Empty>
 										{ searchTerm.length < 3
-											? 'Type at least 3 letters to search'
-											: 'No products found' }
+											? __(
+												'Type at least 3 letters to search',
+												'woo-cart-abandonment-recovery'
+											)
+											: __(
+												'No products found',
+												'woo-cart-abandonment-recovery'
+											) }
 									</SearchBox.Empty>
 								) }
 							</SearchBox.List>
@@ -215,24 +248,6 @@ const ProductSearchField = ( {
 				</SearchBox>
 			) }
 
-			{ /* Selected Products */ }
-			{ selectedProducts.length > 0 && (
-				<div className="space-y-2 -mt-5">
-					<div className="flex flex-wrap gap-2">
-						{ selectedProducts.map( ( product ) => (
-							<Badge
-								closable
-								onClose={ () => removeProduct( product.id ) }
-								key={ product.id }
-								label={ product.name }
-								size="sm"
-								type="pill"
-								variant="neutral"
-							/>
-						) ) }
-					</div>
-				</div>
-			) }
 		</FieldWrapper>
 	);
 };

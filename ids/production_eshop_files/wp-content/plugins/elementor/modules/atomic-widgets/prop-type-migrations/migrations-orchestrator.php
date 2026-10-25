@@ -4,6 +4,7 @@ namespace Elementor\Modules\AtomicWidgets\PropTypeMigrations;
 
 use Elementor\Core\Base\Document;
 use Elementor\Core\Upgrade\Manager as Upgrade_Manager;
+use Elementor\Modules\AtomicWidgets\Module as AtomicWidgetsModule;
 use Elementor\Modules\AtomicWidgets\Logger\Logger;
 use Elementor\Modules\AtomicWidgets\PropTypes\Base\Array_Prop_Type;
 use Elementor\Modules\AtomicWidgets\PropTypes\Base\Object_Prop_Type;
@@ -12,14 +13,13 @@ use Elementor\Modules\AtomicWidgets\PropTypes\Union_Prop_Type;
 use Elementor\Modules\Components\PropTypes\Component_Override_Parser;
 use Elementor\Modules\Components\PropTypes\Overridable_Prop_Type;
 use Elementor\Modules\Components\PropTypes\Override_Prop_Type;
-use Elementor\Plugin;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 class Migrations_Orchestrator {
-	const EXPERIMENT_BC_MIGRATIONS = 'e_bc_migrations';
+	const EXPERIMENT_BC_MIGRATIONS = AtomicWidgetsModule::EXPERIMENT_NAME;
 	const MIGRATIONS_URL = 'https://editor.elementor.com/v1/migrations/';
 	const BUNDLED_MIGRATIONS_DIRECTORY = 'migrations/';
 
@@ -38,15 +38,14 @@ class Migrations_Orchestrator {
 	}
 
 	public function register_hooks() {
-		if ( ! self::is_active() ) {
-			return;
-		}
-
 		add_filter( 'elementor/document/load/data', fn ( $data, $document ) => $this->migrate_doc( $data, $document ), 10, 2 );
 	}
 
 	public static function is_active(): bool {
-		return Plugin::$instance->experiments->is_feature_active( self::EXPERIMENT_BC_MIGRATIONS );
+		return true;
+	}
+
+	public static function register_affecting_feature_flag_hooks( array $features ): void {
 	}
 
 	public static function make( ?string $migrations_path = null ): self {
@@ -70,25 +69,13 @@ class Migrations_Orchestrator {
 	}
 
 	public static function is_rollback(): bool {
-		/** @var Upgrade_Manager $upgrade_manager */
-		$upgrade_manager = Plugin::$instance->upgrade;
-		$stored_version = get_option( $upgrade_manager->get_version_option_name() );
+		$stored_version = get_option( Upgrade_Manager::VERSION_OPTION_NAME );
 
 		if ( ! $stored_version ) {
 			return false;
 		}
 
 		return version_compare( ELEMENTOR_VERSION, $stored_version, '<' );
-	}
-
-	public static function register_affecting_feature_flag_hooks( array $features ): void {
-		if ( ! self::is_active() ) {
-			return;
-		}
-
-		foreach ( $features as $feature ) {
-			add_action( 'elementor/experiments/feature-state-change/' . $feature, [ __CLASS__, 'clear_migration_cache' ], 10, 2 );
-		}
 	}
 
 	public static function clear_migration_cache(): void {

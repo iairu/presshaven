@@ -150,6 +150,7 @@ class Taxonomy extends ItemsIntegration
         foreach ($items as $item) {
             register_term_meta($this->taxonomy, $item['id'], array('type' => $this->custom_fields->get_wp_type($item), 'description' => $item['label'], 'single' => \true, 'default' => $this->custom_fields->get_default_value($item), 'sanitize_callback' => $this->custom_fields->sanitize_item_value($item), 'show_in_rest' => \false));
         }
+        do_action('wpifycf_register_term_meta', $items, $this->taxonomy);
     }
     /**
      * Save method for handling term data and updating custom fields.

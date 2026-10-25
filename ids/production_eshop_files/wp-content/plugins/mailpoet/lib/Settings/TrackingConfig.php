@@ -5,6 +5,8 @@ namespace MailPoet\Settings;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\WP\Functions as WPFunctions;
+
 class TrackingConfig {
   const LEVEL_FULL = 'full';
   const LEVEL_PARTIAL = 'partial';
@@ -13,13 +15,16 @@ class TrackingConfig {
   const OPENS_MERGED = 'merged';
   const OPENS_SEPARATED = 'separated';
 
-  /** @var SettingsController */
-  private $settings;
+  private SettingsController $settings;
+
+  private WPFunctions $wp;
 
   public function __construct(
-    SettingsController $settings
+    SettingsController $settings,
+    WPFunctions $wp
   ) {
     $this->settings = $settings;
+    $this->wp = $wp;
   }
 
   public function isEmailTrackingEnabled(?string $level = null): bool {
@@ -29,7 +34,7 @@ class TrackingConfig {
 
   public function isCookieTrackingEnabled(?string $level = null): bool {
     $level = $level ?? $this->settings->get('tracking.level', self::LEVEL_FULL);
-    return $level === self::LEVEL_FULL;
+    return (bool)$this->wp->applyFilters('mailpoet_is_cookie_tracking_enabled', $level === self::LEVEL_FULL);
   }
 
   public function areOpensMerged(?string $opens = null): bool {

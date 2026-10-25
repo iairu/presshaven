@@ -12,14 +12,17 @@ use MailPoet\AutomaticEmails\WooCommerce\Events\PurchasedInCategory;
 use MailPoet\AutomaticEmails\WooCommerce\Events\PurchasedProduct;
 use MailPoet\Doctrine\Repository;
 use MailPoet\Entities\NewsletterEntity;
+use MailPoet\Entities\NewsletterOptionEntity;
 use MailPoet\Entities\NewsletterOptionFieldEntity;
 use MailPoet\Entities\NewsletterSegmentEntity;
 use MailPoet\Entities\ScheduledTaskEntity;
 use MailPoet\Entities\SendingQueueEntity;
 use MailPoet\Logging\LoggerFactory;
+use MailPoet\Newsletter\Sending\NewsletterReplayMetadata;
 use MailPoet\Util\Helpers;
 use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
+use MailPoetVendor\Doctrine\DBAL\ParameterType;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 use MailPoetVendor\Doctrine\ORM\Query\Expr\Join;
 
@@ -69,6 +72,22 @@ class NewslettersRepository extends Repository {
       ->andWhere('n.type IN (:types)')
       ->setParameter('status', $status)
       ->setParameter('types', $types)
+      ->getQuery()
+      ->getSingleScalarResult());
+  }
+
+  /**
+   * Counts the emails the user has, trashed ones included. Emails MailPoet
+   * creates on their behalf do not count, so this is zero on a fresh install
+   * even when WooCommerce or signup confirmation emails were customized.
+   */
+  public function countUserCreatedNewsletters(): int {
+    return intval($this->entityManager
+      ->createQueryBuilder()
+      ->select('COUNT(n.id)')
+      ->from(NewsletterEntity::class, 'n')
+      ->where('n.type NOT IN (:types)')
+      ->setParameter('types', NewsletterEntity::AUTO_CREATED_TYPES, ArrayParameterType::STRING)
       ->getQuery()
       ->getSingleScalarResult());
   }
@@ -142,6 +161,9 @@ class NewslettersRepository extends Repository {
       ->getResult();
   }
 
+  /**
+   * Returns the number of standard newsletter campaigns sent in the given period.
+   */
   public function getStandardNewsletterSentCount(DateTimeInterface $since): int {
     return (int)$this->doctrineRepository->createQueryBuilder('n')
       ->select('COUNT(n)')
@@ -150,10 +172,15 @@ class NewslettersRepository extends Repository {
       ->andWhere('n.type = :type')
       ->andWhere('n.status = :status')
       ->andWhere('t.status = :taskStatus')
+      // Intentionally skip "Send latest newsletter" replay sends; they would skew the campaign count.
+      // We use only the date of the initial sending.
+      ->andWhere('q.meta IS NULL OR q.meta NOT LIKE :latestNewsletterReplayMeta')
+      ->andWhere('t.meta IS NULL OR t.meta NOT LIKE :latestNewsletterReplayMeta')
       ->andWhere('t.processedAt >= :since')
       ->setParameter('type', NewsletterEntity::TYPE_STANDARD)
       ->setParameter('status', NewsletterEntity::STATUS_SENT)
       ->setParameter('taskStatus', ScheduledTaskEntity::STATUS_COMPLETED)
+      ->setParameter('latestNewsletterReplayMeta', NewsletterReplayMetadata::getMetaLikePattern())
       ->setParameter('since', $since)
       ->getQuery()
       ->getSingleScalarResult() ?: 0;
@@ -208,31 +235,37 @@ class NewslettersRepository extends Repository {
     foreach ($results as $result) {
       $type = $result['type'];
       if ($type === NewsletterEntity::TYPE_AUTOMATIC) {
+        if (!isset($analyticsMap[$type]) || !is_array($analyticsMap[$type])) {
+          $analyticsMap[$type] = [];
+        }
         $analyticsMap[$type][$result['event'] ?? ''] = (int)$result['cnt'];
       } else {
         $analyticsMap[$type] = (int)$result['cnt'];
       }
     }
 
+    $automaticEmailsMap = $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC] ?? [];
+    $automaticEmailsMap = is_array($automaticEmailsMap) ? $automaticEmailsMap : [];
+
     $data = [
       'welcome_newsletters_count' => $analyticsMap[NewsletterEntity::TYPE_WELCOME] ?? 0,
       'notifications_count' => $analyticsMap[NewsletterEntity::TYPE_NOTIFICATION] ?? 0,
-      'automatic_emails_count' => array_sum($analyticsMap[NewsletterEntity::TYPE_AUTOMATIC] ?? []),
+      'automatic_emails_count' => array_sum($automaticEmailsMap),
       'automation_emails_count' => $analyticsMap[NewsletterEntity::TYPE_AUTOMATION] ?? 0,
       're-engagement_emails_count' => $analyticsMap[NewsletterEntity::TYPE_RE_ENGAGEMENT] ?? 0,
       'sent_newsletters_count' => $analyticsMap[NewsletterEntity::TYPE_STANDARD] ?? 0,
       'sent_newsletters_7_days' => $this->getStandardNewsletterSentCount(Carbon::now()->subDays(7)),
       'sent_newsletters_3_months' => $this->getStandardNewsletterSentCount(Carbon::now()->subMonths(3)),
       'sent_newsletters_30_days' => $this->getStandardNewsletterSentCount(Carbon::now()->subDays(30)),
-      'first_purchase_emails_count' => $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC][FirstPurchase::SLUG] ?? 0,
-      'product_purchased_emails_count' => $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC][PurchasedProduct::SLUG] ?? 0,
-      'product_purchased_in_category_emails_count' => $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC][PurchasedInCategory::SLUG] ?? 0,
-      'abandoned_cart_emails_count' => $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC][AbandonedCart::SLUG] ?? 0,
+      'first_purchase_emails_count' => $automaticEmailsMap[FirstPurchase::SLUG] ?? 0,
+      'product_purchased_emails_count' => $automaticEmailsMap[PurchasedProduct::SLUG] ?? 0,
+      'product_purchased_in_category_emails_count' => $automaticEmailsMap[PurchasedInCategory::SLUG] ?? 0,
+      'abandoned_cart_emails_count' => $automaticEmailsMap[AbandonedCart::SLUG] ?? 0,
       'total_gutenberg_newsletter_count' => $this->getTotalGutenbergNewsletterCount() ?: 0,
       'sent_gutenberg_newsletter_count' => $this->getGutenbergNewsletterSentCount() ?: 0,
     ];
     // Count all campaigns
-    $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC] = array_sum($analyticsMap[NewsletterEntity::TYPE_AUTOMATIC] ?? []);
+    $analyticsMap[NewsletterEntity::TYPE_AUTOMATIC] = array_sum($automaticEmailsMap);
     // Post notification history is not a campaign, we count only the parent notification
     unset($analyticsMap[NewsletterEntity::TYPE_NOTIFICATION_HISTORY]);
     $data['campaigns_count'] = array_sum($analyticsMap);
@@ -263,6 +296,25 @@ class NewslettersRepository extends Repository {
       ->addOrderBy('st.id', 'ASC')
       ->setParameter('types', $types)
       ->setParameter('statusCompleted', SendingQueueEntity::STATUS_COMPLETED);
+
+    $excludeFromArchiveSubQuery = $this->entityManager
+      ->createQueryBuilder()
+      ->select('1')
+      ->from(NewsletterOptionEntity::class, 'archiveOption')
+      ->innerJoin('archiveOption.optionField', 'archiveOptionField')
+      ->where('archiveOption.newsletter = n')
+      ->andWhere('archiveOption.value = :excludeFromArchive')
+      ->andWhere('archiveOptionField.name = :excludeFromArchiveOptionName')
+      ->getDQL();
+
+    $queryBuilder
+      ->andWhere($queryBuilder->expr()->orX(
+        'n.type != :standardNewsletterType',
+        $queryBuilder->expr()->not($queryBuilder->expr()->exists($excludeFromArchiveSubQuery))
+      ))
+      ->setParameter('standardNewsletterType', NewsletterEntity::TYPE_STANDARD)
+      ->setParameter('excludeFromArchive', '1')
+      ->setParameter('excludeFromArchiveOptionName', NewsletterOptionFieldEntity::NAME_EXCLUDE_FROM_ARCHIVE);
 
     $segmentIds = $params['segmentIds'] ?? [];
     if (!empty($segmentIds)) {
@@ -298,6 +350,171 @@ class NewslettersRepository extends Repository {
     }
 
     return $queryBuilder->getQuery()->getResult();
+  }
+
+  public function findEmbeddableNewsletterById(int $newsletterId): ?NewsletterEntity {
+    return $this->entityManager
+      ->createQueryBuilder()
+      ->select('n')
+      ->from(NewsletterEntity::class, 'n')
+      ->where('n.id = :newsletterId')
+      ->andWhere('n.status = :status')
+      ->andWhere('n.deletedAt IS NULL')
+      ->andWhere('n.type IN (:types)')
+      ->setParameter('newsletterId', $newsletterId)
+      ->setParameter('status', NewsletterEntity::STATUS_SENT)
+      ->setParameter('types', [
+        NewsletterEntity::TYPE_STANDARD,
+        NewsletterEntity::TYPE_NOTIFICATION_HISTORY,
+      ], ArrayParameterType::STRING)
+      ->getQuery()
+      ->getOneOrNullResult();
+  }
+
+  /**
+   * @return array<int, array{id: int, subject: string|null, sentAt: \DateTimeInterface|string|null, type: string|null, wpPostId: int|null}>
+   */
+  public function findEmbeddableNewsletterRows(string $search = '', int $limit = 20): array {
+    $queryBuilder = $this->entityManager
+      ->createQueryBuilder()
+      ->select('
+        n.id,
+        n.subject,
+        n.type,
+        IDENTITY(n.wpPost) AS wpPostId,
+        MAX(st.processedAt) AS sentAt
+      ')
+      ->from(NewsletterEntity::class, 'n')
+      ->innerJoin(SendingQueueEntity::class, 'sq', Join::WITH, 'sq.newsletter = n.id')
+      ->innerJoin(ScheduledTaskEntity::class, 'st', Join::WITH, 'st.id = sq.task')
+      ->where('n.status = :newsletterStatus')
+      ->andWhere('n.deletedAt IS NULL')
+      ->andWhere('n.type IN (:types)')
+      ->andWhere('st.status = :taskStatus')
+      ->setParameter('newsletterStatus', NewsletterEntity::STATUS_SENT)
+      ->setParameter('taskStatus', ScheduledTaskEntity::STATUS_COMPLETED)
+      ->setParameter('types', [
+        NewsletterEntity::TYPE_STANDARD,
+        NewsletterEntity::TYPE_NOTIFICATION_HISTORY,
+      ], ArrayParameterType::STRING)
+      ->groupBy('n.id')
+      ->addGroupBy('n.subject')
+      ->addGroupBy('n.type')
+      ->addGroupBy('n.wpPost')
+      ->orderBy('sentAt', 'DESC')
+      ->addOrderBy('n.id', 'DESC')
+      ->setMaxResults($limit);
+
+    if ($search !== '') {
+      $queryBuilder
+        ->andWhere(
+          $queryBuilder->expr()->orX(
+            $queryBuilder->expr()->like('n.subject', ':search'),
+            $queryBuilder->expr()->like('sq.newsletterRenderedSubject', ':search')
+          )
+        )
+        ->setParameter('search', '%' . Helpers::escapeSearch($search) . '%');
+    }
+
+    $rows = $queryBuilder->getQuery()->getArrayResult();
+    $result = [];
+    foreach ($rows as $row) {
+      if (!is_array($row)) {
+        continue;
+      }
+
+      $subject = $row['subject'] ?? null;
+      $type = $row['type'] ?? null;
+      $sentAt = $row['sentAt'] ?? null;
+      $wpPostId = $row['wpPostId'] ?? null;
+      $id = $row['id'] ?? null;
+      if (!is_numeric($id)) {
+        continue;
+      }
+
+      $result[] = [
+        'id' => (int)$id,
+        'subject' => is_scalar($subject) ? (string)$subject : null,
+        'sentAt' => $sentAt instanceof \DateTimeInterface || is_string($sentAt) ? $sentAt : null,
+        'type' => is_scalar($type) ? (string)$type : null,
+        'wpPostId' => is_numeric($wpPostId) ? (int)$wpPostId : null,
+      ];
+    }
+
+    return $result;
+  }
+
+  /**
+   * @return array{newsletter: NewsletterEntity, queue: SendingQueueEntity, task: ScheduledTaskEntity}|null
+   */
+  public function findLatestSentStandardForSegment(int $segmentId, int $overfetchLimit = 100): ?array {
+    $newsletterTable = $this->entityManager->getClassMetadata(NewsletterEntity::class)->getTableName();
+    $queueTable = $this->entityManager->getClassMetadata(SendingQueueEntity::class)->getTableName();
+    $taskTable = $this->entityManager->getClassMetadata(ScheduledTaskEntity::class)->getTableName();
+    $newsletterSegmentTable = $this->entityManager->getClassMetadata(NewsletterSegmentEntity::class)->getTableName();
+
+    $rows = $this->entityManager->getConnection()->executeQuery(
+      "
+      SELECT n.id AS newsletter_id, sq.id AS queue_id, st.id AS task_id
+      FROM {$newsletterTable} n
+      INNER JOIN {$queueTable} sq ON sq.newsletter_id = n.id
+      INNER JOIN {$taskTable} st ON st.id = sq.task_id
+      INNER JOIN {$newsletterSegmentTable} ns ON ns.newsletter_id = n.id
+      WHERE n.type = :type
+        AND n.status = :newsletterStatus
+        AND n.deleted_at IS NULL
+        AND st.status = :taskStatus
+        AND st.type = :taskType
+        AND st.processed_at IS NOT NULL
+        AND sq.count_processed > 0
+        AND ns.segment_id = :segmentId
+        -- Skip replay queues/tasks so we pick the original standard send as the replay source,
+        -- not a previous replay (whose processed_at could otherwise win the ORDER BY).
+        AND (sq.meta IS NULL OR sq.meta NOT LIKE :latestNewsletterReplayMeta)
+        AND (st.meta IS NULL OR st.meta NOT LIKE :latestNewsletterReplayMeta)
+      ORDER BY st.processed_at DESC, st.id DESC
+      LIMIT :limit
+      ",
+      [
+        'type' => NewsletterEntity::TYPE_STANDARD,
+        'newsletterStatus' => NewsletterEntity::STATUS_SENT,
+        'taskStatus' => ScheduledTaskEntity::STATUS_COMPLETED,
+        'taskType' => 'sending',
+        'segmentId' => $segmentId,
+        'latestNewsletterReplayMeta' => NewsletterReplayMetadata::getMetaLikePattern(),
+        'limit' => $overfetchLimit,
+      ],
+      [
+        'limit' => ParameterType::INTEGER,
+      ]
+    )->fetchAllAssociative();
+
+    foreach ($rows as $row) {
+      $newsletterId = $row['newsletter_id'] ?? null;
+      $queueId = $row['queue_id'] ?? null;
+      $taskId = $row['task_id'] ?? null;
+      if (!is_numeric($newsletterId) || !is_numeric($queueId) || !is_numeric($taskId)) {
+        continue;
+      }
+      $newsletter = $this->findOneById((int)$newsletterId);
+      $queue = $this->entityManager->find(SendingQueueEntity::class, (int)$queueId);
+      $task = $this->entityManager->find(ScheduledTaskEntity::class, (int)$taskId);
+      if (
+        $newsletter instanceof NewsletterEntity
+        && $queue instanceof SendingQueueEntity
+        && $task instanceof ScheduledTaskEntity
+        && !NewsletterReplayMetadata::isLatestNewsletterReplayMeta($queue->getMeta())
+        && !NewsletterReplayMetadata::isLatestNewsletterReplayMeta($task->getMeta())
+      ) {
+        return [
+          'newsletter' => $newsletter,
+          'queue' => $queue,
+          'task' => $task,
+        ];
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -411,6 +628,58 @@ class NewslettersRepository extends Repository {
   }
 
   /**
+   * Parent post-notification newsletters that have at least one history with a
+   * paused or invalid sending task — i.e. sending was started but is now
+   * stalled and won't progress until the user intervenes (e.g. unauthorized
+   * sender domain, deleted segment, manual pause).
+   *
+   * Results are deduplicated per parent so a single noisy parent (which can
+   * accumulate multiple stuck histories — see PostNotificationScheduler::
+   * createPostNotificationSendingTask) doesn't crowd out other affected
+   * parents up to $limit. `hasInvalid` is true if any of the parent's stuck
+   * histories is in the INVALID state (more severe than PAUSED).
+   *
+   * @return array<int, array{parent: NewsletterEntity, hasInvalid: bool}>
+   */
+  public function findStuckPostNotificationParents(int $limit = 5): array {
+    $rows = $this->entityManager->createQueryBuilder()
+      ->select(
+        'p',
+        'MAX(CASE WHEN t.status = :invalidStatus THEN 1 ELSE 0 END) AS hasInvalid',
+        'MAX(t.updatedAt) AS latestUpdate'
+      )
+      ->from(NewsletterEntity::class, 'p')
+      ->join('p.children', 'n')
+      ->join('n.queues', 'q')
+      ->join('q.task', 't')
+      ->where('p.type = :parentType')
+      ->andWhere('n.type = :historyType')
+      ->andWhere('n.status = :sendingStatus')
+      ->andWhere('p.deletedAt IS NULL')
+      ->andWhere('n.deletedAt IS NULL')
+      ->andWhere('t.status IN (:stuckStatuses)')
+      ->setParameter('parentType', NewsletterEntity::TYPE_NOTIFICATION)
+      ->setParameter('historyType', NewsletterEntity::TYPE_NOTIFICATION_HISTORY)
+      ->setParameter('sendingStatus', NewsletterEntity::STATUS_SENDING)
+      ->setParameter('invalidStatus', ScheduledTaskEntity::STATUS_INVALID)
+      ->setParameter('stuckStatuses', [
+        ScheduledTaskEntity::STATUS_PAUSED,
+        ScheduledTaskEntity::STATUS_INVALID,
+      ])
+      ->groupBy('p.id')
+      ->orderBy('latestUpdate', 'DESC')
+      ->setMaxResults($limit)
+      ->getQuery()->getResult();
+
+    return array_map(static function (array $row): array {
+      return [
+        'parent' => $row[0],
+        'hasInvalid' => (bool)$row['hasInvalid'],
+      ];
+    }, $rows);
+  }
+
+  /**
    * @return NewsletterEntity[]
    */
   public function findSendingNotificationHistoryWithoutPausedOrInvalidTask(NewsletterEntity $newsletter): array {
@@ -453,6 +722,39 @@ class NewslettersRepository extends Repository {
   }
 
   /**
+   * Returns standard newsletters and active automation emails ordered by sentAt.
+   * Drafts (which includes deactivated automations) are excluded to keep the
+   * dropdown focused on automations the user is currently running.
+   *
+   * @return NewsletterEntity[]
+   */
+  public function getStandardAndAutomationNewsletterList(): array {
+    $queryBuilder = $this->entityManager->createQueryBuilder();
+    return $queryBuilder
+      ->select('PARTIAL n.{id,subject,type,sentAt}, PARTIAL wpPost.{id, postTitle}')
+      ->addSelect('CASE WHEN n.sentAt IS NULL THEN 1 ELSE 0 END as HIDDEN sent_at_is_null')
+      ->from(NewsletterEntity::class, 'n')
+      ->leftJoin('n.wpPost', 'wpPost')
+      ->where(
+        $queryBuilder->expr()->orX(
+          $queryBuilder->expr()->eq('n.type', ':typeStandard'),
+          $queryBuilder->expr()->andX(
+            $queryBuilder->expr()->in('n.type', ':automationTypes'),
+            $queryBuilder->expr()->eq('n.status', ':statusActive')
+          )
+        )
+      )
+      ->andWhere('n.deletedAt IS NULL')
+      ->orderBy('sent_at_is_null', 'DESC')
+      ->addOrderBy('n.sentAt', 'DESC')
+      ->setParameter('typeStandard', NewsletterEntity::TYPE_STANDARD)
+      ->setParameter('automationTypes', [NewsletterEntity::TYPE_AUTOMATION, NewsletterEntity::TYPE_AUTOMATION_TRANSACTIONAL], ArrayParameterType::STRING)
+      ->setParameter('statusActive', NewsletterEntity::STATUS_ACTIVE)
+      ->getQuery()
+      ->getResult();
+  }
+
+  /**
    * Returns standard newsletters ordered by sentAt
    * filter by status STATUS_SCHEDULED, STATUS_SENDING, STATUS_SENT
    * @return NewsletterEntity[]
@@ -481,8 +783,11 @@ class NewslettersRepository extends Repository {
     }
 
     $result = $query->getQuery()->getResult();
-
-    return is_array($result) ? $result : [];
+    if (!is_array($result)) {
+      return [];
+    }
+    /** @var NewsletterEntity[] $result */
+    return $result;
   }
 
   /**
@@ -507,8 +812,11 @@ class NewslettersRepository extends Repository {
     }
 
     $result = $query->getQuery()->getResult();
-
-    return is_array($result) ? $result : [];
+    if (!is_array($result)) {
+      return [];
+    }
+    /** @var NewsletterEntity[] $result */
+    return $result;
   }
 
   public function prefetchOptions(array $newsletters) {
@@ -611,5 +919,26 @@ class NewslettersRepository extends Repository {
       $wpPostIds = array_map('intval', $wpPostIds);
 
       return $wpPostIds;
+  }
+
+  /**
+   * @param int[] $ids
+   * @return int[] the subset of $ids that are not of the given type
+   */
+  public function getIdsExcludingType(array $ids, string $type): array {
+    if (!$ids) {
+      return [];
+    }
+    /** @var string[] $filteredIds */
+    $filteredIds = $this->entityManager->createQueryBuilder()
+      ->select('n.id')
+      ->from(NewsletterEntity::class, 'n')
+      ->where('n.id IN (:ids)')
+      ->andWhere('n.type != :type')
+      ->setParameter('ids', $ids)
+      ->setParameter('type', $type)
+      ->getQuery()
+      ->getSingleColumnResult();
+    return array_map('intval', $filteredIds);
   }
 }

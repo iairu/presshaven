@@ -43,6 +43,9 @@ class Red_Bubble_Notifications {
 							'type' => 'string',
 						),
 						'sanitize_callback' => function ( $param ) {
+							if ( ! is_array( $param ) ) {
+								return array();
+							}
 							return array_map( 'sanitize_text_field', $param );
 						},
 					),
@@ -140,7 +143,9 @@ class Red_Bubble_Notifications {
 	}
 
 	/**
-	 * Add an alert slug if the site is missing a site connection
+	 * Add an alert slug if the site is missing a site connection, or has no connection owner recorded and the current user can become one.
+	 *
+	 * @since 6.7.1 Only alerts about a missing user connection when no connection owner is recorded, and to users who can take the vacant owner slot.
 	 *
 	 * @param array $red_bubble_slugs - slugs that describe the reasons the red bubble is showing.
 	 * @return array
@@ -158,7 +163,11 @@ class Red_Bubble_Notifications {
 			return $red_bubble_slugs;
 		}
 
-		if ( ! empty( $broken_modules['needs_user_connection'] ) ) {
+		// A recorded owner without a token is reported as a connection error instead. Only a user who
+		// can take the vacant owner slot (see Manager::authorize()) fixes a site without an owner.
+		if ( ! empty( $broken_modules['needs_user_connection'] )
+			&& ! Jetpack_Options::get_option( 'master_user' )
+			&& current_user_can( 'jetpack_connect' ) ) {
 			$red_bubble_slugs[ self::MISSING_CONNECTION_NOTIFICATION_KEY ] = array(
 				'type'     => 'user',
 				'is_error' => true,
@@ -184,6 +193,10 @@ class Red_Bubble_Notifications {
 	 * @return array
 	 */
 	public static function alert_if_last_backup_failed( array $red_bubble_slugs ) {
+		// Backup is not supported on multisite installations.
+		if ( is_multisite() ) {
+			return $red_bubble_slugs;
+		}
 		// Make sure the Notice wasn't previously dismissed.
 		if ( ! empty( $_COOKIE['backup_failure_dismissed'] ) ) {
 			return $red_bubble_slugs;
@@ -217,6 +230,10 @@ class Red_Bubble_Notifications {
 	 * @return array
 	 */
 	public static function alert_if_protect_has_threats( array $red_bubble_slugs ) {
+		// Scan is not supported on multisite installations.
+		if ( is_multisite() ) {
+			return $red_bubble_slugs;
+		}
 		// Make sure the Notice hasn't been dismissed.
 		if ( ! empty( $_COOKIE['protect_threats_detected_dismissed'] ) ) {
 			return $red_bubble_slugs;
@@ -265,6 +282,7 @@ class Red_Bubble_Notifications {
 							if ( $bundle_product::is_bundle_product() &&
 								$bundle_product::has_paid_plan_for_product() &&
 								! $bundle_product::is_paid_plan_expired() &&
+								! $bundle_product::is_paid_plan_expiring() &&
 								method_exists( $bundle_product, 'get_supported_products' ) &&
 								in_array( $key, $bundle_product::get_supported_products(), true ) ) {
 								$is_covered_by_active_bundle = true;
@@ -362,6 +380,16 @@ class Red_Bubble_Notifications {
 				self::alert_if_paid_plan_requires_plugin_install_or_activation( $red_bubble_slugs )
 			);
 		}
+	}
+
+	/**
+	 * Get cached red bubble alerts without triggering expensive computation.
+	 * Returns the cached transient value or false if not cached.
+	 *
+	 * @return array|false Cached alerts or false if cache is empty.
+	 */
+	public static function get_cached_alerts() {
+		return get_transient( self::MY_JETPACK_RED_BUBBLE_TRANSIENT_KEY );
 	}
 
 	/**

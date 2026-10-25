@@ -11,6 +11,7 @@ use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Entities\SubscriberSegmentEntity;
 use MailPoet\Services\Validator;
 use MailPoet\Settings\SettingsController;
+use MailPoet\Subscribers\SegmentsCountRecalculator;
 use MailPoet\Subscribers\Source;
 use MailPoet\Subscribers\SubscriberSaveController;
 use MailPoet\Subscribers\SubscriberSegmentRepository;
@@ -25,6 +26,18 @@ use MailPoetVendor\Doctrine\DBAL\ParameterType;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 
 class WooCommerce {
+  /**
+   * Per-email record of whether synchronizeGuestCustomer() inserted a brand new
+   * subscriber row this request, or found one that already existed.
+   * insertSubscribers() uses INSERT IGNORE, so a caller looking at the row
+   * afterwards cannot tell "just created" from "already there" — that is
+   * captured at insert time instead. Read by WooCommerce\Subscription, which
+   * runs on the same hook at a later priority and has no other way to know.
+   *
+   * @var array<string, bool>
+   */
+  private $guestSyncCreatedSubscriber = [];
+
   /** @var SettingsController */
   private $settings;
 
@@ -67,6 +80,9 @@ class WooCommerce {
   /** @var Validator */
   private $validator;
 
+  /** @var SegmentsCountRecalculator */
+  private $segmentsCountRecalculator;
+
   public function __construct(
     SettingsController $settings,
     WPFunctions $wp,
@@ -79,7 +95,8 @@ class WooCommerce {
     EntityManager $entityManager,
     Connection $connection,
     SubscriberChangesNotifier $subscriberChangesNotifier,
-    Validator $validator
+    Validator $validator,
+    SegmentsCountRecalculator $segmentsCountRecalculator
   ) {
     $this->settings = $settings;
     $this->wp = $wp;
@@ -93,16 +110,11 @@ class WooCommerce {
     $this->connection = $connection;
     $this->subscriberChangesNotifier = $subscriberChangesNotifier;
     $this->validator = $validator;
+    $this->segmentsCountRecalculator = $segmentsCountRecalculator;
   }
 
   public function shouldShowWooCommerceSegment(): bool {
-    $isWoocommerceActive = $this->woocommerceHelper->isWooCommerceActive();
-    $woocommerceUserExists = $this->subscribersRepository->woocommerceUserExists();
-
-    if (!$isWoocommerceActive && !$woocommerceUserExists) {
-      return false;
-    }
-    return true;
+    return $this->woocommerceHelper->isWooCommerceActive();
   }
 
   public function synchronizeRegisteredCustomer(int $wpUserId, ?string $currentFilter = null): bool {
@@ -112,6 +124,8 @@ class WooCommerce {
     switch ($currentFilter) {
       case 'woocommerce_delete_customer':
         // subscriber should be already deleted in WP users sync
+        // unsubscribeUsersFromSegment() recomputes segments_count for the rows it
+        // removes, so no whole-segment sweep is needed here.
         $this->unsubscribeUsersFromSegment(); // remove leftover association
         break;
       case 'woocommerce_new_customer':
@@ -167,6 +181,17 @@ class WooCommerce {
     return !$this->woocommerceHelper->isCheckoutRequest() || ($checkoutOptinEnabled && $checkoutOptinChecked);
   }
 
+  /**
+   * Whether the given email's subscriber row did not exist before the most
+   * recent synchronizeGuestCustomer() call in this request. Defaults to false,
+   * meaning "treat as pre-existing", for any email that call never saw: a
+   * missing signal must never cause an unearned overwrite of an earlier
+   * consent choice.
+   */
+  public function wasNewlyCreatedByGuestSync(string $email): bool {
+    return $this->guestSyncCreatedSubscriber[$email] ?? false;
+  }
+
   public function synchronizeGuestCustomer(int $orderId): void {
     $wcOrder = $this->woocommerceHelper->wcGetOrder($orderId);
 
@@ -177,11 +202,13 @@ class WooCommerce {
       $status = SubscriberEntity::STATUS_SUBSCRIBED;
     }
 
-    $email = $this->insertSubscriberFromOrder($wcOrder, $status);
+    $wasNewlyCreated = false;
+    $email = $this->insertSubscriberFromOrder($wcOrder, $status, $wasNewlyCreated);
 
     if (empty($email)) {
       return;
     }
+    $this->guestSyncCreatedSubscriber[$email] = $wasNewlyCreated;
     $subscriber = $this->subscribersRepository->findOneBy(['email' => $email]);
 
     if ($subscriber) {
@@ -215,6 +242,11 @@ class WooCommerce {
       $this->removeOrphanedSubscribers();
       $this->updateStatus();
       $this->updateGlobalStatus();
+      // The bulk operations above add/remove/restatus the WooCommerce segment's
+      // memberships en masse via raw SQL, so refresh segments_count for all
+      // members regardless of status — some may have just transitioned away
+      // from subscribed and must be recomputed too.
+      $this->segmentsCountRecalculator->recalculateForSegment((int)$this->segmentsRepository->getWooCommerceSegment()->getId(), false);
     }
 
     $this->subscribersRepository->invalidateTotalSubscribersCache();
@@ -272,14 +304,14 @@ class WooCommerce {
     ", ['capabilities' => $wpdb->prefix . 'capabilities', 'source' => Source::WOOCOMMERCE_USER]);
   }
 
-  private function insertSubscriberFromOrder(\WC_Order $wcOrder, string $status): ?string {
+  private function insertSubscriberFromOrder(\WC_Order $wcOrder, string $status, bool &$wasNewlyCreated = false): ?string {
     $email = $wcOrder->get_billing_email();
 
     if (!$email || !$this->validator->validateEmail($email)) {
       return null;
     }
 
-    $this->insertSubscribers([$email], $status);
+    $wasNewlyCreated = $this->insertSubscribers([$email], $status) > 0;
     return $email;
   }
 
@@ -317,11 +349,11 @@ class WooCommerce {
 
     $processedOrders = [];
     foreach ($result as $item) {
-      if (!$this->validator->validateEmail($item['email'])) {
+      if (!is_string($item['email']) || !$this->validator->validateEmail($item['email']) || !is_numeric($item['order_id'])) {
         continue;
       }
       // because data in result are sorted by id, we can replace the previous order id
-      $processedOrders[(string)$item['email']] = (int)$item['order_id'];
+      $processedOrders[$item['email']] = (int)$item['order_id'];
     }
 
     if (count($processedOrders)) {
@@ -355,12 +387,14 @@ class WooCommerce {
     // Save timestamp about new subscribers before insert
     $this->subscriberChangesNotifier->subscribersBatchCreate();
     // Insert new subscribers
-    $this->connection->executeQuery('
+    // executeStatement, not executeQuery: the affected-row count is what tells
+    // a caller whether INSERT IGNORE actually inserted or silently discarded.
+    $insertedCount = $this->connection->executeStatement('
       INSERT IGNORE INTO ' . $subscribersTable . ' (`is_woocommerce_user`, `email`, `status`, `created_at`, `last_subscribed_at`, `source`) VALUES
       ' . implode(',', $subscribersValues) . '
     ');
 
-    return count($emails);
+    return (int)$insertedCount;
   }
 
   /**
@@ -422,7 +456,12 @@ class WooCommerce {
       if (!$row['meta_value']) {
         continue;
       }
-      $subscribersData[$row['post_id']][$row['meta_key']] = $row['meta_value'];
+      $postId = is_numeric($row['post_id']) ? (int)$row['post_id'] : 0;
+      $metaKey = is_string($row['meta_key']) ? $row['meta_key'] : '';
+      if ($postId === 0 || $metaKey === '') {
+        continue;
+      }
+      $subscribersData[$postId][$metaKey] = $row['meta_value'];
     }
 
     $now = (Carbon::now())->format('Y-m-d H:i:s');
@@ -456,6 +495,22 @@ class WooCommerce {
     $wcSegment = $this->segmentsRepository->getWooCommerceSegment();
     $subscribersTable = $this->entityManager->getClassMetadata(SubscriberEntity::class)->getTableName();
     $subscriberSegmentsTable = $this->entityManager->getClassMetadata(SubscriberSegmentEntity::class)->getTableName();
+
+    // Capture the affected subscriber ids before the DELETE: once the membership
+    // rows are gone, recalculateForSegment() can no longer see these subscribers,
+    // so a surviving subscriber would keep a stale segments_count. Recompute them
+    // explicitly afterwards (same pattern as SegmentsRepository::bulkDelete()).
+    $affectedIds = $this->connection->executeQuery(
+      "
+      SELECT mpss.subscriber_id FROM {$subscriberSegmentsTable} mpss
+      LEFT JOIN {$subscribersTable} mps ON mpss.subscriber_id = mps.id
+      WHERE mpss.segment_id = :segmentId AND mpss.status = :subscribedStatus
+        AND (mps.is_woocommerce_user = 0 OR mps.email = '' OR mps.email IS NULL)
+    ",
+      ['segmentId' => $wcSegment->getId(), 'subscribedStatus' => SubscriberEntity::STATUS_SUBSCRIBED],
+      ['segmentId' => ParameterType::INTEGER, 'subscribedStatus' => ParameterType::STRING]
+    )->fetchFirstColumn();
+
     // Unsubscribe non-WC or invalid users from segment
     $this->connection->executeQuery(
       "
@@ -466,6 +521,11 @@ class WooCommerce {
       ['segmentId' => $wcSegment->getId()],
       ['segmentId' => ParameterType::INTEGER]
     );
+
+    $subscriberIds = array_map(function ($id): int {
+      return is_numeric($id) ? (int)$id : 0;
+    }, $affectedIds);
+    $this->segmentsCountRecalculator->recalculateForSubscribers($subscriberIds);
   }
 
   private function updateGlobalStatus(): void {
@@ -521,12 +581,14 @@ class WooCommerce {
     // Registered users with orders
     if ($this->woocommerceHelper->isWooCommerceCustomOrdersTableEnabled()) {
       $ordersTable = $this->woocommerceHelper->getOrdersTableName();
-      $registeredCustomersSubQuery = "SELECT DISTINCT customer_id AS id FROM `{$ordersTable}` WHERE type = 'shop_order'";
+      // Exclude guest orders (customer_id = 0) as they are not registered users
+      $registeredCustomersSubQuery = "SELECT DISTINCT customer_id AS id FROM `{$ordersTable}` WHERE type = 'shop_order' AND customer_id > 0";
     } else {
+      // Exclude guest orders (meta_value = 0 or empty) as they are not registered users
       $registeredCustomersSubQuery = "SELECT DISTINCT wppm.meta_value AS id FROM {$wpdb->postmeta} wppm
         JOIN {$wpdb->posts} wpp ON wppm.post_id = wpp.ID
         AND wpp.post_type = 'shop_order'
-        WHERE wppm.meta_key = '_customer_user'";
+        WHERE wppm.meta_key = '_customer_user' AND wppm.meta_value > 0";
     }
 
     $this->connection->executeQuery("

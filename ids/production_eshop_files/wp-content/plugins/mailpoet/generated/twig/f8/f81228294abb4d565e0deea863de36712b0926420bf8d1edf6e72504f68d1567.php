@@ -60,7 +60,7 @@ class __TwigTemplate_72cb81adca1fcada3d740fa851dd9cdc07463639615e596a1f2d37bd9b4
   ";
         // line 11
         yield "  var mailpoet_templates = ";
-        yield json_encode(($context["templates"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["templates"] ?? null));
         yield ";
   var mailpoet_form_edit_url =
     \"";

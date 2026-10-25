@@ -19,13 +19,14 @@ function woocs_cancel_order_data() {
 }
 
 function woocs_recalculate_order_data() {
-    if (confirm('Are you sure?')) {
+    if (confirm(woocs_meta_params.are_you_sure)) {
         var id = jQuery(".woocs_recalculate_order_curr_button").data('order_id');
         jQuery('.woocs_recalculate_order_curr_button').prop('href', 'javascript:void(0);');
         var data = {
             action: "woocs_recalculate_order_data",
             selected_currency: jQuery("select[name='woocs_order_currency']").val(),
-            order_id: id
+            order_id: id,
+            currency_nonce: woocs_meta_params.currency_nonce
         };
 
         jQuery.post(ajaxurl, data, function (data) {
@@ -34,13 +35,14 @@ function woocs_recalculate_order_data() {
     }
 }
 function woocs_update_order_rate() {
-    if (confirm('Are you sure?')) {
+    if (confirm(woocs_meta_params.are_you_sure)) {
         var id = jQuery(".woocs_recalculate_order_curr_button").data('order_id');
         jQuery('.woocs_update_order_curr_button').prop('href', 'javascript:void(0);');
         var data = {
             action: "woocs_update_order_rate",
             current_rate: jQuery("input[name='woocs_current_rate']").val(),
-            order_id: id
+            order_id: id,
+            currency_nonce: woocs_meta_params.currency_nonce
         };
 
         jQuery.post(ajaxurl, data, function (data) {

@@ -4,9 +4,9 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Twig\Compiler;
 class VariadicExpression extends ArrayExpression
 {
- public function compile(Compiler $compiler) : void
- {
- $compiler->raw('...');
- parent::compile($compiler);
- }
+public function compile(Compiler $compiler): void
+{
+$compiler->raw('...');
+parent::compile($compiler);
+}
 }

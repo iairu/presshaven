@@ -19,7 +19,6 @@ use WCPay\Fraud_Prevention\Fraud_Prevention_Service;
  * WC_Payments_Express_Checkout_Button_Handler class.
  */
 class WC_Payments_Express_Checkout_Button_Handler {
-	const BUTTON_LOCATIONS            = 'payment_request_button_locations';
 	const DEFAULT_BORDER_RADIUS_IN_PX = 4;
 
 	/**
@@ -76,8 +75,8 @@ class WC_Payments_Express_Checkout_Button_Handler {
 			return;
 		}
 
-		// Checks if Payment Request is enabled.
-		if ( 'yes' !== $this->gateway->get_option( 'payment_request' ) ) {
+		// Checks if at least one express checkout method is enabled.
+		if ( ! $this->gateway->is_payment_request_enabled() && ! $this->express_checkout_helper->can_use_amazon_pay() ) {
 			return;
 		}
 
@@ -87,19 +86,43 @@ class WC_Payments_Express_Checkout_Button_Handler {
 		}
 
 		add_action( 'template_redirect', [ $this, 'set_session' ] );
+		add_action( 'wcpay_payment_fields_js_config', [ $this, 'payment_fields_js_config' ] );
 		add_action( 'template_redirect', [ $this, 'handle_express_checkout_redirect' ] );
 		add_filter( 'woocommerce_login_redirect', [ $this, 'get_login_redirect_url' ], 10, 3 );
 		add_filter( 'woocommerce_registration_redirect', [ $this, 'get_login_redirect_url' ], 10, 3 );
 		add_filter( 'woocommerce_cart_needs_shipping_address', [ $this, 'filter_cart_needs_shipping_address' ], 11, 1 );
 		add_action( 'wp_enqueue_scripts', [ $this, 'scripts' ] );
 		add_filter( 'woocommerce_gateway_title', [ $this, 'filter_gateway_title' ], 10, 2 );
-		add_action( 'woocommerce_checkout_order_processed', [ $this->express_checkout_helper, 'add_order_payment_method_title' ], 10, 2 );
 
 		$this->express_checkout_ajax_handler->init();
 
 		if ( is_admin() && current_user_can( 'manage_woocommerce' ) ) {
 			$this->register_ece_data_for_block_editor();
 		}
+	}
+
+	/**
+	 * Appends express-checkout-related data to the JS configuration used during checkout.
+	 *
+	 * @param array $config The configuration to be provided to the JS.
+	 *
+	 * @return mixed
+	 */
+	public function payment_fields_js_config( $config ) {
+		$context = $this->express_checkout_helper->get_button_context();
+
+		$config['isPaymentRequestEnabled'] = $this->gateway->is_payment_request_enabled()
+			&& (
+				empty( $context )
+				|| $this->express_checkout_helper->is_express_checkout_method_enabled_at( $context, 'payment_request' )
+			);
+		$config['isAmazonPayEnabled']      = $this->express_checkout_helper->can_use_amazon_pay()
+			&& (
+				empty( $context )
+				|| $this->express_checkout_helper->is_express_checkout_method_enabled_at( $context, 'amazon_pay' )
+			);
+
+		return $config;
 	}
 
 	/**
@@ -111,7 +134,15 @@ class WC_Payments_Express_Checkout_Button_Handler {
 		$button_type                      = $this->gateway->get_option( 'payment_request_button_type' );
 		$common_settings                  = $this->express_checkout_helper->get_common_button_settings();
 		$express_checkout_button_settings = [
-			// Default format is en_US.
+			/**
+			 * Filters the locale used for the express checkout (payment request) button.
+			 *
+			 * Defaults to the two-letter site locale (e.g. `en`).
+			 *
+			 * @since 2.1.0
+			 *
+			 * @param string $locale The two-letter locale code.
+			 */
 			'locale'       => apply_filters( 'wcpay_payment_request_button_locale', substr( get_locale(), 0, 2 ) ),
 			'branded_type' => 'default' === $button_type ? 'short' : 'long',
 		];
@@ -157,34 +188,8 @@ class WC_Payments_Express_Checkout_Button_Handler {
 			return true;
 		}
 		// If cart contains subscription and account creation is not posible, authentication is required.
-		if ( $this->has_subscription_product() && ! $this->is_account_creation_possible() ) {
+		if ( $this->express_checkout_helper->has_subscription_product() && ! $this->is_account_creation_possible() ) {
 			return true;
-		}
-
-		return false;
-	}
-
-	/**
-	 * Checks whether cart contains a subscription product or this is a subscription product page.
-	 *
-	 * @return boolean
-	 */
-	public function has_subscription_product() {
-		if ( ! class_exists( 'WC_Subscriptions_Product' ) || ! class_exists( 'WC_Subscriptions_Cart' ) ) {
-			return false;
-		}
-
-		if ( $this->express_checkout_helper->is_product() ) {
-			$product = $this->express_checkout_helper->get_product();
-			if ( WC_Subscriptions_Product::is_subscription( $product ) ) {
-				return true;
-			}
-		}
-
-		if ( $this->express_checkout_helper->is_checkout() || $this->express_checkout_helper->is_cart() ) {
-			if ( WC_Subscriptions_Cart::cart_contains_subscription() ) {
-				return true;
-			}
 		}
 
 		return false;
@@ -199,7 +204,7 @@ class WC_Payments_Express_Checkout_Button_Handler {
 		$is_signup_from_checkout_allowed = 'yes' === get_option( 'woocommerce_enable_signup_and_login_from_checkout', 'no' );
 
 		// If a subscription is being purchased, check if account creation is allowed for subscriptions.
-		if ( ! $is_signup_from_checkout_allowed && $this->has_subscription_product() ) {
+		if ( ! $is_signup_from_checkout_allowed && $this->express_checkout_helper->has_subscription_product() ) {
 			$is_signup_from_checkout_allowed = 'yes' === get_option( 'woocommerce_enable_signup_from_checkout_for_subscriptions', 'no' );
 		}
 
@@ -218,27 +223,32 @@ class WC_Payments_Express_Checkout_Button_Handler {
 	 * @return array Parameters for Express Checkout.
 	 */
 	public function get_express_checkout_params() {
-		/**
-		 * Allowing some specific configuration to be tweaked by 3pd.
-		 *
-		 * @since 9.5.0
-		 */
+		$button_context = $this->express_checkout_helper->get_button_context();
+
 		return array_merge(
+			/**
+			 * Filters the express checkout JS params, allowing some specific configuration to be tweaked by 3pd.
+			 *
+			 * @since 9.6.0
+			 *
+			 * @param array $params The express checkout JS params.
+			 */
 			apply_filters(
 				'wcpay_express_checkout_js_params',
 				[
-					'ajax_url'           => admin_url( 'admin-ajax.php' ),
-					'wc_ajax_url'        => WC_AJAX::get_endpoint( '%%endpoint%%' ),
-					'nonce'              => [
+					'ajax_url'                    => admin_url( 'admin-ajax.php' ),
+					'wc_ajax_url'                 => WC_AJAX::get_endpoint( '%%endpoint%%' ),
+					'nonce'                       => [
 						'platform_tracker'             => wp_create_nonce( 'platform_tracks_nonce' ),
 						// needed to communicate via the Store API.
-						'tokenized_cart_nonce'         => wp_create_nonce( 'woopayments_tokenized_cart_nonce' ),
+						'tokenized_cart_nonce'         => wp_create_nonce( WC_Payments_Express_Checkout_Button_Helper::TOKENIZED_CART_NONCE_ACTION ),
 						'tokenized_cart_session_nonce' => wp_create_nonce( 'woopayments_tokenized_cart_session_nonce' ),
 						'store_api_nonce'              => wp_create_nonce( 'wc_store_api' ),
 					],
-					'checkout'           => [
+					'checkout'                    => [
 						'currency_code'              => strtolower( get_woocommerce_currency() ),
 						'currency_decimals'          => WC_Payments::get_localization_service()->get_currency_format( get_woocommerce_currency() )['num_decimals'],
+						'stripe_minor_unit'          => WC_Payments_Utils::get_stripe_minor_unit_for_currency( get_woocommerce_currency() ),
 						'country_code'               => substr( get_option( 'woocommerce_default_country' ), 0, 2 ),
 						'needs_shipping'             => WC()->cart->needs_shipping(),
 						// Defaults to 'required' to match how core initializes this option.
@@ -246,12 +256,18 @@ class WC_Payments_Express_Checkout_Button_Handler {
 						'allowed_shipping_countries' => array_keys( WC()->countries->get_shipping_countries() ?? [] ),
 						'display_prices_with_tax'    => 'incl' === get_option( 'woocommerce_tax_display_cart' ),
 					],
-					'button'             => $this->get_button_settings(),
-					'login_confirmation' => $this->get_login_confirmation_settings(),
-					'button_context'     => $this->express_checkout_helper->get_button_context(),
-					'has_block'          => has_block( 'woocommerce/cart' ) || has_block( 'woocommerce/checkout' ),
-					'product'            => $this->express_checkout_helper->get_product_data(),
-					'store_name'         => get_bloginfo( 'name' ),
+					'has_subscription'            => $this->express_checkout_helper->has_subscription_product(),
+					// Product page (no cart yet) and pay-for-order (order API has no cart extension).
+					'setup_future_usage'          => $this->express_checkout_helper->get_setup_future_usage( $button_context ),
+					'is_manual_capture'           => 'yes' === $this->gateway->get_option( 'manual_capture' ),
+					'button'                      => $this->get_button_settings(),
+					'login_confirmation'          => $this->get_login_confirmation_settings(),
+					'button_context'              => $button_context,
+					'has_block'                   => has_block( 'woocommerce/cart' ) || has_block( 'woocommerce/checkout' ),
+					'product'                     => $this->express_checkout_helper->get_product_data(),
+					'store_name'                  => get_bloginfo( 'name' ),
+					'enabled_methods'             => $this->express_checkout_helper->get_enabled_express_checkout_methods_for_context(),
+					'methods_enabled_at_location' => $this->express_checkout_helper->get_methods_enabled_at_current_location(),
 				]
 			),
 			[
@@ -260,6 +276,9 @@ class WC_Payments_Express_Checkout_Button_Handler {
 					'publishableKey' => $this->account->get_publishable_key( WC_Payments::mode()->is_test() ),
 					'accountId'      => $this->account->get_stripe_account_id(),
 					'locale'         => WC_Payments_Utils::convert_to_stripe_locale( get_locale() ),
+				],
+				'flags'  => [
+					'isEceUsingConfirmationTokens' => WC_Payments_Features::is_ece_confirmation_tokens_enabled(),
 				],
 			]
 		);
@@ -384,7 +403,7 @@ class WC_Payments_Express_Checkout_Button_Handler {
 	 * @param boolean $needs_shipping_address Whether the cart needs a shipping address.
 	 */
 	public function filter_cart_needs_shipping_address( $needs_shipping_address ) {
-		if ( $this->has_subscription_product() && wc_get_shipping_method_count( true, true ) === 0 ) {
+		if ( $this->express_checkout_helper->has_subscription_product() && wc_get_shipping_method_count( true, true ) === 0 ) {
 			return false;
 		}
 

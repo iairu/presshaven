@@ -1,190 +1,237 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\RuleSet;
 if (!defined('ABSPATH')) exit;
-use MailPoetVendor\Sabberworm\CSS\Comment\Comment;
-use MailPoetVendor\Sabberworm\CSS\Comment\Commentable;
+use MailPoetVendor\Sabberworm\CSS\Comment\CommentContainer;
+use MailPoetVendor\Sabberworm\CSS\CSSElement;
+use MailPoetVendor\Sabberworm\CSS\CSSList\CSSListItem;
 use MailPoetVendor\Sabberworm\CSS\OutputFormat;
 use MailPoetVendor\Sabberworm\CSS\Parsing\ParserState;
 use MailPoetVendor\Sabberworm\CSS\Parsing\UnexpectedEOFException;
 use MailPoetVendor\Sabberworm\CSS\Parsing\UnexpectedTokenException;
-use MailPoetVendor\Sabberworm\CSS\Renderable;
-use MailPoetVendor\Sabberworm\CSS\Rule\Rule;
-abstract class RuleSet implements Renderable, Commentable
+use MailPoetVendor\Sabberworm\CSS\Position\Position;
+use MailPoetVendor\Sabberworm\CSS\Position\Positionable;
+use MailPoetVendor\Sabberworm\CSS\Property\Declaration;
+use MailPoetVendor\Sabberworm\CSS\ShortClassNameProvider;
+class RuleSet implements CSSElement, CSSListItem, Positionable, DeclarationList
 {
- private $aRules;
- protected $iLineNo;
- protected $aComments;
- public function __construct($iLineNo = 0)
- {
- $this->aRules = [];
- $this->iLineNo = $iLineNo;
- $this->aComments = [];
- }
- public static function parseRuleSet(ParserState $oParserState, RuleSet $oRuleSet)
- {
- while ($oParserState->comes(';')) {
- $oParserState->consume(';');
- }
- while (!$oParserState->comes('}')) {
- $oRule = null;
- if ($oParserState->getSettings()->bLenientParsing) {
- try {
- $oRule = Rule::parse($oParserState);
- } catch (UnexpectedTokenException $e) {
- try {
- $sConsume = $oParserState->consumeUntil(["\n", ";", '}'], \true);
- // We need to “unfind” the matches to the end of the ruleSet as this will be matched later
- if ($oParserState->streql(\substr($sConsume, -1), '}')) {
- $oParserState->backtrack(1);
- } else {
- while ($oParserState->comes(';')) {
- $oParserState->consume(';');
- }
- }
- } catch (UnexpectedTokenException $e) {
- // We’ve reached the end of the document. Just close the RuleSet.
- return;
- }
- }
- } else {
- $oRule = Rule::parse($oParserState);
- }
- if ($oRule) {
- $oRuleSet->addRule($oRule);
- }
- }
- $oParserState->consume('}');
- }
- public function getLineNo()
- {
- return $this->iLineNo;
- }
- public function addRule(Rule $oRule, Rule $oSibling = null)
- {
- $sRule = $oRule->getRule();
- if (!isset($this->aRules[$sRule])) {
- $this->aRules[$sRule] = [];
- }
- $iPosition = \count($this->aRules[$sRule]);
- if ($oSibling !== null) {
- $iSiblingPos = \array_search($oSibling, $this->aRules[$sRule], \true);
- if ($iSiblingPos !== \false) {
- $iPosition = $iSiblingPos;
- $oRule->setPosition($oSibling->getLineNo(), $oSibling->getColNo() - 1);
- }
- }
- if ($oRule->getLineNo() === 0 && $oRule->getColNo() === 0) {
- //this node is added manually, give it the next best line
- $rules = $this->getRules();
- $pos = \count($rules);
- if ($pos > 0) {
- $last = $rules[$pos - 1];
- $oRule->setPosition($last->getLineNo() + 1, 0);
- }
- }
- \array_splice($this->aRules[$sRule], $iPosition, 0, [$oRule]);
- }
- public function getRules($mRule = null)
- {
- if ($mRule instanceof Rule) {
- $mRule = $mRule->getRule();
- }
- $aResult = [];
- foreach ($this->aRules as $sName => $aRules) {
- // Either no search rule is given or the search rule matches the found rule exactly
- // or the search rule ends in “-” and the found rule starts with the search rule.
- if (!$mRule || $sName === $mRule || \strrpos($mRule, '-') === \strlen($mRule) - \strlen('-') && (\strpos($sName, $mRule) === 0 || $sName === \substr($mRule, 0, -1))) {
- $aResult = \array_merge($aResult, $aRules);
- }
- }
- \usort($aResult, function (Rule $first, Rule $second) {
- if ($first->getLineNo() === $second->getLineNo()) {
- return $first->getColNo() - $second->getColNo();
- }
- return $first->getLineNo() - $second->getLineNo();
- });
- return $aResult;
- }
- public function setRules(array $aRules)
- {
- $this->aRules = [];
- foreach ($aRules as $rule) {
- $this->addRule($rule);
- }
- }
- public function getRulesAssoc($mRule = null)
- {
- $aResult = [];
- foreach ($this->getRules($mRule) as $oRule) {
- $aResult[$oRule->getRule()] = $oRule;
- }
- return $aResult;
- }
- public function removeRule($mRule)
- {
- if ($mRule instanceof Rule) {
- $sRule = $mRule->getRule();
- if (!isset($this->aRules[$sRule])) {
- return;
- }
- foreach ($this->aRules[$sRule] as $iKey => $oRule) {
- if ($oRule === $mRule) {
- unset($this->aRules[$sRule][$iKey]);
- }
- }
- } else {
- foreach ($this->aRules as $sName => $aRules) {
- // Either no search rule is given or the search rule matches the found rule exactly
- // or the search rule ends in “-” and the found rule starts with the search rule or equals it
- // (without the trailing dash).
- if (!$mRule || $sName === $mRule || \strrpos($mRule, '-') === \strlen($mRule) - \strlen('-') && (\strpos($sName, $mRule) === 0 || $sName === \substr($mRule, 0, -1))) {
- unset($this->aRules[$sName]);
- }
- }
- }
- }
- public function __toString()
- {
- return $this->render(new OutputFormat());
- }
- protected function renderRules(OutputFormat $oOutputFormat)
- {
- $sResult = '';
- $bIsFirst = \true;
- $oNextLevel = $oOutputFormat->nextLevel();
- foreach ($this->aRules as $aRules) {
- foreach ($aRules as $oRule) {
- $sRendered = $oNextLevel->safely(function () use($oRule, $oNextLevel) {
- return $oRule->render($oNextLevel);
- });
- if ($sRendered === null) {
- continue;
- }
- if ($bIsFirst) {
- $bIsFirst = \false;
- $sResult .= $oNextLevel->spaceBeforeRules();
- } else {
- $sResult .= $oNextLevel->spaceBetweenRules();
- }
- $sResult .= $sRendered;
- }
- }
- if (!$bIsFirst) {
- // Had some output
- $sResult .= $oOutputFormat->spaceAfterRules();
- }
- return $oOutputFormat->removeLastSemicolon($sResult);
- }
- public function addComments(array $aComments)
- {
- $this->aComments = \array_merge($this->aComments, $aComments);
- }
- public function getComments()
- {
- return $this->aComments;
- }
- public function setComments(array $aComments)
- {
- $this->aComments = $aComments;
- }
+use CommentContainer;
+use LegacyDeclarationListMethods;
+use Position;
+use ShortClassNameProvider;
+private $declarations = [];
+public function __construct(?int $lineNumber = null)
+{
+$this->setPosition($lineNumber);
+}
+public static function parseRuleSet(ParserState $parserState, RuleSet $ruleSet): void
+{
+while ($parserState->comes(';')) {
+$parserState->consume(';');
+}
+while (\true) {
+$commentsBeforeDeclaration = [];
+$parserState->consumeWhiteSpace($commentsBeforeDeclaration);
+if ($parserState->comes('}')) {
+break;
+}
+$declaration = null;
+if ($parserState->getSettings()->usesLenientParsing()) {
+try {
+$declaration = Declaration::parse($parserState, $commentsBeforeDeclaration);
+} catch (UnexpectedTokenException $e) {
+try {
+$consumedText = $parserState->consumeUntil(["\n", ';', '}'], \true);
+if ($parserState->streql(\substr($consumedText, -1), '}')) {
+$parserState->backtrack(1);
+} else {
+while ($parserState->comes(';')) {
+$parserState->consume(';');
+}
+}
+} catch (UnexpectedTokenException $e) {
+return;
+}
+}
+} else {
+$declaration = Declaration::parse($parserState, $commentsBeforeDeclaration);
+}
+if ($declaration instanceof Declaration) {
+$ruleSet->addDeclaration($declaration);
+}
+}
+$parserState->consume('}');
+}
+public function addDeclaration(Declaration $declarationToAdd, ?Declaration $sibling = null): void
+{
+$propertyName = $declarationToAdd->getPropertyName();
+if (!isset($this->declarations[$propertyName])) {
+$this->declarations[$propertyName] = [];
+}
+$position = \count($this->declarations[$propertyName]);
+if ($sibling !== null) {
+$siblingPosition = \array_search($sibling, $this->declarations[$propertyName], \true);
+if ($siblingPosition !== \false) {
+$siblingIsInSet = \true;
+$position = $siblingPosition;
+} else {
+$siblingIsInSet = $this->hasDeclaration($sibling);
+if ($siblingIsInSet) {
+foreach ($this->declarations[$propertyName] as $index => $declaration) {
+if (self::comparePositionable($declaration, $sibling) >= 0) {
+$position = $index;
+break;
+}
+}
+}
+}
+if ($siblingIsInSet) {
+$siblingLineNumber = $sibling->getLineNumber();
+$siblingColumnNumber = $sibling->getColumnNumber();
+foreach ($this->declarations as $declarationsForAProperty) {
+foreach ($declarationsForAProperty as $declaration) {
+if ($declaration->getLineNumber() === $siblingLineNumber && $declaration->getColumnNumber() >= $siblingColumnNumber) {
+$declaration->setPosition($siblingLineNumber, $declaration->getColumnNumber() + 1);
+}
+}
+}
+$declarationToAdd->setPosition($siblingLineNumber, $siblingColumnNumber);
+}
+}
+if ($declarationToAdd->getLineNumber() === null) {
+$columnNumber = $declarationToAdd->getColumnNumber() ?? 0;
+$declarations = $this->getDeclarations();
+$declarationsCount = \count($declarations);
+if ($declarationsCount > 0) {
+$last = $declarations[$declarationsCount - 1];
+$lastsLineNumber = $last->getLineNumber();
+if (!\is_int($lastsLineNumber)) {
+throw new \UnexpectedValueException('A Declaration without a line number was found during addDeclaration', 1750718399);
+}
+$declarationToAdd->setPosition($lastsLineNumber + 1, $columnNumber);
+} else {
+$declarationToAdd->setPosition(1, $columnNumber);
+}
+} elseif ($declarationToAdd->getColumnNumber() === null) {
+$declarationToAdd->setPosition($declarationToAdd->getLineNumber(), 0);
+}
+\array_splice($this->declarations[$propertyName], $position, 0, [$declarationToAdd]);
+}
+public function getDeclarations(?string $searchPattern = null): array
+{
+$result = [];
+foreach ($this->declarations as $propertyName => $declarations) {
+if ($searchPattern === null || $propertyName === $searchPattern || \strrpos($searchPattern, '-') === \strlen($searchPattern) - \strlen('-') && (\strpos($propertyName, $searchPattern) === 0 || $propertyName === \substr($searchPattern, 0, -1))) {
+$result = \array_merge($result, $declarations);
+}
+}
+\usort($result, [self::class, 'comparePositionable']);
+return $result;
+}
+public function setDeclarations(array $declarations): void
+{
+$this->declarations = [];
+foreach ($declarations as $declaration) {
+$this->addDeclaration($declaration);
+}
+}
+public function getDeclarationsAssociative(?string $searchPattern = null): array
+{
+$result = [];
+foreach ($this->getDeclarations($searchPattern) as $declaration) {
+$result[$declaration->getPropertyName()] = $declaration;
+}
+return $result;
+}
+public function removeDeclaration(Declaration $declarationToRemove): void
+{
+$nameOfPropertyToRemove = $declarationToRemove->getPropertyName();
+if (!isset($this->declarations[$nameOfPropertyToRemove])) {
+return;
+}
+foreach ($this->declarations[$nameOfPropertyToRemove] as $key => $declaration) {
+if ($declaration === $declarationToRemove) {
+unset($this->declarations[$nameOfPropertyToRemove][$key]);
+}
+}
+}
+public function removeMatchingDeclarations(string $searchPattern): void
+{
+foreach ($this->declarations as $propertyName => $declarations) {
+if ($propertyName === $searchPattern || \strrpos($searchPattern, '-') === \strlen($searchPattern) - \strlen('-') && (\strpos($propertyName, $searchPattern) === 0 || $propertyName === \substr($searchPattern, 0, -1))) {
+unset($this->declarations[$propertyName]);
+}
+}
+}
+public function removeAllDeclarations(): void
+{
+$this->declarations = [];
+}
+public function render(OutputFormat $outputFormat): string
+{
+return $this->renderDeclarations($outputFormat);
+}
+protected function renderDeclarations(OutputFormat $outputFormat): string
+{
+$result = '';
+$isFirst = \true;
+$nextLevelFormat = $outputFormat->nextLevel();
+foreach ($this->getDeclarations() as $declaration) {
+$nextLevelFormatter = $nextLevelFormat->getFormatter();
+$renderedDeclaration = $nextLevelFormatter->safely(static function () use ($declaration, $nextLevelFormat): string {
+return $declaration->render($nextLevelFormat);
+});
+if ($renderedDeclaration === null) {
+continue;
+}
+if ($isFirst) {
+$isFirst = \false;
+$result .= $nextLevelFormatter->spaceBeforeRules();
+} else {
+$result .= $nextLevelFormatter->spaceBetweenRules();
+}
+$result .= $renderedDeclaration;
+}
+$formatter = $outputFormat->getFormatter();
+if (!$isFirst) {
+$result .= $formatter->spaceAfterRules();
+}
+return $formatter->removeLastSemicolon($result);
+}
+public function getArrayRepresentation(): array
+{
+$declarationsArrayRepresentation = [];
+foreach ($this->declarations as $propertyName => $declarationsForOneProperty) {
+$declarationsArrayRepresentation[$propertyName] = \array_map(function (Declaration $declaration): array {
+return $declaration->getArrayRepresentation();
+}, $declarationsForOneProperty);
+}
+return ['class' => $this->getShortClassName(), 'declarations' => $declarationsArrayRepresentation];
+}
+private static function comparePositionable(Positionable $first, Positionable $second): int
+{
+$firstsLineNumber = $first->getLineNumber();
+$secondsLineNumber = $second->getLineNumber();
+if (!\is_int($firstsLineNumber) || !\is_int($secondsLineNumber)) {
+throw new \UnexpectedValueException('A Declaration without a line number was passed to comparePositionable', 1750637683);
+}
+if ($firstsLineNumber === $secondsLineNumber) {
+$firstsColumnNumber = $first->getColumnNumber();
+$secondsColumnNumber = $second->getColumnNumber();
+if (!\is_int($firstsColumnNumber) || !\is_int($secondsColumnNumber)) {
+throw new \UnexpectedValueException('A Declaration without a column number was passed to comparePositionable', 1750637761);
+}
+return $firstsColumnNumber - $secondsColumnNumber;
+}
+return $firstsLineNumber - $secondsLineNumber;
+}
+private function hasDeclaration(Declaration $declaration): bool
+{
+foreach ($this->declarations as $declarationsForAProperty) {
+if (\in_array($declaration, $declarationsForAProperty, \true)) {
+return \true;
+}
+}
+return \false;
+}
 }

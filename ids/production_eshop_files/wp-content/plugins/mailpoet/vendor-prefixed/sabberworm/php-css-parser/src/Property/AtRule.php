@@ -1,12 +1,10 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Property;
 if (!defined('ABSPATH')) exit;
-use MailPoetVendor\Sabberworm\CSS\Comment\Commentable;
-use MailPoetVendor\Sabberworm\CSS\Renderable;
-interface AtRule extends Renderable, Commentable
+use MailPoetVendor\Sabberworm\CSS\CSSList\CSSListItem;
+interface AtRule extends CSSListItem
 {
- const BLOCK_RULES = 'media/document/supports/region-style/font-feature-values';
- const SET_RULES = 'font-face/counter-style/page/swash/styleset/annotation';
- public function atRuleName();
- public function atRuleArgs();
+public const BLOCK_RULES = ['media', 'document', 'supports', 'region-style', 'font-feature-values', 'container', 'layer', 'scope', 'starting-style'];
+public function atRuleName(): string;
 }

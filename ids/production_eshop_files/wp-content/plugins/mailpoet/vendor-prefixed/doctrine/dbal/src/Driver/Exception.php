@@ -5,5 +5,5 @@ if (!defined('ABSPATH')) exit;
 use Throwable;
 interface Exception extends Throwable
 {
- public function getSQLState();
+public function getSQLState();
 }

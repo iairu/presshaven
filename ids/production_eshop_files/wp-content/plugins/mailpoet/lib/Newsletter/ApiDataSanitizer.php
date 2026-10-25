@@ -5,6 +5,8 @@ namespace MailPoet\Newsletter;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Newsletter\Renderer\StylesHelper;
+
 class ApiDataSanitizer {
   /** @var NewsletterHtmlSanitizer */
   private $htmlSanitizer;
@@ -28,33 +30,98 @@ class ApiDataSanitizer {
     if (isset($body['content']) && isset($body['content']['blocks']) && is_array($body['content']['blocks'])) {
       $body['content']['blocks'] = $this->sanitizeBlocks($body['content']['blocks']);
     }
+    if (isset($body['blockDefaults']) && is_array($body['blockDefaults'])) {
+      $body['blockDefaults'] = $this->sanitizeBlockDefaults($body['blockDefaults']);
+    }
+    foreach (['content', 'blockDefaults'] as $key) {
+      if (isset($body[$key]) && is_array($body[$key])) {
+        $body[$key] = StylesHelper::sanitizeBlockStyles($body[$key]);
+      }
+    }
+    if (isset($body['globalStyles']) && is_array($body['globalStyles'])) {
+      $body['globalStyles'] = $this->sanitizeGlobalStyles($body['globalStyles']);
+    }
     return $body;
+  }
+
+  /**
+   * Global styles end up in a <style> element in the editor and the email. Invalid values are removed,
+   * so the editor falls back to its defaults; the email renderer skips them too.
+   */
+  private function sanitizeGlobalStyles(array $globalStyles): array {
+    foreach ($globalStyles as $group => $styles) {
+      if (!is_array($styles)) {
+        continue;
+      }
+      foreach ($styles as $property => $value) {
+        if (!StylesHelper::isValidStyleKey($property) || !StylesHelper::isValidCssValue($value)) {
+          unset($globalStyles[$group][$property]);
+        }
+      }
+    }
+    return $globalStyles;
+  }
+
+  private function sanitizeBlockDefaults(array $blockDefaults): array {
+    foreach ($blockDefaults as $type => $defaults) {
+      if (!is_array($defaults)) {
+        continue;
+      }
+      $blockDefaults[$type] = $this->sanitizeBlockProperties($defaults, $type);
+    }
+    return $blockDefaults;
   }
 
   private function sanitizeBlocks(array $blocks): array {
     foreach ($blocks as $key => $block) {
-      if (!is_array($block) || !isset($block['type'])) {
+      if (!is_array($block)) {
         continue;
       }
+      $block = $this->sanitizeBlock($block);
       if (isset($block['blocks']) && is_array($block['blocks'])) {
-        $blocks[$key]['blocks'] = $this->sanitizeBlocks($block['blocks']);
-      } else {
-        $blocks[$key] = $this->sanitizeBlock($block);
+        $block['blocks'] = $this->sanitizeBlocks($block['blocks']);
       }
-    };
+      $blocks[$key] = $block;
+    }
     return $blocks;
   }
 
   private function sanitizeBlock(array $block): array {
-    if (!isset(self::SANITIZATION_CONFIG[$block['type']])) {
+    if (
+      ($block['type'] ?? null) === 'container'
+      && isset($block['image'])
+      && is_array($block['image'])
+      && is_string($block['image']['src'] ?? null)
+    ) {
+      // The editor puts the background image URL into url() in a <style> element
+      $block['image']['src'] = StylesHelper::escapeCssUrl($block['image']['src']);
+    }
+    return $this->sanitizeBlockProperties($block, $block['type'] ?? null);
+  }
+
+  /**
+   * @param mixed $type
+   */
+  private function sanitizeBlockProperties(array $block, $type): array {
+    if (!is_string($type) || !isset(self::SANITIZATION_CONFIG[$type])) {
       return $block;
     }
-    foreach (self::SANITIZATION_CONFIG[$block['type']] as $property) {
+    foreach (self::SANITIZATION_CONFIG[$type] as $property) {
       if (!isset($block[$property])) {
         continue;
       }
-      $block[$property] = $this->htmlSanitizer->sanitize($block[$property]);
+      $block[$property] = $this->sanitizeProperty($block[$property]);
     }
     return $block;
+  }
+
+  /**
+   * @param mixed $value
+   */
+  private function sanitizeProperty($value): string {
+    if (!is_scalar($value)) {
+      return '';
+    }
+    return $this->htmlSanitizer->sanitize((string)$value);
   }
 }

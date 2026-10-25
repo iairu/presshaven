@@ -22,6 +22,7 @@ class AssetsController {
   private $settings;
 
   const RECAPTCHA_API_URL = 'https://www.google.com/recaptcha/api.js?render=explicit';
+  const TURNSTILE_API_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
   public function __construct(
     WPFunctions $wp,
@@ -41,7 +42,12 @@ class AssetsController {
     ob_start();
     $captcha = $this->settings->get('captcha');
     if (!empty($captcha['type']) && CaptchaConstants::isReCaptcha($captcha['type'])) {
-      echo '<script src="' . esc_url(self::RECAPTCHA_API_URL) . '" async defer></script>';
+      // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WPFunctions::escUrl() wraps esc_url().
+      echo '<script src="' . $this->wp->escUrl(self::RECAPTCHA_API_URL) . '" async defer></script>';
+    }
+    if (!empty($captcha['type']) && CaptchaConstants::isTurnstile($captcha['type'])) {
+      // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WPFunctions::escUrl() wraps esc_url().
+      echo '<script src="' . $this->wp->escUrl(self::TURNSTILE_API_URL) . '" async defer></script>';
     }
 
     $this->wp->wpPrintScripts('jquery');
@@ -75,6 +81,12 @@ class AssetsController {
         self::RECAPTCHA_API_URL
       );
     }
+    if (!empty($captcha['type']) && CaptchaConstants::isTurnstile($captcha['type'])) {
+      $this->wp->wpEnqueueScript(
+        'mailpoet_turnstile',
+        self::TURNSTILE_API_URL
+      );
+    }
 
     $this->wp->wpEnqueueStyle(
       'mailpoet_public',
@@ -88,7 +100,7 @@ class AssetsController {
 
     $this->wp->wpEnqueueScript(
       'mailpoet_public',
-      Env::$assetsUrl . '/dist/js/' . $this->renderer->getJsAsset('public.js'),
+      Env::$assetsUrl . '/dist/js/' . $this->renderer->getJsAsset('public.min.js'),
       ['jquery'],
       Env::$version,
       $enqueuePlacementParams
@@ -98,7 +110,12 @@ class AssetsController {
     $this->wp->wpLocalizeScript('mailpoet_public', 'MailPoetForm', [
       'ajax_url' => $this->wp->adminUrl('admin-ajax.php'),
       'is_rtl' => (function_exists('is_rtl') ? (bool)is_rtl() : false),
-      'ajax_common_error_message' => esc_js($ajaxFailedErrorMessage),
+      'ajax_common_error_message' => $ajaxFailedErrorMessage,
+      'captcha_input_label' => __('Type in the characters you see in the picture above:', 'mailpoet'),
+      'captcha_reload_title' => __('Reload CAPTCHA', 'mailpoet'),
+      'captcha_audio_title' => __('Play CAPTCHA', 'mailpoet'),
+      'assets_url' => Env::$assetsUrl,
+      'collect_subscriber_timezones' => $this->settings->isSettingEnabled('collect_subscriber_timezones.enabled'),
     ]);
   }
 

@@ -2106,13 +2106,41 @@ function PreviewForm(_ref) {
       inputEl.current.innerHTML = '';
       var isQa = _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_3__.formsScriptPayload.includes('qa');
       if (isFormV4) {
-        var container = document.createElement('div');
+        // WP 6.3+ renders the block-editor canvas inside an iframe
+        // (iframe[name="editor-canvas"]). The block's DOM lives in that iframe,
+        // but our React runs in the top window's JS realm, so the global
+        // `document` here is the TOP frame's document, not the iframe's. The v4
+        // forms embed script scans its executing context's local `document`
+        // (getElementsByClassName('hs-form-frame') + MutationObserver on
+        // document.body) and has no programmatic create() API. So both the
+        // placeholder and the embed script must live in the IFRAME's document
+        // for hydration to happen. Route everything through the placeholder's
+        // ownerDocument to target the correct realm.
+        var doc = inputEl.current.ownerDocument;
+        var container = doc.createElement('div');
         container.classList.add('hs-form-frame');
         container.dataset.region = _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_3__.hublet;
         container.dataset.formId = formId;
         container.dataset.portalId = portalId.toString();
         container.dataset.env = isQa ? 'qa' : '';
         inputEl.current.appendChild(container);
+        // Derive the portal-specific embed URL from the v2 script URL: take its
+        // host (origin) so we follow whatever host a PHP filter applies to the
+        // v2 URL, and append the v4 embed path. Inject it into the iframe's
+        // document so it executes in the iframe window and scans the iframe
+        // document where the placeholder is. Running post-mount means doc.body
+        // exists, so the script's MutationObserver initializes without the
+        // "not a Node" crash seen when it's loaded too early in the iframe
+        // head. One copy per iframe window is enough — its MutationObserver
+        // hydrates any later placeholders too.
+        var v4EmbedUrl = _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_3__.formsScript ? "".concat(new URL(_constants_leadinConfig__WEBPACK_IMPORTED_MODULE_3__.formsScript).origin, "/forms/embed/").concat(portalId, ".js") : '';
+        var v4AlreadyPresent = !v4EmbedUrl || !!doc.querySelector("script[src=\"".concat(v4EmbedUrl, "\"]"));
+        if (v4EmbedUrl && !v4AlreadyPresent) {
+          var embedScript = doc.createElement('script');
+          embedScript.src = v4EmbedUrl;
+          embedScript.defer = true;
+          doc.body.appendChild(embedScript);
+        }
       } else {
         var additionalParams = isQa ? {
           env: 'qa'
@@ -2647,21 +2675,60 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var _UIComponents_UIOverlay__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../UIComponents/UIOverlay */ "./scripts/shared/UIComponents/UIOverlay.ts");
 /* harmony import */ var _Common_PreviewDisabled__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../Common/PreviewDisabled */ "./scripts/shared/Common/PreviewDisabled.tsx");
+/* harmony import */ var _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../constants/leadinConfig */ "./scripts/constants/leadinConfig.ts");
 
 
 
 
+
+function getHbspt(win) {
+  if (!win) {
+    return undefined;
+  }
+  return win.hbspt;
+}
 function PreviewForm(_ref) {
   var url = _ref.url,
     fullSiteEditor = _ref.fullSiteEditor;
   var inputEl = (0,react__WEBPACK_IMPORTED_MODULE_1__.useRef)(null);
   (0,react__WEBPACK_IMPORTED_MODULE_1__.useEffect)(function () {
-    if (inputEl.current) {
-      //@ts-expect-error Hubspot global
-      var hbspt = window.parent.hbspt || window.hbspt;
-      hbspt.meetings.create('.meetings-iframe-container');
+    var el = inputEl.current;
+    if (!el) {
+      return;
     }
-  }, [url, inputEl]);
+    // WP 6.3+ renders the block-editor canvas inside an iframe
+    // (iframe[name="editor-canvas"]). The `.meetings-iframe-container` lives in
+    // that iframe's document, but `hbspt.meetings.create(selector)` resolves the
+    // selector against the document of the realm `hbspt` belongs to. The
+    // top-frame hbspt therefore scans the top document and never finds the
+    // container, so the preview stays blank. Run the embed in the container's
+    // own realm: reuse that realm's hbspt if it is already present, otherwise
+    // inject MeetingsEmbedCode into that document and create once it loads.
+    // (Mirrors the v4 form block fix.)
+    var doc = el.ownerDocument;
+    var win = doc.defaultView;
+    var create = function create() {
+      var hbspt = getHbspt(win) || getHbspt(window.parent) || getHbspt(window);
+      if (hbspt && hbspt.meetings) {
+        hbspt.meetings.create('.meetings-iframe-container');
+      }
+    };
+    var realmHbspt = getHbspt(win);
+    if (realmHbspt && realmHbspt.meetings) {
+      create();
+      return;
+    }
+    var existing = doc.querySelector("script[src=\"".concat(_constants_leadinConfig__WEBPACK_IMPORTED_MODULE_4__.meetingsScript, "\"]"));
+    if (existing) {
+      existing.addEventListener('load', create);
+      return;
+    }
+    var script = doc.createElement('script');
+    script.src = _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_4__.meetingsScript;
+    script.defer = true;
+    script.addEventListener('load', create);
+    doc.body.appendChild(script);
+  }, [url]);
   if (fullSiteEditor) {
     return (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_Common_PreviewDisabled__WEBPACK_IMPORTED_MODULE_3__["default"], {});
   }
@@ -3365,6 +3432,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _constants_leadinConfig__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../constants/leadinConfig */ "./scripts/constants/leadinConfig.ts");
 /* harmony import */ var _appUtils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./appUtils */ "./scripts/utils/appUtils.ts");
 /* harmony import */ var _api_wordpressApiClient__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../api/wordpressApiClient */ "./scripts/api/wordpressApiClient.ts");
+/* harmony import */ var _embedderReady__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./embedderReady */ "./scripts/utils/embedderReady.ts");
+
 
 
 
@@ -3391,6 +3460,9 @@ var getOrCreateBackgroundApp = function getOrCreateBackgroundApp() {
   if (window.LeadinBackgroundApp) {
     return window.LeadinBackgroundApp;
   }
+  if (!(0,_embedderReady__WEBPACK_IMPORTED_MODULE_3__.isEmbedderReady)()) {
+    return null;
+  }
   var _window = window,
     IntegratedAppEmbedder = _window.IntegratedAppEmbedder,
     IntegratedAppOptions = _window.IntegratedAppOptions;
@@ -3402,6 +3474,112 @@ var getOrCreateBackgroundApp = function getOrCreateBackgroundApp() {
   window.LeadinBackgroundApp = embedder;
   return window.LeadinBackgroundApp;
 };
+
+/***/ }),
+
+/***/ "./scripts/utils/embedderReady.ts":
+/*!****************************************!*\
+  !*** ./scripts/utils/embedderReady.ts ***!
+  \****************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "isEmbedderReady": () => (/* binding */ isEmbedderReady),
+/* harmony export */   "reportEmbedderUnavailable": () => (/* binding */ reportEmbedderUnavailable),
+/* harmony export */   "whenEmbedderReady": () => (/* binding */ whenEmbedderReady)
+/* harmony export */ });
+/* harmony import */ var _lib_Raven__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../lib/Raven */ "./scripts/lib/Raven.ts");
+function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
+function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+
+var POLL_INTERVAL_MS = 250;
+var DEFAULT_TIMEOUT_MS = 15000;
+var EMBEDDER_SCRIPT_SELECTOR = 'script[src*="/integrated-app-embedder/"]';
+function isEmbedderReady() {
+  var _window = window,
+    IntegratedAppEmbedder = _window.IntegratedAppEmbedder,
+    IntegratedAppOptions = _window.IntegratedAppOptions;
+  return !!IntegratedAppEmbedder && typeof IntegratedAppOptions === 'function';
+}
+function getEmbedderDiagnostics() {
+  var scriptTag = document.querySelector(EMBEDDER_SCRIPT_SELECTOR);
+  return {
+    hasScriptTag: !!scriptTag,
+    scriptSrc: scriptTag ? scriptTag.src : null,
+    readyState: document.readyState,
+    hasEmbedder: !!window.IntegratedAppEmbedder,
+    typeofOptions: _typeof(window.IntegratedAppOptions)
+  };
+}
+/**
+ * The embedder script is a cross-origin script from js.hubspot.com, and nothing
+ * makes the widgets wait for it: they read its globals off `window` the moment a
+ * control renders. On sites where an asset pipeline defers it, or where the
+ * editor is simply slow, the widget can lose that race and fail permanently even
+ * though the script arrives seconds later.
+ *
+ * Resolves true as soon as the globals appear, or false once the wait is up.
+ */
+function whenEmbedderReady() {
+  var timeoutMs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : DEFAULT_TIMEOUT_MS;
+  var intervalId;
+  var cancel = function cancel() {
+    if (intervalId !== undefined) {
+      window.clearInterval(intervalId);
+      intervalId = undefined;
+    }
+  };
+  var promise = new Promise(function (resolve) {
+    if (isEmbedderReady()) {
+      console.info('HubSpot plugin - embedder ready immediately');
+      resolve(true);
+      return;
+    }
+    var startedAt = Date.now();
+    console.info("HubSpot plugin - waiting up to ".concat(timeoutMs, "ms for embedder script"), getEmbedderDiagnostics());
+    intervalId = window.setInterval(function () {
+      var waitedMs = Date.now() - startedAt;
+      if (isEmbedderReady()) {
+        cancel();
+        console.info("HubSpot plugin - embedder ready after ".concat(waitedMs, "ms"));
+        resolve(true);
+      } else if (waitedMs >= timeoutMs) {
+        cancel();
+        resolve(false);
+      }
+    }, POLL_INTERVAL_MS);
+  });
+  return {
+    promise: promise,
+    cancel: cancel
+  };
+}
+/**
+ * Reports a give-up so these failures stop being invisible. Until now the widget
+ * rendered its error box without telling anyone, so the only signal we had for
+ * this whole class of problem came from unrelated admin pages.
+ *
+ * Uses captureException rather than captureMessage on purpose: Raven is
+ * configured with a shouldSendCallback that drops any event whose culprit does
+ * not match plugins/leadin/, and captureMessage does not attach a stack trace,
+ * so it has no culprit to match on.
+ */
+function reportEmbedderUnavailable(waitedMs) {
+  var diagnostics = getEmbedderDiagnostics();
+  console.error("HubSpot plugin - embedder unavailable after ".concat(waitedMs, "ms"), diagnostics);
+  _lib_Raven__WEBPACK_IMPORTED_MODULE_0__["default"].captureException(new Error('Leadin embedder unavailable'), {
+    fingerprint: ['EMBEDDER_UNAVAILABLE'],
+    extra: _objectSpread({
+      waitedMs: waitedMs
+    }, diagnostics)
+  });
+}
 
 /***/ }),
 
@@ -3467,13 +3645,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _api_wordpressApiClient__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../api/wordpressApiClient */ "./scripts/api/wordpressApiClient.ts");
 /* harmony import */ var _backgroundAppUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./backgroundAppUtils */ "./scripts/utils/backgroundAppUtils.ts");
 /* harmony import */ var _isRefreshTokenAvailable__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./isRefreshTokenAvailable */ "./scripts/utils/isRefreshTokenAvailable.ts");
-/* harmony import */ var _shared_Common_ErrorHandler__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../shared/Common/ErrorHandler */ "./scripts/shared/Common/ErrorHandler.tsx");
+/* harmony import */ var _embedderReady__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./embedderReady */ "./scripts/utils/embedderReady.ts");
+/* harmony import */ var _shared_Common_ErrorHandler__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../shared/Common/ErrorHandler */ "./scripts/shared/Common/ErrorHandler.tsx");
 function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
 function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
 function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
 function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
 function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
 function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+
 
 
 
@@ -3490,21 +3670,49 @@ function useGetEmbedder() {
     _useState4 = _slicedToArray(_useState3, 2),
     errorStatus = _useState4[0],
     setErrorStatus = _useState4[1];
+  var cancelWaitRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  var mountedRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(true);
   var loadEmbedder = function loadEmbedder() {
     (0,_api_wordpressApiClient__WEBPACK_IMPORTED_MODULE_2__.fetchAccessToken)().then(function (_ref) {
       var accessToken = _ref.accessToken,
         expiresIn = _ref.expiresIn;
-      setEmbedder((0,_backgroundAppUtils__WEBPACK_IMPORTED_MODULE_3__.getOrCreateBackgroundApp)(accessToken, expiresIn));
+      if (!mountedRef.current) return;
+      var startedAt = Date.now();
+      var _whenEmbedderReady = (0,_embedderReady__WEBPACK_IMPORTED_MODULE_5__.whenEmbedderReady)(),
+        promise = _whenEmbedderReady.promise,
+        cancel = _whenEmbedderReady.cancel;
+      cancelWaitRef.current = cancel;
+      return promise.then(function (isReady) {
+        cancelWaitRef.current = null;
+        if (!mountedRef.current) return;
+        var app = isReady ? (0,_backgroundAppUtils__WEBPACK_IMPORTED_MODULE_3__.getOrCreateBackgroundApp)(accessToken, expiresIn) : null;
+        if (app) {
+          console.info('HubSpot plugin - embedder ready, rendering widget');
+          setEmbedder(app);
+        } else {
+          (0,_embedderReady__WEBPACK_IMPORTED_MODULE_5__.reportEmbedderUnavailable)(Date.now() - startedAt);
+          setErrorStatus(500);
+        }
+      });
     })["catch"](function (err) {
-      return setErrorStatus(err && err.status || 500);
+      if (!mountedRef.current) return;
+      console.error('HubSpot plugin - access token request failed', err && err.status || 'no status');
+      setErrorStatus(err && err.status || 500);
     });
   };
   (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(function () {
     if ((0,_isRefreshTokenAvailable__WEBPACK_IMPORTED_MODULE_4__.isRefreshTokenAvailable)()) {
       loadEmbedder();
     }
+    return function () {
+      mountedRef.current = false;
+      if (cancelWaitRef.current) {
+        cancelWaitRef.current();
+        cancelWaitRef.current = null;
+      }
+    };
   }, []);
-  var errorElement = errorStatus !== null ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_shared_Common_ErrorHandler__WEBPACK_IMPORTED_MODULE_5__["default"], {
+  var errorElement = errorStatus !== null ? /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_shared_Common_ErrorHandler__WEBPACK_IMPORTED_MODULE_6__["default"], {
     status: errorStatus,
     resetErrorState: function resetErrorState() {
       setErrorStatus(null);

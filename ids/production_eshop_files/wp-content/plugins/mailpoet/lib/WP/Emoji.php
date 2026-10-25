@@ -41,7 +41,8 @@ class Emoji {
     $formsTableName = ContainerWrapper::getInstance()->get(FormsRepository::class)->getTableName();
     $bodyJson = json_encode($body, JSON_UNESCAPED_UNICODE);
     $fixedJson = $this->encodeForUTF8Column($formsTableName, 'body', $bodyJson);
-    return json_decode($fixedJson, true);
+    $decoded = json_decode($fixedJson, true);
+    return is_array($decoded) ? $decoded : $body;
   }
 
   private function encodeRenderedBodyForUTF8Column($value) {
@@ -72,11 +73,9 @@ class Emoji {
 
     $matches = [];
     if (preg_match_all($regex, $content, $matches)) {
-      if (!empty($matches[1])) {
-        foreach ($matches[1] as $emoji) {
-          $entity = html_entity_decode($emoji, ENT_COMPAT, 'UTF-8');
-          $content = str_replace($emoji, $entity, $content);
-        }
+      foreach ($matches[1] as $emoji) {
+        $entity = html_entity_decode($emoji, ENT_COMPAT, 'UTF-8');
+        $content = str_replace($emoji, $entity, $content);
       }
     }
 

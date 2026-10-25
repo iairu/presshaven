@@ -21,6 +21,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class WC_Cart_Session {
 
 	/**
+	 * Carts whose session updates have been disabled.
+	 *
+	 * @var WeakReference<WC_Cart>[]
+	 */
+	private static $carts_with_disabled_updates = array();
+
+	/**
 	 * Reference to cart object.
 	 *
 	 * @since 3.2.0
@@ -86,6 +93,8 @@ final class WC_Cart_Session {
 		add_action( 'woocommerce_add_to_cart', array( $this, 'maybe_set_cart_cookies' ) );
 		add_action( 'wp', array( $this, 'maybe_set_cart_cookies' ), 99 );
 		add_action( 'shutdown', array( $this, 'maybe_set_cart_cookies' ), 0 );
+
+		add_action( 'template_redirect', array( $this, 'clean_up_removed_cart_contents' ) );
 	}
 
 	/**
@@ -94,6 +103,10 @@ final class WC_Cart_Session {
 	 * @since 3.2.0
 	 */
 	public function get_cart_from_session() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
 		/**
 		 * Fires when cart is loaded from session.
 		 *
@@ -129,9 +142,11 @@ final class WC_Cart_Session {
 			$update_cart_session = true;
 		}
 
-		// Prime caches to reduce future queries.
-		if ( is_callable( '_prime_post_caches' ) ) {
-			_prime_post_caches( wp_list_pluck( $cart, 'product_id' ) );
+		if ( ! empty( $cart ) ) {
+			// Prime caches to reduce future queries.
+			$product_ids    = array_filter( array_column( $cart, 'product_id' ) );
+			$variations_ids = array_filter( array_column( $cart, 'variation_id' ) );
+			_prime_post_caches( array_merge( $product_ids, $variations_ids ) );
 		}
 
 		$cart_contents = array();
@@ -289,7 +304,7 @@ final class WC_Cart_Session {
 			WC()->session->set( 'cart', empty( $cart_for_session ) ? null : $cart_for_session );
 			$this->cart->calculate_totals();
 
-			if ( $merge_saved_cart ) {
+			if ( $merge_saved_cart || $update_cart_session ) {
 				$this->persistent_cart_update();
 			}
 		}
@@ -302,11 +317,59 @@ final class WC_Cart_Session {
 	}
 
 	/**
+	 * Enables or disables session updates for a cart.
+	 *
+	 * @internal
+	 * @since 11.2.0
+	 *
+	 * @param WC_Cart $cart    Cart object.
+	 * @param bool    $enabled Whether session updates should be enabled.
+	 */
+	public static function set_updates_enabled_for_cart( WC_Cart $cart, $enabled ): void {
+		$cart_id = spl_object_id( $cart );
+
+		if ( $enabled ) {
+			unset( self::$carts_with_disabled_updates[ $cart_id ] );
+		} else {
+			self::$carts_with_disabled_updates[ $cart_id ] = WeakReference::create( $cart );
+		}
+	}
+
+	/**
+	 * Checks whether session updates are enabled for a cart.
+	 *
+	 * @internal
+	 * @since 11.2.0
+	 *
+	 * @param WC_Cart $cart Cart object.
+	 * @return bool
+	 */
+	public static function are_updates_enabled_for_cart( WC_Cart $cart ): bool {
+		$cart_id = spl_object_id( $cart );
+
+		if ( ! isset( self::$carts_with_disabled_updates[ $cart_id ] ) ) {
+			return true;
+		}
+
+		$disabled_cart = self::$carts_with_disabled_updates[ $cart_id ]->get();
+		if ( null === $disabled_cart ) {
+			unset( self::$carts_with_disabled_updates[ $cart_id ] );
+			return true;
+		}
+
+		return $disabled_cart !== $cart;
+	}
+
+	/**
 	 * Destroy cart session data.
 	 *
 	 * @since 3.2.0
 	 */
 	public function destroy_cart_session() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
 		$wc_session = WC()->session;
 
 		$wc_session->set( 'cart', null );
@@ -316,6 +379,11 @@ final class WC_Cart_Session {
 		$wc_session->set( 'coupon_discount_tax_totals', null );
 		$wc_session->set( 'removed_cart_contents', null );
 		$wc_session->set( 'order_awaiting_payment', null );
+		$wc_session->set( 'store_api_draft_order', null );
+		$wc_session->set( 'shipping_method_counts', null );
+		$wc_session->set( 'previous_shipping_methods', null );
+		$wc_session->set( 'chosen_shipping_methods', null );
+		$this->remove_shipping_for_package_from_session();
 	}
 
 	/**
@@ -326,12 +394,12 @@ final class WC_Cart_Session {
 	 * @since 3.2.0
 	 */
 	public function maybe_set_cart_cookies() {
-		if ( headers_sent() || ! did_action( 'wp_loaded' ) ) {
+		if ( $this->should_skip_session_updates() || headers_sent() || ! did_action( 'wp_loaded' ) ) {
 			return;
 		}
 		if ( ! $this->cart->is_empty() ) {
 			$this->set_cart_cookies( true );
-		} elseif ( isset( $_COOKIE['woocommerce_items_in_cart'] ) ) { // WPCS: input var ok.
+		} elseif ( isset( $_COOKIE['woocommerce_items_in_cart'] ) ) {
 			$this->set_cart_cookies( false );
 		}
 		$this->dedupe_cookies();
@@ -393,6 +461,10 @@ final class WC_Cart_Session {
 	 * Sets the php session data for the cart and coupons.
 	 */
 	public function set_session() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
 		$wc_session = WC()->session;
 
 		$cart                       = $this->get_cart_for_session();
@@ -411,6 +483,15 @@ final class WC_Cart_Session {
 		$wc_session->set( 'coupon_discount_totals', empty( $coupon_discount_totals ) ? null : $coupon_discount_totals );
 		$wc_session->set( 'coupon_discount_tax_totals', empty( $coupon_discount_tax_totals ) ? null : $coupon_discount_tax_totals );
 		$wc_session->set( 'removed_cart_contents', empty( $removed_cart_contents ) ? null : $removed_cart_contents );
+		if ( ! $this->cart_has_shippable_products() ) {
+			$wc_session->set( 'shipping_method_counts', null );
+			$wc_session->set( 'previous_shipping_methods', null );
+			$wc_session->set( 'chosen_shipping_methods', null );
+			$this->remove_shipping_for_package_from_session();
+		}
+		if ( empty( $cart ) ) {
+			$wc_session->set( 'store_api_draft_order', null );
+		}
 
 		/**
 		 * Fires when cart is updated.
@@ -440,6 +521,10 @@ final class WC_Cart_Session {
 	 * Save the persistent cart when the cart is updated.
 	 */
 	public function persistent_cart_update() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
 		/**
 		 * Filters whether the persistent cart is enabled.
 		 *
@@ -461,6 +546,10 @@ final class WC_Cart_Session {
 	 * Delete the persistent cart permanently.
 	 */
 	public function persistent_cart_destroy() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
 		/**
 		 * Filters whether the persistent cart is enabled.
 		 *
@@ -560,8 +649,8 @@ final class WC_Cart_Session {
 			$cart = array();
 		}
 
-		$inital_cart_size = count( $cart );
-		$order_items      = $order->get_items();
+		$initial_cart_size = count( $cart );
+		$order_items       = $order->get_items();
 
 		foreach ( $order_items as $item ) {
 			$product_id     = (int) apply_filters( 'woocommerce_add_to_cart_product_id', $item->get_product_id() );
@@ -587,12 +676,37 @@ final class WC_Cart_Session {
 
 			foreach ( $item->get_meta_data() as $meta ) {
 				if ( taxonomy_is_product_attribute( $meta->key ) || meta_is_product_attribute( $meta->key, $meta->value, $product_id ) ) {
-					$variations[ $meta->key ] = $meta->value;
+					$attribute_key = 'attribute_' . sanitize_title( $meta->key );
+					if ( taxonomy_is_product_attribute( $meta->key ) ) {
+						$variations[ $attribute_key ] = sanitize_title( $meta->value );
+					} else {
+						$variations[ $attribute_key ] = html_entity_decode( wc_clean( $meta->value ), ENT_QUOTES, get_bloginfo( 'charset' ) );
+					}
 				}
 			}
 
 			if ( ! apply_filters( 'woocommerce_add_to_cart_validation', true, $product_id, $quantity, $variation_id, $variations, $cart_item_data ) ) {
 				continue;
+			}
+
+			$product_data = wc_get_product( $variation_id ? $variation_id : $product_id );
+			if ( $product_data instanceof WC_Product && $product_data->is_sold_individually() ) {
+				// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Filter documented in CartController::validate_add_to_cart().
+				$quantity = apply_filters( 'woocommerce_add_to_cart_sold_individually_quantity', 1, $quantity, $product_id, $variation_id, $cart_item_data );
+
+				$cart_id = WC()->cart->generate_cart_id( $product_id, $variation_id, $variations, $cart_item_data );
+				// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Filter first added in WC_Cart::add_to_cart(), add documentation there.
+				$found_in_cart = apply_filters( 'woocommerce_add_to_cart_sold_individually_found_in_cart', isset( $cart[ $cart_id ] ) && isset( $cart[ $cart_id ]['quantity'] ) && $cart[ $cart_id ]['quantity'] > 0, $product_id, $variation_id, $cart_item_data, $cart_id );
+				if ( $found_in_cart ) {
+					/* translators: %s: product name */
+					$message = sprintf( __( 'You cannot add another "%s" to your cart.', 'woocommerce' ), $product_data->get_name() );
+					// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Filter documented in WC_Cart::add_to_cart().
+					$message         = apply_filters( 'woocommerce_cart_product_cannot_add_another_message', $message, $product_data );
+					$wp_button_class = wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '';
+					$message         = sprintf( '%s <a href="%s" class="button wc-forward%s">%s</a>', $message, esc_url( wc_get_cart_url() ), esc_attr( $wp_button_class ), __( 'View cart', 'woocommerce' ) );
+					wc_add_notice( $message, 'error' );
+					continue;
+				}
 			}
 
 			// Add to cart directly.
@@ -620,7 +734,7 @@ final class WC_Cart_Session {
 
 		$num_items_in_cart           = count( $cart );
 		$num_items_in_original_order = count( $order_items );
-		$num_items_added             = $num_items_in_cart - $inital_cart_size;
+		$num_items_added             = $num_items_in_cart - $initial_cart_size;
 
 		if ( $num_items_in_original_order > $num_items_added ) {
 			wc_add_notice(
@@ -643,5 +757,79 @@ final class WC_Cart_Session {
 		}
 
 		return $cart;
+	}
+
+	/**
+	 * Remove shipping data for all packages from session.
+	 *
+	 * @return void
+	 */
+	private function remove_shipping_for_package_from_session() {
+		$wc_session = WC()->session;
+
+		if ( ! is_a( $wc_session, 'WC_Session_Handler' ) ) {
+			return;
+		}
+
+		foreach ( array_keys( $wc_session->get_session_data() ) as $key ) {
+			if ( 0 === strpos( $key, 'shipping_for_package_' ) ) {
+				$wc_session->set( $key, null );
+			}
+		}
+	}
+
+	/**
+	 * Check if the cart has shippable products.
+	 *
+	 * @return bool
+	 */
+	private function cart_has_shippable_products() {
+		foreach ( $this->cart->get_cart() as $cart_item ) {
+			if ( $cart_item['data']->needs_shipping() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Checks whether session updates have been disabled for this cart.
+	 *
+	 * @return bool
+	 */
+	private function should_skip_session_updates() {
+		return ! self::are_updates_enabled_for_cart( $this->cart );
+	}
+
+	/**
+	 * Removes items from the removed cart contents on next user initiated request.
+	 *
+	 * @return void
+	 */
+	public function clean_up_removed_cart_contents() {
+		if ( $this->should_skip_session_updates() ) {
+			return;
+		}
+
+		// Limit to page requests initiated by the user.
+		$is_page = is_singular() || is_archive() || is_search();
+
+		if ( is_404() || ! $is_page ) {
+			return;
+		}
+
+		// Don't cleanup if user just removed an item (undo link is being displayed).
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['removed_item'] ) ) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['undo_item'] ) ) {
+			return;
+		}
+
+		WC()->session->set( 'removed_cart_contents', null );
+		$this->cart->set_removed_cart_contents( array() );
 	}
 }

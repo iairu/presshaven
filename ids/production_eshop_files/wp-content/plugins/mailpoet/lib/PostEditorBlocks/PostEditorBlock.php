@@ -19,20 +19,32 @@ class PostEditorBlock {
   /** @var SubscriptionFormBlock */
   private $subscriptionFormBlock;
 
+  /** @var NewsletterBlock */
+  private $newsletterBlock;
+
+  /** @var ManageSubscriptionBlock */
+  private $manageSubscriptionBlock;
+
   public function __construct(
     Renderer $renderer,
     WPFunctions $wp,
-    SubscriptionFormBlock $subscriptionFormBlock
+    SubscriptionFormBlock $subscriptionFormBlock,
+    NewsletterBlock $newsletterBlock,
+    ManageSubscriptionBlock $manageSubscriptionBlock
   ) {
     $this->renderer = $renderer;
     $this->wp = $wp;
     $this->subscriptionFormBlock = $subscriptionFormBlock;
+    $this->newsletterBlock = $newsletterBlock;
+    $this->manageSubscriptionBlock = $manageSubscriptionBlock;
   }
 
   public function init() {
     $this->subscriptionFormBlock->init();
+    $this->newsletterBlock->init();
+    $this->manageSubscriptionBlock->init();
 
-    if (is_admin()) {
+    if ($this->wp->isAdmin()) {
       $this->initAdmin();
     } else {
       $this->initFrontend();
@@ -42,13 +54,24 @@ class PostEditorBlock {
   private function initAdmin() {
     $this->wp->addAction('enqueue_block_editor_assets', [$this, 'enqueueAssets']);
     $this->subscriptionFormBlock->initAdmin();
+    $this->newsletterBlock->initAdmin();
+    $this->manageSubscriptionBlock->initAdmin();
   }
 
   public function enqueueAssets() {
     $this->wp->wpEnqueueScript(
       'mailpoet-block-form-block-js',
       Env::$assetsUrl . '/dist/js/' . $this->renderer->getJsAsset('post_editor_block.js'),
-      ['wp-blocks', 'wp-components', 'wp-server-side-render', 'wp-block-editor'],
+      [
+        'wp-api-fetch',
+        'wp-blocks',
+        'wp-components',
+        'wp-element',
+        'wp-i18n',
+        'wp-server-side-render',
+        'wp-block-editor',
+        'wp-url',
+      ],
       Env::$version,
       true
     );
@@ -63,5 +86,7 @@ class PostEditorBlock {
 
   private function initFrontend() {
     $this->subscriptionFormBlock->initFrontend();
+    $this->newsletterBlock->initFrontend();
+    $this->manageSubscriptionBlock->initFrontend();
   }
 }

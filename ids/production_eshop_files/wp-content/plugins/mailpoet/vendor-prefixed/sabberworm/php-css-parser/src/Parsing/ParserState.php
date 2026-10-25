@@ -1,317 +1,326 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Parsing;
 if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Sabberworm\CSS\Comment\Comment;
 use MailPoetVendor\Sabberworm\CSS\Settings;
 class ParserState
 {
- const EOF = null;
- private $oParserSettings;
- private $sText;
- private $aText;
- private $iCurrentPosition;
- private $sCharset;
- private $iLength;
- private $iLineNo;
- public function __construct($sText, Settings $oParserSettings, $iLineNo = 1)
- {
- $this->oParserSettings = $oParserSettings;
- $this->sText = $sText;
- $this->iCurrentPosition = 0;
- $this->iLineNo = $iLineNo;
- $this->setCharset($this->oParserSettings->sDefaultCharset);
- }
- public function setCharset($sCharset)
- {
- $this->sCharset = $sCharset;
- $this->aText = $this->strsplit($this->sText);
- if (\is_array($this->aText)) {
- $this->iLength = \count($this->aText);
- }
- }
- public function getCharset()
- {
- return $this->sCharset;
- }
- public function currentLine()
- {
- return $this->iLineNo;
- }
- public function currentColumn()
- {
- return $this->iCurrentPosition;
- }
- public function getSettings()
- {
- return $this->oParserSettings;
- }
- public function anchor()
- {
- return new Anchor($this->iCurrentPosition, $this);
- }
- public function setPosition($iPosition)
- {
- $this->iCurrentPosition = $iPosition;
- }
- public function parseIdentifier($bIgnoreCase = \true)
- {
- if ($this->isEnd()) {
- throw new UnexpectedEOFException('', '', 'identifier', $this->iLineNo);
- }
- $sResult = $this->parseCharacter(\true);
- if ($sResult === null) {
- throw new UnexpectedTokenException($sResult, $this->peek(5), 'identifier', $this->iLineNo);
- }
- $sCharacter = null;
- while (!$this->isEnd() && ($sCharacter = $this->parseCharacter(\true)) !== null) {
- if (\preg_match('/[a-zA-Z0-9\\x{00A0}-\\x{FFFF}_-]/Sux', $sCharacter)) {
- $sResult .= $sCharacter;
- } else {
- $sResult .= '\\' . $sCharacter;
- }
- }
- if ($bIgnoreCase) {
- $sResult = $this->strtolower($sResult);
- }
- return $sResult;
- }
- public function parseCharacter($bIsForIdentifier)
- {
- if ($this->peek() === '\\') {
- if ($bIsForIdentifier && $this->oParserSettings->bLenientParsing && ($this->comes('\\0') || $this->comes('\\9'))) {
- // Non-strings can contain \0 or \9 which is an IE hack supported in lenient parsing.
- return null;
- }
- $this->consume('\\');
- if ($this->comes('\\n') || $this->comes('\\r')) {
- return '';
- }
- if (\preg_match('/[0-9a-fA-F]/Su', $this->peek()) === 0) {
- return $this->consume(1);
- }
- $sUnicode = $this->consumeExpression('/^[0-9a-fA-F]{1,6}/u', 6);
- if ($this->strlen($sUnicode) < 6) {
- // Consume whitespace after incomplete unicode escape
- if (\preg_match('/\\s/isSu', $this->peek())) {
- if ($this->comes('MailPoetVendor\\r\\n')) {
- $this->consume(2);
- } else {
- $this->consume(1);
- }
- }
- }
- $iUnicode = \intval($sUnicode, 16);
- $sUtf32 = "";
- for ($i = 0; $i < 4; ++$i) {
- $sUtf32 .= \chr($iUnicode & 0xff);
- $iUnicode = $iUnicode >> 8;
- }
- return \iconv('utf-32le', $this->sCharset, $sUtf32);
- }
- if ($bIsForIdentifier) {
- $peek = \ord($this->peek());
- // Ranges: a-z A-Z 0-9 - _
- if ($peek >= 97 && $peek <= 122 || $peek >= 65 && $peek <= 90 || $peek >= 48 && $peek <= 57 || $peek === 45 || $peek === 95 || $peek > 0xa1) {
- return $this->consume(1);
- }
- } else {
- return $this->consume(1);
- }
- return null;
- }
- public function consumeWhiteSpace()
- {
- $aComments = [];
- do {
- while (\preg_match('/\\s/isSu', $this->peek()) === 1) {
- $this->consume(1);
- }
- if ($this->oParserSettings->bLenientParsing) {
- try {
- $oComment = $this->consumeComment();
- } catch (UnexpectedEOFException $e) {
- $this->iCurrentPosition = $this->iLength;
- return $aComments;
- }
- } else {
- $oComment = $this->consumeComment();
- }
- if ($oComment !== \false) {
- $aComments[] = $oComment;
- }
- } while ($oComment !== \false);
- return $aComments;
- }
- public function comes($sString, $bCaseInsensitive = \false)
- {
- $sPeek = $this->peek(\strlen($sString));
- return $sPeek == '' ? \false : $this->streql($sPeek, $sString, $bCaseInsensitive);
- }
- public function peek($iLength = 1, $iOffset = 0)
- {
- $iOffset += $this->iCurrentPosition;
- if ($iOffset >= $this->iLength) {
- return '';
- }
- return $this->substr($iOffset, $iLength);
- }
- public function consume($mValue = 1)
- {
- if (\is_string($mValue)) {
- $iLineCount = \substr_count($mValue, "\n");
- $iLength = $this->strlen($mValue);
- if (!$this->streql($this->substr($this->iCurrentPosition, $iLength), $mValue)) {
- throw new UnexpectedTokenException($mValue, $this->peek(\max($iLength, 5)), $this->iLineNo);
- }
- $this->iLineNo += $iLineCount;
- $this->iCurrentPosition += $this->strlen($mValue);
- return $mValue;
- } else {
- if ($this->iCurrentPosition + $mValue > $this->iLength) {
- throw new UnexpectedEOFException($mValue, $this->peek(5), 'count', $this->iLineNo);
- }
- $sResult = $this->substr($this->iCurrentPosition, $mValue);
- $iLineCount = \substr_count($sResult, "\n");
- $this->iLineNo += $iLineCount;
- $this->iCurrentPosition += $mValue;
- return $sResult;
- }
- }
- public function consumeExpression($mExpression, $iMaxLength = null)
- {
- $aMatches = null;
- $sInput = $iMaxLength !== null ? $this->peek($iMaxLength) : $this->inputLeft();
- if (\preg_match($mExpression, $sInput, $aMatches, \PREG_OFFSET_CAPTURE) === 1) {
- return $this->consume($aMatches[0][0]);
- }
- throw new UnexpectedTokenException($mExpression, $this->peek(5), 'expression', $this->iLineNo);
- }
- public function consumeComment()
- {
- $mComment = \false;
- if ($this->comes('/*')) {
- $iLineNo = $this->iLineNo;
- $this->consume(1);
- $mComment = '';
- while (($char = $this->consume(1)) !== '') {
- $mComment .= $char;
- if ($this->comes('*/')) {
- $this->consume(2);
- break;
- }
- }
- }
- if ($mComment !== \false) {
- // We skip the * which was included in the comment.
- return new Comment(\substr($mComment, 1), $iLineNo);
- }
- return $mComment;
- }
- public function isEnd()
- {
- return $this->iCurrentPosition >= $this->iLength;
- }
- public function consumeUntil($aEnd, $bIncludeEnd = \false, $consumeEnd = \false, array &$comments = [])
- {
- $aEnd = \is_array($aEnd) ? $aEnd : [$aEnd];
- $out = '';
- $start = $this->iCurrentPosition;
- while (!$this->isEnd()) {
- $char = $this->consume(1);
- if (\in_array($char, $aEnd)) {
- if ($bIncludeEnd) {
- $out .= $char;
- } elseif (!$consumeEnd) {
- $this->iCurrentPosition -= $this->strlen($char);
- }
- return $out;
- }
- $out .= $char;
- if ($comment = $this->consumeComment()) {
- $comments[] = $comment;
- }
- }
- if (\in_array(self::EOF, $aEnd)) {
- return $out;
- }
- $this->iCurrentPosition = $start;
- throw new UnexpectedEOFException('One of ("' . \implode('","', $aEnd) . '")', $this->peek(5), 'search', $this->iLineNo);
- }
- private function inputLeft()
- {
- return $this->substr($this->iCurrentPosition, -1);
- }
- public function streql($sString1, $sString2, $bCaseInsensitive = \true)
- {
- if ($bCaseInsensitive) {
- return $this->strtolower($sString1) === $this->strtolower($sString2);
- } else {
- return $sString1 === $sString2;
- }
- }
- public function backtrack($iAmount)
- {
- $this->iCurrentPosition -= $iAmount;
- }
- public function strlen($sString)
- {
- if ($this->oParserSettings->bMultibyteSupport) {
- return \mb_strlen($sString, $this->sCharset);
- } else {
- return \strlen($sString);
- }
- }
- private function substr($iStart, $iLength)
- {
- if ($iLength < 0) {
- $iLength = $this->iLength - $iStart + $iLength;
- }
- if ($iStart + $iLength > $this->iLength) {
- $iLength = $this->iLength - $iStart;
- }
- $sResult = '';
- while ($iLength > 0) {
- $sResult .= $this->aText[$iStart];
- $iStart++;
- $iLength--;
- }
- return $sResult;
- }
- private function strtolower($sString)
- {
- if ($this->oParserSettings->bMultibyteSupport) {
- return \mb_strtolower($sString, $this->sCharset);
- } else {
- return \strtolower($sString);
- }
- }
- private function strsplit($sString)
- {
- if ($this->oParserSettings->bMultibyteSupport) {
- if ($this->streql($this->sCharset, 'utf-8')) {
- return \preg_split('//u', $sString, -1, \PREG_SPLIT_NO_EMPTY);
- } else {
- $iLength = \mb_strlen($sString, $this->sCharset);
- $aResult = [];
- for ($i = 0; $i < $iLength; ++$i) {
- $aResult[] = \mb_substr($sString, $i, 1, $this->sCharset);
- }
- return $aResult;
- }
- } else {
- if ($sString === '') {
- return [];
- } else {
- return \str_split($sString);
- }
- }
- }
- private function strpos($sString, $sNeedle, $iOffset)
- {
- if ($this->oParserSettings->bMultibyteSupport) {
- return \mb_strpos($sString, $sNeedle, $iOffset, $this->sCharset);
- } else {
- return \strpos($sString, $sNeedle, $iOffset);
- }
- }
+public const EOF = null;
+private $parserSettings;
+private $text;
+private $characters;
+private $currentPosition = 0;
+private $charset;
+private $lineNumber;
+public function __construct(string $text, Settings $parserSettings, int $lineNumber = 1)
+{
+$this->parserSettings = $parserSettings;
+$this->text = $text;
+$this->lineNumber = $lineNumber;
+$this->setCharset($this->parserSettings->getDefaultCharset());
+}
+public function setCharset(string $charset): void
+{
+$this->charset = $charset;
+$this->characters = $this->strsplit($this->text);
+}
+public function currentLine(): int
+{
+return $this->lineNumber;
+}
+public function currentColumn(): int
+{
+return $this->currentPosition;
+}
+public function getSettings(): Settings
+{
+return $this->parserSettings;
+}
+public function anchor(): Anchor
+{
+return new Anchor($this->currentPosition, $this);
+}
+public function setPosition(int $position): void
+{
+$this->currentPosition = $position;
+}
+public function parseIdentifier(bool $ignoreCase = \true): string
+{
+if ($this->isEnd()) {
+throw new UnexpectedEOFException('', '', 'identifier', $this->lineNumber);
+}
+$result = $this->parseCharacter(\true);
+if ($result === null) {
+throw new UnexpectedTokenException('', $this->peek(5), 'identifier', $this->lineNumber);
+}
+while (!$this->isEnd() && ($character = $this->parseCharacter(\true)) !== null) {
+$matchResult = \preg_match('/[a-zA-Z0-9\x{00A0}-\x{FFFF}_-]/Sux', $character);
+if (!\is_int($matchResult)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112617);
+}
+if ($matchResult !== 0) {
+$result .= $character;
+} else {
+$result .= '\\' . $character;
+}
+}
+if ($ignoreCase) {
+$result = $this->strtolower($result);
+}
+return $result;
+}
+public function parseCharacter(bool $isForIdentifier): ?string
+{
+if ($this->peek() === '\\') {
+$this->consume('\\');
+if ($this->comes('\n') || $this->comes('\r')) {
+return '';
+}
+$matchResult = \preg_match('/[0-9a-fA-F]/Su', $this->peek());
+if (!\is_int($matchResult)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112618);
+}
+if ($matchResult === 0) {
+return $this->consume(1);
+}
+$hexCodePoint = $this->consumeExpression('/^[0-9a-fA-F]{1,6}/u', 6);
+if ($this->strlen($hexCodePoint) < 6) {
+$matchResult = \preg_match('/\s/isSu', $this->peek());
+if (!\is_int($matchResult)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112619);
+}
+if ($matchResult !== 0) {
+if ($this->comes('MailPoetVendor\r\n')) {
+$this->consume(2);
+} else {
+$this->consume(1);
+}
+}
+}
+$codePoint = \intval($hexCodePoint, 16);
+$utf32EncodedCharacter = '';
+for ($i = 0; $i < 4; ++$i) {
+$utf32EncodedCharacter .= \chr($codePoint & 0xff);
+$codePoint = $codePoint >> 8;
+}
+$convertedCharacter = @\iconv('utf-32le', $this->charset, $utf32EncodedCharacter);
+if (!\is_string($convertedCharacter)) {
+throw new \RuntimeException('The Unicode escape sequence could not be converted to the target character set.', 1787112620);
+}
+return $convertedCharacter;
+}
+if ($isForIdentifier) {
+$peek = \ord($this->peek());
+if ($peek >= 97 && $peek <= 122 || $peek >= 65 && $peek <= 90 || $peek >= 48 && $peek <= 57 || $peek === 45 || $peek === 95 || $peek > 0xa1) {
+return $this->consume(1);
+}
+} else {
+return $this->consume(1);
+}
+return null;
+}
+public function consumeWhiteSpace(array &$comments = []): string
+{
+$consumed = '';
+do {
+while (\true) {
+$matchResult = \preg_match('/\s/isSu', $this->peek());
+if (!\is_int($matchResult)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112621);
+}
+if ($matchResult !== 1) {
+break;
+}
+$consumed .= $this->consume(1);
+}
+if ($this->parserSettings->usesLenientParsing()) {
+try {
+$comment = $this->consumeComment();
+} catch (UnexpectedEOFException $e) {
+$this->currentPosition = \count($this->characters);
+break;
+}
+} else {
+$comment = $this->consumeComment();
+}
+if ($comment instanceof Comment) {
+$comments[] = $comment;
+}
+} while ($comment instanceof Comment);
+return $consumed;
+}
+public function comes(string $string, bool $caseInsensitive = \false): bool
+{
+$peek = $this->peek(\strlen($string));
+return $peek !== '' && $this->streql($peek, $string, $caseInsensitive);
+}
+public function peek(int $length = 1, int $offset = 0): string
+{
+$offset += $this->currentPosition;
+if ($offset >= \count($this->characters)) {
+return '';
+}
+return $this->substr($offset, $length);
+}
+public function consume($value = 1): string
+{
+if (\is_string($value)) {
+$numberOfLines = \substr_count($value, "\n");
+$length = $this->strlen($value);
+if (!$this->streql($this->substr($this->currentPosition, $length), $value)) {
+throw new UnexpectedTokenException($value, $this->peek(\max($length, 5)), 'literal', $this->lineNumber);
+}
+$this->lineNumber += $numberOfLines;
+$this->currentPosition += $this->strlen($value);
+$result = $value;
+} else {
+if ($this->currentPosition + $value > \count($this->characters)) {
+throw new UnexpectedEOFException((string) $value, $this->peek(5), 'count', $this->lineNumber);
+}
+$result = $this->substr($this->currentPosition, $value);
+$numberOfLines = \substr_count($result, "\n");
+$this->lineNumber += $numberOfLines;
+$this->currentPosition += $value;
+}
+return $result;
+}
+public function consumeIfComes(string $nextContent): bool
+{
+$length = $this->strlen($nextContent);
+if (!$this->streql($this->substr($this->currentPosition, $length), $nextContent)) {
+return \false;
+}
+$numberOfLines = \substr_count($nextContent, "\n");
+$this->lineNumber += $numberOfLines;
+$this->currentPosition += $this->strlen($nextContent);
+return \true;
+}
+public function consumeExpression(string $expression, ?int $maximumLength = null): string
+{
+$matches = null;
+$input = $maximumLength !== null ? $this->peek($maximumLength) : $this->inputLeft();
+$matchResult = \preg_match($expression, $input, $matches, \PREG_OFFSET_CAPTURE);
+if (!\is_int($matchResult)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112622);
+}
+if ($matchResult !== 1) {
+throw new UnexpectedTokenException($expression, $this->peek(5), 'expression', $this->lineNumber);
+}
+return $this->consume($matches[0][0]);
+}
+public function consumeComment()
+{
+$lineNumber = $this->lineNumber;
+$comment = null;
+if ($this->comes('/*')) {
+$this->consume(1);
+$comment = '';
+while (($char = $this->consume(1)) !== '') {
+$comment .= $char;
+if ($this->comes('*/')) {
+$this->consume(2);
+break;
+}
+}
+}
+return \is_string($comment) ? new Comment(\substr($comment, 1), $lineNumber) : \false;
+}
+public function isEnd(): bool
+{
+return $this->currentPosition >= \count($this->characters);
+}
+public function consumeUntil($stopCharacters, bool $includeEnd = \false, bool $consumeEnd = \false, array &$comments = []): string
+{
+$stopCharacters = \is_array($stopCharacters) ? $stopCharacters : [$stopCharacters];
+$consumedCharacters = '';
+$start = $this->currentPosition;
+$comments = \array_merge($comments, $this->consumeComments());
+while (!$this->isEnd()) {
+$character = $this->consume(1);
+if (\in_array($character, $stopCharacters, \true)) {
+if ($includeEnd) {
+$consumedCharacters .= $character;
+} elseif (!$consumeEnd) {
+$this->currentPosition -= $this->strlen($character);
+}
+return $consumedCharacters;
+}
+$consumedCharacters .= $character;
+$comments = \array_merge($comments, $this->consumeComments());
+}
+if (\in_array(self::EOF, $stopCharacters, \true)) {
+return $consumedCharacters;
+}
+$this->currentPosition = $start;
+throw new UnexpectedEOFException('One of ("' . \implode('","', $stopCharacters) . '")', $this->peek(5), 'search', $this->lineNumber);
+}
+private function inputLeft(): string
+{
+return $this->substr($this->currentPosition, -1);
+}
+public function streql(string $string1, string $string2, bool $caseInsensitive = \true): bool
+{
+return $caseInsensitive ? $this->strtolower($string1) === $this->strtolower($string2) : $string1 === $string2;
+}
+public function backtrack(int $numberOfCharacters): void
+{
+$this->currentPosition -= $numberOfCharacters;
+}
+public function strlen(string $string): int
+{
+return $this->parserSettings->hasMultibyteSupport() ? \mb_strlen($string, $this->charset) : \strlen($string);
+}
+private function substr(int $offset, int $length): string
+{
+if ($length < 0) {
+$length = \count($this->characters) - $offset + $length;
+}
+if ($offset + $length > \count($this->characters)) {
+$length = \count($this->characters) - $offset;
+}
+$result = '';
+while ($length > 0) {
+$result .= $this->characters[$offset];
+$offset++;
+$length--;
+}
+return $result;
+}
+private function strtolower(string $string): string
+{
+return $this->parserSettings->hasMultibyteSupport() ? \mb_strtolower($string, $this->charset) : \strtolower($string);
+}
+private function strsplit(string $string): array
+{
+if ($this->parserSettings->hasMultibyteSupport()) {
+if ($this->streql($this->charset, 'utf-8')) {
+$result = \preg_split('//u', $string, -1, \PREG_SPLIT_NO_EMPTY);
+if (!\is_array($result)) {
+throw new \RuntimeException('The CSS is not valid UTF-8.', 1787112623);
+}
+} else {
+$length = \mb_strlen($string, $this->charset);
+$result = [];
+for ($i = 0; $i < $length; ++$i) {
+$result[] = \mb_substr($string, $i, 1, $this->charset);
+}
+}
+} else {
+$result = $string !== '' ? \str_split($string) : [];
+}
+return $result;
+}
+private function consumeComments(): array
+{
+$comments = [];
+while (\true) {
+$comment = $this->consumeComment();
+if ($comment instanceof Comment) {
+$comments[] = $comment;
+} else {
+return $comments;
+}
+}
+}
 }

@@ -24,7 +24,7 @@ class Next_Command extends \ActionScheduler_WPCLI_Command
             $callback_args = json_decode($callback_args, \true);
         }
         if ($raw) {
-            \WP_CLI::line(as_next_scheduled_action($hook, $callback_args, $group));
+            \WpifyWooDeps\WP_CLI::line(as_next_scheduled_action($hook, $callback_args, $group));
             return;
         }
         $params = array('hook' => $hook, 'orderby' => 'date', 'order' => 'ASC', 'group' => $group);
@@ -33,7 +33,7 @@ class Next_Command extends \ActionScheduler_WPCLI_Command
         }
         $params['status'] = \ActionScheduler_Store::STATUS_RUNNING;
         // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
-        \WP_CLI::debug('ActionScheduler()::store()->query_action( ' . var_export($params, \true) . ' )');
+        \WpifyWooDeps\WP_CLI::debug('ActionScheduler()::store()->query_action( ' . var_export($params, \true) . ' )');
         $store = \ActionScheduler::store();
         $action_id = $store->query_action($params);
         if ($action_id) {
@@ -42,12 +42,12 @@ class Next_Command extends \ActionScheduler_WPCLI_Command
         }
         $params['status'] = \ActionScheduler_Store::STATUS_PENDING;
         // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
-        \WP_CLI::debug('ActionScheduler()::store()->query_action( ' . var_export($params, \true) . ' )');
+        \WpifyWooDeps\WP_CLI::debug('ActionScheduler()::store()->query_action( ' . var_export($params, \true) . ' )');
         $action_id = $store->query_action($params);
         if ($action_id) {
             echo $action_id;
             return;
         }
-        \WP_CLI::warning('No matching next action.');
+        \WpifyWooDeps\WP_CLI::warning('No matching next action.');
     }
 }

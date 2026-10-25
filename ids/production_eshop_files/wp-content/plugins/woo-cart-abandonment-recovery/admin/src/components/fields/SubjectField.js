@@ -4,6 +4,8 @@ import useDebounceDispatch from '@Utils/debounceDispatch';
 import { Input, Button, DropdownMenu } from '@bsf/force-ui';
 import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { __ } from '@wordpress/i18n';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const SubjectField = ( {
@@ -12,6 +14,7 @@ const SubjectField = ( {
 	name,
 	value,
 	badge,
+	placeholder,
 	handleChange,
 	options = [],
 	autoSave = true,
@@ -90,10 +93,13 @@ const SubjectField = ( {
 		}
 	};
 
+	const a11y = useFieldA11y( { description, error } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
@@ -104,23 +110,26 @@ const SubjectField = ( {
 						className={ `${
 							badge ? 'w-24 ' : 'w-full'
 						} focus:[&>input]:ring-focus` }
+						{ ...a11y.controlProps }
 						type="text"
 						size="md"
+						placeholder={ placeholder }
 						name={ name }
 						ref={ inputRef }
 						value={ textValue }
 						onChange={ handleOnChange }
 						disabled={ isPro && isFeatureBlocked }
 					/>
-					{ error && (
-						<p className="text-red-500 text-sm mt-1">{ error }</p>
-					) }
+					<FieldError id={ a11y.errorId }>{ error }</FieldError>
 				</div>
 				{ options.length > 0 && (
 					<DropdownMenu placement="bottom-end">
 						<DropdownMenu.Trigger>
-							<span className="sr-only">Open Dropdown</span>
 							<Button
+								aria-label={ __(
+									'Insert placeholder',
+									'woo-cart-abandonment-recovery'
+								) }
 								size="md"
 								type="button"
 								variant="outline"

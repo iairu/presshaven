@@ -55,89 +55,89 @@ class __TwigTemplate_756448057f537f5715d1a262e5a4bc2ae04cea7f694f005ae4bcfe6c686
         yield "  <div id=\"dynamic_segments_container\"></div>
 
   <script type=\"text/javascript\">
-    var mailpoet_dynamic_segment_count = ";
+    var mailpoet_segments_api = ";
         // line 7
-        yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["dynamic_segment_count"] ?? null), "html", null, true);
-        yield ";
-    var mailpoet_listing_per_page = ";
-        // line 8
-        yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["items_per_page"] ?? null), "html", null, true);
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["api"] ?? null));
         yield ";
     var mailpoet_custom_fields = ";
-        // line 9
-        yield json_encode(($context["custom_fields"] ?? null));
+        // line 8
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["custom_fields"] ?? null));
         yield ";
     var mailpoet_static_segments_list = ";
-        // line 10
-        yield json_encode(($context["static_segments_list"] ?? null));
+        // line 9
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["static_segments_list"] ?? null));
         yield ";
     var wordpress_editable_roles_list = ";
-        // line 11
-        yield json_encode(($context["wordpress_editable_roles_list"] ?? null));
+        // line 10
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["wordpress_editable_roles_list"] ?? null));
         yield ";
     var mailpoet_newsletters_list = ";
-        // line 12
-        yield json_encode(($context["newsletters_list"] ?? null));
+        // line 11
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["newsletters_list"] ?? null));
         yield ";
     var mailpoet_product_attributes = ";
-        // line 13
-        yield json_encode(($context["product_attributes"] ?? null));
+        // line 12
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["product_attributes"] ?? null));
         yield ";
     var mailpoet_local_product_attributes = ";
-        // line 14
-        yield json_encode(($context["local_product_attributes"] ?? null));
+        // line 13
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["local_product_attributes"] ?? null));
         yield ";
     var mailpoet_product_categories = ";
-        // line 15
-        yield json_encode(($context["product_categories"] ?? null));
+        // line 14
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["product_categories"] ?? null));
         yield ";
     var mailpoet_product_tags = ";
-        // line 16
-        yield json_encode(($context["product_tags"] ?? null));
+        // line 15
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["product_tags"] ?? null));
         yield ";
     var mailpoet_products = ";
+        // line 16
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["products"] ?? null));
+        yield ";
+    var mailpoet_variable_products = ";
         // line 17
-        yield json_encode(($context["products"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["variable_products"] ?? null));
         yield ";
     var mailpoet_membership_plans = ";
         // line 18
-        yield json_encode(($context["membership_plans"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["membership_plans"] ?? null));
         yield ";
     var mailpoet_subscription_products = ";
         // line 19
-        yield json_encode(($context["subscription_products"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["subscription_products"] ?? null));
         yield ";
     var mailpoet_can_use_woocommerce_memberships = ";
         // line 20
-        yield json_encode(($context["can_use_woocommerce_memberships"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["can_use_woocommerce_memberships"] ?? null));
         yield ";
     var mailpoet_can_use_woocommerce_subscriptions = ";
         // line 21
-        yield json_encode(($context["can_use_woocommerce_subscriptions"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["can_use_woocommerce_subscriptions"] ?? null));
         yield ";
     var mailpoet_woocommerce_currency_symbol = ";
         // line 22
-        yield json_encode(($context["woocommerce_currency_symbol"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["woocommerce_currency_symbol"] ?? null));
         yield ";
     var mailpoet_woocommerce_countries = ";
         // line 23
-        yield json_encode(($context["woocommerce_countries"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["woocommerce_countries"] ?? null));
         yield ";
     var mailpoet_woocommerce_payment_methods = ";
         // line 24
-        yield json_encode(($context["woocommerce_payment_methods"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["woocommerce_payment_methods"] ?? null));
         yield ";
     var mailpoet_woocommerce_shipping_methods = ";
         // line 25
-        yield json_encode(($context["woocommerce_shipping_methods"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["woocommerce_shipping_methods"] ?? null));
         yield ";
     var mailpoet_signup_forms = ";
         // line 26
-        yield json_encode(($context["signup_forms"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["signup_forms"] ?? null));
         yield ";
     var mailpoet_automations = ";
         // line 27
-        yield json_encode(($context["automations"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["automations"] ?? null));
         yield ";
   </script>
 

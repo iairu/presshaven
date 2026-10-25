@@ -1,6 +1,11 @@
 import React from 'react';
 import RenderFields from '@Components/RenderFields';
 import ConditionsHelper from '@Utils/conditions';
+import { cn } from '@Utils/helper';
+import {
+	getDrawerFieldData,
+	getFieldCardClass,
+} from '../shared/templateDrawerUtils';
 
 const SmsTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 	const smsFields = cart_abandonment_admin?.settings_fields?.sms_fields;
@@ -25,10 +30,13 @@ const SmsTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 						return (
 							<div
 								key={ field }
-								className="px-4 rounded-md bg-white shadow-sm"
+								className={ cn(
+									'px-4 rounded-md bg-white shadow-sm',
+									getFieldCardClass( data?.type )
+								) }
 							>
 								<RenderFields
-									data={ data }
+									data={ getDrawerFieldData( field, data ) }
 									value={
 										[
 											'time',

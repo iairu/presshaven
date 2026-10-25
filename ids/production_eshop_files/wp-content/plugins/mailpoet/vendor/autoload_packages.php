@@ -1,6 +1,5 @@
 <?php
-namespace Automattic\Jetpack\Autoloader\jp059d2c86b74ae8ac6d545a31632bcaaf\al5_0_8;
+namespace Automattic\Jetpack\Autoloader\jpbd85136368c3501bec76a9a8dd9738ea\al5_0_23;
 if (!defined('ABSPATH')) exit;
- // phpcs:ignore
 require_once __DIR__ . '/jetpack-autoloader/class-autoloader.php';
 Autoloader::init();

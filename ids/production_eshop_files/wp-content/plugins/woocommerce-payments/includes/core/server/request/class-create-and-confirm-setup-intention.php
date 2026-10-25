@@ -79,6 +79,28 @@ class Create_And_Confirm_Setup_Intention extends Request {
 	}
 
 	/**
+	 * Set fingerprint data for fraud prevention.
+	 *
+	 * Adds hashed fingerprint metadata to the setup intent request
+	 * to help detect and prevent card testing attacks.
+	 *
+	 * @param string $fingerprint Fingerprint data from the client.
+	 *
+	 * @return void
+	 */
+	public function set_fingerprint( string $fingerprint = '' ) {
+		// The setup intent flow doesn't call set_metadata() first, and get_param() throws on a
+		// missing key, so default to an empty array rather than assume metadata is present.
+		try {
+			$metadata = $this->get_param( 'metadata' );
+		} catch ( Invalid_Request_Parameter_Exception $e ) {
+			$metadata = [];
+		}
+		$metadata = array_merge( $metadata, $this->get_fingerprint_metadata( $fingerprint ) );
+		$this->set_param( 'metadata', $metadata );
+	}
+
+	/**
 	 * Payment method setter.
 	 *
 	 * @param string $payment_method_id ID of payment method to process charge with.
@@ -90,6 +112,22 @@ class Create_And_Confirm_Setup_Intention extends Request {
 		// Including the 'card' prefix to support subscription renewals using legacy payment method IDs.
 		$this->validate_stripe_id( $payment_method_id, [ 'pm', 'src', 'card' ] );
 		$this->set_param( 'payment_method', $payment_method_id );
+	}
+
+	/**
+	 * Confirmation token setter.
+	 *
+	 * Used by Express Checkout Element (ECE) which provides a confirmation token
+	 * instead of a payment method ID.
+	 *
+	 * @param string $confirmation_token The confirmation token.
+	 *
+	 * @return void
+	 * @throws Invalid_Request_Parameter_Exception
+	 */
+	public function set_confirmation_token( string $confirmation_token ) {
+		$this->validate_stripe_id( $confirmation_token, 'ctoken' );
+		$this->set_param( 'confirmation_token', $confirmation_token );
 	}
 
 	/**

@@ -10,6 +10,7 @@ use WP_Role;
 
 class Capabilities {
   const MEMBERS_CAP_GROUP_NAME = 'mailpoet';
+  const TRANSIENT_CAPS_VERIFIED = 'mailpoet_caps_verified';
 
   private $renderer = null;
   /** @var WPFunctions  */
@@ -24,7 +25,7 @@ class Capabilities {
     if ($renderer !== null) {
       $this->renderer = $renderer;
     }
-    if ($wp == null) {
+    if ($wp === null) {
       $wp = new WPFunctions;
     }
     $this->wp = $wp;
@@ -33,6 +34,7 @@ class Capabilities {
 
   public function init() {
     $this->setupMembersCapabilities();
+    $this->ensureWPCapabilities();
   }
 
   public function setupWPCapabilities() {
@@ -61,6 +63,38 @@ class Capabilities {
         $roleObjects[$role]->remove_cap($name);
       }
     }
+  }
+
+  /**
+   * Verify default capabilities are present on roles and restore any missing ones.
+   * Runs only on admin requests, throttled by a 1-hour transient.
+   */
+  private function ensureWPCapabilities(): void {
+    if (!$this->wp->isAdmin()) {
+      return;
+    }
+
+    if ($this->wp->getTransient(self::TRANSIENT_CAPS_VERIFIED)) {
+      return;
+    }
+
+    $permissions = $this->accessControl->getDefaultPermissions();
+    $roleObjects = [];
+    foreach ($permissions as $name => $roles) {
+      foreach ($roles as $role) {
+        if (!isset($roleObjects[$role])) {
+          $roleObjects[$role] = $this->wp->getRole($role);
+        }
+        if (!$roleObjects[$role] instanceof WP_Role) {
+          continue;
+        }
+        if (!($roleObjects[$role]->capabilities[$name] ?? false)) {
+          $roleObjects[$role]->add_cap($name);
+        }
+      }
+    }
+
+    $this->wp->setTransient(self::TRANSIENT_CAPS_VERIFIED, '1', HOUR_IN_SECONDS);
   }
 
   public function setupMembersCapabilities() {

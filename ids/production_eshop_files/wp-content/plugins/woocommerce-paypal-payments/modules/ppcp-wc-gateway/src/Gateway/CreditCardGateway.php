@@ -8,30 +8,29 @@
 declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\WcGateway\Gateway;
 
-use DomainException;
 use Exception;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use WC_Order;
 use WC_Payment_Tokens;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\OrderEndpoint;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\PaymentsEndpoint;
-use WooCommerce\PayPalCommerce\ApiClient\Endpoint\PaymentTokensEndpoint;
+use WooCommerce\PayPalCommerce\ApiClient\Entity\Order;
+use WooCommerce\PayPalCommerce\ApiClient\Entity\OrderStatus;
 use WooCommerce\PayPalCommerce\ApiClient\Exception\PayPalApiException;
 use WooCommerce\PayPalCommerce\ApiClient\Exception\RuntimeException;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\Environment;
 use WooCommerce\PayPalCommerce\Session\SessionHandler;
-use WooCommerce\PayPalCommerce\Vaulting\PaymentTokenRepository;
-use WooCommerce\PayPalCommerce\Vaulting\VaultedCreditCardHandler;
-use WooCommerce\PayPalCommerce\Vaulting\WooCommercePaymentTokens;
+use WooCommerce\PayPalCommerce\WcPaymentTokens\WooCommercePaymentTokens;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
 use WooCommerce\PayPalCommerce\WcGateway\Endpoint\CaptureCardPayment;
 use WooCommerce\PayPalCommerce\WcGateway\Exception\GatewayGenericException;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\AuthorizedPaymentsProcessor;
+use WooCommerce\PayPalCommerce\WcGateway\Processor\OrderMetaTrait;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\OrderProcessor;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\PaymentsStatusHandlingTrait;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\RefundProcessor;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\TransactionIdHandlingTrait;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\SettingsRenderer;
+use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 use WooCommerce\PayPalCommerce\WcSubscriptions\FreeTrialHandlerTrait;
 use WooCommerce\PayPalCommerce\WcSubscriptions\Helper\SubscriptionHelper;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\CardPaymentsConfiguration;
@@ -41,17 +40,20 @@ use WooCommerce\PayPalCommerce\WcGateway\Helper\CardPaymentsConfiguration;
 class CreditCardGateway extends \WC_Payment_Gateway_CC
 {
     use \WooCommerce\PayPalCommerce\WcGateway\Gateway\ProcessPaymentTrait;
-    use \WooCommerce\PayPalCommerce\WcGateway\Gateway\GatewaySettingsRendererTrait;
     use TransactionIdHandlingTrait;
     use PaymentsStatusHandlingTrait;
     use FreeTrialHandlerTrait;
+    use OrderMetaTrait;
     const ID = 'ppcp-credit-card-gateway';
     /**
-     * The Settings Renderer.
+     * Order meta key holding the one-time, per-attempt random nonce for a
+     * vaulted-card payment that is awaiting the buyer to complete a 3D Secure
+     * challenge. The same value is embedded in the PayPal return URL and must
+     * match on return before the capture is resumed; it is cleared once used.
      *
-     * @var SettingsRenderer
+     * @var string
      */
-    protected $settings_renderer;
+    const THREE_DS_RESUME_META = '_ppcp_card_3ds_resume';
     /**
      * The processor for orders.
      *
@@ -77,18 +79,6 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
      */
     protected CardPaymentsConfiguration $dcc_configuration;
     /**
-     * The vaulted credit card handler.
-     *
-     * @var VaultedCreditCardHandler
-     */
-    protected $vaulted_credit_card_handler;
-    /**
-     * The URL to the module.
-     *
-     * @var string
-     */
-    private $module_url;
-    /**
      * The Session Handler.
      *
      * @var SessionHandler
@@ -106,12 +96,6 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
      * @var TransactionUrlProvider
      */
     protected $transaction_url_provider;
-    /**
-     * The payment token repository.
-     *
-     * @var PaymentTokenRepository
-     */
-    private $payment_token_repository;
     /**
      * The subscription helper.
      *
@@ -142,18 +126,6 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
      * @var CaptureCardPayment
      */
     private $capture_card_payment;
-    /**
-     * The prefix.
-     *
-     * @var string
-     */
-    private $prefix;
-    /**
-     * Payment tokens endpoint.
-     *
-     * @var PaymentTokensEndpoint
-     */
-    private $payment_tokens_endpoint;
     /**
      * WooCommerce payment tokens factory.
      *
@@ -215,52 +187,40 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
      */
     public $enabled = 'yes';
     /**
-     * CreditCardGateway constructor.
-     *
-     * @param SettingsRenderer          $settings_renderer           The Settings Renderer.
      * @param OrderProcessor            $order_processor             The Order processor.
      * @param ContainerInterface        $config                      The settings.
      * @param CardPaymentsConfiguration $dcc_configuration           The DCC Gateway Configuration.
      * @param array                     $card_icons                  The card icons.
-     * @param string                    $module_url                  The URL to the module.
      * @param SessionHandler            $session_handler             The Session Handler.
      * @param RefundProcessor           $refund_processor            The refund processor.
      * @param TransactionUrlProvider    $transaction_url_provider    Service able to provide view transaction url base.
      * @param SubscriptionHelper        $subscription_helper         The subscription helper.
      * @param PaymentsEndpoint          $payments_endpoint           The payments endpoint.
-     * @param VaultedCreditCardHandler  $vaulted_credit_card_handler The vaulted credit card handler.
      * @param Environment               $environment                 The environment.
      * @param OrderEndpoint             $order_endpoint              The order endpoint.
      * @param CaptureCardPayment        $capture_card_payment        Capture card payment.
-     * @param string                    $prefix                      The prefix.
-     * @param PaymentTokensEndpoint     $payment_tokens_endpoint     Payment tokens endpoint.
      * @param WooCommercePaymentTokens  $wc_payment_tokens           WooCommerce payment tokens factory.
      * @param LoggerInterface           $logger                      The logger.
      */
-    public function __construct(SettingsRenderer $settings_renderer, OrderProcessor $order_processor, ContainerInterface $config, CardPaymentsConfiguration $dcc_configuration, array $card_icons, string $module_url, SessionHandler $session_handler, RefundProcessor $refund_processor, \WooCommerce\PayPalCommerce\WcGateway\Gateway\TransactionUrlProvider $transaction_url_provider, SubscriptionHelper $subscription_helper, PaymentsEndpoint $payments_endpoint, VaultedCreditCardHandler $vaulted_credit_card_handler, Environment $environment, OrderEndpoint $order_endpoint, CaptureCardPayment $capture_card_payment, string $prefix, PaymentTokensEndpoint $payment_tokens_endpoint, WooCommercePaymentTokens $wc_payment_tokens, LoggerInterface $logger)
+    public function __construct(OrderProcessor $order_processor, ContainerInterface $config, CardPaymentsConfiguration $dcc_configuration, array $card_icons, SessionHandler $session_handler, RefundProcessor $refund_processor, \WooCommerce\PayPalCommerce\WcGateway\Gateway\TransactionUrlProvider $transaction_url_provider, SubscriptionHelper $subscription_helper, PaymentsEndpoint $payments_endpoint, Environment $environment, OrderEndpoint $order_endpoint, CaptureCardPayment $capture_card_payment, WooCommercePaymentTokens $wc_payment_tokens, LoggerInterface $logger)
     {
         $this->id = self::ID;
-        $this->settings_renderer = $settings_renderer;
         $this->order_processor = $order_processor;
         $this->config = $config;
         $this->dcc_configuration = $dcc_configuration;
-        $this->module_url = $module_url;
         $this->session_handler = $session_handler;
         $this->refund_processor = $refund_processor;
         $this->transaction_url_provider = $transaction_url_provider;
         $this->subscription_helper = $subscription_helper;
         $this->payments_endpoint = $payments_endpoint;
-        $this->vaulted_credit_card_handler = $vaulted_credit_card_handler;
         $this->environment = $environment;
         $this->order_endpoint = $order_endpoint;
         $this->capture_card_payment = $capture_card_payment;
-        $this->prefix = $prefix;
-        $this->payment_tokens_endpoint = $payment_tokens_endpoint;
         $this->wc_payment_tokens = $wc_payment_tokens;
         $this->logger = $logger;
         $default_support = array('products', 'refunds');
         $this->supports = array_merge($default_support, apply_filters('woocommerce_paypal_payments_credit_card_gateway_supports', array()));
-        $this->method_title = __('Advanced Card Processing', 'woocommerce-paypal-payments');
+        $this->method_title = __('Debit & Credit Cards', 'woocommerce-paypal-payments');
         $this->method_description = __('Accept debit and credit cards, and local payment methods with PayPal’s latest solution.', 'woocommerce-paypal-payments');
         $this->title = apply_filters('woocommerce_paypal_payments_credit_card_gateway_title', $this->dcc_configuration->gateway_title(), $this);
         $this->description = apply_filters('woocommerce_paypal_payments_credit_card_gateway_description', $this->dcc_configuration->gateway_description(), $this);
@@ -360,38 +320,47 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
     public function process_payment($order_id)
     {
         $wc_order = wc_get_order($order_id);
-        if (!is_a($wc_order, WC_Order::class)) {
+        if (!$wc_order instanceof WC_Order) {
             WC()->session->set('ppcp_card_payment_token_for_free_trial', null);
             return $this->handle_payment_failure(null, new GatewayGenericException(new Exception('WC order was not found.')));
         }
+        /**
+         * A vaulted card staged during checkout completes the order without a
+         * PayPal capture, so the order itself must be the free trial the vault
+         * was staged for. Both markers are consumed before that check, so they
+         * belong to this order only and never reach the next one in the same
+         * session.
+         */
         $guest_card_payment_for_free_trial = WC()->session->get('ppcp_guest_payment_for_free_trial') ?? null;
-        WC()->session->get('ppcp_guest_payment_for_free_trial', null);
-        if ($guest_card_payment_for_free_trial) {
-            $customer_id = $guest_card_payment_for_free_trial->customer->id ?? '';
-            if ($customer_id) {
-                update_user_meta($wc_order->get_customer_id(), '_ppcp_target_customer_id', $customer_id);
-            }
-            if (isset($guest_card_payment_for_free_trial->payment_source->card)) {
-                $this->wc_payment_tokens->create_payment_token_card($wc_order->get_customer_id(), $guest_card_payment_for_free_trial);
-                $wc_order->payment_complete();
-                return $this->handle_payment_success($wc_order);
-            }
-        }
         $card_payment_token_for_free_trial = WC()->session->get('ppcp_card_payment_token_for_free_trial') ?? null;
+        WC()->session->set('ppcp_guest_payment_for_free_trial', null);
         WC()->session->set('ppcp_card_payment_token_for_free_trial', null);
-        if ($card_payment_token_for_free_trial) {
-            $tokens = WC_Payment_Tokens::get_customer_tokens(get_current_user_id());
-            foreach ($tokens as $token) {
-                if ($token->get_id() === (int) $card_payment_token_for_free_trial) {
+        if ($this->is_free_trial_order($wc_order)) {
+            if (is_object($guest_card_payment_for_free_trial)) {
+                $customer_id = $guest_card_payment_for_free_trial->customer->id ?? '';
+                if ($customer_id) {
+                    update_user_meta($wc_order->get_customer_id(), '_ppcp_target_customer_id', $customer_id);
+                }
+                if (isset($guest_card_payment_for_free_trial->payment_source->card)) {
+                    $this->wc_payment_tokens->create_payment_token_card($wc_order->get_customer_id(), $guest_card_payment_for_free_trial);
                     $wc_order->payment_complete();
-                    $wc_order->add_payment_token($token);
                     return $this->handle_payment_success($wc_order);
+                }
+            }
+            if ($card_payment_token_for_free_trial) {
+                $tokens = WC_Payment_Tokens::get_customer_tokens(get_current_user_id());
+                foreach ($tokens as $token) {
+                    if ($token->get_id() === (int) $card_payment_token_for_free_trial) {
+                        $wc_order->payment_complete();
+                        $wc_order->add_payment_token($token);
+                        return $this->handle_payment_success($wc_order);
+                    }
                 }
             }
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $card_payment_token_id = wc_clean(wp_unslash($_POST['wc-ppcp-credit-card-gateway-payment-token'] ?? ''));
-        if ($this->is_free_trial_order($wc_order) && $card_payment_token_id) {
+        if ($this->is_free_trial_order($wc_order) && $card_payment_token_id && 'new' !== $card_payment_token_id) {
             $customer_tokens = $this->wc_payment_tokens->customer_tokens(get_current_user_id());
             foreach ($customer_tokens as $token) {
                 if ($token['payment_source']->name() === 'card') {
@@ -412,6 +381,27 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
             }
         }
         /**
+         * Resume a vaulted-card payment after the buyer completed a 3D Secure
+         * challenge. The one-time nonce in the return URL must match the value
+         * stored on the order; it is cleared on use, so the resume is single-use.
+         */
+        // wp_unslash() can return an array, so the value is sanitized on the next line behind an is_string() guard.
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        $provided_resume_nonce = wp_unslash($_GET['ppcp_resume_nonce'] ?? '');
+        $provided_resume_nonce = is_string($provided_resume_nonce) ? sanitize_text_field($provided_resume_nonce) : '';
+        $stored_resume_nonce = (string) $wc_order->get_meta(self::THREE_DS_RESUME_META);
+        if ($stored_resume_nonce && $provided_resume_nonce && hash_equals($stored_resume_nonce, $provided_resume_nonce)) {
+            $wc_order->delete_meta_data(self::THREE_DS_RESUME_META);
+            $wc_order->save();
+            try {
+                $order = $this->order_endpoint->order((string) $wc_order->get_meta(\WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway::ORDER_ID_META_KEY));
+                return $this->finalize_vaulted_card_order($wc_order, $order);
+            } catch (RuntimeException $exception) {
+                $this->logger->error($exception->getMessage());
+                return $this->handle_payment_failure($wc_order, $exception);
+            }
+        }
+        /**
          * Vault v3 (save payment methods).
          * If customer has chosen a saved credit card payment from checkout page.
          */
@@ -419,43 +409,34 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
             $tokens = WC_Payment_Tokens::get_customer_tokens(get_current_user_id());
             foreach ($tokens as $token) {
                 if ($token->get_id() === (int) $card_payment_token_id) {
-                    $custom_id = (string) $wc_order->get_id();
-                    $invoice_id = $this->prefix . $wc_order->get_order_number();
                     try {
-                        $create_order = $this->capture_card_payment->create_order($token->get_token(), $custom_id, $invoice_id, $wc_order);
+                        $resume_nonce = wp_generate_password(20, \false);
+                        $created_order = $this->capture_card_payment->create_order($token->get_token(), $wc_order, $resume_nonce);
+                        $this->add_paypal_meta($wc_order, $created_order, $this->environment);
+                        $wc_order->add_payment_token($token);
+                        /**
+                         * Step-up: when PayPal returns a payer-action link the buyer must
+                         * complete a 3D Secure challenge before this vaulted card can be
+                         * charged. PayPal returns the order in CREATED (or
+                         * PAYER_ACTION_REQUIRED) status with that link; a frictionless
+                         * charge has no such link. Store this attempt's one-time nonce and
+                         * redirect to the payer-action URL; the capture resumes when the
+                         * buyer returns with the matching nonce. A later attempt overwrites
+                         * the nonce, so only the most recent challenge can be confirmed.
+                         */
+                        $payer_action = $this->payer_action_url($created_order);
+                        if ($payer_action) {
+                            $wc_order->update_meta_data(self::THREE_DS_RESUME_META, $resume_nonce);
+                            $wc_order->save();
+                            return array('result' => 'success', 'redirect' => $payer_action);
+                        }
+                        $order = $this->order_endpoint->order($created_order->id());
+                        return $this->finalize_vaulted_card_order($wc_order, $order);
                     } catch (RuntimeException $exception) {
                         $this->logger->error($exception->getMessage());
+                        return $this->handle_payment_failure($wc_order, $exception);
                     }
-                    $order = $this->order_endpoint->order($create_order->id);
-                    $wc_order->update_meta_data(\WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway::INTENT_META_KEY, $order->intent());
-                    $wc_order->add_payment_token($token);
-                    if ($order->intent() === 'AUTHORIZE') {
-                        $order = $this->order_endpoint->authorize($order);
-                        $wc_order->update_meta_data(AuthorizedPaymentsProcessor::CAPTURED_META_KEY, 'false');
-                        if ($this->subscription_helper->has_subscription($wc_order->get_id())) {
-                            $wc_order->update_meta_data('_ppcp_captured_vault_webhook', 'false');
-                        }
-                    }
-                    $transaction_id = $this->get_paypal_order_transaction_id($order);
-                    if ($transaction_id) {
-                        $this->update_transaction_id($transaction_id, $wc_order);
-                    }
-                    $this->handle_new_order_status($order, $wc_order);
-                    return $this->handle_payment_success($wc_order);
                 }
-            }
-        }
-        /**
-         * If customer has chosen a saved credit card payment from checkout page.
-         */
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing
-        $saved_credit_card = wc_clean(wp_unslash($_POST['saved_credit_card'] ?? ''));
-        if ($saved_credit_card && is_checkout()) {
-            try {
-                $wc_order = $this->vaulted_credit_card_handler->handle_payment($saved_credit_card, $wc_order);
-                return $this->handle_payment_success($wc_order);
-            } catch (RuntimeException $error) {
-                return $this->handle_payment_failure($wc_order, $error);
             }
         }
         /**
@@ -488,6 +469,68 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
         }
     }
     /**
+     * Authorizes or captures a vaulted-card PayPal order, records the transaction
+     * id, transitions the WC order and returns the WC payment result. Shared by
+     * the initial saved-card charge and the resume step after a 3D Secure
+     * challenge; the status checks keep it idempotent whether or not the order
+     * was already captured during the return.
+     *
+     * @param WC_Order $wc_order The WC order.
+     * @param Order    $order    The PayPal order to finalize.
+     * @return array The WC payment result.
+     * @throws RuntimeException When an API request fails.
+     */
+    private function finalize_vaulted_card_order(WC_Order $wc_order, Order $order): array
+    {
+        if ($order->intent() === 'AUTHORIZE') {
+            $order = $this->order_endpoint->authorize($order);
+            $wc_order->update_meta_data(AuthorizedPaymentsProcessor::CAPTURED_META_KEY, 'false');
+            if ($this->subscription_helper->has_subscription($wc_order->get_id())) {
+                $wc_order->update_meta_data('_ppcp_captured_vault_webhook', 'false');
+            }
+        } elseif ($order->status()->is(OrderStatus::APPROVED) || $order->status()->is(OrderStatus::CREATED)) {
+            // A vaulted-card order is created in CREATED status and must be
+            // captured explicitly; without this it never leaves "pending payment".
+            $order = $this->order_endpoint->capture($order);
+        }
+        $transaction_id = $this->get_paypal_order_transaction_id($order);
+        if ($transaction_id) {
+            $this->update_transaction_id($transaction_id, $wc_order);
+        }
+        $this->handle_new_order_status($order, $wc_order);
+        /**
+         * Safety net: if nothing transitioned the order into a handled state
+         * (e.g. PayPal returned PAYER_ACTION_REQUIRED and produced no capture or
+         * authorization), fail cleanly instead of leaving the order silently
+         * stuck in "pending payment".
+         */
+        if (!$wc_order->has_status(array('processing', 'completed', 'on-hold'))) {
+            $this->logger->error(sprintf('Vaulted card payment for WC order %1$d did not reach a handled state (PayPal order %2$s, status %3$s); failing the payment.', $wc_order->get_id(), $order->id(), $order->status()->name()));
+            return $this->handle_payment_failure($wc_order, new RuntimeException(__('This saved card could not be charged. Please try another payment method.', 'woocommerce-paypal-payments')));
+        }
+        return $this->handle_payment_success($wc_order);
+    }
+    /**
+     * Returns the payer-action URL from a PayPal order's HATEOAS links, or an
+     * empty string when none is present.
+     *
+     * @param Order $order The PayPal order.
+     * @return string
+     */
+    private function payer_action_url(Order $order): string
+    {
+        $links = $order->links();
+        if (!is_array($links)) {
+            return '';
+        }
+        foreach ($links as $link) {
+            if (is_object($link) && isset($link->rel, $link->href) && 'payer-action' === $link->rel) {
+                return (string) $link->href;
+            }
+        }
+        return '';
+    }
+    /**
      * Process refund.
      *
      * If the gateway declares 'refunds' support, this will allow it to refund.
@@ -501,7 +544,7 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
     public function process_refund($order_id, $amount = null, $reason = '')
     {
         $order = wc_get_order($order_id);
-        if (!is_a($order, \WC_Order::class)) {
+        if (!$order instanceof \WC_Order) {
             return \false;
         }
         return $this->refund_processor->process($order, (float) $amount, (string) $reason);
@@ -563,6 +606,7 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
             return $ret;
         }
         if ('enabled' === $key) {
+            assert($this->config instanceof Settings);
             $this->config->set('dcc_enabled', 'yes' === $value);
             $this->config->persist();
             $this->dcc_configuration->refresh();
@@ -578,15 +622,6 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
     private function is_enabled(): bool
     {
         return $this->dcc_configuration->is_enabled();
-    }
-    /**
-     * Returns the settings renderer.
-     *
-     * @return SettingsRenderer
-     */
-    protected function settings_renderer(): SettingsRenderer
-    {
-        return $this->settings_renderer;
     }
     /**
      * Check whether customer is changing subscription payment.
@@ -612,7 +647,7 @@ class CreditCardGateway extends \WC_Payment_Gateway_CC
     private function add_payment_token_to_order(WC_Order $wc_order, int $wc_payment_token_id, string $return_url, SessionHandler $session_handler): array
     {
         $payment_token = WC_Payment_Tokens::get($wc_payment_token_id);
-        if ($payment_token) {
+        if ($payment_token && (int) $payment_token->get_user_id() === get_current_user_id()) {
             $wc_order->add_payment_token($payment_token);
             $wc_order->save();
             $session_handler->destroy_session_data();

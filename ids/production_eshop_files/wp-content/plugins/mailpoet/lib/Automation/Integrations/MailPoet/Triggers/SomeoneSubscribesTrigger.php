@@ -88,7 +88,7 @@ class SomeoneSubscribesTrigger implements Trigger {
       return false;
     }
 
-    // Triggers when no segment IDs defined (= any segment) or the current segment paylo.
+    // Triggers when no segment IDs defined (= any segment) or the current segment payload.
     $triggerArgs = $args->getStep()->getArgs();
     $segmentIds = $triggerArgs['segment_ids'] ?? [];
     return !is_array($segmentIds) || !$segmentIds || in_array($segmentId, $segmentIds, true);

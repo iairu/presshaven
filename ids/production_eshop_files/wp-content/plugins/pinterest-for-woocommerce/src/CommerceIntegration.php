@@ -17,6 +17,9 @@ use Pinterest_For_Woocommerce;
 
 /**
  * Class Handling Commerce Integration operations.
+ *
+ * @class   CommerceIntegration
+ * @version 1.6.0
  */
 class CommerceIntegration {
 
@@ -83,7 +86,7 @@ class CommerceIntegration {
 							'Create Pinterest Commerce Integration retries has stopped. No further attempts to be scheduled.',
 							'pinterest-for-woocommerce'
 						),
-						esc_html( $e->get_pinterest_code() ),
+						esc_html( (string) $e->get_pinterest_code() ),
 						esc_html( $e->getMessage() ),
 					),
 					'error'
@@ -104,7 +107,7 @@ class CommerceIntegration {
 							'Create Pinterest Commerce Integration has failed due to Pinterest API code %1$s with message %2$s. Scheduling a retry attempt.',
 							'pinterest-for-woocommerce'
 						),
-						esc_html( $e->get_pinterest_code() ),
+						esc_html( (string) $e->get_pinterest_code() ),
 						esc_html( $e->getMessage() ),
 					),
 					'error'
@@ -167,7 +170,7 @@ class CommerceIntegration {
 						'Commerce Integration Sync has failed with Pinterest code %1$s and the message %2$s. Next attempt in a week.',
 						'pinterest-for-woocommerce'
 					),
-					esc_html( $e->get_pinterest_code() ),
+					esc_html( (string) $e->get_pinterest_code() ),
 					esc_html( $e->getMessage() )
 				),
 				'error'

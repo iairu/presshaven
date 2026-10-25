@@ -296,7 +296,11 @@ class Error_Handler {
 	 */
 	protected function should_allow_error_filtering() {
 		$host = new \Automattic\Jetpack\Status\Host();
-		return $host->is_woa_site();
+		if ( $host->is_woa_site() || $host->is_vip_site() || $host->is_newspack_site() ) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -753,7 +757,7 @@ class Error_Handler {
 	private function garbage_collector( $errors ) {
 		foreach ( $errors as $error_code => $users ) {
 			foreach ( $users as $user_id => $error ) {
-				if ( self::ERROR_LIFE_TIME < time() - (int) $error['timestamp'] ) {
+				if ( empty( $error['timestamp'] ) || self::ERROR_LIFE_TIME < time() - (int) $error['timestamp'] ) {
 					unset( $errors[ $error_code ][ $user_id ] );
 				}
 			}

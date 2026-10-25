@@ -13,6 +13,7 @@ use Automattic\WooCommerce\EmailEditor\Engine\PersonalizationTags\Personalizatio
 use Automattic\WooCommerce\EmailEditor\Engine\Templates\Templates;
 use Automattic\WooCommerce\EmailEditor\Engine\Logger\Email_Editor_Logger;
 use WP_Post;
+use WP_REST_Request;
 use WP_Theme_JSON;
 
 /**
@@ -136,7 +137,7 @@ class Email_Editor {
 			$request_uri = sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) );
 		}
 		if ( strstr( $request_uri, 'site-editor.php' ) === false ) {
-			$post_types = array_column( $this->get_post_types(), 'name' );
+			$post_types = array_column( self::get_post_types(), 'name' );
 			$this->templates->initialize( $post_types );
 		}
 	}
@@ -157,7 +158,7 @@ class Email_Editor {
 	 * @return void
 	 */
 	private function register_email_post_types(): void {
-		foreach ( $this->get_post_types() as $post_type ) {
+		foreach ( self::get_post_types() as $post_type ) {
 			register_post_type(
 				$post_type['name'],
 				array_merge( $this->get_default_email_post_args(), $post_type['args'] )
@@ -181,9 +182,15 @@ class Email_Editor {
 	 * @return array
 	 * @phpstan-return EmailPostType[]
 	 */
-	private function get_post_types(): array {
-		$post_types = array();
-		return apply_filters( 'woocommerce_email_editor_post_types', $post_types );
+	private static function get_post_types(): array {
+		$post_types = apply_filters( 'woocommerce_email_editor_post_types', array() );
+		/**
+		 * Non-array filter results mean no email post types.
+		 *
+		 * @var EmailPostType[] $post_types
+		 */
+		$post_types = is_array( $post_types ) ? $post_types : array();
+		return $post_types;
 	}
 
 	/**
@@ -239,7 +246,7 @@ class Email_Editor {
 	 * @return void
 	 */
 	public function extend_email_post_api() {
-		$email_post_types = array_column( $this->get_post_types(), 'name' );
+		$email_post_types = array_column( self::get_post_types(), 'name' );
 		register_rest_field(
 			$email_post_types,
 			'email_data',
@@ -263,8 +270,28 @@ class Email_Editor {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this->email_api_controller, 'send_preview_email_data' ),
-				'permission_callback' => function () {
-					return current_user_can( 'edit_posts' );
+				'permission_callback' => function ( WP_REST_Request $request ) {
+					if ( ! current_user_can( 'edit_posts' ) ) {
+						return false;
+					}
+					$post_id = $request->get_param( 'postId' );
+					if ( is_numeric( $post_id ) && (int) $post_id > 0 ) {
+						return self::is_email_post_type( get_post_type( (int) $post_id ) ) && current_user_can( 'edit_post', (int) $post_id );
+					}
+
+					/**
+					 * Filters whether a preview email may be sent for a request without a backing post.
+					 *
+					 * Defaults to false: postless requests are rejected unless an integration
+					 * that handles them (via the `woocommerce_email_editor_send_preview_email`
+					 * filter) explicitly authorizes the request.
+					 *
+					 * @param bool             $allowed Whether the postless request is authorized. Default false.
+					 * @param \WP_REST_Request $request The send-preview REST request.
+					 *
+					 * @since 2.16.0
+					 */
+					return (bool) apply_filters( 'woocommerce_email_editor_send_preview_email_without_post_permission', false, $request );
 				},
 			)
 		);
@@ -277,6 +304,25 @@ class Email_Editor {
 				'permission_callback' => function () {
 					return current_user_can( 'edit_posts' );
 				},
+			)
+		);
+		register_rest_route(
+			'woocommerce-email-editor/v1',
+			'/personalization_tags',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this->email_api_controller, 'get_personalization_tags_collection' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+				'args'                => array(
+					'post_id' => array(
+						'description'       => __( 'The post ID for context-aware tag filtering.', 'woocommerce' ),
+						'type'              => 'integer',
+						'required'          => false,
+						'sanitize_callback' => 'absint',
+					),
+				),
 			)
 		);
 	}
@@ -315,17 +361,17 @@ class Email_Editor {
 	}
 
 	/**
-	 * Check if the current post type is an email post type.
+	 * Check if the post type is registered for the email editor.
 	 *
-	 * @param string $current_post_type The current post type.
+	 * @param string|false $post_type The post type to check.
 	 * @return bool
 	 */
-	private function current_post_is_email_post_type( $current_post_type ): bool {
-		if ( ! $current_post_type ) {
+	public static function is_email_post_type( $post_type ): bool {
+		if ( ! $post_type ) {
 			return false;
 		}
-		$email_post_types = array_column( $this->get_post_types(), 'name' );
-		return in_array( $current_post_type, $email_post_types, true );
+		$email_post_types = array_column( self::get_post_types(), 'name' );
+		return in_array( $post_type, $email_post_types, true );
 	}
 
 	/**
@@ -341,7 +387,12 @@ class Email_Editor {
 			return $template;
 		}
 
-		if ( ! $this->current_post_is_email_post_type( $post->post_type ) ) {
+		if ( ! self::is_email_post_type( $post->post_type ) ) {
+			return $template;
+		}
+
+		// Anyone can see a published email. For other statuses the user must be able to read the post.
+		if ( ! is_post_publicly_viewable( $post ) && ! current_user_can( 'read_post', $post->ID ) ) {
 			return $template;
 		}
 
@@ -368,7 +419,7 @@ class Email_Editor {
 			return $preview_link;
 		}
 
-		if ( ! $this->current_post_is_email_post_type( $post->post_type ) ) {
+		if ( ! self::is_email_post_type( $post->post_type ) ) {
 			return $preview_link;
 		}
 

@@ -8,6 +8,36 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\Automation\Engine\WordPress;
 
 class ContextFactory {
+  private const ELEVATED_CAPABILITIES = [
+    'activate_plugins',
+    'create_users',
+    'delete_plugins',
+    'delete_themes',
+    'delete_users',
+    'edit_files',
+    'edit_plugins',
+    'edit_themes',
+    'edit_users',
+    'install_plugins',
+    'install_themes',
+    'manage_network',
+    'manage_network_options',
+    'manage_network_plugins',
+    'manage_network_themes',
+    'manage_network_users',
+    'manage_options',
+    'manage_sites',
+    'manage_woocommerce',
+    'mailpoet_manage_settings',
+    'promote_users',
+    'remove_users',
+    'switch_themes',
+    'unfiltered_html',
+    'update_core',
+    'update_plugins',
+    'update_themes',
+    'upgrade_network',
+  ];
 
   /** @var WordPress  */
   private $wp;
@@ -22,6 +52,7 @@ class ContextFactory {
   public function getContextData(): array {
     return [
       'comment_statuses' => $this->getCommentStatuses(),
+      'editable_roles' => $this->getEditableRoles(),
       'post_types' => $this->getPostTypes(),
       'taxonomies' => $this->getTaxonomies(),
     ];
@@ -40,6 +71,41 @@ class ContextFactory {
       ];
     }
     return $stati;
+  }
+
+  /**
+   * @return string[][]
+   */
+  private function getEditableRoles(): array {
+    $roles = [];
+    foreach ($this->wp->getEditableRoles() as $id => $role) {
+      $roleId = (string)$id;
+      if ($this->isElevatedRole($roleId, $role)) {
+        continue;
+      }
+      $roles[] = [
+        'id' => $roleId,
+        'name' => (string)($role['name'] ?? $roleId),
+      ];
+    }
+    return $roles;
+  }
+
+  /**
+   * @param string $id
+   * @param array{name?: string, capabilities?: array<string, bool>} $role
+   */
+  private function isElevatedRole(string $id, array $role): bool {
+    if ($id === 'administrator') {
+      return true;
+    }
+    $capabilities = $role['capabilities'] ?? [];
+    foreach (self::ELEVATED_CAPABILITIES as $capability) {
+      if (!empty($capabilities[$capability])) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

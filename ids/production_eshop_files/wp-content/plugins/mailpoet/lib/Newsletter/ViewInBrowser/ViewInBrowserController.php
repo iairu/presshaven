@@ -9,6 +9,8 @@ use MailPoet\EmailEditor\Integrations\MailPoet\DependencyNotice;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Newsletter\NewslettersRepository;
 use MailPoet\Newsletter\Sending\SendingQueuesRepository;
+use MailPoet\Newsletter\Sharing\ShareMetadataBuilder;
+use MailPoet\Newsletter\Sharing\ShareVisibility;
 use MailPoet\Newsletter\Url as NewsletterUrl;
 use MailPoet\Subscribers\LinkTokens;
 use MailPoet\Subscribers\SubscribersRepository;
@@ -35,6 +37,12 @@ class ViewInBrowserController {
   /** @var DependencyNotice */
   private $dependencyNotice;
 
+  /** @var ShareVisibility */
+  private $shareVisibility;
+
+  /** @var ShareMetadataBuilder */
+  private $shareMetadataBuilder;
+
   public function __construct(
     LinkTokens $linkTokens,
     NewsletterUrl $newsletterUrl,
@@ -42,7 +50,9 @@ class ViewInBrowserController {
     ViewInBrowserRenderer $viewInBrowserRenderer,
     SendingQueuesRepository $sendingQueuesRepository,
     DependencyNotice $dependencyNotice,
-    SubscribersRepository $subscribersRepository
+    SubscribersRepository $subscribersRepository,
+    ShareVisibility $shareVisibility,
+    ShareMetadataBuilder $shareMetadataBuilder
   ) {
     $this->linkTokens = $linkTokens;
     $this->viewInBrowserRenderer = $viewInBrowserRenderer;
@@ -51,6 +61,8 @@ class ViewInBrowserController {
     $this->newsletterUrl = $newsletterUrl;
     $this->dependencyNotice = $dependencyNotice;
     $this->newslettersRepository = $newslettersRepository;
+    $this->shareVisibility = $shareVisibility;
+    $this->shareMetadataBuilder = $shareMetadataBuilder;
   }
 
   public function view(array $data) {
@@ -62,13 +74,46 @@ class ViewInBrowserController {
       return '';
     }
 
-    // if queue and subscriber exist, subscriber must have received the newsletter
+    // the queue must belong to the validated newsletter; otherwise its stored
+    // body is content the requester's newsletter/hash pair does not authorise
     $queue = isset($data['queue_id']) ? $this->sendingQueuesRepository->findOneById($data['queue_id']) : null;
+    if ($queue && (!$queue->getNewsletter() || $queue->getNewsletter()->getId() !== $newsletter->getId())) {
+      throw new \InvalidArgumentException("Invalid 'queue_id'");
+    }
+
+    // if queue and subscriber exist, subscriber must have received the newsletter
     if (!$isPreview && $queue && $subscriber->getId() && !$this->sendingQueuesRepository->isSubscriberProcessed($queue, $subscriber)) {
       throw new \InvalidArgumentException("Subscriber did not receive the newsletter yet");
     }
 
-    return $this->viewInBrowserRenderer->render($isPreview, $newsletter, $subscriber, $queue);
+    $html = $this->viewInBrowserRenderer->render($isPreview, $newsletter, $subscriber, $queue);
+    if (!empty($data['embed_hide_background'])) {
+      // Public embed URLs may request this cosmetic-only presentation variant.
+      $html = $this->hideEmbedBackground($html);
+    }
+    if (!$isPreview && $this->shareVisibility->canShare($newsletter)) {
+      $publicUrl = $this->newsletterUrl->getPublicShareUrl($newsletter);
+      // Pass $publicUrl as both the share target and the replaceState target so the
+      // tokenised view-in-browser URL is scrubbed from the address bar on load.
+      return $this->shareMetadataBuilder->injectShareToolbar($html, $newsletter, $publicUrl, $publicUrl);
+    }
+    return $html;
+  }
+
+  private function hideEmbedBackground(string $html): string {
+    $style = '<style id="mailpoet-newsletter-embed-background">html,body{background:transparent!important;}body{padding:0!important;}</style>';
+    $headPosition = stripos($html, '</head>');
+    if ($headPosition !== false) {
+      return substr_replace($html, $style, $headPosition, 0);
+    }
+
+    $matches = [];
+    if (preg_match('/<html\b[^>]*>/i', $html, $matches, PREG_OFFSET_CAPTURE)) {
+      $position = $matches[0][1] + strlen($matches[0][0]);
+      return substr_replace($html, $style, $position, 0);
+    }
+
+    return $style . $html;
   }
 
   private function getNewsletter(array $data) {

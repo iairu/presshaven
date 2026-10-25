@@ -79,9 +79,11 @@ class Help {
       ],
       'cronStatus' => $this->cronHelper->getDaemon(),
       'queueStatus' => $mailerLog,
+      'activePlugins' => $this->systemReportCollector->getActivePluginsData(),
     ];
 
     $systemStatusData['cronStatus']['accessible'] = $this->cronHelper->isDaemonAccessible();
+    $systemStatusData['queueStatus']['sendingLimitReached'] = MailerLog::isSendingLimitReached();
     $systemStatusData['queueStatus']['tasksStatusCounts'] = $this->scheduledTasksRepository->getCountsPerStatus();
 
     $scheduledTasks = $this->scheduledTasksRepository->getLatestTasks(SendingQueue::TASK_TYPE);

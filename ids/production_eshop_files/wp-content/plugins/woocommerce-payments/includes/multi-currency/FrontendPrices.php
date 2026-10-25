@@ -8,6 +8,7 @@
 namespace WCPay\MultiCurrency;
 
 use WC_Order;
+use WC_Shipping_Method;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -65,8 +66,8 @@ class FrontendPrices {
 		add_filter( 'woocommerce_get_variation_prices_hash', [ $this, 'add_exchange_rate_to_variation_prices_hash' ], 99 );
 
 		// Shipping methods hooks.
-		add_action( 'init', [ $this, 'register_free_shipping_filters' ], 99 );
-		add_filter( 'woocommerce_shipping_method_add_rate_args', [ $this, 'convert_shipping_method_rate_cost' ], 99 );
+		add_filter( 'woocommerce_shipping_zone_shipping_methods', [ $this, 'convert_free_shipping_method_min_amount' ], 99 );
+		add_filter( 'woocommerce_shipping_method_add_rate_args', [ $this, 'convert_shipping_method_rate_cost' ], 99, 2 );
 
 		// Coupon hooks.
 		add_filter( 'woocommerce_coupon_get_amount', [ $this, 'get_coupon_amount' ], 99, 2 );
@@ -87,12 +88,12 @@ class FrontendPrices {
 	 * This method converts the '_price' parameters based on the selected currency.
 	 *
 	 * @param array     $query The current query variables.
-	 * @param \WP_Block $block The current block instance.
-	 * @param int       $page  The current page number.
+	 * @param \WP_Block $_unused_block The current block instance.
+	 * @param int       $_unused_page  The current page number.
 	 *
 	 * @return array The modified query variables.
 	 */
-	public function maybe_modify_price_ranges_query_var( $query, $block, $page ) {
+	public function maybe_modify_price_ranges_query_var( $query, $_unused_block, $_unused_page ) {
 		if ( 'product' !== $query['post_type'] ) {
 			return $query;
 		}
@@ -272,12 +273,13 @@ class FrontendPrices {
 	/**
 	 * Returns the shipping add rate args with cost converted.
 	 *
-	 * @param array $args Shipping rate args.
+	 * @param array              $args   Shipping rate args.
+	 * @param WC_Shipping_Method $method The shipping method adding the rate.
 	 *
 	 * @return array Shipping rate args with converted cost.
 	 */
-	public function convert_shipping_method_rate_cost( $args ) {
-		if ( isset( $args['cost'] ) ) {
+	public function convert_shipping_method_rate_cost( $args, $method ) {
+		if ( isset( $args['cost'] ) && $this->compatibility->should_convert_shipping_amount( $method ) ) {
 			/**
 			 * We need to keep the `cost` structure intact when applying
 			 * multi-currency conversions, because downstream it is important
@@ -336,42 +338,20 @@ class FrontendPrices {
 	}
 
 	/**
-	 * Returns the free shipping zone settings with converted min_amount.
+	 * Converts the min_amount of free shipping methods.
 	 *
-	 * @param array $data The shipping zone settings.
-	 *
-	 * @return array The shipping zone settings with converted min_amount.
+	 * @param array $methods The shipping methods.
 	 */
-	public function get_free_shipping_min_amount( $data ) {
-		if ( empty( $data['min_amount'] ) ) {
-			return $data;
-		}
-
-		// Free shipping min amount is treated as products to avoid inconsistencies with charm pricing
-		// making a method invalid when its min amount is the same as the product's price.
-		$data['min_amount'] = $this->multi_currency->get_price( $data['min_amount'], 'product' );
-		return $data;
-	}
-
-	/**
-	 * Register the hooks to set the min amount for free shipping methods.
-	 */
-	public function register_free_shipping_filters() {
-		$shipping_zones = \WC_Shipping_Zones::get_zones();
-
-		$default_zone = \WC_Shipping_Zones::get_zone( 0 );
-		if ( $default_zone ) {
-			$shipping_zones[] = [ 'shipping_methods' => $default_zone->get_shipping_methods() ];
-		}
-
-		foreach ( $shipping_zones as $shipping_zone ) {
-			foreach ( $shipping_zone['shipping_methods'] as $shipping_method ) {
-				if ( 'free_shipping' === $shipping_method->id ) {
-					$option_name = 'option_woocommerce_' . trim( $shipping_method->id ) . '_' . (int) $shipping_method->instance_id . '_settings';
-					add_filter( $option_name, [ $this, 'get_free_shipping_min_amount' ], 99 );
-				}
+	public function convert_free_shipping_method_min_amount( $methods ) {
+		foreach ( $methods as $method ) {
+			// Free shipping min amount is treated as products to avoid inconsistencies with charm pricing
+			// making a method invalid when its min amount is the same as the product's price.
+			if ( 'free_shipping' === $method->id && ! empty( $method->min_amount ) ) {
+				$method->min_amount = $this->multi_currency->get_price( $method->min_amount, 'product' );
 			}
 		}
+
+		return $methods;
 	}
 
 	/**
@@ -385,6 +365,19 @@ class FrontendPrices {
 
 		// Do not add exchange rate if order was made in the store's default currency.
 		if ( $default_currency->get_code() === $order->get_currency() ) {
+			return;
+		}
+
+		// A third-party currency switcher sets the order currency through the `woocommerce_currency`
+		// filter, without the shopper selecting it in Multi-Currency. Multi-Currency did not convert
+		// that order, and a rate recorded for it would make Analytics convert the order on top of the
+		// switcher's own conversion. Orders given an explicit currency, such as through the REST API,
+		// are left as they were.
+		$order_currency = $order->get_currency();
+		if (
+			$this->multi_currency->get_selected_currency()->get_code() !== $order_currency
+			&& get_woocommerce_currency() === $order_currency
+		) {
 			return;
 		}
 

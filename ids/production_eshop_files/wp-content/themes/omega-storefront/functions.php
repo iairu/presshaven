@@ -116,7 +116,7 @@ function omega_storefront_register_styles() {
     	require_once get_theme_file_path( 'lib/custom/css/wptt-webfont-loader.php' );
         wp_enqueue_style(
 			'omega-storefront-google-fonts',
-			wptt_get_webfont_url( $omega_storefront_fonts_url ),
+			omega_storefront_wptt_get_webfont_url( $omega_storefront_fonts_url ),
 			array(),
 			$omega_storefront_theme_version
 		);
@@ -297,6 +297,7 @@ function omega_storefront_admin_notice() {
                 <p><?php esc_html_e('Before you dive into customization, let’s go through a quick setup process to ensure everything runs smoothly. Click below to start setting up your website in minutes!', 'omega-storefront') ?> </p>
                 <div class="info-link">
                     <a href="<?php echo esc_url( admin_url( 'themes.php?page=omegastorefront-wizard' ) ); ?>"><?php esc_html_e('Get Started with Omega Storefront', 'omega-storefront'); ?></a>
+					<a target="_blank" href="<?php echo esc_url( OMEGA_STOREFRONT_BUNDLE_BUTTON ); ?>" class="notice-bundle"><?php esc_html_e('Get All WP Themes', 'omega-storefront'); ?></a>
                 </div>
                 <p class="dismiss-link"><strong><a href="?omega_storefront_admin_notice=1"><?php esc_html_e( 'Dismiss', 'omega-storefront' ); ?></a></strong></p>
             </div>

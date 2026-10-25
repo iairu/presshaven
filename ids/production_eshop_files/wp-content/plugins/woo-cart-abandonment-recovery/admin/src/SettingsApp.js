@@ -1,4 +1,4 @@
-import { createRoot } from 'react-dom/client';
+import { createRoot } from '@wordpress/element';
 import ViewContainer from '@Admin/ViewContainer';
 import { reducer, StateProvider, initialState } from '@Store';
 

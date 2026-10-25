@@ -282,8 +282,12 @@ build_sync_sql() {
     # option_name column is UNIQUE, so each row updates in place and a pool's
     # own honeypot-only options are never removed (same non-destructive apply
     # as wp_terms above). See SETTINGS_ALLOW / SETTINGS_DENY_RE above.
+    # _utf8mb4: the connection charset is binary (see prod_mysql), so a bare
+    # literal is a binary string, and MySQL 8's ICU regex refuses to match a
+    # binary pattern against a utf8mb4 column (ERROR 3995) -- confirmed live
+    # after the 5.7 -> 8.4 upgrade, every cycle failed here.
     prod_mysqldump --replace \
-        --where="($SETTINGS_ALLOW) AND option_name NOT REGEXP '$SETTINGS_DENY_RE'" \
+        --where="($SETTINGS_ALLOW) AND option_name NOT REGEXP _utf8mb4'$SETTINGS_DENY_RE'" \
         "$MYSQL_DATABASE" wp_options >> "$sql_file" || return 2
 
     {

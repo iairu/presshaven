@@ -12,7 +12,8 @@ use WC_AJAX;
 use WC_Order;
 use WooCommerce\PayPalCommerce\ApiClient\Entity\CallbackConfig;
 use WooCommerce\PayPalCommerce\ApiClient\Entity\ExperienceContext;
-use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
+use WooCommerce\PayPalCommerce\ApiClient\Helper\ReturnUrlSecret;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsProvider;
 use WooCommerce\PayPalCommerce\WcGateway\Endpoint\ReturnUrlEndpoint;
 use WooCommerce\PayPalCommerce\WcGateway\Shipping\ShippingCallbackUrlFactory;
 /**
@@ -25,15 +26,30 @@ class ExperienceContextBuilder
      */
     private ExperienceContext $experience_context;
     /**
-     * The Settings.
+     * The Settings Provider class.
      */
-    private ContainerInterface $settings;
+    private SettingsProvider $settings;
     private ShippingCallbackUrlFactory $shipping_callback_url_factory;
-    public function __construct(ContainerInterface $settings, ShippingCallbackUrlFactory $shipping_callback_url_factory)
+    /**
+     * Issues the single-use secret that the endpoint return URL carries.
+     *
+     * Optional, so a caller that builds no endpoint return URL keeps working with
+     * the two-argument constructor.
+     */
+    private ?ReturnUrlSecret $return_url_secret;
+    /**
+     * The secret that this builder put in its endpoint return URL, if it did.
+     *
+     * Every with_* method clones, and a clone copies this value, so it travels down
+     * the chain to a later call that replaces the return URL.
+     */
+    private string $pending_return_url_secret = '';
+    public function __construct(SettingsProvider $settings, ShippingCallbackUrlFactory $shipping_callback_url_factory, ?ReturnUrlSecret $return_url_secret = null)
     {
         $this->experience_context = new ExperienceContext();
         $this->settings = $settings;
         $this->shipping_callback_url_factory = $shipping_callback_url_factory;
+        $this->return_url_secret = $return_url_secret;
     }
     /**
      * Uses the default config for the PayPal buttons.
@@ -54,7 +70,16 @@ class ExperienceContextBuilder
     public function with_endpoint_return_urls(): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
     {
         $builder = clone $this;
-        $builder->experience_context = $builder->experience_context->with_return_url(home_url(WC_AJAX::get_endpoint(ReturnUrlEndpoint::ENDPOINT)))->with_cancel_url(wc_get_checkout_url());
+        $return_url = home_url(WC_AJAX::get_endpoint(ReturnUrlEndpoint::ENDPOINT));
+        // The return URL is public and PayPal keeps its query string, so a single-use
+        // secret in the URL is the proof that ReturnUrlEndpoint compares. It needs no
+        // WC session cookie, so a buyer returning in another browser is still accepted.
+        if ($this->return_url_secret instanceof ReturnUrlSecret) {
+            $secret = $this->return_url_secret->issue_pending();
+            $builder->pending_return_url_secret = $secret;
+            $return_url = add_query_arg('ppcp_return_nonce', $secret, $return_url);
+        }
+        $builder->experience_context = $builder->experience_context->with_return_url($return_url)->with_cancel_url(wc_get_checkout_url());
         return $builder;
     }
     /**
@@ -77,6 +102,14 @@ class ExperienceContextBuilder
     public function with_custom_return_url(string $url): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
     {
         $builder = clone $this;
+        // This URL replaces the endpoint return URL, so the secret that URL carried
+        // never ships.
+        if ('' !== $builder->pending_return_url_secret) {
+            if ($this->return_url_secret instanceof ReturnUrlSecret) {
+                $this->return_url_secret->discard_pending($builder->pending_return_url_secret);
+            }
+            $builder->pending_return_url_secret = '';
+        }
         $builder->experience_context = $builder->experience_context->with_return_url($url);
         return $builder;
     }
@@ -97,7 +130,7 @@ class ExperienceContextBuilder
     public function with_current_brand_name(): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
     {
         $builder = clone $this;
-        $brand_name = $this->settings->has('brand_name') ? (string) $this->settings->get('brand_name') : '';
+        $brand_name = $this->settings->brand_name();
         if (empty($brand_name)) {
             $brand_name = null;
         }
@@ -119,10 +152,21 @@ class ExperienceContextBuilder
     public function with_current_landing_page(): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
     {
         $builder = clone $this;
-        $landing_page = $this->settings->has('landing_page') ? (string) $this->settings->get('landing_page') : ExperienceContext::LANDING_PAGE_NO_PREFERENCE;
+        $landing_page = $this->settings->landing_page_enum();
         if (empty($landing_page)) {
             $landing_page = ExperienceContext::LANDING_PAGE_NO_PREFERENCE;
         }
+        $builder->experience_context = $builder->experience_context->with_landing_page($landing_page);
+        return $builder;
+    }
+    /**
+     * Uses the given landing page, ignoring the merchant setting.
+     *
+     * @param string $landing_page An ExperienceContext::LANDING_PAGE_* value.
+     */
+    public function with_landing_page(string $landing_page): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
+    {
+        $builder = clone $this;
         $builder->experience_context = $builder->experience_context->with_landing_page($landing_page);
         return $builder;
     }
@@ -132,7 +176,7 @@ class ExperienceContextBuilder
     public function with_current_payment_method_preference(): \WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder
     {
         $builder = clone $this;
-        $builder->experience_context = $builder->experience_context->with_payment_method_preference($this->settings->has('payee_preferred') && $this->settings->get('payee_preferred') ? ExperienceContext::PAYMENT_METHOD_IMMEDIATE_PAYMENT_REQUIRED : ExperienceContext::PAYMENT_METHOD_UNRESTRICTED);
+        $builder->experience_context = $builder->experience_context->with_payment_method_preference($this->settings->instant_payments_only() ? ExperienceContext::PAYMENT_METHOD_IMMEDIATE_PAYMENT_REQUIRED : ExperienceContext::PAYMENT_METHOD_UNRESTRICTED);
         return $builder;
     }
     /**

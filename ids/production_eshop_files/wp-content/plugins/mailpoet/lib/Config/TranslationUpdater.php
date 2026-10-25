@@ -119,7 +119,12 @@ class TranslationUpdater {
       $this->wpFunctions->setTransient($cacheKey, $rawResponse, self::TRANSIENT_EXPIRATION);
     }
     $response = json_decode($this->wpFunctions->wpRemoteRetrieveBody($rawResponse), true);
-    if (!is_array($response) || (array_key_exists('success', $response) && $response['success'] === false)) {
+    if (
+      !is_array($response)
+      || (array_key_exists('success', $response) && $response['success'] === false)
+      || !array_key_exists('data', $response)
+      || !is_array($response['data'])
+    ) {
       $this->logError("MailPoet: Failed to fetch translations from WordPress.com API with code 200 and response: " . json_encode($response));
       return [];
     }
@@ -176,12 +181,14 @@ class TranslationUpdater {
     });
   }
 
-  private function logError(string $message): void {
-    if (class_exists(Debugger::class)) {
+  protected function logError(string $message): void {
+    if (class_exists(Debugger::class) && Debugger::$logDirectory) {
       Debugger::log($message, ILogger::ERROR);
     }
     if (function_exists('error_log')) {
+      // phpcs:disable QITStandard.PHP.DebugCode.DebugFunctionFound
       error_log($message); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+      // phpcs:enable QITStandard.PHP.DebugCode.DebugFunctionFound
     }
   }
 

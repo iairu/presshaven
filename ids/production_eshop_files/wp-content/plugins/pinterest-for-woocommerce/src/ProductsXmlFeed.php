@@ -21,6 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class adding Save Pin support.
+ *
+ * @class   ProductsXmlFeed
+ * @version 1.6.0
  */
 class ProductsXmlFeed {
 
@@ -29,7 +32,7 @@ class ProductsXmlFeed {
 	/**
 	 * The default data structure of the Item to be printed in the XML feed.
 	 *
-	 * @var array
+	 * @var string[]
 	 */
 	private static $feed_item_structure = array(
 		'g:id',
@@ -42,7 +45,9 @@ class ProductsXmlFeed {
 		'g:availability',
 		'g:price',
 		'sale_price',
+		'sale_price_effective_date',
 		'g:mpn',
+		'g:brand',
 		'g:tax',
 		'g:shipping',
 		'g:additional_image_link',
@@ -68,6 +73,27 @@ class ProductsXmlFeed {
 	 * @var int
 	 */
 	const ADDITIONAL_IMAGES_LIMIT = 10;
+
+	/**
+	 * Limit of categories allowed by Pinterest in the product_type.
+	 *
+	 * @var int
+	 */
+	const PRODUCT_TYPE_CATEGORIES_LIMIT = 5;
+
+	/**
+	 * Limit of characters allowed by Pinterest in the product_type.
+	 *
+	 * @var int
+	 */
+	const PRODUCT_TYPE_CHARS_LIMIT = 1000;
+
+	/**
+	 * Limit of characters allowed by Pinterest in the brand.
+	 *
+	 * @var int
+	 */
+	const BRAND_CHARS_LIMIT = 100;
 
 
 	/**
@@ -109,8 +135,8 @@ class ProductsXmlFeed {
 		 * Filter that controls the attributes that will be added to the product XML file.
 		 *
 		 * @since 0.5.0
-		 * @param array      XML fields to add.
-		 * @param WC_Product Product for which the XML is being generated.
+		 * @param array      $feed_item_structure XML fields to add.
+		 * @param WC_Product $product             Product for which the XML is being generated.
 		 */
 		foreach ( apply_filters( 'pinterest_for_woocommerce_feed_item_structure', self::$feed_item_structure, $product ) as $attribute ) {
 			$method_name = 'get_property_' . str_replace( ':', '_', $attribute );
@@ -128,8 +154,8 @@ class ProductsXmlFeed {
 		 * Filter XML output for product
 		 *
 		 * @since 1.0.10
-		 * @param string     XML content.
-		 * @param WC_Product Product for which the XML is being generated.
+		 * @param string     $xml     XML content.
+		 * @param WC_Product $product Product for which the XML is being generated.
 		 */
 		return apply_filters( 'pinterest_for_woocommerce_feed_item_xml', $xml, $product );
 	}
@@ -143,6 +169,15 @@ class ProductsXmlFeed {
 	 * @return boolean
 	 */
 	private static function is_product_fit_for_feed( $product ) {
+
+		if ( $product->get_id() && '' !== get_post_field( 'post_password', $product->get_id(), 'raw' ) ) {
+			return false;
+		}
+
+		if ( $product instanceof WC_Product_Variation && $product->get_parent_id()
+			&& '' !== get_post_field( 'post_password', $product->get_parent_id(), 'raw' ) ) {
+			return false;
+		}
 
 		// Decide if product is fit for the feed based on price.
 		$price = self::get_product_regular_price( $product );
@@ -206,7 +241,7 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_item_group_id( $product, $property ) {
 
@@ -237,14 +272,61 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_description( $product, $property ) {
 
-		$description = $product->get_parent_id() ? $product->get_description() : $product->get_short_description();
+		// Guard against stale IDs or upstream lookup failures that pass a
+		// non-product value through to the feed pipeline.
+		if ( ! $product instanceof WC_Product ) {
+			return;
+		}
 
-		if ( empty( $description ) ) {
-			$description = get_the_excerpt( $product->get_id() );
+		if ( $product->get_parent_id() ) {
+			$description = $product->get_description();
+			$parent      = null;
+
+			if ( empty( $description ) ) {
+				/*
+				 * For variations without their own description, fall back to the parent
+				 * product's short description, then the parent's long description.
+				 * Avoid get_the_excerpt() here because WooCommerce stores the variation's
+				 * attribute summary in post_excerpt, which is not a useful description.
+				 *
+				 * wc_get_product() has its own per-request object cache, so sibling
+				 * variations of the same parent reuse the same load without
+				 * needing a second cache layer in this method.
+				 */
+				$parent = wc_get_product( $product->get_parent_id() );
+
+				if ( $parent ) {
+					$description = $parent->get_short_description();
+
+					if ( empty( $description ) ) {
+						$description = $parent->get_description();
+					}
+				}
+			}
+
+			/**
+			 * Filters the description used for a variation product entry in the
+			 * Pinterest feed XML. Use this to override the variation→parent
+			 * fallback chain (e.g. emit a translated description, prefer parent
+			 * long over short, or inject a per-variation string).
+			 *
+			 * @since 1.4.27
+			 *
+			 * @param string                $description Resolved description after the variation→parent fallback.
+			 * @param WC_Product            $product     Variation product.
+			 * @param WC_Product|false|null $parent      Parent product, null when not loaded (variation had its own description), or false when the parent post was deleted.
+			 */
+			$description = apply_filters( 'pinterest_for_woocommerce_variation_description', $description, $product, $parent );
+		} else {
+			$description = $product->get_short_description();
+
+			if ( empty( $description ) ) {
+				$description = get_the_excerpt( $product->get_id() );
+			}
 		}
 
 		if ( empty( $description ) ) {
@@ -256,6 +338,7 @@ class ProductsXmlFeed {
 		 *
 		 * @param bool       $apply_shortcodes Shortcodes are applied if set to `true` and stripped out if set to `false`.
 		 * @param WC_Product $product          WooCommerce product object.
+		 *
 		 * phpcs:disable WooCommerce.Commenting.CommentHooks.MissingSinceComment
 		 */
 		$apply_shortcodes = apply_filters( 'pinterest_for_woocommerce_product_description_apply_shortcodes', false, $product );
@@ -278,7 +361,7 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_g_product_type( $product, $property ) {
 
@@ -292,7 +375,34 @@ class ProductsXmlFeed {
 			return;
 		}
 
-		return '<' . $property . '>' . implode( ' &gt; ', $taxonomies ) . '</' . $property . '>';
+		// Limit to first 5 categories as per Pinterest requirements.
+		$original_count = count( $taxonomies );
+		if ( $original_count > self::PRODUCT_TYPE_CATEGORIES_LIMIT ) {
+			$taxonomies = array_slice( $taxonomies, 0, self::PRODUCT_TYPE_CATEGORIES_LIMIT );
+			Logger::log( sprintf( 'Product [%1$s] has %2$d categories, limiting to first %3$d as per Pinterest requirements.', $id, $original_count, self::PRODUCT_TYPE_CATEGORIES_LIMIT ) );
+		}
+
+		// Build product_type string.
+		$product_type = implode( ' &gt; ', $taxonomies );
+
+		// Ensure product_type doesn't exceed 1000 character limit.
+		if ( strlen( $product_type ) > self::PRODUCT_TYPE_CHARS_LIMIT ) {
+			Logger::log( sprintf( 'Product [%1$s] product_type length is %2$d characters, truncating to %3$d characters as per Pinterest requirements.', $id, strlen( $product_type ), self::PRODUCT_TYPE_CHARS_LIMIT ) );
+
+			// Build product_type by adding taxonomies until we hit the character limit, we always include the first taxonomy.
+			$product_type = '';
+			foreach ( $taxonomies as $index => $taxonomy ) {
+				$separator        = $index > 0 ? ' &gt; ' : '';
+				$new_product_type = $product_type . $separator . $taxonomy;
+
+				if ( strlen( $new_product_type ) > self::PRODUCT_TYPE_CHARS_LIMIT && $index > 0 ) {
+					break;
+				}
+				$product_type = $new_product_type;
+			}
+		}
+
+		return '<' . $property . '>' . $product_type . '</' . $property . '>';
 	}
 
 
@@ -327,8 +437,8 @@ class ProductsXmlFeed {
 	 */
 	private static function add_utm_parameters( $product_url ) {
 		$utm_params = array(
-			'utm_source'   => 'pinterest',
-			'utm_medium'   => 'social',
+			'utm_source' => 'pinterest',
+			'utm_medium' => 'social',
 		);
 
 		return add_query_arg( $utm_params, $product_url );
@@ -340,7 +450,7 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_g_image_link( $product, $property ) {
 
@@ -397,7 +507,7 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_g_price( $product, $property ) {
 
@@ -416,9 +526,12 @@ class ProductsXmlFeed {
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_sale_price( $product, $property ) {
+		if ( ! $product->is_on_sale() ) {
+			return;
+		}
 
 		if ( ! $product->get_parent_id() && method_exists( $product, 'get_variation_sale_price' ) ) {
 			$regular_price = $product->get_variation_regular_price( 'min', true );
@@ -443,6 +556,32 @@ class ProductsXmlFeed {
 	}
 
 	/**
+	 * Returns the effective date interval for an active scheduled sale.
+	 *
+	 * @param WC_Product $product  The product.
+	 * @param string     $property The name of the property.
+	 *
+	 * @return string|void
+	 */
+	private static function get_property_sale_price_effective_date( $product, $property ) {
+		if ( ! $product->is_on_sale() ) {
+			return;
+		}
+
+		$start_date = $product->get_date_on_sale_from();
+		$end_date   = $product->get_date_on_sale_to();
+
+		if ( ! $start_date || ! $end_date ) {
+			return;
+		}
+
+		$start_date = gmdate( 'Y-m-d\TH:i:s\Z', $start_date->getTimestamp() );
+		$end_date   = gmdate( 'Y-m-d\TH:i:s\Z', $end_date->getTimestamp() );
+
+		return '<' . $property . '>' . $start_date . '/' . $end_date . '</' . $property . '>';
+	}
+
+	/**
 	 * Returns the SKU in order to populate the MPN field.
 	 *
 	 * @param WC_Product $product the product.
@@ -456,12 +595,50 @@ class ProductsXmlFeed {
 
 
 	/**
+	 * Returns the brand of the product from the core WooCommerce product_brand taxonomy.
+	 *
+	 * @param WC_Product $product The product.
+	 * @param string     $property The name of the property.
+	 *
+	 * @return string
+	 */
+	private static function get_property_g_brand( $product, $property ) {
+		$id    = $product->get_parent_id() ? $product->get_parent_id() : $product->get_id();
+		$terms = wc_get_object_terms( $id, 'product_brand' );
+
+		if ( empty( $terms ) || is_wp_error( $terms ) ) {
+			return '';
+		}
+
+		/**
+		 * Filters the brand value included in the Pinterest feed.
+		 *
+		 * @since 1.4.27
+		 * @param string     $brand   The brand name.
+		 * @param WC_Product $product The product.
+		 */
+		$brand = apply_filters( 'pinterest_for_woocommerce_product_brand', $terms[0]->name, $product );
+
+		if ( empty( $brand ) ) {
+			return '';
+		}
+
+		// Ensure brand doesn't exceed Pinterest's character limit.
+		if ( strlen( $brand ) > self::BRAND_CHARS_LIMIT ) {
+			Logger::log( sprintf( 'Product [%1$s] brand length is %2$d characters, truncating to %3$d characters as per Pinterest requirements.', $id, strlen( $brand ), self::BRAND_CHARS_LIMIT ) );
+			$brand = substr( $brand, 0, self::BRAND_CHARS_LIMIT );
+		}
+
+		return '<' . $property . '>' . self::sanitize( $brand ) . '</' . $property . '>';
+	}
+
+	/**
 	 * Returns the gallery images for the product.
 	 *
 	 * @param WC_Product $product the product.
 	 * @param string     $property The name of the property.
 	 *
-	 * @return string
+	 * @return string|void
 	 */
 	private static function get_property_g_additional_image_link( $product, $property ) {
 
@@ -512,11 +689,11 @@ class ProductsXmlFeed {
 		/*
 		 * Entry is a one or multiple XML nodes in the following format:
 		 *  <g:shipping>
-		 *		<g:country>...</g:country>
-		 *		<g:region>...</g:region>
-		 *		<g:service>...</g:service>
-		 *		<g:price>...</g:price>
-		 *	</g:shipping>
+		 *      <g:country>...</g:country>
+		 *      <g:region>...</g:region>
+		 *      <g:service>...</g:service>
+		 *      <g:price>...</g:price>
+		 *  </g:shipping>
 		 */
 		foreach ( $shipping_info as $info ) {
 			$shipping_name    = self::sanitize( $info['name'] );
@@ -552,6 +729,8 @@ class ProductsXmlFeed {
 
 	/**
 	 * Get locale currency decimals
+	 *
+	 * @return mixed
 	 */
 	private static function get_currency_decimals() {
 		$currencies = get_transient( PINTEREST_FOR_WOOCOMMERCE_PREFIX . '_currencies_list' );

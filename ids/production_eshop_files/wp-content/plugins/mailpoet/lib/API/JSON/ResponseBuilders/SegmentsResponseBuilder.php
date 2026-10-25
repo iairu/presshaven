@@ -32,12 +32,15 @@ class SegmentsResponseBuilder {
       'name' => $segment->getName(),
       'type' => $segment->getType(),
       'description' => $segment->getDescription(),
+      'public_description' => $segment->getPublicDescription(),
       'created_at' => ($createdAt = $segment->getCreatedAt()) ? $createdAt->format(self::DATE_FORMAT) : null,
       'updated_at' => ($updatedAt = $segment->getUpdatedAt()) ? $updatedAt->format(self::DATE_FORMAT) : null,
       'deleted_at' => ($deletedAt = $segment->getDeletedAt()) ? $deletedAt->format(self::DATE_FORMAT) : null,
       'average_engagement_score' => $segment->getAverageEngagementScore(),
       'filters_connect' => $segment->getFiltersConnectOperator(),
-      'showInManageSubscriptionPage' => (int)$segment->getDisplayInManageSubscriptionPage(),
+      'show_in_manage_subscription_page' => (int)$segment->getDisplayInManageSubscriptionPage(),
+      'confirmation_email_id' => $segment->getConfirmationEmailId(),
+      'confirmation_page_id' => $segment->getConfirmationPageId(),
     ];
   }
 

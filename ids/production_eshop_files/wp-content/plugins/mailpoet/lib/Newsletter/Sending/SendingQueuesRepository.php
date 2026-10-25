@@ -5,6 +5,7 @@ namespace MailPoet\Newsletter\Sending;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Cron\Workers\SendingQueue\SendingQueue as SendingQueueWorker;
 use MailPoet\Doctrine\Repository;
 use MailPoet\Entities\DynamicSegmentFilterEntity;
 use MailPoet\Entities\NewsletterEntity;
@@ -15,6 +16,7 @@ use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Logging\LoggerFactory;
 use MailPoet\Segments\DynamicSegments\FilterFactory;
 use MailPoetVendor\Carbon\Carbon;
+use MailPoetVendor\Doctrine\DBAL\ParameterType;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 
 /**
@@ -70,6 +72,24 @@ class SendingQueuesRepository extends Repository {
     return $queryBuilder->getQuery()->getOneOrNullResult();
   }
 
+  public function findLatestCompletedByNewsletter(NewsletterEntity $newsletter): ?SendingQueueEntity {
+    return $this->entityManager->createQueryBuilder()
+      ->select('s')
+      ->from(SendingQueueEntity::class, 's')
+      ->join('s.task', 't')
+      ->andWhere('s.newsletter = :newsletter')
+      ->andWhere('s.deletedAt IS NULL')
+      ->andWhere('t.status = :status')
+      ->setParameter('newsletter', $newsletter)
+      ->setParameter('status', ScheduledTaskEntity::STATUS_COMPLETED)
+      ->orderBy('t.processedAt', 'DESC')
+      ->addOrderBy('t.id', 'DESC')
+      ->addOrderBy('s.id', 'DESC')
+      ->setMaxResults(1)
+      ->getQuery()
+      ->getOneOrNullResult();
+  }
+
   public function countAllToProcessByNewsletter(NewsletterEntity $newsletter): int {
     return intval($this->entityManager->createQueryBuilder()
       ->select('sum(s.countToProcess)')
@@ -89,6 +109,44 @@ class SendingQueuesRepository extends Repository {
       ->getQuery()
       ->getArrayResult();
     return array_map('intval', array_column($results, 'task_id'));
+  }
+
+  /**
+   * Returns the time zone group each sending task belongs to, keyed by task id.
+   * Only tasks of time zone campaigns are included.
+   *
+   * @param int[] $taskIds
+   * @return array<int, array{timezone: string|null, fallbackUsed: bool}>
+   */
+  public function getGroupTimezonesByTaskIds(array $taskIds): array {
+    if (!$taskIds) {
+      return [];
+    }
+    $queues = $this->entityManager->createQueryBuilder()
+      ->select('s')
+      ->from(SendingQueueEntity::class, 's')
+      ->andWhere('s.task IN (:taskIds)')
+      ->setParameter('taskIds', $taskIds)
+      ->getQuery()
+      ->getResult();
+
+    $timezones = [];
+    foreach ($queues as $queue) {
+      $meta = $queue->getMeta() ?? [];
+      if (empty($meta[TimeZoneCampaignScheduler::META_SEND_BY_TIMEZONE])) {
+        continue;
+      }
+      $task = $queue->getTask();
+      if (!$task instanceof ScheduledTaskEntity) {
+        continue;
+      }
+      $timezone = $meta[TimeZoneCampaignScheduler::META_GROUP_TIMEZONE] ?? null;
+      $timezones[(int)$task->getId()] = [
+        'timezone' => is_string($timezone) && $timezone !== '' ? $timezone : null,
+        'fallbackUsed' => !empty($meta[TimeZoneCampaignScheduler::META_FALLBACK_USED]),
+      ];
+    }
+    return $timezones;
   }
 
   public function isSubscriberProcessed(SendingQueueEntity $queue, SubscriberEntity $subscriber): bool {
@@ -169,11 +227,12 @@ class SendingQueuesRepository extends Repository {
       ->getQuery();
   }
 
-  public function pause(SendingQueueEntity $queue): void {
+  public function pause(SendingQueueEntity $queue, ?string $reason = null): void {
     if ($queue->getCountProcessed() !== $queue->getCountTotal()) {
       $task = $queue->getTask();
       if ($task instanceof ScheduledTaskEntity) {
         $task->setStatus(ScheduledTaskEntity::STATUS_PAUSED);
+        $task->setPauseReason($reason);
         $this->flush();
       }
     }
@@ -182,6 +241,7 @@ class SendingQueuesRepository extends Repository {
   public function resume(SendingQueueEntity $queue): void {
     $task = $queue->getTask();
     if (!$task instanceof ScheduledTaskEntity) return;
+    $isLatestNewsletterReplay = NewsletterReplayMetadata::isLatestNewsletterReplayMeta($queue->getMeta());
 
     if ($queue->getCountProcessed() === $queue->getCountTotal()) {
       $processedAt = Carbon::now()->millisecond(0);
@@ -189,7 +249,7 @@ class SendingQueuesRepository extends Repository {
       $task->setStatus(ScheduledTaskEntity::STATUS_COMPLETED);
       // Update also status of newsletter if necessary
       $newsletter = $queue->getNewsletter();
-      if ($newsletter instanceof NewsletterEntity && $newsletter->canBeSetSent()) {
+      if (!$isLatestNewsletterReplay && $newsletter instanceof NewsletterEntity && $newsletter->canBeSetSent()) {
         $newsletter->setStatus(NewsletterEntity::STATUS_SENT);
       }
       $this->flush();
@@ -200,7 +260,9 @@ class SendingQueuesRepository extends Repository {
         $queue->setNewsletterRenderedBody(null);
         $this->persist($queue);
       }
-      $newsletter->setStatus($newsletter->canBeSetActive() ? NewsletterEntity::STATUS_ACTIVE : NewsletterEntity::STATUS_SENDING);
+      if (!$isLatestNewsletterReplay) {
+        $newsletter->setStatus($newsletter->canBeSetActive() ? NewsletterEntity::STATUS_ACTIVE : NewsletterEntity::STATUS_SENDING);
+      }
       $task->setStatus(null);
       $this->flush();
     }
@@ -272,6 +334,47 @@ class SendingQueuesRepository extends Repository {
       $queue->setCountTotal($processed + $unprocessed);
     }
     $this->entityManager->flush();
+  }
+
+  public function nullRenderedBodyForOldCompletedQueues(int $retentionDays, int $batchSize): int {
+    $queueTable = $this->entityManager->getClassMetadata(SendingQueueEntity::class)->getTableName();
+    $taskTable = $this->entityManager->getClassMetadata(ScheduledTaskEntity::class)->getTableName();
+    $cutoff = Carbon::now()->subDays($retentionDays)->toDateTimeString();
+
+    // Double-nested subquery avoids MySQL's "can't specify target table for update in FROM clause" error.
+    $result = $this->entityManager->getConnection()->executeStatement(
+      "
+      UPDATE `{$queueTable}` sq
+      SET sq.newsletter_rendered_body = NULL
+      WHERE sq.id IN (
+        SELECT sq2.id FROM (
+          SELECT sq3.id
+          FROM `{$queueTable}` sq3
+          INNER JOIN `{$taskTable}` t ON t.id = sq3.task_id
+          WHERE t.status = :status
+            AND t.type = :taskType
+            AND t.processed_at < :cutoff
+            AND sq3.newsletter_rendered_body IS NOT NULL
+            AND sq3.deleted_at IS NULL
+          LIMIT :limit
+        ) sq2
+      )
+      ",
+      [
+        'status' => ScheduledTaskEntity::STATUS_COMPLETED,
+        'taskType' => SendingQueueWorker::TASK_TYPE,
+        'cutoff' => $cutoff,
+        'limit' => $batchSize,
+      ],
+      [
+        'status' => ParameterType::STRING,
+        'taskType' => ParameterType::STRING,
+        'cutoff' => ParameterType::STRING,
+        'limit' => ParameterType::INTEGER,
+      ]
+    );
+
+    return (int)$result;
   }
 
   /** @param int[] $ids */

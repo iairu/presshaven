@@ -8,7 +8,7 @@
 
 <section class="no-results not-found">
 	<header class="page-header">
-		<h1 class="page-title"><?php esc_html_e( 'Nothing Found', 'omega-storefront' ); ?></h1>
+		<h1 class="page-title"><?php echo esc_html( get_theme_mod( 'omega_storefront_noting_found_main_title', __( 'Nothing Found', 'omega-storefront' ) ) ); ?></h1>
 	</header>
 	<div class="page-content">
 		<?php
@@ -28,10 +28,15 @@
 
 		<?php 
 		// If the user is on a search results page and no results were found.
-		elseif ( is_search() ) : ?>
+		elseif ( is_search() ) :
 
-			<p><?php esc_html_e( 'Sorry, but nothing matched your search terms. Please try again with some different keywords.', 'omega-storefront' ); ?></p>
-			<?php get_search_form(); ?>
+			// Display the "Nothing Found" message
+            echo '<p>' . esc_html( get_theme_mod( 'omega_storefront_noting_found_para', __( 'Sorry, but nothing matched your search terms. Please try again with some different keywords.', 'omega-storefront' ) ) ) . '</p>';
+
+            // Check if the checkbox is checked to enable search form
+            if ( get_theme_mod( 'omega_storefront_noting_found_saerch', 1 ) ) : ?>
+                <?php get_search_form(); // Display the search form if enabled ?>
+            <?php endif; ?>
 
 		<?php 
 		// If no content is available.

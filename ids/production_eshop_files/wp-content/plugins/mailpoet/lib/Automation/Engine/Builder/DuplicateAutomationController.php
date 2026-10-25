@@ -10,6 +10,7 @@ use MailPoet\Automation\Engine\Data\NextStep;
 use MailPoet\Automation\Engine\Data\Step;
 use MailPoet\Automation\Engine\Exceptions;
 use MailPoet\Automation\Engine\Exceptions\InvalidStateException;
+use MailPoet\Automation\Engine\Hooks;
 use MailPoet\Automation\Engine\Registry;
 use MailPoet\Automation\Engine\Storage\AutomationStorage;
 use MailPoet\Automation\Engine\WordPress;
@@ -25,14 +26,19 @@ class DuplicateAutomationController {
   /** @var Registry */
   private $registry;
 
+  /** @var Hooks */
+  private $hooks;
+
   public function __construct(
     WordPress $wordPress,
     AutomationStorage $automationStorage,
-    Registry $registry
+    Registry $registry,
+    Hooks $hooks
   ) {
     $this->wordPress = $wordPress;
     $this->automationStorage = $automationStorage;
     $this->registry = $registry;
+    $this->hooks = $hooks;
   }
 
   public function duplicateAutomation(int $id): Automation {
@@ -47,6 +53,9 @@ class DuplicateAutomationController {
       $this->wordPress->wpGetCurrentUser()
     );
     $duplicate->setStatus(Automation::STATUS_DRAFT);
+    foreach ($automation->getAllMetas() as $key => $value) {
+      $duplicate->setMeta((string)$key, $value);
+    }
 
     $steps = $duplicate->getSteps();
     foreach ($steps as $id => $step) {
@@ -64,6 +73,7 @@ class DuplicateAutomationController {
     if (!$savedAutomation) {
       throw new InvalidStateException('Automation not found.');
     }
+    $this->hooks->doAutomationAfterDuplicate($savedAutomation, $automation);
     return $savedAutomation;
   }
 
@@ -100,7 +110,8 @@ class DuplicateAutomationController {
         array_map(function (NextStep $nextStep) use ($newIds): NextStep {
           $nextStepId = $nextStep->getId();
           return new NextStep($nextStepId ? $newIds[$nextStepId] : null);
-        }, $step->getNextSteps())
+        }, $step->getNextSteps()),
+        $step->getFilters()
       );
     }
     return $newSteps;

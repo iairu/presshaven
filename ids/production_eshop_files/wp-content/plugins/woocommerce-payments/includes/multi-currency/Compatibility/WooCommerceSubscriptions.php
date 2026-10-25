@@ -32,10 +32,6 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	/**
 	 * The current subscription being iterated through on the My Account > Subscriptions page.
 	 *
-	 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-	 *
-	 * @psalm-suppress UndefinedDocblockClass
-	 *
 	 * @var WC_Subscription|null
 	 */
 	public $current_my_account_subscription = null;
@@ -171,23 +167,18 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 *
 	 * The running_override_selected_currency_filters property is used here to avoid infinite loops.
 	 *
-	 * @param mixed $return Default is false, but could be three letter currency code.
+	 * @param mixed $selected_currency Default is false, but could be three letter currency code.
 	 *
 	 * @return mixed Three letter currency code or false if not.
 	 */
-	public function override_selected_currency( $return ) {
+	public function override_selected_currency( $selected_currency ) {
 		// If it's not false, or we are already running filters, exit.
-		if ( $return || $this->running_override_selected_currency_filters ) {
-			return $return;
+		if ( $selected_currency || $this->running_override_selected_currency_filters ) {
+			return $selected_currency;
 		}
 
 		// If we have a subscription in $current_my_account_subscription, we want to use the currency from that subscription.
 		if ( $this->is_current_my_account_subscription_set() ) {
-			/**
-			 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-			 *
-			 * @psalm-suppress UndefinedDocblockClass
-			 */
 			return $this->current_my_account_subscription->get_currency();
 		}
 
@@ -202,37 +193,27 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 				$subscription      = $this->get_subscription( $cart_item[ $subscription_type ]['subscription_id'] );
 
 				$this->running_override_selected_currency_filters = false;
-				/**
-				 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-				 *
-				 * @psalm-suppress UndefinedDocblockClass
-				 */
-				return $subscription ? $subscription->get_currency() : $return;
+				return $subscription ? $subscription->get_currency() : $selected_currency;
 			}
 		}
 
 		// This instance is for when the customer lands on the product page to choose a new subscription tier.
 		$switch_subscription = $this->get_subscription_from_superglobal_switch_id();
-		/**
-		 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-		 *
-		 * @psalm-suppress UndefinedDocblockClass
-		 */
-		return $switch_subscription ? $switch_subscription->get_currency() : $return;
+		return $switch_subscription ? $switch_subscription->get_currency() : $selected_currency;
 	}
 
 	/**
 	 * Checks to see if the product's price should be converted.
 	 *
-	 * @param bool   $return  Whether to convert the product's price or not. Default is true.
-	 * @param object $product Product object to test.
+	 * @param bool   $should_convert Whether to convert the product's price or not. Default is true.
+	 * @param object $_unused_product        Product object to test.
 	 *
 	 * @return bool True if it should be converted.
 	 */
-	public function should_convert_product_price( bool $return, $product ): bool {
+	public function should_convert_product_price( bool $should_convert, $_unused_product ): bool {
 		// If it's already false, return it.
-		if ( ! $return ) {
-			return $return;
+		if ( ! $should_convert ) {
+			return $should_convert;
 		}
 
 		$calls = [
@@ -247,7 +228,7 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 			// When WCPay Subs programmatically sets up the cart, we need to return the
 			// converted price so the user lands at the checkout with the correct price.
 			if ( $this->utils->is_call_in_backtrace( [ 'WCS_Cart_Renewal->setup_cart' ] ) ) {
-				return $return;
+				return $should_convert;
 			}
 
 			if ( $this->utils->is_call_in_backtrace( $calls ) ) {
@@ -267,21 +248,21 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 			return false;
 		}
 
-		return $return;
+		return $should_convert;
 	}
 
 	/**
 	 * Checks to see if the coupon's amount should be converted.
 	 *
-	 * @param bool   $return Whether to convert the coupon's price or not. Default is true.
-	 * @param object $coupon Coupon object to test.
+	 * @param bool   $should_convert Whether to convert the coupon's price or not. Default is true.
+	 * @param object $coupon         Coupon object to test.
 	 *
 	 * @return bool True if it should be converted.
 	 */
-	public function should_convert_coupon_amount( bool $return, $coupon ): bool {
+	public function should_convert_coupon_amount( bool $should_convert, $coupon ): bool {
 		// If it's already false, return it.
-		if ( ! $return ) {
-			return $return;
+		if ( ! $should_convert ) {
+			return $should_convert;
 		}
 
 		// We do not need to convert percentage coupons.
@@ -306,20 +287,20 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 			return false;
 		}
 
-		return $return;
+		return $should_convert;
 	}
 
 	/**
 	 * Checks to see if currency switching should be disabled.
 	 *
-	 * @param bool $return Whether widgets should be hidden or not. Default is false.
+	 * @param bool $should_disable Whether widgets should be hidden or not. Default is false.
 	 *
 	 * @return bool
 	 */
-	public function should_disable_currency_switching( bool $return ): bool {
+	public function should_disable_currency_switching( bool $should_disable ): bool {
 		// If it's already true, return it.
-		if ( $return ) {
-			return $return;
+		if ( $should_disable ) {
+			return $should_disable;
 		}
 
 		if ( $this->get_subscription_type_from_cart( 'renewal' )
@@ -329,7 +310,7 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 			return true;
 		}
 
-		return $return;
+		return $should_disable;
 	}
 
 	/**
@@ -338,10 +319,6 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 * The my-subscriptions.php template file calls $subscription->get_formatted_order_total(), which then calls $subscription->get_price_string_details().
 	 * At that point in time, if we have certain calls in the backtrace, we need to add the subscription into $current_my_account_subscription so that we
 	 * are able to use it later on in the maybe_get_explicit_format_for_subscription_total filter.
-	 *
-	 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-	 *
-	 * @psalm-suppress UndefinedDocblockClass
 	 *
 	 * @param array           $subscription_details The details related to the subscription.
 	 * @param WC_Subscription $subscription         The subscription being acted on.
@@ -369,16 +346,12 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 * we no longer need it. The woocommerce_get_formatted_subscription_total filter is at the end of that call, so we check to see if the var is set,
 	 * and if it is, we clear it, and we also clear the FrontendCurrencies cache.
 	 *
-	 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-	 *
-	 * @psalm-suppress UndefinedDocblockClass
-	 *
 	 * @param string          $formatted    The subscription formatted total.
-	 * @param WC_Subscription $subscription The subscription being acted on.
+	 * @param WC_Subscription $_unused_subscription The subscription being acted on.
 	 *
 	 * @return string The unmodified subscription formatted total.
 	 */
-	public function maybe_clear_current_my_account_subscription( $formatted, $subscription ): string {
+	public function maybe_clear_current_my_account_subscription( $formatted, $_unused_subscription ): string {
 		if ( $this->is_current_my_account_subscription_set() ) {
 			$this->current_my_account_subscription = null;
 			$this->frontend_currencies->selected_currency_changed();
@@ -405,14 +378,11 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 
 		/**
 		 * Get the currency code from the subscription, then return the explicit price.
-		 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-		 *
-		 * @psalm-suppress UndefinedDocblockClass
 		 */
 		$currency_code = $this->current_my_account_subscription->get_currency() ?? get_woocommerce_currency();
 
 		// This is sourced from WC_Payments_Explicit_Price_Formatter::get_explicit_price_with_currency.
-		$price_to_check = html_entity_decode( wp_strip_all_tags( $html_price ) );
+		$price_to_check = \WC_Payments_Utils::decode_html_entities( wp_strip_all_tags( $html_price ) );
 
 		if ( false === strpos( $price_to_check, trim( $currency_code ) ) ) {
 			return $html_price . ' ' . $currency_code;
@@ -427,11 +397,6 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 * @return bool
 	 */
 	private function is_current_my_account_subscription_set(): bool {
-		/**
-		 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-		 *
-		 * @psalm-suppress UndefinedClass
-		 */
 		return is_a( $this->current_my_account_subscription, 'WC_Subscription' );
 	}
 
@@ -479,11 +444,6 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 * Getter for subscription objects.
 	 *
 	 * @param  mixed $the_subscription Post object or post ID of the order.
-	 *
-	 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-	 *
-	 * @psalm-suppress UndefinedDocblockClass
-	 *
 	 * @return WC_Subscription|bool The subscription object, or false if it cannot be found.
 	 */
 	private function get_subscription( $the_subscription ) {
@@ -497,10 +457,6 @@ class WooCommerceSubscriptions extends BaseCompatibility {
 	 * Checks $_GET superglobal for a switch ID from the `switch-subscription` param if it exists.
 	 * This `switch-subscription` param is added to the URL when a customer
 	 * has initiated a switch from the My Account → Subscription page.
-	 *
-	 * Tell Psalm to ignore the WC_Subscription class, this class is only loaded if Subscriptions is active.
-	 *
-	 * @psalm-suppress UndefinedDocblockClass
 	 *
 	 * @return WC_Subscription|bool The subscription object, or false if it cannot be found.
 	 */

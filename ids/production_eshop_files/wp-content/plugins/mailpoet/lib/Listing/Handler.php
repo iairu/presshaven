@@ -21,24 +21,33 @@ class Handler {
     );
   }
 
-  /**
-   * Polyfill for deprecated FILTER_SANITIZE_STRING which was used to sanitize
-   * $data['sort_by'].
-   */
-  private function filterString(string $string): string {
-    $str = (string)preg_replace('/\x00|<[^>]*>?/', '', $string);
-    return str_replace(["'", '"'], ['&#39;', '&#34;'], $str);
+  private function sanitizeSortBy(string $sortBy): string {
+    $sortBy = trim($sortBy);
+    if ($sortBy === '') {
+      return 'id';
+    }
+
+    // Fallback to `id` when there is at least one non-identifier character.
+    if (strspn($sortBy, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_') !== strlen($sortBy)) {
+      return 'id';
+    }
+
+    return $sortBy;
   }
 
   private function processData(array $data) {
     // check if sort order was specified or default to "asc"
     $sortOrder = (!empty($data['sort_order'])) ? $data['sort_order'] : 'asc';
     // constrain sort order value to either be "asc" or "desc"
-    $sortOrder = ($sortOrder === 'asc') ? 'asc' : 'desc';
+    $sortOrder = strtolower(trim((string)$sortOrder));
+    if ($sortOrder === '') {
+      $sortOrder = 'asc';
+    }
+    $sortOrder = in_array($sortOrder, ['asc', 'desc'], true) ? $sortOrder : 'desc';
 
     // sanitize sort by
     $sortBy = (!empty($data['sort_by']))
-      ? $this->filterString($data['sort_by'])
+      ? $this->sanitizeSortBy((string)$data['sort_by'])
       : '';
 
     if (empty($sortBy)) {

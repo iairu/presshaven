@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca
+class ComposerStaticInitd32e836687f13c6cf88475dac2c9a321
 {
     public static $files = array (
         'c2ea57f92dd459f0857d477589d07a94' => __DIR__ . '/..' . '/symfony/polyfill-intl-normalizer/bootstrap.php',
@@ -110,13 +110,6 @@ class ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca
         'Cloudflare\\APO\\Router\\RequestRouter' => __DIR__ . '/../..' . '/src/Router/RequestRouter.php',
         'Cloudflare\\APO\\Router\\RouterInterface' => __DIR__ . '/../..' . '/src/Router/RouterInterface.php',
         'Cloudflare\\APO\\SecurityUtil' => __DIR__ . '/../..' . '/src/SecurityUtil.php',
-        'Cloudflare\\APO\\Test\\API\\PluginTest' => __DIR__ . '/../..' . '/src/Test/API/PluginTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\DataStoreTest' => __DIR__ . '/../..' . '/src/Test/WordPress/DataStoreTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\HooksTest' => __DIR__ . '/../..' . '/src/Test/WordPress/HooksTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\PlansTest' => __DIR__ . '/../..' . '/src/Test/WordPress/PlansTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\ProxyTest' => __DIR__ . '/../..' . '/src/Test/WordPress/ProxyTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\UtilsTest' => __DIR__ . '/../..' . '/src/Test/WordPress/UtilsTest.php',
-        'Cloudflare\\APO\\Test\\WordPress\\WordPressAPITest' => __DIR__ . '/../..' . '/src/Test/WordPress/WordPressAPITest.php',
         'Cloudflare\\APO\\Utils' => __DIR__ . '/../..' . '/src/Utils.php',
         'Cloudflare\\APO\\Vendor\\CloudFlare\\IpRewrite' => __DIR__ . '/..' . '/cloudflare/cf-ip-rewrite/src/CloudFlare/IpRewrite.php',
         'Cloudflare\\APO\\Vendor\\CloudFlare\\IpUtils' => __DIR__ . '/..' . '/cloudflare/cf-ip-rewrite/src/CloudFlare/IpUtils.php',
@@ -153,9 +146,9 @@ class ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInita099b72e7882f3172c8b1a0aba65b0ca::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInitd32e836687f13c6cf88475dac2c9a321::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInitd32e836687f13c6cf88475dac2c9a321::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInitd32e836687f13c6cf88475dac2c9a321::$classMap;
 
         }, null, ClassLoader::class);
     }

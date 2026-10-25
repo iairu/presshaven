@@ -7,8 +7,15 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\SubscriberEntity;
+use MailPoet\Subscribers\Source;
 
 class MetaInfo {
+  private const SOURCE_PLUGINS = [
+    Source::FORM => 'mailpoet',
+    Source::WOOCOMMERCE_USER => 'woocommerce',
+    Source::WOOCOMMERCE_CHECKOUT => 'woocommerce',
+  ];
+
   public function getSendingTestMetaInfo() {
     return $this->makeMetaInfo('sending_test', 'unknown', 'administrator');
   }
@@ -25,16 +32,22 @@ class MetaInfo {
     return $this->makeMetaInfo(
       'transactional',
       $subscriber ? $subscriber->getStatus() : 'unknown',
-      $subscriber ? $subscriber->getSource() : 'unknown'
+      $subscriber ? $subscriber->getSource() : 'unknown',
+      $subscriber ? $subscriber->getSourcePlugin() : null,
+      $subscriber ? $subscriber->getSourceUrl() : null
     );
   }
 
   public function getConfirmationMetaInfo(SubscriberEntity $subscriber) {
-    return $this->makeMetaInfo('confirmation', $subscriber->getStatus(), $subscriber->getSource());
+    return $this->makeMetaInfo('confirmation', $subscriber->getStatus(), $subscriber->getSource(), $subscriber->getSourcePlugin(), $subscriber->getSourceUrl());
   }
 
   public function getNewSubscriberNotificationMetaInfo() {
     return $this->makeMetaInfo('new_subscriber_notification', 'unknown', 'administrator');
+  }
+
+  public function getSubscriberLimitNotificationMetaInfo() {
+    return $this->makeMetaInfo('subscriber_limit_notification', 'unknown', 'administrator');
   }
 
   public function getNewsletterMetaInfo(NewsletterEntity $newsletter, SubscriberEntity $subscriber) {
@@ -56,14 +69,22 @@ class MetaInfo {
         $type = 'post_notification';
         break;
     }
-    return $this->makeMetaInfo($type, $subscriber->getStatus(), $subscriber->getSource());
+    return $this->makeMetaInfo($type, $subscriber->getStatus(), $subscriber->getSource(), $subscriber->getSourcePlugin(), $subscriber->getSourceUrl());
   }
 
-  private function makeMetaInfo($emailType, $subscriberStatus, $subscriberSource) {
-    return [
+  private function makeMetaInfo($emailType, $subscriberStatus, $subscriberSource, ?string $subscriberSourcePlugin = null, ?string $subscriberSourceUrl = null) {
+    $metaInfo = [
       'email_type' => $emailType,
       'subscriber_status' => $subscriberStatus,
       'subscriber_source' => $subscriberSource ?: 'unknown',
     ];
+    $plugin = $subscriberSource === Source::API ? $subscriberSourcePlugin : (self::SOURCE_PLUGINS[$subscriberSource] ?? null);
+    if ($plugin) {
+      $metaInfo['subscriber_source_plugin'] = $plugin;
+    }
+    if ($subscriberSourceUrl) {
+      $metaInfo['subscriber_source_url'] = $subscriberSourceUrl;
+    }
+    return $metaInfo;
   }
 }

@@ -30,8 +30,9 @@ class CongratulatoryMssEmailController {
   }
 
   public function sendCongratulatoryEmail(string $toEmailAddress) {
+    $subject = _x('Sending with MailPoet works!', 'Subject of an email confirming that MailPoet Sending Service works', 'mailpoet');
     $renderedNewsletter = [
-      'subject' => _x('Sending with MailPoet works!', 'Subject of an email confirming that MailPoet Sending Service works', 'mailpoet'),
+      'subject' => $subject,
       'body' => [
         'html' => $this->renderer->render('emails/congratulatoryMssEmail.html'),
         'text' => $this->renderer->render('emails/congratulatoryMssEmail.txt'),

@@ -9,28 +9,24 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-07-30T18:31:19+02:00\n"
+"POT-Creation-Date: 2026-09-07T13:24:09+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.11.0\n"
+"X-Generator: WP-CLI 2.5.0\n"
 "X-Domain: wpify-woo\n"
 
 #. Plugin Name of the plugin
-#: wpify-woo.php
 msgid "WPify Woo"
 msgstr ""
 
 #. Description of the plugin
-#: wpify-woo.php
 msgid "Custom functionality for WooCommerce"
 msgstr ""
 
 #. Author of the plugin
-#: wpify-woo.php
 msgid "WPify s.r.o."
 msgstr ""
 
 #. Author URI of the plugin
-#: wpify-woo.php
 msgid "https://www.wpify.io/"
 msgstr ""
 
@@ -205,7 +201,7 @@ msgstr ""
 
 #: src/Managers/ModulesManager.php:210
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:54
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2692
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2733
 msgid "Withdrawal & Claim"
 msgstr ""
 
@@ -641,7 +637,7 @@ msgstr ""
 #: src/Modules/HeurekaOverenoZakazniky/HeurekaOverenoZakaznikyModule.php:614
 #: src/Modules/HeurekaOverenoZakazniky/HeurekaOverenoZakaznikyModule.php:624
 #: src/Modules/IcDic/IcDicModule.php:1623
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1422
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1425
 msgid "No"
 msgstr ""
 
@@ -1199,7 +1195,7 @@ msgid "Standard (with VAT)"
 msgstr ""
 
 #: src/Modules/IcDic/IcDicModule.php:1623
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1422
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1425
 msgid "Yes"
 msgstr ""
 
@@ -1796,25 +1792,25 @@ msgid "Select languages where you want to use the vocative in emails. If you don
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/Admin/RequestsListTable.php:35
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2351
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2583
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2392
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2624
 msgid "Date"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/Admin/RequestsListTable.php:36
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:38
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-plain.php:24
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2351
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2478
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2584
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2392
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2519
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2625
 msgid "Type"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/Admin/RequestsListTable.php:37
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:47
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:32
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2482
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2484
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2523
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2525
 msgid "Order"
 msgstr ""
 
@@ -1823,7 +1819,7 @@ msgstr ""
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:33
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:50
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-plain.php:27
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2486
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2527
 #: src/WooCommerceIntegration.php:159
 msgid "Customer"
 msgstr ""
@@ -1833,7 +1829,7 @@ msgid "Period status (at submission)"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/Admin/RequestsListTable.php:40
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2508
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2549
 msgid "Note"
 msgstr ""
 
@@ -1904,7 +1900,7 @@ msgstr ""
 #. translators: %d: line item id
 #. translators: %d: order line item number
 #: src/Modules/WithdrawalClaims/Emails/AbstractRequestEmail.php:258
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2526
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2567
 msgid "Item no longer in order (line #%d)"
 msgstr ""
 
@@ -2035,6 +2031,10 @@ msgstr ""
 msgid "Your claim has been received"
 msgstr ""
 
+#: src/Modules/WithdrawalClaims/Emails/CustomerClaimEmail.php:45
+msgid "We have received your claim. Please keep this email as a record of its receipt."
+msgstr ""
+
 #: src/Modules/WithdrawalClaims/Emails/CustomerWithdrawalEmail.php:15
 msgid "Withdrawal — confirmation to customer"
 msgstr ""
@@ -2055,7 +2055,7 @@ msgstr ""
 #. translators: %d: request ID
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:35
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:26
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2472
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2513
 msgid "Request #%d"
 msgstr ""
 
@@ -2063,20 +2063,20 @@ msgstr ""
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:31
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:42
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-plain.php:25
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2479
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2520
 msgid "Submitted at"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:57
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:34
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2092
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2488
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2121
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2529
 msgid "Scope"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:61
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:35
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2487
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2528
 msgid "Period end (at submission)"
 msgstr ""
 
@@ -2091,24 +2091,24 @@ msgstr ""
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-plain.php:47
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:70
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-plain.php:39
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2112
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2351
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2520
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2585
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2141
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2392
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2561
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2626
 msgid "Items"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:87
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:76
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2117
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2521
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2146
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2562
 msgid "Item"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/emails/admin-request-html.php:88
 #: src/Modules/WithdrawalClaims/templates/emails/customer-request-html.php:77
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2118
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2521
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2147
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2562
 msgid "Quantity"
 msgstr ""
 
@@ -2132,14 +2132,14 @@ msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/request-form.php:20
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:203
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2232
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2309
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2273
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2350
 msgid "Withdraw from contract"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/request-form.php:21
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:277
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2310
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2351
 msgid "File a claim"
 msgstr ""
 
@@ -2158,7 +2158,7 @@ msgid "required"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/request-form.php:35
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1965
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1968
 msgid "Your request has been submitted. A confirmation email has been sent to you."
 msgstr ""
 
@@ -2183,7 +2183,7 @@ msgid "Defect description"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/templates/request-form.php:133
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2489
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2530
 msgid "Reason"
 msgstr ""
 
@@ -2200,7 +2200,7 @@ msgid "Whole order"
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModel.php:96
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2107
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2136
 msgid "Specific items"
 msgstr ""
 
@@ -2279,7 +2279,7 @@ msgid "Headline rendered as <code>h2</code>above the \"Withdraw from contract\" 
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:232
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2233
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2274
 msgid "Need to withdraw from this contract?"
 msgstr ""
 
@@ -2292,7 +2292,7 @@ msgid "Short paragraph rendered between the heading and the button."
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:240
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2234
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2275
 msgid "Use the link below to start the withdrawal process online."
 msgstr ""
 
@@ -2410,253 +2410,269 @@ msgstr ""
 msgid "The email does not match the order."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:938
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:941
 msgid "You have reached the maximum number of requests for this order."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:946
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:949
 msgid "Please wait a bit before submitting another request."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:974
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:977
 msgid "You have already submitted an identical request for this order. We are processing it."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1069
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1072
 msgid "withdrawal"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1070
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1073
 msgid "claim"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1076
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1079
 msgid "Visible to admins only:"
 msgstr ""
 
 #. translators: %s: type (withdrawal or claim)
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1079
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1082
 msgid "%s functions are disabled — assign a page in module settings for this form to render on the front end."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1083
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1086
 msgid "Open settings"
 msgstr ""
 
 #. translators: %s: field label
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1317
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1320
 msgid "%s is required."
 msgstr ""
 
 #. translators: %s: field label
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1329
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1332
 msgid "%s must be a valid email address."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1471
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1474
 msgid "This form is not active."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1478
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1481
 msgid "Invalid request — security check failed. Please reload the page and try again."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1500
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1856
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1931
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1503
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1859
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1934
 msgid "Too many attempts. Please try again later."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1665
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1668
 msgid "No eligible items selected."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1671
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1674
 msgid "Please describe the defect."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1743
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1746
 msgid "Could not save your request. Please try again later."
 msgstr ""
 
 #. translators: 1: type, 2: request id
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1755
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1758
 msgid "WPify Woo: %1$s request submitted (#%2$d)."
-msgstr ""
-
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1828
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1909
-msgid "Invalid form type."
 msgstr ""
 
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1831
 #: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1912
+msgid "Invalid form type."
+msgstr ""
+
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1834
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1915
 msgid "This form is not available."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1836
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1916
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1839
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1919
 msgid "Security check failed. Please reload the page."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1846
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1851
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1849
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1854
 msgid "Please reload the page and try again."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1878
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1881
 msgid "This order has no items eligible for withdrawal (the period may have expired or items are excluded)."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1879
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1882
 msgid "This order has no items eligible for a claim (the warranty may have expired or items are excluded)."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1922
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1927
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1925
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:1930
 msgid "Submitted."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2006
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2009
 msgid "Network error. Please try again."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2007
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2010
 msgid "Working…"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2008
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2011
 msgid "Something went wrong. Please try again."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2037
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2040
 msgid "No eligible items in this order."
 msgstr ""
 
-#. translators: %s: date
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2050
-msgid "Withdrawal period ends on %s."
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2072
+msgid "The withdrawal period differs between items — see the dates in the table below."
 msgstr ""
 
 #. translators: %s: date
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2061
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2075
+msgid "Withdrawal period ends on %s."
+msgstr ""
+
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2086
+msgid "The warranty period differs between items — see the dates in the table below."
+msgstr ""
+
+#. translators: %s: date
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2089
 msgid "Warranty valid until %s."
 msgstr ""
 
 #. translators: %d: number of items
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2075
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2104
 msgid "%d item is not eligible and will not be included."
 msgid_plural "%d items are not eligible and will not be included."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %d: number of eligible items
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2099
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2128
 msgid "Whole order (all %d eligible item)"
 msgid_plural "Whole order (all %d eligible items)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2159
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2152
+msgid "Period ends"
+msgstr ""
+
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2153
+msgid "Warranty until"
+msgstr ""
+
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2197
 msgid "1 (full)"
 msgstr ""
 
 #. translators: %d: number of units still available for return after refunds
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2162
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2200
 msgid "of %d available"
 msgstr ""
 
 #. translators: %d: ordered quantity
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2165
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2203
 msgid "of %d ordered"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2350
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2391
 msgid "Submitted requests"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2418
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2419
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2441
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2626
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2631
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2459
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2460
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2482
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2667
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2672
 msgid "Withdrawals & Claims"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2428
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2469
 msgid "You do not have permission to access this page."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2447
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2488
 msgid "Search requests"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2457
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2498
 msgid "Request not found"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2473
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2514
 msgid "Back to list"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2480
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2521
 msgid "Status"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2511
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2552
 msgid "Internal note (e.g. processed, awaiting refund, exchange…). Not visible to the customer."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2513
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2554
 msgid "Save note"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2536
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2577
 msgid "Item names/prices are read live from the order. Full historical change log is in the WC order notes."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2554
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2595
 msgid "Withdrawal & Claim Requests"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2574
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2615
 msgid "No requests submitted."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2602
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2643
 msgid "View"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2607
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2648
 msgid "Full order change history is in WC order notes below."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2708
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2749
 msgid "Excluded from withdrawal"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2709
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2750
 msgid "Customer cannot withdraw from contract for this product (custom-made, hygiene, perishable…)."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2713
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2754
 msgid "Excluded from warranty/claim"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2714
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2755
 msgid "Customer cannot file a claim for this product."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2719
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2760
 msgid "Withdrawal period override (days)"
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2720
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2728
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2761
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2769
 msgid "Leave empty to use the global setting."
 msgstr ""
 
-#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2727
+#: src/Modules/WithdrawalClaims/WithdrawalClaimsModule.php:2768
 msgid "Warranty months override"
 msgstr ""
 

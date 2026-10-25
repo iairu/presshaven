@@ -5,7 +5,7 @@ namespace Action_Scheduler\WP_CLI;
 /**
  * Action command for Action Scheduler.
  */
-class Action_Command extends \WP_CLI_Command
+class Action_Command extends \WpifyWooDeps\WP_CLI_Command
 {
     /**
      * Cancel the next occurrence or all occurrences of a scheduled action.

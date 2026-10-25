@@ -10,26 +10,22 @@ namespace WooCommerce\PayPalCommerce\Blocks;
 
 use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
 use WC_AJAX;
-use WooCommerce\PayPalCommerce\Blocks\Endpoint\UpdateShippingEndpoint;
+use WooCommerce\PayPalCommerce\Assets\AssetGetter;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\UpdateShippingEndpoint;
 use WooCommerce\PayPalCommerce\Button\Assets\SmartButtonInterface;
 use WooCommerce\PayPalCommerce\Session\Cancellation\CancelController;
 use WooCommerce\PayPalCommerce\Session\Cancellation\CancelView;
 use WooCommerce\PayPalCommerce\Session\SessionHandler;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsProvider;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\SettingsStatus;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 use WooCommerce\PayPalCommerce\WcSubscriptions\Helper\SubscriptionHelper;
 /**
  * Class PayPalPaymentMethod
  */
 class PayPalPaymentMethod extends AbstractPaymentMethodType
 {
-    /**
-     * The URL of this module.
-     *
-     * @var string
-     */
-    private $module_url;
+    private AssetGetter $asset_getter;
     /**
      * The assets version.
      *
@@ -43,11 +39,11 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
      */
     private $smart_button;
     /**
-     * The settings.
+     * The settings provider.
      *
-     * @var Settings
+     * @var SettingsProvider
      */
-    private $plugin_settings;
+    private SettingsProvider $plugin_settings;
     /**
      * The Settings status helper.
      *
@@ -97,30 +93,16 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
      */
     protected $use_place_order;
     /**
-     * The text for the standard "Place order" button.
-     *
-     * @var string
-     */
-    protected $place_order_button_text;
-    /**
-     * The text for additional "Place order" description.
-     *
-     * @var string
-     */
-    protected $place_order_button_description;
-    /**
      * All existing funding sources for PayPal buttons.
      *
      * @var array
      */
     private $all_funding_sources;
     /**
-     * Assets constructor.
-     *
-     * @param string                        $module_url The url of this module.
+     * @param AssetGetter                   $asset_getter
      * @param string                        $version    The assets version.
      * @param SmartButtonInterface|callable $smart_button The smart button script loading handler.
-     * @param Settings                      $plugin_settings The settings.
+     * @param SettingsProvider              $plugin_settings The settings provider.
      * @param SettingsStatus                $settings_status The Settings status helper.
      * @param PayPalGateway                 $gateway The WC gateway.
      * @param bool                          $final_review_enabled Whether the final review is enabled.
@@ -129,14 +111,12 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
      * @param SubscriptionHelper            $subscription_helper The subscription helper.
      * @param bool                          $add_place_order_method Whether to create a non-express method with the standard "Place order" button.
      * @param bool                          $use_place_order Whether to use the standard "Place order" button instead of PayPal buttons.
-     * @param string                        $place_order_button_text The text for the standard "Place order" button.
-     * @param string                        $place_order_button_description The text for additional "Place order" description.
      * @param array                         $all_funding_sources All existing funding sources for PayPal buttons.
      */
-    public function __construct(string $module_url, string $version, $smart_button, Settings $plugin_settings, SettingsStatus $settings_status, PayPalGateway $gateway, bool $final_review_enabled, CancelView $cancellation_view, SessionHandler $session_handler, SubscriptionHelper $subscription_helper, bool $add_place_order_method, bool $use_place_order, string $place_order_button_text, string $place_order_button_description, array $all_funding_sources)
+    public function __construct(AssetGetter $asset_getter, string $version, $smart_button, SettingsProvider $plugin_settings, SettingsStatus $settings_status, PayPalGateway $gateway, bool $final_review_enabled, CancelView $cancellation_view, SessionHandler $session_handler, SubscriptionHelper $subscription_helper, bool $add_place_order_method, bool $use_place_order, array $all_funding_sources)
     {
         $this->name = PayPalGateway::ID;
-        $this->module_url = $module_url;
+        $this->asset_getter = $asset_getter;
         $this->version = $version;
         $this->smart_button = $smart_button;
         $this->plugin_settings = $plugin_settings;
@@ -148,8 +128,6 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
         $this->subscription_helper = $subscription_helper;
         $this->add_place_order_method = $add_place_order_method;
         $this->use_place_order = $use_place_order;
-        $this->place_order_button_text = $place_order_button_text;
-        $this->place_order_button_description = $place_order_button_description;
         $this->all_funding_sources = $all_funding_sources;
     }
     /**
@@ -163,17 +141,14 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
      */
     public function is_active()
     {
-        // Do not load when definitely not needed,
-        // but we still need to check the locations later and handle in JS
-        // because has_block cannot be called here (too early).
-        return $this->plugin_settings->has('enabled') && $this->plugin_settings->get('enabled');
+        return $this->plugin_settings->is_method_enabled(PayPalGateway::ID);
     }
     /**
      * {@inheritDoc}
      */
     public function get_payment_method_script_handles()
     {
-        wp_register_script('ppcp-checkout-block', trailingslashit($this->module_url) . 'assets/js/checkout-block.js', array(), $this->version, \true);
+        wp_register_script('ppcp-checkout-block', $this->asset_getter->get_asset_url('checkout-block.js'), array(), $this->version, \true);
         return array('ppcp-checkout-block');
     }
     /**
@@ -196,9 +171,46 @@ class PayPalPaymentMethod extends AbstractPaymentMethodType
             $funding_sources = array_values(array_diff(array_keys($this->all_funding_sources), $disabled_funding_sources));
         }
         $smart_buttons_enabled = !$this->use_place_order && $this->settings_status->is_smart_button_enabled_for_location($script_data['context'] ?? 'block-checkout');
-        $place_order_enabled = ($this->use_place_order || $this->add_place_order_method) && !$this->subscription_helper->cart_contains_subscription();
+        // A subscription cart may still use the standard "Place order" flow when a vault
+        // token can be saved (vaulting mode) or when manual renewals are accepted (the
+        // subscription is charged as a plain, one-time Orders API payment).
+        //
+        // The vaulting capability comes from the settings, not $script_data: under SDK v6
+        // the smart button is a DisabledSmartButton whose script_data() is empty.
+        //
+        // Free-trial ($0) carts keep the row too: a first-time buyer's "Place order" is
+        // completed through the gateway's vault-approval redirect (see PayPalGateway::
+        // process_payment), so an already-saved account is no longer required.
+        $place_order_enabled = ($this->use_place_order || $this->add_place_order_method) && (!$this->subscription_helper->cart_contains_subscription() || $this->plugin_settings->can_save_vault_token() || $this->subscription_helper->accept_manual_renewals());
         $cart = WC()->cart;
-        return array('id' => $this->gateway->id, 'title' => $this->gateway->title, 'icon' => array(array('id' => 'paypal', 'alt' => 'PayPal', 'src' => $this->gateway->icon)), 'description' => $this->gateway->get_description(), 'smartButtonsEnabled' => $smart_buttons_enabled, 'placeOrderEnabled' => $place_order_enabled, 'fundingSource' => $this->session_handler->funding_source(), 'finalReviewEnabled' => $this->final_review_enabled, 'placeOrderButtonText' => $this->place_order_button_text, 'placeOrderButtonDescription' => $this->place_order_button_description, 'enabledFundingSources' => $funding_sources, 'ajax' => array('update_shipping' => array('endpoint' => WC_AJAX::get_endpoint(UpdateShippingEndpoint::ENDPOINT), 'nonce' => wp_create_nonce(UpdateShippingEndpoint::nonce()))), 'scriptData' => $script_data, 'needShipping' => $cart && $cart->needs_shipping());
+        $data = array(
+            'id' => $this->gateway->id,
+            'title' => $this->gateway->title,
+            'icon' => array(array('id' => 'paypal', 'alt' => 'PayPal', 'src' => $this->gateway->icon)),
+            'description' => $this->gateway->get_description(),
+            'smartButtonsEnabled' => $smart_buttons_enabled,
+            'placeOrderEnabled' => $place_order_enabled,
+            'fundingSource' => $this->session_handler->funding_source(),
+            'finalReviewEnabled' => $this->final_review_enabled,
+            'enabledFundingSources' => $funding_sources,
+            // The gateway's (mode-aware) supported features, so the block can
+            // declare them to WooCommerce Blocks and not be filtered out when the
+            // cart requires one (e.g. `multiple_subscriptions` for 2+ subscriptions).
+            'supportedFeatures' => array_values((array) $this->gateway->supports),
+            'ajax' => array('update_shipping' => array('endpoint' => WC_AJAX::get_endpoint(UpdateShippingEndpoint::ENDPOINT), 'nonce' => wp_create_nonce(UpdateShippingEndpoint::nonce()))),
+            'scriptData' => $script_data,
+            'needShipping' => $cart && $cart->needs_shipping(),
+        );
+        /**
+         * Filters the payment method data handed to the v5 block checkout.
+         *
+         * The place order button label and its description are WooCommerce's, so the
+         * plugin no longer sets them. Add `placeOrderButtonLabel` here to rename the
+         * button, or `placeOrderButtonDescription` to render text beneath it.
+         *
+         * @param array $data The payment method data.
+         */
+        return (array) apply_filters('woocommerce_paypal_payments_blocks_payment_method_data', $data);
     }
     /**
      * Checks if it is the block editing mode.

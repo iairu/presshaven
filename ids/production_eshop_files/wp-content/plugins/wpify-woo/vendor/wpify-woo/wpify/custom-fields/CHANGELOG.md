@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.12.1] - 2026-10-13
+
+### Fixed
+- Build asset URLs, the REST namespace and the script handle are resolved correctly on Windows. `path_to_url()` and `get_api_basename()` stripped `WP_CONTENT_DIR` with a plain `str_replace()`, which never matched when `WP_CONTENT_DIR` mixes separators (`C:\xampp\htdocs/wp-content`) and `__DIR__` uses backslashes, so absolute Windows paths leaked into asset URLs and the REST namespace. Both paths now go through `wp_normalize_path()` and only a leading content-dir prefix is stripped. Thanks to František Musil for the report.
+- `get_api_basename()` now removes only the trailing `/src` segment. Previously every `/src` occurrence in the path was removed, so installs with another `/src` in the path (e.g. `plugins/src-tools/…` or a library vendored under a `src/` directory) get a different, correct REST namespace and script handle.
+
+## [4.12.0] - 2026-09-23
+
+### Added
+- New `wpifycf_preresolved_options` filter over the value→label map embedded in `data-preresolved-options`, receiving the map, the saved values per `options_key`, and the prepared items. Lets integrations supply labels an options callback cannot produce from `value` alone.
+- The async demo page in the `wcf-demo` fixture gains a dependent select (`cache_options => false`, `{{field}}` placeholder param) pre-filled with a saved value, so the preresolve path for cascading selects is visible.
+
+### Fixed
+- Async `select` / `multi_select` fields with `cache_options => false` (dependent/cascading selects whose `async_params` use `{{field}}` placeholders) now get their saved values preresolved server-side too. Previously `collect_async_values()` skipped them and, since the client-side resolve request only runs in the block editor, options pages and metaboxes rendered the saved value as a raw ID. Placeholder `async_params` are dropped for the preresolve call, so the callback receives the static params plus `value`; the browse list stays per-field as before.
+
+## [4.11.2] - 2026-09-23
+
+### Fixed
+- Async `select` / `multi_select` fields nested in a `columns` or `wrapper` layout inside a `multi_group` (or `group`) are now included in `data-preresolved-options`. `collect_async_values()` dropped the row scope when passing through a layout wrapper, so the saved values of such fields rendered as raw IDs instead of labels.
+
+## [4.11.1] - 2026-09-11
+
+### Fixed
+- Duplicating a group now regenerates UUID fields, including those in nested groups and layout wrappers, while preserving the original group's identifiers and other field values.
+
+## [4.11.0] - 2026-07-29
+
+### Added
+- The `post` and `multi_post` field types are now WooCommerce-aware. When `post_type` includes `product` or `product_variation` and WooCommerce is active, the picker searches product SKUs as well as titles, lists exact SKU matches first, and shows the SKU next to the product name in both the dropdown and the preview of a selected product. No configuration is needed; without WooCommerce the fields behave exactly as before. See [ADR 0003](docs/adr/0003-woocommerce-aware-post-search.md).
+- The `posts` REST endpoint returns a `sku` key on every post — the WooCommerce SKU for products, an empty string otherwise.
+- New `wpifycf_search_posts_by_sku` filter to switch the SKU search on or off, and new `wpifycf_post_data` filter to attach custom data to every post returned by the `posts` endpoint.
+
+## [4.10.2] - 2026-07-21
+
+### Added
+- New `wpifycf_register_term_meta` action fires after a taxonomy integration registers its term meta, passing the flattened field definitions and the taxonomy slug — the term-side counterpart of `wpifycf_register_post_meta`, so integrations (e.g. RosettaPress) can discover term field schemas.
+
+### Fixed
+- The `wpifycf_register_post_meta` action now actually fires. Since its introduction it was invoked with `add_action()` instead of `do_action()`, so listeners never received post meta registrations and integrations built on it silently did nothing.
+
+## [4.10.1] - 2026-07-17
+
+### Fixed
+- Gutenberg block lazy loading now actually defers off-screen blocks. The pre-render loading placeholder was only one line tall, so on editor open every block in a post fit inside the viewport and all server-side render requests fired at once. The loading placeholder now reserves height (`min-height: 500px`, overridable via the `--wpifycf-block-placeholder-height` CSS custom property), so blocks below the fold stay outside the viewport gate and render top-down as the content above them settles. Empty and error placeholders remain compact.
+
+## [4.10.0] - 2026-07-16
+
+### Added
+- Lazy field data loading: fields now call the REST API only once they are visible — in the viewport (with a 200px preload margin and 200ms dwell against fast scrolling) and in a visible browser tab. Applies uniformly to `select`/`multi_select` async options and label resolution, `post`/`multi_post`, `term`/`multi_term`, `attachment`/`multi_attachment`, `link`, `direct_file`/`multi_direct_file`, and Gutenberg server-side block previews (which additionally skip re-renders while scrolled off-canvas and catch up on return). Focusing a field loads it immediately. Once loaded, a field never unloads. Documented in `docs/features/lazy-loading.md`; rationale in `docs/adr/0001-viewport-gated-data-loading.md`.
+
+### Changed
+- **Perceived behavior change**: admin pages opened in background browser tabs no longer preload field data; loading starts when the tab is first viewed. Stored `select`/`multi_select` values still display their labels immediately (server-side preresolution); `post`/`term`/`attachment`/`link`/`direct_file` value previews and collapsed `multi_group` item titles derived from them appear when the field first becomes visible.
+
+## [4.9.3] - 2026-06-22
+
+### Fixed
+- Async option requests are now aborted when superseded. Typing a new search (or otherwise changing the query) cancels the previous in-flight `options`/`options-resolve` request via the React Query `AbortSignal`, which is now forwarded through `get()` to `apiFetch`. Prevents a slow earlier response from overwriting newer results and avoids wasted in-flight requests.
+
+## [4.9.2] - 2026-06-22
+
+### Fixed
+- `select` async search now debounces (300ms) before requesting options, so typing a query no longer fires one REST request per keystroke. `multi_select` already debounced; `Select` was missing it.
+
+## [4.9.1] - 2026-06-22
+
+### Fixed
+- `OptionsIntegration::build_preresolved_options()` now includes **every** stored async value in the embedded `data-preresolved-options` map, falling back to the raw value as its own label when the options callback cannot resolve it (e.g. a saved option that no longer exists in the source). Previously such values were absent from the map, so each one triggered its own client-side `resolve` request — producing one request per field on pages with many `select`/`multi_select` fields bound to the same list with stale or out-of-window values. The selected value still displays as before; only the redundant requests are eliminated.
+
+## [4.9.0] - 2026-06-22
+
+### Added
+- `cache_options` option (default `true`) for `select` and `multi_select`. When enabled, an async option list is fetched once and shared across all fields using the same `options_key`/`async_params` instead of once per field. Set to `false` to restore the legacy per-field request — needed only for callbacks whose `async_params` use dynamic `{{field}}` placeholders or that otherwise depend on `value` when returning the browse list. Documented in `docs/field-types/select.md` and `docs/field-types/multi_select.md`.
+- `list_id` is now accepted as an alias for `options_key` in field definitions (`BaseIntegration::normalize_items()`), for backward compatibility with integrations that used the older key name.
+
+### Changed
+- Async `select`/`multi_select` options requests no longer carry the field's `value`, so otherwise-identical fields share a single cached REST response instead of each firing its own request. Previously a page with N selects backed by the same list issued N near-identical `/wpifycf/v1/options/{key}?…&value=…` calls (one per field), which caused excessive load when many such fields were present. Selected-option labels are now resolved independently of the browse list: storage-backed integrations embed a preresolved value→label map in the app container's `data-preresolved-options` attribute (resolved server-side in one batched callback call per key, no extra request); the Gutenberg block editor resolves them via a batched `resolve` request on the same endpoint; and fetched browse slices are accumulated client-side so selected labels persist across searches. `staleTime`/`gcTime` were added to the options queries so identical requests are reused across remounts.
+
+### Fixed
+- Saving a field set that contains an empty `multi_email`, `multi_richtext`, `multi_url`, or `multi_number` repeater item no longer triggers a fatal `TypeError` (HTTP 500 on save). A new empty repeater item serializes as `[]`, which `sanitize_email()`, `wp_kses_post()`, and `esc_url()` reject — only `sanitize_text_field()`/`sanitize_textarea_field()` guard arrays internally. `CustomFields::sanitize_item_value()` now coerces non-string input to an empty string for the `email`, `url`, `wysiwyg`, and `richtext` branches and to `null` for `number`/`range`, so the save succeeds.
+- `SubscriptionMetabox::render()` no longer fatals on classic (non-HPOS) order storage. Its signature required `WC_Order`, but WordPress passes a `WP_Post` to the metabox callback on the legacy subscription edit screen. It now accepts `WP_Post|WC_Abstract_Order` and resolves the order via `wc_get_order()`, matching the existing `OrderMetabox::render()` behaviour.
+
 ## [4.8.0] - 2026-05-07
 
 ### Security

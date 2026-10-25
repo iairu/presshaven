@@ -15,6 +15,9 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Interface AttributeInterface
+ *
+ * @class   AttributeInterface
+ * @version 1.6.0
  */
 interface AttributeInterface {
 
@@ -46,7 +49,7 @@ interface AttributeInterface {
 	/**
 	 * Return an array of WooCommerce product types that this attribute can be applied to.
 	 *
-	 * @return array
+	 * @return string[]
 	 */
 	public static function get_applicable_product_types(): array;
 

@@ -14,7 +14,6 @@ use MailPoet\Automation\Engine\Exceptions;
 use MailPoet\Automation\Engine\Exceptions\UnexpectedValueException;
 use MailPoet\Automation\Engine\Hooks;
 use MailPoet\Automation\Engine\Storage\AutomationRunStorage;
-use MailPoet\Automation\Engine\Storage\AutomationStatisticsStorage;
 use MailPoet\Automation\Engine\Storage\AutomationStorage;
 use MailPoet\Automation\Engine\Validation\AutomationValidator;
 
@@ -24,9 +23,6 @@ class UpdateAutomationController {
 
   /** @var AutomationStorage */
   private $storage;
-
-  /** @var AutomationStatisticsStorage */
-  private $statisticsStorage;
 
   /** @var AutomationValidator */
   private $automationValidator;
@@ -41,7 +37,6 @@ class UpdateAutomationController {
   public function __construct(
     Hooks $hooks,
     AutomationStorage $storage,
-    AutomationStatisticsStorage $statisticsStorage,
     AutomationValidator $automationValidator,
     AutomationRunStorage $automationRunStorage,
     ActionScheduler $actionScheduler,
@@ -49,7 +44,6 @@ class UpdateAutomationController {
   ) {
     $this->hooks = $hooks;
     $this->storage = $storage;
-    $this->statisticsStorage = $statisticsStorage;
     $this->automationValidator = $automationValidator;
     $this->updateStepsController = $updateStepsController;
     $this->automationRunStorage = $automationRunStorage;
@@ -61,7 +55,7 @@ class UpdateAutomationController {
     if (!$automation) {
       throw Exceptions::automationNotFound($id);
     }
-    $this->validateIfAutomationCanBeUpdated($automation, $data);
+    $previousAutomation = clone $automation;
 
     if (array_key_exists('name', $data)) {
       $automation->setName($data['name']);
@@ -74,6 +68,7 @@ class UpdateAutomationController {
     }
 
     if (array_key_exists('steps', $data)) {
+      $this->validateTriggerInvariants($automation, $data['steps']);
       $this->validateAutomationSteps($automation, $data['steps']);
       $this->updateStepsController->updateSteps($automation, $data['steps']);
       foreach ($automation->getSteps() as $step) {
@@ -82,9 +77,10 @@ class UpdateAutomationController {
       }
     }
 
-    if (($automation->getStatus() === Automation::STATUS_DRAFT) && ($originalStatus === Automation::STATUS_ACTIVE)) {
-      $this->unscheduleAutomationRuns($automation);
-    }
+    $shouldUnscheduleAutomationRuns = (
+      ($automation->getStatus() === Automation::STATUS_DRAFT)
+      && ($originalStatus === Automation::STATUS_ACTIVE)
+    ) || !empty($data['cancel_running_runs']);
 
     if (array_key_exists('meta', $data)) {
       $automation->deleteAllMetas();
@@ -98,45 +94,57 @@ class UpdateAutomationController {
     $this->automationValidator->validate($automation);
     $this->storage->updateAutomation($automation);
 
+    if ($shouldUnscheduleAutomationRuns) {
+      $this->unscheduleAutomationRuns($automation);
+    }
+
     $automation = $this->storage->getAutomation($id);
     if (!$automation) {
       throw Exceptions::automationNotFound($id);
     }
+    $this->hooks->doAutomationAfterUpdate($automation, $previousAutomation);
     return $automation;
-  }
-
-  /**
-   * This is a temporary validation, see MAILPOET-4744
-   */
-  private function validateIfAutomationCanBeUpdated(Automation $automation, array $data): void {
-
-    if (
-      !in_array(
-        $automation->getStatus(),
-        [
-        Automation::STATUS_ACTIVE,
-        Automation::STATUS_DEACTIVATING,
-        ],
-        true
-      )
-    ) {
-      return;
-    }
-
-    $statistics = $this->statisticsStorage->getAutomationStats($automation->getId());
-    if ($statistics->getInProgress() === 0) {
-      return;
-    }
-
-    if (!isset($data['status']) || $data['status'] === $automation->getStatus()) {
-      throw Exceptions::automationHasActiveRuns($automation->getId());
-    }
   }
 
   private function checkAutomationStatus(string $status): void {
     if (!in_array($status, Automation::STATUS_ALL, true)) {
       // translators: %s is the status.
       throw UnexpectedValueException::create()->withMessage(sprintf(__('Invalid status: %s', 'mailpoet'), $status));
+    }
+  }
+
+  private function validateTriggerInvariants(Automation $automation, array $steps): void {
+    $existingTriggers = [];
+    foreach ($automation->getSteps() as $step) {
+      if ($step->getType() === Step::TYPE_TRIGGER) {
+        $existingTriggers[$step->getId()] = $step;
+      }
+    }
+
+    $newTriggers = [];
+    foreach ($steps as $id => $data) {
+      if (($data['type'] ?? null) === Step::TYPE_TRIGGER) {
+        $newTriggers[$id] = $data;
+      }
+    }
+
+    $triggersChanged = false;
+    if (count($newTriggers) !== count($existingTriggers)) {
+      $triggersChanged = true;
+    }
+
+    if (!$triggersChanged) {
+      foreach ($existingTriggers as $id => $existingTrigger) {
+        $newTrigger = $newTriggers[$id] ?? null;
+        if (!$newTrigger || ($newTrigger['key'] ?? '') !== $existingTrigger->getKey()) {
+          $triggersChanged = true;
+          break;
+        }
+      }
+    }
+
+    if ($triggersChanged && $this->automationRunStorage->getCountForAutomation($automation) > 0) {
+      throw Exceptions::automationTriggerModificationNotSupported();
     }
   }
 
@@ -157,8 +165,8 @@ class UpdateAutomationController {
   private function stepChanged(Step $a, Step $b): bool {
     $aData = $a->toArray();
     $bData = $b->toArray();
-    unset($aData['args']);
-    unset($bData['args']);
+    unset($aData['args'], $aData['filters']);
+    unset($bData['args'], $bData['filters']);
     return $aData === $bData;
   }
 

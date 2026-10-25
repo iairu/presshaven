@@ -376,7 +376,7 @@ if( !function_exists('omega_storefront_footer_content_info') ):
                                     echo esc_html( $omega_storefront_footer_copyright_text );
                                     echo '<br>';
                                     echo esc_html__('Theme: ', 'omega-storefront') . '<a href="' . esc_url('https://www.omegathemes.com/products/free-storefront-wordpress-theme') . '" title="' . esc_attr__('OMEGA STOREFRONT ', 'omega-storefront') . '" target="_blank"><span>' . esc_html__('OMEGA STOREFRONT', 'omega-storefront') . '</span></a>' . esc_html__(' By ', 'omega-storefront') . '  <span>' . esc_html__('OMEGA ', 'omega-storefront') . '</span>';
-                                    echo esc_html__('Powered by ', 'omega-storefront') . '<a href="' . esc_url('https://wordpress.org') . '" title="' . esc_attr__('WordPress', 'omega-storefront') . '" target="_blank"><span>' . esc_html__('WordPress.', 'omega-storefront') . '</span></a>';
+                                    echo esc_html__('Powered by ', 'omega-storefront') . '<a href="' . esc_url('https://wordpress.org') . '" title="' . esc_attr__('WordPress', 'omega-storefront') . '" target="_blank"><span>' . esc_html__('wordpress.', 'omega-storefront') . '</span></a>';
                                 ?>
                             </div>
                         </div>

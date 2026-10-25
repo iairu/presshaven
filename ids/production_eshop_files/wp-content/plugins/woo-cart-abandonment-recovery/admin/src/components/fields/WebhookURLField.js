@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Input, Button, Loader, toast } from '@bsf/force-ui';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y } from '@Components/common/fieldA11y';
 
 const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 	const [ state, dispatch ] = useStateValue();
@@ -20,6 +21,8 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 		400,
 		true
 	);
+
+	const a11y = useFieldA11y( { description } );
 
 	useEffect( () => {
 		setUrl( initial || '' );
@@ -38,17 +41,18 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 			return;
 		}
 		setIsTriggered( true );
+		const details = window.wcf_ca_details || {};
 		const sampleData = {
-			first_name: wcf_ca_details.name,
-			last_name: wcf_ca_details.surname,
-			email: wcf_ca_details.email,
-			phone: wcf_ca_details.phone,
+			first_name: details.name || '',
+			last_name: details.surname || '',
+			email: details.email || '',
+			phone: details.phone || '',
 			order_status: 'abandoned',
 			checkout_url:
 				window.location.origin + '/checkout/?wcf_ac_token=something',
 			coupon_code: 'abcgefgh',
 			product_names: 'Product1, Product2 & Product3',
-			cart_total: wcf_ca_details.woo_currency_symbol + '20',
+			cart_total: ( details.woo_currency_symbol || '' ) + '20',
 			product_table: `<table align="left" cellpadding="10" cellspacing="0" style="float: none; border: 1px solid #e5e5e5;">
 			<tr align="center">
 				<th style="color: #636363; border: 1px solid #e5e5e5;">Item</th>
@@ -85,9 +89,21 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 						)
 					);
 				} else {
-					__(
-						'Webhook trigger failed',
-						'woo-cart-abandonment-recovery'
+					toast.error(
+						__(
+							'Webhook trigger failed',
+							'woo-cart-abandonment-recovery'
+						),
+						{
+							description: sprintf(
+								// translators: %d: HTTP status code returned by the webhook URL.
+								__(
+									'The webhook URL answered with status %d.',
+									'woo-cart-abandonment-recovery'
+								),
+								response.status
+							),
+						}
 					);
 				}
 			} )
@@ -96,7 +112,13 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 					__(
 						'Webhook trigger failed',
 						'woo-cart-abandonment-recovery'
-					)
+					),
+					{
+						description: __(
+							'The URL could not be reached, or it does not accept requests from this page.',
+							'woo-cart-abandonment-recovery'
+						),
+					}
 				);
 			} )
 			.finally( () => {
@@ -105,17 +127,25 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 	}
 
 	return (
-		<FieldWrapper title={ title } description={ description } type="block">
-			<div className="flex gap-2 items-center">
-				<div className="flex-1">
+		<FieldWrapper
+			title={ title }
+			description={ description }
+			fieldId={ a11y.id }
+			type="block"
+		>
+			<div className="flex flex-wrap gap-2 items-center">
+				<div className="flex-1 min-w-48">
 					<Input
-						className="focus:[&>input]:ring-focus"
-						type="text"
+						{ ...a11y.controlProps }
+						type="url"
 						size="md"
 						name={ name }
 						value={ url }
 						onChange={ handleInputChange }
-						placeholder="Enter the Webhook URL"
+						placeholder={ __(
+							'Enter the Webhook URL',
+							'woo-cart-abandonment-recovery'
+						) }
 					/>
 				</div>
 				<Button
@@ -137,7 +167,7 @@ const WebhookURLField = ( { title, description, name, value, onSaved } ) => {
 					}
 					iconPosition="left"
 				>
-					Trigger Sample
+					{ __( 'Trigger Sample', 'woo-cart-abandonment-recovery' ) }
 				</Button>
 			</div>
 		</FieldWrapper>

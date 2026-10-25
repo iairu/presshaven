@@ -28,26 +28,61 @@ class Env {
   public static $pluginPrefix;
   /** @var string WP DB prefix + plugin prefix */
   public static $dbPrefix;
-  /** @var string WP DB prefix only */
-  public static $wpDbPrefix;
-  public static $dbHost;
-  public static $dbIsIpv6;
-  public static $dbSocket;
-  public static $dbPort;
-  public static $dbName;
-  public static $dbUsername;
-  public static $dbPassword;
-  public static $dbCharset;
-  public static $dbCollation;
-  public static $dbCharsetCollate;
-  public static $dbTimezoneOffset;
+  /**
+   * @deprecated Use global $wpdb->prefix instead
+   */
+  public static $wpDbPrefix = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbHost = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbIsIpv6 = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbSocket = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbPort = '';
+  /**
+   * @deprecated Use global $wpdb->dbname instead
+   */
+  public static $dbName = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbUsername = '';
+  /**
+   * @deprecated Database connection is handled by WordPress $wpdb
+   */
+  public static $dbPassword = '';
+  /**
+   * @deprecated Use global $wpdb->charset instead
+   */
+  public static $dbCharset = '';
+  /**
+   * @deprecated Use global $wpdb->collate instead
+   */
+  public static $dbCollation = '';
+  /**
+   * @deprecated Use global $wpdb->get_charset_collate() instead
+   */
+  public static $dbCharsetCollate = '';
+  /**
+   * @deprecated Calculate timezone offset from WordPress gmt_offset option if needed
+   */
+  public static $dbTimezoneOffset = '';
 
   // back compatibility for older Premium plugin with underscore naming
   // (we need to allow it to activate so it can render an update notice)
   public static $plugin_name; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
   public static $temp_path; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
 
-  public static function init($file, $version, $dbHost, $dbUser, $dbPassword, $dbName) {
+  public static function init($file, $version) {
     self::$version = $version;
     self::$file = $file;
     self::$path = dirname(self::$file);
@@ -65,7 +100,9 @@ class Env {
     self::$languagesPath = self::$path . '/../../languages/plugins/';
     self::$libPath = self::$path . '/lib';
     self::$pluginPrefix = WPFunctions::get()->applyFilters('mailpoet_db_prefix', 'mailpoet_');
-    self::initDbParameters($dbHost, $dbUser, $dbPassword, $dbName);
+
+    global $wpdb;
+    self::$dbPrefix = $wpdb->prefix . self::$pluginPrefix;
 
     // back compatibility for older Premium plugin with underscore naming
     self::$plugin_name = self::$pluginName; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
@@ -73,31 +110,8 @@ class Env {
   }
 
   /**
-   * @see https://codex.wordpress.org/Editing_wp-config.php#Set_Database_Host for possible DB_HOSTS values
+   * @deprecated Calculate timezone offset from WordPress gmt_offset option directly if needed
    */
-  private static function initDbParameters($dbHost, $dbUser, $dbPassword, $dbName) {
-    $parsedHost = WPFunctions::get()->parseDbHost($dbHost);
-    if ($parsedHost === false) {
-      throw new \InvalidArgumentException('Invalid db host configuration.');
-    }
-    [$host, $port, $socket, $isIpv6] = $parsedHost;
-
-    global $wpdb;
-    self::$dbPrefix = $wpdb->prefix . self::$pluginPrefix;
-    self::$wpDbPrefix = $wpdb->prefix;
-    self::$dbHost = $host;
-    self::$dbIsIpv6 = $isIpv6;
-    self::$dbPort = $port;
-    self::$dbSocket = $socket;
-    self::$dbName = $dbName;
-    self::$dbUsername = $dbUser;
-    self::$dbPassword = $dbPassword;
-    self::$dbCharset = $wpdb->charset;
-    self::$dbCollation = $wpdb->collate;
-    self::$dbCharsetCollate = $wpdb->get_charset_collate();
-    self::$dbTimezoneOffset = self::getDbTimezoneOffset();
-  }
-
   public static function getDbTimezoneOffset($offset = false) {
     $offset = ($offset) ? $offset : WPFunctions::get()->getOption('gmt_offset');
     $offset = (float)($offset);

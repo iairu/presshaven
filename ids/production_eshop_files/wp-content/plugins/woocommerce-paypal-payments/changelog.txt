@@ -1,5 +1,287 @@
 *** Changelog ***
 
+= 4.2.0 - 2026-10-21 =
+* Enhancement - PayPal JS SDK v6 is now the default for all stores, including existing ones; SDK v5 remains available as a fallback via `woocommerce.feature-flags.woocommerce_paypal_payments.sdk_v6_enabled` filter #4720
+* Enhancement - Remove the leftover checks that let vaulting disable Pay Later, including the `woocommerce_paypal_payments_pay_later_with_vaulting` filter #4736
+* Enhancement - Enable the Pay Later payment method after onboarding on every onboarding path, keeping the merchant's previous choice on reconnect #4733
+* Enhancement - Render PayPal buttons and Pay Later messaging in block theme templates and the Site Editor #4731
+* Enhancement - Show PayPal buttons and Pay Later messaging in the block theme Single Product template, with messaging placed below the price by default #4759
+* Enhancement - PayPal buttons in the WooCommerce Mini Cart block, on the frontend and in the Site Editor #4767
+* Enhancement - Calculate Pay Later messaging installment amounts on the page with SDK v6 instead of through cart simulation, so amounts update instantly #4729
+* Enhancement - Keep WooCommerce's "Place order" button label instead of replacing it with "Proceed to PayPal", and remove the PayPal redirect notice from Block Checkout #4704
+* Enhancement - Debit & Credit Cards redirect gateway for Block Checkout with SDK v6 #4688
+* Enhancement - Remove the deprecated cardholder name field and its settings toggle for advanced card payments with SDK v6 #4713
+* Enhancement - Send the buyer's email, name, phone and billing address when creating a card payment to reduce card risk declines #4650
+* Enhancement - Rework the Abilities API module to use the existing dependency injection system #4698
+* Enhancement - Show a "Place order" fallback that redirects to PayPal when the PayPal buttons fail to load on SDK v6 classic checkout #4777
+* Enhancement - Enable the PayPal and Advanced Card Processing gateway logos by default for new setups #4794
+* Enhancement - Add Apple Pay frontend logging and more detailed log prefixes to diagnose payments failing only on live sites #4680
+* Fix - reCAPTCHA v3 token verified twice on SDK v6 classic checkout, causing a fallback to the v2 challenge #4761
+* Fix - PayPal buttons, card fields and Pay Later messages stop working on SDK v6 when a page stays open longer than 15 minutes #4772
+* Fix - PayPal buttons disappear after several page loads on SDK v6 due to a client token rate limit #4755
+* Fix - Fatal error on WooCommerce versions below 10.9 #4753
+* Fix - Venmo shown on SDK v6 even when disabled #4764
+* Fix - Advanced Card Processing support for Mexico merchants with SDK v6 #4730
+* Fix - Excessive PayPal API requests for orders that no longer exist on SDK v6, keeping customer sessions alive for days #4735
+* Fix - "Order total has changed" error when paying for a free trial subscription from the product page #4762
+* Fix - Pay Later messaging settings checkboxes not keeping their saved state on SDK v6 #4752
+* Fix - Fastlane classic checkout on SDK v6 shows plain country dropdowns instead of the enhanced WooCommerce fields #4754
+* Fix - Native "Proceed to PayPal" button intermittently shown next to the PayPal buttons on SDK v6 classic checkout #4766
+* Fix - PayPal buttons on product and cart pages redirect to checkout instead of completing the order when Pay Now is enabled on SDK v6 #4699
+* Fix - PayPal gateway missing on Block Checkout and PayPal button missing on classic checkout for free trial subscriptions #4725
+* Fix - Advanced Card Processing payment fails when part of the order is paid with store credit #4689
+* Fix - Cart emptied when adding a product while a cart simulation request is running #4708
+* Fix - Shipping line item missing from the order after a failed Advanced Card Processing payment and successful retry #4694
+* Fix - Payment method reverted to PayPal on order save after a failed PayPal attempt and switching gateways, sending BACS on-hold emails without bank details #4687
+* Fix - Declined vaulted card renewal stores the capture ID and blocks all later payment attempts #4695
+* Fix - Orders paid with WooPayments or BACS saved as PayPal orders when stale PayPal order data exists #4632
+* Fix - PayPal order amount ignores cart total reductions applied outside the WooCommerce discount APIs #4714
+* Fix - Negative fees ignored by Google Pay and other express payments on Block Checkout #4668
+* Fix - Tracking added with WooCommerce Shipment Tracking not synced to PayPal Package Tracking #4747
+* Fix - reCAPTCHA rejections not logged unless plugin logging is enabled #4619
+* Fix - Pay Now ignored for PayPal Subscription products bought from the product page #4630
+* Fix - Store Sync no longer replaces the guest session cookie, which emptied the cart on the next page load #4734
+* Fix - Stop the "Subscription could not be loaded" log entry on order screens #4629
+* Fix - Show saved PayPal accounts on Block Checkout as "Use existing PayPal account" instead of the internal gateway ID #4718
+* Fix - PayPal express payments on block checkout do not complete the order directly when Pay Now is enabled on SDK v6 #4790
+* Fix - Express PayPal payments that need a second approval return the customer to a full cart instead of completing #4785
+* Fix - Express payments with Pay Now do not empty the cart after capture, so the same cart can be paid twice #4786
+* Fix - Apple Pay and Google Pay leave the buyer stuck when PayPal asks for a payer action at capture #4806
+* Fix - Apple Pay express payments fail when tax is calculated from the billing address #4817
+* Fix - PayPal buttons on the cart page ignore the Cart button location, and Mini Cart buttons need a page reload after adding a product #4797
+* Fix - PayPal buttons shown in the block theme Mini Cart for free products, causing a frontend error #4788
+* Fix - PayPal buttons and Pay Later messaging fail to load on SDK v6 for WordPress locale variants such as Deutsch (Sie) #4784
+* Fix - SDK v6 card payments can be attempted with empty or invalid card fields, with a generic error instead of a clear message #4805
+* Fix - reCAPTCHA blocks PayPal checkout when a theme or page builder renders a different checkout type than the saved page content #4801
+* Fix - Venmo payment fails when vaulting is enabled #4793
+* Fix - Google Pay on the product page fails when a negative fee is applied #4812
+* Fix - Google Pay error on the product page popup when Pay Now is enabled and shipping is disabled #4814
+* Fix - Google Pay on the product page does not collect the shipping address when the cart is empty #4815
+* Fix - PayPal button shown on the product page for free products when shipping costs are disabled #4813
+* Fix - PayPal buttons missing on the product page and classic cart for free trial subscriptions #4775
+* Fix - Fastlane shows the Advanced Card Processing title on the frontend instead of its own #4776
+* Fix - Failed subscription approval on the cart page tells the shopper nothing #4771
+* Fix - Settings app loaded on all WooCommerce settings pages, throwing a JavaScript error #4770
+* Fix - Expiry date and CVV placeholders in SDK v6 card fields not translatable #4789
+* Fix - Product page preview in the block theme Site Editor #4804
+
+= 4.1.3 - 2026-09-09 =
+* Enhancement - PayPal JS SDK v6 is now the default for new store setups, moving PayPal buttons, Apple Pay, Google Pay, Advanced Card Fields, Fastlane, Pay Later messaging and vaulting subscriptions onto the new integration; existing stores remain on SDK v5 with this version #4641
+* Enhancement - Add filter hooks to customize the payment method title and allow payment method icons #4586
+* Enhancement - Clearer, customer-friendly decline messages for 3D Secure rejections #4573
+* Enhancement - First-party WooCommerce plugin detection for product customizations #4552
+* Enhancement - Allow Pay Later to remain available when vaulting is enabled #4611
+* Enhancement - Improve manual-renewal-only subscription scenarios #4621
+* Enhancement - Exclude connection details from Blueprint exports by default #4647
+* Fix - Apple Pay shown under the PayPal gateway when a vaulting subscription is in the cart #4546
+* Fix - Prevent Vault API calls made with an empty customer ID #4567
+* Fix - Keep recoverable PAYER_ACTION_REQUIRED orders from failing prematurely #4569
+* Fix - Retain the shopper's checkout data when returning from PayPal on mobile #4649
+* Fix - PayPal gateway missing on Block Checkout when WooCommerce Subscriptions automatic renewals are enabled #4659
+* Fix - Webhook registration hitting the wrong API host right after onboarding #4669
+* Fix - Give the Pay upon Invoice phone field its own ID #4666
+* Fix - Stop polling the merchant-integrations endpoint on every cron run #4640
+* Fix - Skip WooCommerce Inbox note registration during AJAX requests #4607
+* Fix - Remove the orphaned reCAPTCHA Inbox note and align its enabled checks #4634
+* Fix - Prevent Advanced Card Fields submission when Blocks checkout fields are invalid (author @marcofucito) #4435
+* Fix - Show the product button on variable products with no preselected attributes #4691
+* Fix - Fix negative tax_total when a discount is not reported by WooCommerce #4690
+
+= 4.1.2 - 2026-08-04 =
+* Enhancement - Advanced onboarding options for onboarding wizard #4496
+* Enhancement - Improved buyer-facing card decline reason display #4509
+* Enhancement - Add filter to allow Pay Later button and messaging when Vaulting is enabled #4508
+* Enhancement - Handle PayPal API address data returned as an array instead of an object #4516
+* Enhancement - Remove/Rework Cart Simulation #4473
+* Enhancement - Remove Pay with Crypto promotional pricing messaging #4540
+* Enhancement - Add filters to allow limiting of ingested/valid products #4547
+* Enhancement - Validators need extraction from CheckoutEndpoint #4370
+* Fix - invoice_id missing for existing customers paying with saved PayPal payment tokens #4541
+* Fix - Fractional WooCommerce quantities truncated to 0, causing invalid PayPal line items and checkout failures #4530
+* Fix - fraudnet.js: Uncaught ReferenceError PAYPAL is not defined on classic checkout when hosted_fields_loaded fires before fb.js loads #4520
+* Fix - Saved PayPal token in subscription change-payment flow moves active subscription to pending #4536
+* Fix - PHP warning in PayPal order tracking when WooCommerce Shipment Tracking sync reads non-array tracking metadata #4505
+* Fix - OXXO description is missing by default #4479
+* Fix - CHECKOUT.ORDER.APPROVED webhook fails with uncaught PayPalOrderMissingException causing HTTP 500 loop, pending orders and Apple Pay never captured #4534
+* Fix - Block Checkout "Sign up now" button label not replaced with "Proceed to PayPal" #4440
+* Fix - ppcp-local-alternative-payment-methods-css-gateway.css loads on every frontend page #4465
+* Fix - ACDC edit order page shows Processor Response 0000:Approved on edit order page #4478
+* Fix - Advanced Card Processing orders fail with "Order does not contain an id" error #4482
+* Fix - Mexico Enable Installments not visible on Overview tab in Features section #4461
+* Fix - Pay Later messaging tab merchant_identifier error showing until page reload when connecting manually #4459
+* Fix - Duplicated WooCommerce orders #4387
+* Fix - Google Pay / Apple Pay (Safari) button visible on PayPal gateway when Classic checkout removed from smart button location #4491
+* Fix - Manual renewal subscription from frontend block express checkout renders empty Apple Pay and Google Pay div #4497
+* Fix - Store Sync toggle missing when feature flag is active #4535
+* Fix - Inconsistent PayPal button behavior for subscriptions on cart #4542
+* Fix - Scope reCAPTCHA assets and markup to active PayPal payment locations #4548
+
+= 4.1.1 - 2026-07-07 =
+* Fix - Fix Pay upon Invoice gateway enqueued outside of checkout context with Block Mini Cart #4483
+* Fix - Too many requests to merchant-integrations API endpoint #4490
+
+= 4.1.0 - 2026-06-23 =
+* Enhancement - New Vault Management Component for buyers with saved PayPal accounts to update funding instrument #4421
+* Enhancement - Pay upon Invoice support for Block Checkout #4405
+* Enhancement - OXXO support for Block Checkout #4381
+* Enhancement - Show PayPal account or last card digits in payment method on order confirmation page & emails #4427
+* Enhancement - Disable legacy "PayPal Standard" gateway when merchant account is connected to PayPal Payments #4463
+* Fix - Third-party plugin gift cards not calculated on PayPal payment modal #4422
+* Fix - Fix PayPal amount mismatch from inclusive-tax rounding #4425
+* Fix - Negative fee calculation may result in a mismatch PayPal between the WooCommerce order total and the total amount paid via PayPal #4409
+* Fix - Unsuccessful payment for vaulting subscription with ACDC from Block Checkout #4437
+* Fix - Unsuccessful payment for vaulting subscriptions with 100% discount coupons (CANNOT_BE_ZERO_OR_NEGATIVE) #4452
+* Fix - Unsuccessful payment for free trial vaulting subscription with acdc and PayPal #4439
+* Fix - Vaulted ACDC saved-card checkout stuck in "payment pending" #4431
+* Fix - PartnersEndpoint::seller_status() floods PayPal merchant-integrations endpoint with 403s #4430
+* Fix - Avoid spamming OAuth requests when auth fails #4414
+* Fix - Google Pay not rendered on variable product page #4433
+* Fix - Simplify manual client ID validation to accommodate new Client ID format #4397
+* Fix - Mismatch line item not delivered to PayPal overview transaction page #4426
+* Fix - APM transaction links open paypal.com instead of sandbox.paypal.com in Sandbox mode #4418
+* Fix - Coerce stored values in typed-bool getters and vault_enabled migration #4393
+* Fix - Fix type casting for customer unique ID in session MD5 hash #4333
+* Fix - Apple Pay fails on single product page when no shipping option is available #4375
+* Fix - Settings notifications do not display on the PayPal Payments settings pages #4034
+* Fix - Add missing "Show logos of supported cards" setting in the ACDC options #4380
+* Fix - Phone number verification may fail #4448
+* Fix - Saved payment methods display in continuation mode #4457
+* Fix - Card payments with saved cards may fail in certain cases #4450
+
+= 4.0.4 - 2026-05-19 =
+* Enhancement - WooCommerce Blueprints integration to import & export the PayPal Payments configuration #4363
+* Enhancement - PayPal redirect gateway now appears on Block checkout for Subscription-type products #4338
+* Enhancement - updated render hooks for Apple Pay & Google Pay buttons on Classic Checkout to be consistent with PayPal #4350
+* Enhancement - Improved error message for reCAPTCHA v2 challenge failures #4342
+* Enhancement - Added ACDC card decline responses to WooCommerce order notes & checkout #4314
+* Fix - Intermittent "Please choose product options..." error when adding variable product to the cart #4315
+* Fix - Placeholder for Pay Later messaging in Block checkout editor when messaging failed to load #4302
+* Fix - Error "Debit & Credit Cards is not available for this order" on Block checkout when buying PayPal Subscription #4351
+* Fix - Unsuccessful payment for PayPal Subscriptions from Block cart & checkout #4343
+* Fix - Branded-only mode persisted after uninstalling the plugin #4337
+* Fix - Wrong payment method displayed on order edit page in some cases #4349
+* Fix - Incorrect asset path for PayPalInsightsLoader.js caused console error #4293
+* Fix - Auto-capture on status change did not work for non-express payments #4352
+* Fix - Things to do next showed "Register Domain for Apple Pay" action item in branded-only mode #4296
+
+= 4.0.3 - 2026-04-27 =
+* Enhancement – consolidate disabled funding sources card decision #4216
+* Enhancement – Hide Apple Pay Register Domain TODO when domain is already validated #4263
+* Enhancement – Remove vault v2 code #4254
+* Fix – Cart simulation causes checkout instability and cannot be disabled #4277
+* Fix – Fix bool (false) in transients #4281
+* Fix – Return HTTP 400 on nonce validation failures instead of 500 #4280
+* Fix – AddressFactory::from_wc_order billing address #4279
+* Fix – Duplicate WooCommerce orders created when buyer switches payment method at checkout #4276
+* Fix – BCDC - Mexico - BCDC not visible on block checkout #4289
+* Fix – Guest Cart appears empty when product is added from product page #4288
+* Fix – APMS - Order with apms stay in pending status (iDeal, ...) #4294
+* Fix – Failing ACDC payment for Free Trial subscription on classic checkout #4299
+* Fix – Drop shipping when city is missing to prevent CITY_REQUIRED #4292
+
+= 4.0.2 - 2026-04-02 =
+* Fix – API rate limiting #4244
+
+= 4.0.1 - 2026-03-31 =
+* Enhancement – Removed legacy UI #4031
+* Enhancement – Added migration banner guiding BCDC merchants through upgrade to Advanced Card Processing #4192
+* Enhancement – Apple Pay and Google Pay can now be enabled independently, without requiring Advanced Card Processing (ACDC) to be active #4186
+* Enhancement – Fastlane is now available in all ACDC-supported countries #4149
+* Enhancement – Added Fastlane to reCAPTCHA-protected payment methods for improved fraud protection #4161
+* Enhancement – Pay with Crypto is now enabled by default for eligible merchants #4171
+* Enhancement – Added Pay Upon Invoice support to the new settings UI #4117, #4144
+* Enhancement – Vaulting via Orders API now supported for redirect gateway in Block Checkout #4131
+* Enhancement – Billing agreements can now be imported and converted to Vault tokens #4134
+* Fix – PUI and OXXO settings were not preserved after upgrading from 2.9.6 to 4.0.0 #4194
+* Fix – Merchant onboarding state was lost when upgrading from a previous version #4150
+* Fix – BCDC was not enabled after migration for merchants who had it active but were not ACDC-eligible #4160
+* Fix – BCDC button was not active after migration when BCDC was part of the PayPal gateway #4155, #4180
+* Fix – Pay Later messaging tab was missing after migration when BCDC was part of the PayPal gateway #4159
+* Fix – Capture virtual orders on status change setting was not preserved during migration #4157
+* Fix – Cardholder name was always shown on the frontend after legacy migration #4167
+* Fix – L2/L3 data was incorrectly sent when Stay Updated was disabled during migration #4168
+* Fix – APM settings were not correctly migrated when APMs were part of the PayPal gateway #4182
+* Fix – BCDC override flag was not functioning correctly #4177
+* Fix – Capture on status change was not working as expected in the new UI #4169
+* Fix – ACDC setting was not preserved after saving and reloading the settings page #4108
+* Fix – ACDC was not enabled by default after onboarding for eligible countries #4128
+* Fix – Standard card button gateway was incorrectly visible on the WooCommerce Payments tab and classic checkout #4118
+* Fix – Google Pay and Apple Pay were visible on classic checkout for non-eligible countries #4137
+* Fix – Save payment method checkbox was incorrectly shown for ACDC in unsupported countries #4176
+* Fix – Pay with Crypto gateway was visible on checkout for ineligible merchants #4175
+* Fix – Pay with Crypto cancel and return URL query parameters were not parsed correctly #4183
+* Fix – Various Pay with Crypto fixes including icon update and miscellaneous issues #4187, #4172
+* Fix – Fastlane watermark was not hidden when the "Display Fastlane Watermark" setting was disabled #4140
+* Fix – Fastlane "Learn More" link was missing for GB and AU locales #4112
+* Fix – PayPal buttons were not visible on the block cart page #4125
+* Fix – Incorrect button style was shown on the Pay for Order page #4184, #4141
+* Fix – Failed orders could not be paid via PayPal #4154
+* Fix – Deposits remainder payments were not completed for pending-deposit orders #4100
+* Fix – Infinite loop when changing payment method for a subscription #4085
+* Fix – Fatal error on plugin upgrade due to ArgumentCountError in AuthenticationRestEndpoint #4090
+* Fix – Fatal error on simulate cart calls #3769
+* Fix – AVS code mismatch causing payment failures #4132
+* Fix – BCDC-only merchants incorrectly had ACDC, Apple Pay, and Google Pay disabled #4088
+* Fix – Removed Order Status requirement for PayPal payment processing #4185
+* Fix – Refactored GermanizedShipmentIntegration to support Shiptastic #4061, #4193
+* Fix - Do not increment step directly #4086
+
+= 3.4.1 - 2026-03-05 =
+* Fix - Performance issue in /v2/vault/payment-tokens/id #4098
+* Fix - China Merchants ACDC and Vaulting Missing #4139
+
+= 3.4.0 - 2026-02-10 =
+* New - Level 2 and Level 3 card processing support for Advanced Credit and Debit Cards #3970, #3999
+* Enhancement - PayPal Working Capital promotional messaging now available for eligible merchants #4048
+* Enhancement - Improved reCAPTCHA logging to help troubleshoot blocked requests #3835
+* Enhancement - Added direct link to plugin logs in settings for easier debugging #3743
+* Enhancement - Restored woocommerce_gateway_description filter for gateway customization #3742
+* Enhancement - Updated Pay Later messaging descriptions and settings #4012
+* Enhancement - Improved onboarding step 4 title for ACDC regions #3998
+* Enhancement - Add pattern validation and improve error messages for client credentials #4073
+* Enhancement - Improve authentication error handling #4073
+* Enhancement - Ensure webhook verification on production #4074
+* Fix - Google Pay now correctly updates WooCommerce shipping address #3798
+* Fix - Google Pay no longer shows shipping selection for virtual products #3797
+* Fix - Google Pay shipping method now visible on product pages with empty cart #4030
+* Fix - Google Pay edge-case that prevented it from working on all pages when Pay Now is disabled #3860
+* Fix - Google Pay and Apple Pay buttons no longer disappear when changing the address in block checkout #3851
+* Fix - Apple Pay now shows applied coupons correctly in payment popup #3838
+* Fix - PayPal button in Mini Cart now works correctly on product pages #3745
+* Fix - Fastlane email lookup now works when email is pre-populated from session #3637
+* Fix - Fastlane no longer shown in settings for ineligible merchants #3872
+* Fix - Duplicate PayPal captures and double stock reductions should no longer occur #3885
+* Fix - Missing PayPal order ID meta data now saved for vaulted card transactions #4035
+* Fix - "Instant payments only" toggle now uses correct setting value #3767
+* Fix - Settings Overview tab now loads correctly for BCDC-only countries #3775
+* Fix - Alternative Payment Methods now show correctly based on merchant eligibility #3864
+* Fix - Payment method descriptions now display in block checkout for all gateways #3891
+* Fix - Payment gateway icon sizing in Classic Checkout #3894
+* Fix - "Disable Specific Credit Cards" option now hidden for BCDC countries #3653
+* Fix - PHP warning when adding variable products via PayPal button #3849
+* Fix - PHP 8.4 implicit nullable parameter deprecation warning #3996 (author @mondalaci)
+* Fix - Translation loading timing issue with currency checks #3978 (author @mondalaci)
+* Fix - Potential error when cart is accessed before initialization #3973
+* Fix - Improved error handling for token validation failures #3986
+
+= 3.3.2 - 2026-01-12 =
+* Enhancement - Improved reCAPTCHA configuration to help protect your store and maintain compliance #3980, #3984
+* Fix - Advanced Card Processing may temporarily become unavailable after updating the plugin #3983
+
+= 3.3.1 - 2025-12-09 =
+* Enhancement - reCAPTCHA Integration UX Improvements #3907
+* Enhancement - Disable simulate-event endpoint for webhook verification #3908
+
+= 3.3.0 - 2025-11-04 =
+* Enhancement - Pay Later messaging & button auto-enabled for eligible Canadian merchants on 12th November, based on the STAY UPDATED preference. #3819
+* Enhancement - Customizable reCAPTCHA implementation for PayPal endpoints #3829
+* Fix - Fatal error in Visual Composer front-end editor due to strict $hook_suffix type #3815
+* Fix - Pay Later Messaging settings tab not visible in some cases when updating to a previous plugin version #3812
+
+= 3.2.1 - 2025-10-20 =
+* Enhancement - Make plugin upgrade hooks safer #3789
+* Enhancement - Webhook transient lock #3790
+
 = 3.2.0 - 2025-10-15 =
 * Enhancement - Enable AppSwitch and SSSC feature flags by default #3724
 * Enhancement - Remove temporary Pay Later messaging auto-enablement logic #3680
@@ -725,7 +1007,7 @@
 * Fix - Error while syncing tracking data to PayPal -> Sync GZD Tracking #1020
 * Fix - Fix product price retrieval for variable product buttons #1000
 * Fix - All tabs hidden on OXXO tab visit #1048
-* Fix - Woocommerce Germanized Invoice bug #1017
+* Fix - WooCommerce Germanized Invoice bug #1017
 * Fix - Fix shipping address validation #1047
 * Fix - Trigger WC JS validation on button click to highlight empty fields #1004
 * Fix - Fix PHP 8.1 deprecated error #1009

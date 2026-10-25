@@ -228,6 +228,9 @@
 :is(#wcar-admin-app) .right-4 {
 	right: 1rem;
 }
+:is(#wcar-admin-app) .right-5 {
+	right: 1.25rem;
+}
 :is(#wcar-admin-app) .right-\[calc\(-50\%\+10px\)\] {
 	right: calc(-50% + 10px);
 }
@@ -239,9 +242,6 @@
 }
 :is(#wcar-admin-app) .top-0 {
 	top: 0px;
-}
-:is(#wcar-admin-app) .top-10 {
-	top: 2.5rem;
 }
 :is(#wcar-admin-app) .top-2 {
 	top: 0.5rem;
@@ -261,8 +261,8 @@
 :is(#wcar-admin-app) .top-4 {
 	top: 1rem;
 }
-:is(#wcar-admin-app) .top-\[0\.3rem\] {
-	top: 0.3rem;
+:is(#wcar-admin-app) .top-5 {
+	top: 1.25rem;
 }
 :is(#wcar-admin-app) .top-full {
 	top: 100%;
@@ -294,8 +294,8 @@
 :is(#wcar-admin-app) .z-\[1\] {
 	z-index: 1;
 }
-:is(#wcar-admin-app) .z-\[9\] {
-	z-index: 9;
+:is(#wcar-admin-app) .z-\[99999\] {
+	z-index: 99999;
 }
 :is(#wcar-admin-app) .order-1 {
 	order: 1;
@@ -417,11 +417,12 @@
 :is(#wcar-admin-app) .m-0 {
 	margin: 0px;
 }
-:is(#wcar-admin-app) .m-1 {
-	margin: 0.25rem;
-}
 :is(#wcar-admin-app) .m-5 {
 	margin: 1.25rem;
+}
+:is(#wcar-admin-app) .-mx-1 {
+	margin-left: -0.25rem;
+	margin-right: -0.25rem;
 }
 :is(#wcar-admin-app) .mx-1 {
 	margin-left: 0.25rem;
@@ -459,8 +460,11 @@
 	margin-top: auto;
 	margin-bottom: auto;
 }
-:is(#wcar-admin-app) .-mt-5 {
-	margin-top: -1.25rem;
+:is(#wcar-admin-app) .-mb-1 {
+	margin-bottom: -0.25rem;
+}
+:is(#wcar-admin-app) .-mt-6 {
+	margin-top: -1.5rem;
 }
 :is(#wcar-admin-app) .mb-0 {
 	margin-bottom: 0px;
@@ -471,14 +475,8 @@
 :is(#wcar-admin-app) .mb-2 {
 	margin-bottom: 0.5rem;
 }
-:is(#wcar-admin-app) .mb-3 {
-	margin-bottom: 0.75rem;
-}
 :is(#wcar-admin-app) .mb-4 {
 	margin-bottom: 1rem;
-}
-:is(#wcar-admin-app) .mb-5 {
-	margin-bottom: 1.25rem;
 }
 :is(#wcar-admin-app) .mb-6 {
 	margin-bottom: 1.5rem;
@@ -494,9 +492,6 @@
 }
 :is(#wcar-admin-app) .ml-2 {
 	margin-left: 0.5rem;
-}
-:is(#wcar-admin-app) .ml-3 {
-	margin-left: 0.75rem;
 }
 :is(#wcar-admin-app) .ml-4 {
 	margin-left: 1rem;
@@ -531,6 +526,9 @@
 :is(#wcar-admin-app) .mt-0 {
 	margin-top: 0px;
 }
+:is(#wcar-admin-app) .mt-0\.5 {
+	margin-top: 0.125rem;
+}
 :is(#wcar-admin-app) .mt-1 {
 	margin-top: 0.25rem;
 }
@@ -546,23 +544,20 @@
 :is(#wcar-admin-app) .mt-2\.5 {
 	margin-top: 0.625rem;
 }
+:is(#wcar-admin-app) .mt-3 {
+	margin-top: 0.75rem;
+}
 :is(#wcar-admin-app) .mt-4 {
 	margin-top: 1rem;
 }
 :is(#wcar-admin-app) .mt-6 {
 	margin-top: 1.5rem;
 }
-:is(#wcar-admin-app) .mt-7 {
-	margin-top: 1.75rem;
-}
 :is(#wcar-admin-app) .mt-8 {
 	margin-top: 2rem;
 }
 :is(#wcar-admin-app) .mt-\[2px\] {
 	margin-top: 2px;
-}
-:is(#wcar-admin-app) .mt-\[3px\] {
-	margin-top: 3px;
 }
 :is(#wcar-admin-app) .mt-auto {
 	margin-top: auto;
@@ -573,8 +568,11 @@
 :is(#wcar-admin-app) .box-border {
 	box-sizing: border-box;
 }
-:is(#wcar-admin-app) .box-content {
-	box-sizing: content-box;
+:is(#wcar-admin-app) .line-clamp-2 {
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 }
 :is(#wcar-admin-app) .block {
 	display: block;
@@ -641,6 +639,10 @@
 	width: 1rem;
 	height: 1rem;
 }
+:is(#wcar-admin-app) .size-4\.5 {
+	width: 1.125rem;
+	height: 1.125rem;
+}
 :is(#wcar-admin-app) .size-5 {
 	width: 1.25rem;
 	height: 1.25rem;
@@ -656,6 +658,10 @@
 :is(#wcar-admin-app) .size-8 {
 	width: 2rem;
 	height: 2rem;
+}
+:is(#wcar-admin-app) .size-full {
+	width: 100%;
+	height: 100%;
 }
 :is(#wcar-admin-app) .\!h-5 {
 	height: 1.25rem !important;
@@ -708,17 +714,26 @@
 :is(#wcar-admin-app) .h-8 {
 	height: 2rem;
 }
-:is(#wcar-admin-app) .h-80 {
-	height: 20rem;
-}
-:is(#wcar-admin-app) .h-9 {
-	height: 2.25rem;
+:is(#wcar-admin-app) .h-\[52\.5px\] {
+	height: 52.5px;
 }
 :is(#wcar-admin-app) .h-\[52px\] {
 	height: 52px;
 }
+:is(#wcar-admin-app) .h-\[53px\] {
+	height: 53px;
+}
+:is(#wcar-admin-app) .h-\[58\.5px\] {
+	height: 58.5px;
+}
+:is(#wcar-admin-app) .h-\[59px\] {
+	height: 59px;
+}
 :is(#wcar-admin-app) .h-\[75vh\] {
 	height: 75vh;
+}
+:is(#wcar-admin-app) .h-\[79px\] {
+	height: 79px;
 }
 :is(#wcar-admin-app) .h-auto {
 	height: auto;
@@ -742,8 +757,11 @@
 :is(#wcar-admin-app) .max-h-10 {
 	max-height: 2.5rem;
 }
-:is(#wcar-admin-app) .max-h-72 {
-	max-height: 18rem;
+:is(#wcar-admin-app) .max-h-40 {
+	max-height: 10rem;
+}
+:is(#wcar-admin-app) .max-h-60 {
+	max-height: 15rem;
 }
 :is(#wcar-admin-app) .max-h-\[10\.75rem\] {
 	max-height: 10.75rem;
@@ -760,6 +778,9 @@
 :is(#wcar-admin-app) .max-h-\[calc\(100\%_-_6rem\)\] {
 	max-height: calc(100% - 6rem);
 }
+:is(#wcar-admin-app) .min-h-11 {
+	min-height: 2.75rem;
+}
 :is(#wcar-admin-app) .min-h-16 {
 	min-height: 4rem;
 }
@@ -774,6 +795,9 @@
 }
 :is(#wcar-admin-app) .min-h-\[2\.5rem\] {
 	min-height: 2.5rem;
+}
+:is(#wcar-admin-app) .min-h-\[200px\] {
+	min-height: 200px;
 }
 :is(#wcar-admin-app) .min-h-\[2rem\] {
 	min-height: 2rem;
@@ -869,8 +893,14 @@
 :is(#wcar-admin-app) .w-3\.5 {
 	width: 0.875rem;
 }
+:is(#wcar-admin-app) .w-32 {
+	width: 8rem;
+}
 :is(#wcar-admin-app) .w-4 {
 	width: 1rem;
+}
+:is(#wcar-admin-app) .w-40 {
+	width: 10rem;
 }
 :is(#wcar-admin-app) .w-5 {
 	width: 1.25rem;
@@ -918,6 +948,9 @@
 :is(#wcar-admin-app) .w-full {
 	width: 100%;
 }
+:is(#wcar-admin-app) .w-px {
+	width: 1px;
+}
 :is(#wcar-admin-app) .min-w-0 {
 	min-width: 0px;
 }
@@ -929,6 +962,9 @@
 }
 :is(#wcar-admin-app) .min-w-32 {
 	min-width: 8rem;
+}
+:is(#wcar-admin-app) .min-w-48 {
+	min-width: 12rem;
 }
 :is(#wcar-admin-app) .min-w-6 {
 	min-width: 1.5rem;
@@ -954,8 +990,8 @@
 :is(#wcar-admin-app) .max-w-3xl {
 	max-width: 48rem;
 }
-:is(#wcar-admin-app) .max-w-48 {
-	max-width: 12rem;
+:is(#wcar-admin-app) .max-w-72 {
+	max-width: 18rem;
 }
 :is(#wcar-admin-app) .max-w-7xl {
 	max-width: 80rem;
@@ -966,14 +1002,17 @@
 :is(#wcar-admin-app) .max-w-\[43\.5rem\] {
 	max-width: 43.5rem;
 }
+:is(#wcar-admin-app) .max-w-\[calc\(100vw-2\.5rem\)\] {
+	max-width: calc(100vw - 2.5rem);
+}
 :is(#wcar-admin-app) .max-w-full {
 	max-width: 100%;
 }
 :is(#wcar-admin-app) .max-w-lg {
 	max-width: 32rem;
 }
-:is(#wcar-admin-app) .max-w-md {
-	max-width: 28rem;
+:is(#wcar-admin-app) .max-w-sm {
+	max-width: 24rem;
 }
 :is(#wcar-admin-app) .max-w-xl {
 	max-width: 36rem;
@@ -1001,6 +1040,9 @@
 }
 :is(#wcar-admin-app) .grow-0 {
 	flex-grow: 0;
+}
+:is(#wcar-admin-app) .basis-0 {
+	flex-basis: 0px;
 }
 :is(#wcar-admin-app) .table-fixed {
 	table-layout: fixed;
@@ -1033,6 +1075,10 @@
 }
 :is(#wcar-admin-app) .translate-x-\[-0\.5rem\] {
 	--tw-translate-x: -0.5rem;
+	transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+:is(#wcar-admin-app) .translate-y-0\.5 {
+	--tw-translate-y: 0.125rem;
 	transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 :is(#wcar-admin-app) .rotate-0 {
@@ -1068,11 +1114,17 @@
 :is(#wcar-admin-app) .cursor-default {
 	cursor: default;
 }
+:is(#wcar-admin-app) .cursor-help {
+	cursor: help;
+}
 :is(#wcar-admin-app) .cursor-not-allowed {
 	cursor: not-allowed;
 }
 :is(#wcar-admin-app) .cursor-pointer {
 	cursor: pointer;
+}
+:is(#wcar-admin-app) .cursor-wait {
+	cursor: wait;
 }
 :is(#wcar-admin-app) .select-none {
 	-webkit-user-select: none;
@@ -1240,6 +1292,9 @@
 :is(#wcar-admin-app) .gap-3 {
 	gap: 0.75rem;
 }
+:is(#wcar-admin-app) .gap-3\.5 {
+	gap: 0.875rem;
+}
 :is(#wcar-admin-app) .gap-4 {
 	gap: 1rem;
 }
@@ -1252,14 +1307,8 @@
 :is(#wcar-admin-app) .gap-8 {
 	gap: 2rem;
 }
-:is(#wcar-admin-app) .gap-\[12px\] {
-	gap: 12px;
-}
-:is(#wcar-admin-app) .gap-\[1px\] {
-	gap: 1px;
-}
-:is(#wcar-admin-app) .gap-\[2px\] {
-	gap: 2px;
+:is(#wcar-admin-app) .gap-\[14px\] {
+	gap: 14px;
 }
 :is(#wcar-admin-app) .gap-x-2 {
 	column-gap: 0.5rem;
@@ -1316,6 +1365,11 @@
 	margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
 	margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
 }
+:is(#wcar-admin-app) :is(.space-y-2\.5 > :not([hidden]) ~ :not([hidden])) {
+	--tw-space-y-reverse: 0;
+	margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));
+	margin-bottom: calc(0.625rem * var(--tw-space-y-reverse));
+}
 :is(#wcar-admin-app) :is(.space-y-3 > :not([hidden]) ~ :not([hidden])) {
 	--tw-space-y-reverse: 0;
 	margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
@@ -1325,16 +1379,6 @@
 	--tw-space-y-reverse: 0;
 	margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
 	margin-bottom: calc(1rem * var(--tw-space-y-reverse));
-}
-:is(#wcar-admin-app) :is(.space-y-6 > :not([hidden]) ~ :not([hidden])) {
-	--tw-space-y-reverse: 0;
-	margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));
-	margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));
-}
-:is(#wcar-admin-app) :is(.space-y-7 > :not([hidden]) ~ :not([hidden])) {
-	--tw-space-y-reverse: 0;
-	margin-top: calc(1.75rem * calc(1 - var(--tw-space-y-reverse)));
-	margin-bottom: calc(1.75rem * var(--tw-space-y-reverse));
 }
 :is(#wcar-admin-app) :is(.divide-x-0 > :not([hidden]) ~ :not([hidden])) {
 	--tw-divide-x-reverse: 0;
@@ -1408,6 +1452,9 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+:is(#wcar-admin-app) .whitespace-normal {
+	white-space: normal;
+}
 :is(#wcar-admin-app) .whitespace-nowrap {
 	white-space: nowrap;
 }
@@ -1416,6 +1463,9 @@
 }
 :is(#wcar-admin-app) .text-nowrap {
 	text-wrap: nowrap;
+}
+:is(#wcar-admin-app) .break-words {
+	overflow-wrap: break-word;
 }
 :is(#wcar-admin-app) .rounded {
 	border-radius: 0.25rem;
@@ -1636,10 +1686,6 @@
 	--tw-border-opacity: 1;
 	border-color: rgb(240 100 52 / var(--tw-border-opacity, 1));
 }
-:is(#wcar-admin-app) .border-flamingo-500 {
-	--tw-border-opacity: 1;
-	border-color: rgb(237 77 34 / var(--tw-border-opacity, 1));
-}
 :is(#wcar-admin-app) .border-focus-error-border {
 	--tw-border-opacity: 1;
 	border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
@@ -1648,9 +1694,9 @@
 	--tw-border-opacity: 1;
 	border-color: rgb(229 231 235 / var(--tw-border-opacity, 1));
 }
-:is(#wcar-admin-app) .border-red-500 {
+:is(#wcar-admin-app) .border-support-error {
 	--tw-border-opacity: 1;
-	border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
+	border-color: rgb(220 38 38 / var(--tw-border-opacity, 1));
 }
 :is(#wcar-admin-app) .border-tab-border {
 	--tw-border-opacity: 1;
@@ -1821,6 +1867,9 @@
 	--tw-bg-opacity: 1;
 	background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
+:is(#wcar-admin-app) .bg-flamingo-200\/40 {
+	background-color: rgb(250 200 174 / 0.4);
+}
 :is(#wcar-admin-app) .bg-flamingo-400 {
 	--tw-bg-opacity: 1;
 	background-color: rgb(240 100 52 / var(--tw-bg-opacity, 1));
@@ -1849,10 +1898,6 @@
 	--tw-bg-opacity: 1;
 	background-color: rgb(254 248 245 / var(--tw-bg-opacity, 1));
 }
-:is(#wcar-admin-app) .bg-primary-600 {
-	--tw-bg-opacity: 1;
-	background-color: rgb(229 78 26 / var(--tw-bg-opacity, 1));
-}
 :is(#wcar-admin-app) .bg-primary-background {
 	--tw-bg-opacity: 1;
 	background-color: rgb(238 242 247 / var(--tw-bg-opacity, 1));
@@ -1860,6 +1905,18 @@
 :is(#wcar-admin-app) .bg-red-50 {
 	--tw-bg-opacity: 1;
 	background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
+}
+:is(#wcar-admin-app) .bg-support-error {
+	--tw-bg-opacity: 1;
+	background-color: rgb(220 38 38 / var(--tw-bg-opacity, 1));
+}
+:is(#wcar-admin-app) .bg-support-success {
+	--tw-bg-opacity: 1;
+	background-color: rgb(22 163 74 / var(--tw-bg-opacity, 1));
+}
+:is(#wcar-admin-app) .bg-support-warning {
+	--tw-bg-opacity: 1;
+	background-color: rgb(234 179 8 / var(--tw-bg-opacity, 1));
 }
 :is(#wcar-admin-app) .bg-tab-background {
 	--tw-bg-opacity: 1;
@@ -1899,12 +1956,6 @@
 :is(#wcar-admin-app) .bg-white\/20 {
 	background-color: rgb(255 255 255 / 0.2);
 }
-:is(#wcar-admin-app) .bg-white\/30 {
-	background-color: rgb(255 255 255 / 0.3);
-}
-:is(#wcar-admin-app) .bg-opacity-50 {
-	--tw-bg-opacity: 0.5;
-}
 :is(#wcar-admin-app) .bg-gradient-to-r {
 	background-image: linear-gradient(to right, var(--tw-gradient-stops));
 }
@@ -1934,6 +1985,9 @@
 }
 :is(#wcar-admin-app) .stroke-\[2\] {
 	stroke-width: 2;
+}
+:is(#wcar-admin-app) .stroke-\[3\] {
+	stroke-width: 3;
 }
 :is(#wcar-admin-app) .stroke-\[3px\] {
 	stroke-width: 3px;
@@ -1985,9 +2039,6 @@
 }
 :is(#wcar-admin-app) .p-6 {
 	padding: 1.5rem;
-}
-:is(#wcar-admin-app) .p-7 {
-	padding: 1.75rem;
 }
 :is(#wcar-admin-app) .p-8 {
 	padding: 2rem;
@@ -2084,11 +2135,14 @@
 	padding-top: 1.25rem;
 	padding-bottom: 1.25rem;
 }
+:is(#wcar-admin-app) .pb-0\.5 {
+	padding-bottom: 0.125rem;
+}
 :is(#wcar-admin-app) .pb-1 {
 	padding-bottom: 0.25rem;
 }
-:is(#wcar-admin-app) .pb-10 {
-	padding-bottom: 2.5rem;
+:is(#wcar-admin-app) .pb-16 {
+	padding-bottom: 4rem;
 }
 :is(#wcar-admin-app) .pb-2 {
 	padding-bottom: 0.5rem;
@@ -2153,6 +2207,9 @@
 :is(#wcar-admin-app) .pr-9 {
 	padding-right: 2.25rem;
 }
+:is(#wcar-admin-app) .pt-1 {
+	padding-top: 0.25rem;
+}
 :is(#wcar-admin-app) .pt-2 {
 	padding-top: 0.5rem;
 }
@@ -2165,6 +2222,9 @@
 :is(#wcar-admin-app) .pt-5 {
 	padding-top: 1.25rem;
 }
+:is(#wcar-admin-app) .pt-6 {
+	padding-top: 1.5rem;
+}
 :is(#wcar-admin-app) .text-left {
 	text-align: left;
 }
@@ -2173,6 +2233,9 @@
 }
 :is(#wcar-admin-app) .text-right {
 	text-align: right;
+}
+:is(#wcar-admin-app) .align-top {
+	vertical-align: top;
 }
 :is(#wcar-admin-app) .font-mono {
 	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -2227,11 +2290,18 @@
 :is(#wcar-admin-app) .font-semibold {
 	font-weight: 600;
 }
+:is(#wcar-admin-app) .lowercase {
+	text-transform: lowercase;
+}
 :is(#wcar-admin-app) .capitalize {
 	text-transform: capitalize;
 }
 :is(#wcar-admin-app) .italic {
 	font-style: italic;
+}
+:is(#wcar-admin-app) .tabular-nums {
+	--tw-numeric-spacing: tabular-nums;
+	font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
 :is(#wcar-admin-app) .leading-11 {
 	line-height: 2.75rem;
@@ -2269,9 +2339,8 @@
 :is(#wcar-admin-app) .tracking-2 {
 	letter-spacing: 0.125em;
 }
-:is(#wcar-admin-app) .\!text-gray-500 {
-	--tw-text-opacity: 1 !important;
-	color: rgb(107 114 128 / var(--tw-text-opacity, 1)) !important;
+:is(#wcar-admin-app) .tracking-\[-0\.02em\] {
+	letter-spacing: -0.02em;
 }
 :is(#wcar-admin-app) .\!text-gray-600 {
 	--tw-text-opacity: 1 !important;
@@ -2389,17 +2458,13 @@
 	--tw-text-opacity: 1;
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
 }
-:is(#wcar-admin-app) .text-green-500 {
-	--tw-text-opacity: 1;
-	color: rgb(34 197 94 / var(--tw-text-opacity, 1));
-}
-:is(#wcar-admin-app) .text-green-700 {
-	--tw-text-opacity: 1;
-	color: rgb(21 128 61 / var(--tw-text-opacity, 1));
-}
 :is(#wcar-admin-app) .text-icon-disabled {
 	--tw-text-opacity: 1;
 	color: rgb(189 193 199 / var(--tw-text-opacity, 1));
+}
+:is(#wcar-admin-app) .text-icon-interactive {
+	--tw-text-opacity: 1;
+	color: rgb(240 100 52 / var(--tw-text-opacity, 1));
 }
 :is(#wcar-admin-app) .text-icon-inverse {
 	--tw-text-opacity: 1;
@@ -2422,23 +2487,15 @@
 }
 :is(#wcar-admin-app) .text-link-primary {
 	--tw-text-opacity: 1;
-	color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+	color: rgb(240 100 52 / var(--tw-text-opacity, 1));
 }
 :is(#wcar-admin-app) .text-primary-600 {
 	--tw-text-opacity: 1;
 	color: rgb(229 78 26 / var(--tw-text-opacity, 1));
 }
-:is(#wcar-admin-app) .text-red-500 {
-	--tw-text-opacity: 1;
-	color: rgb(239 68 68 / var(--tw-text-opacity, 1));
-}
 :is(#wcar-admin-app) .text-red-600 {
 	--tw-text-opacity: 1;
 	color: rgb(220 38 38 / var(--tw-text-opacity, 1));
-}
-:is(#wcar-admin-app) .text-red-800 {
-	--tw-text-opacity: 1;
-	color: rgb(153 27 27 / var(--tw-text-opacity, 1));
 }
 :is(#wcar-admin-app) .text-support-error {
 	--tw-text-opacity: 1;
@@ -2520,6 +2577,9 @@
 	-webkit-text-decoration-line: none;
 	        text-decoration-line: none;
 }
+:is(#wcar-admin-app) .underline-offset-2 {
+	text-underline-offset: 2px;
+}
 :is(#wcar-admin-app) .placeholder-text-tertiary::placeholder {
 	--tw-placeholder-opacity: 1;
 	color: rgb(107 114 128 / var(--tw-placeholder-opacity, 1));
@@ -2535,6 +2595,12 @@
 }
 :is(#wcar-admin-app) .opacity-60 {
 	opacity: 0.6;
+}
+:is(#wcar-admin-app) .opacity-70 {
+	opacity: 0.7;
+}
+:is(#wcar-admin-app) .opacity-80 {
+	opacity: 0.8;
 }
 :is(#wcar-admin-app) .\!shadow-none {
 	--tw-shadow: 0 0 #0000 !important;
@@ -2571,11 +2637,6 @@
 	--tw-shadow-colored: 0px 24px 64px -12px var(--tw-shadow-color);
 	box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
-:is(#wcar-admin-app) .shadow-soft-shadow-inner {
-	--tw-shadow: 0px 1px 1px 0px rgba(0, 0, 0, 0.05);
-	--tw-shadow-colored: 0px 1px 1px 0px var(--tw-shadow-color);
-	box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-}
 :is(#wcar-admin-app) .shadow-soft-shadow-lg {
 	--tw-shadow: 0px 12px 32px -12px rgba(149, 160, 178, 0.24);
 	--tw-shadow-colored: 0px 12px 32px -12px var(--tw-shadow-color);
@@ -2605,11 +2666,14 @@
 :is(#wcar-admin-app) .\!outline-0 {
 	outline-width: 0px !important;
 }
-:is(#wcar-admin-app) .outline-0 {
-	outline-width: 0px;
-}
 :is(#wcar-admin-app) .outline-1 {
 	outline-width: 1px;
+}
+:is(#wcar-admin-app) .outline-2 {
+	outline-width: 2px;
+}
+:is(#wcar-admin-app) .outline-offset-1 {
+	outline-offset: 1px;
 }
 :is(#wcar-admin-app) .outline-border-disabled {
 	outline-color: #E5E7EB;
@@ -2646,6 +2710,9 @@
 }
 :is(#wcar-admin-app) .outline-primary-300 {
 	outline-color: #F6A285;
+}
+:is(#wcar-admin-app) .outline-primary-600 {
+	outline-color: #E54E1A;
 }
 :is(#wcar-admin-app) .outline-red-600 {
 	outline-color: #dc2626;
@@ -2692,10 +2759,6 @@
 	--tw-ring-opacity: 1;
 	--tw-ring-color: rgb(17 24 39 / var(--tw-ring-opacity, 1));
 }
-:is(#wcar-admin-app) .ring-black {
-	--tw-ring-opacity: 1;
-	--tw-ring-color: rgb(0 0 0 / var(--tw-ring-opacity, 1));
-}
 :is(#wcar-admin-app) .ring-border-subtle {
 	--tw-ring-opacity: 1;
 	--tw-ring-color: rgb(229 231 235 / var(--tw-ring-opacity, 1));
@@ -2733,10 +2796,6 @@
 	--tw-backdrop-blur: blur(2px);
 	backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
-:is(#wcar-admin-app) .backdrop-blur-sm {
-	--tw-backdrop-blur: blur(4px);
-	backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
-}
 :is(#wcar-admin-app) .transition {
 	transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color;
 	transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
@@ -2756,6 +2815,11 @@
 }
 :is(#wcar-admin-app) .transition-\[color\2c outline\2c box-shadow\] {
 	transition-property: color,outline,box-shadow;
+	transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+	transition-duration: 150ms;
+}
+:is(#wcar-admin-app) .transition-\[opacity\2c visibility\] {
+	transition-property: opacity,visibility;
 	transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 	transition-duration: 150ms;
 }
@@ -2786,6 +2850,9 @@
 	transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 	transition-duration: 150ms;
 }
+:is(#wcar-admin-app) .delay-200 {
+	transition-delay: 200ms;
+}
 :is(#wcar-admin-app) .duration-150 {
 	transition-duration: 150ms;
 }
@@ -2807,11 +2874,20 @@
 :is(#wcar-admin-app) .ease-linear {
 	transition-timing-function: linear;
 }
-:is(#wcar-admin-app) .\[box-shadow\:none\] {
-	box-shadow: none;
+:is(#wcar-admin-app) .\[font\:inherit\] {
+	font: inherit;
 }
 :is(#wcar-admin-app) .\[grid-area\:1\/1\/2\/3\] {
 	grid-area: 1/1/2/3;
+}
+:is(#wcar-admin-app) .\[overflow-wrap\:anywhere\] {
+	overflow-wrap: anywhere;
+}
+:is(#wcar-admin-app) .\[transition-duration\:200ms\2c 500ms\] {
+	transition-duration: 200ms,500ms;
+}
+:is(#wcar-admin-app) .\[transition-property\:color\2c visibility\] {
+	transition-property: color,visibility;
 }
 :is(#wcar-admin-app) .\[word-break\:break-word\] {
 	word-break: break-word;
@@ -2862,7 +2938,8 @@ a:focus {
 	box-shadow: none;
 }
 
-a:focus-visible {
+a:focus-visible,
+.wcar-focus-ring:focus-visible {
 	box-shadow: 0 0 0 2px #000;
 	outline: 2px solid transparent;
 }
@@ -3207,9 +3284,9 @@ a:focus-visible {
 	border-color: rgb(37 99 235 / var(--tw-border-opacity, 1));
 }
 
-:is(#wcar-admin-app) .hover\:border-red-500:hover {
+:is(#wcar-admin-app) .hover\:border-support-error:hover {
 	--tw-border-opacity: 1;
-	border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
+	border-color: rgb(220 38 38 / var(--tw-border-opacity, 1));
 }
 
 :is(#wcar-admin-app) .hover\:border-text-inverse:hover {
@@ -3292,14 +3369,13 @@ a:focus-visible {
 	background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
 }
 
+:is(#wcar-admin-app) .hover\:bg-flamingo-200\/40:hover {
+	background-color: rgb(250 200 174 / 0.4);
+}
+
 :is(#wcar-admin-app) .hover\:bg-flamingo-50:hover {
 	--tw-bg-opacity: 1;
 	background-color: rgb(254 244 238 / var(--tw-bg-opacity, 1));
-}
-
-:is(#wcar-admin-app) .hover\:bg-flamingo-500:hover {
-	--tw-bg-opacity: 1;
-	background-color: rgb(237 77 34 / var(--tw-bg-opacity, 1));
 }
 
 :is(#wcar-admin-app) .hover\:bg-gray-50:hover {
@@ -3310,11 +3386,6 @@ a:focus-visible {
 :is(#wcar-admin-app) .hover\:bg-primary-25:hover {
 	--tw-bg-opacity: 1;
 	background-color: rgb(254 248 245 / var(--tw-bg-opacity, 1));
-}
-
-:is(#wcar-admin-app) .hover\:bg-primary-600:hover {
-	--tw-bg-opacity: 1;
-	background-color: rgb(229 78 26 / var(--tw-bg-opacity, 1));
 }
 
 :is(#wcar-admin-app) .hover\:bg-red-50:hover {
@@ -3356,6 +3427,11 @@ a:focus-visible {
 	color: rgb(240 100 52 / var(--tw-text-opacity, 1));
 }
 
+:is(#wcar-admin-app) .hover\:text-flamingo-500:hover {
+	--tw-text-opacity: 1;
+	color: rgb(237 77 34 / var(--tw-text-opacity, 1));
+}
+
 :is(#wcar-admin-app) .hover\:text-gray-200:hover {
 	--tw-text-opacity: 1;
 	color: rgb(229 231 235 / var(--tw-text-opacity, 1));
@@ -3378,17 +3454,12 @@ a:focus-visible {
 
 :is(#wcar-admin-app) .hover\:text-link-primary-hover:hover {
 	--tw-text-opacity: 1;
-	color: rgb(29 78 216 / var(--tw-text-opacity, 1));
+	color: rgb(229 78 26 / var(--tw-text-opacity, 1));
 }
 
 :is(#wcar-admin-app) .hover\:text-primary-600:hover {
 	--tw-text-opacity: 1;
 	color: rgb(229 78 26 / var(--tw-text-opacity, 1));
-}
-
-:is(#wcar-admin-app) .hover\:text-red-500:hover {
-	--tw-text-opacity: 1;
-	color: rgb(239 68 68 / var(--tw-text-opacity, 1));
 }
 
 :is(#wcar-admin-app) .hover\:text-red-600:hover {
@@ -3411,11 +3482,6 @@ a:focus-visible {
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
 }
 
-:is(#wcar-admin-app) .hover\:text-white:hover {
-	--tw-text-opacity: 1;
-	color: rgb(255 255 255 / var(--tw-text-opacity, 1));
-}
-
 :is(#wcar-admin-app) .hover\:underline:hover {
 	-webkit-text-decoration-line: underline;
 	        text-decoration-line: underline;
@@ -3430,10 +3496,6 @@ a:focus-visible {
 	--tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 	--tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
 	box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-}
-
-:is(#wcar-admin-app) .hover\:outline-0:hover {
-	outline-width: 0px;
 }
 
 :is(#wcar-admin-app) .hover\:outline-border-disabled:hover {
@@ -3537,6 +3599,11 @@ a:focus-visible {
 	border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
 }
 
+:is(#wcar-admin-app) .focus\:border-support-error:focus {
+	--tw-border-opacity: 1;
+	border-color: rgb(220 38 38 / var(--tw-border-opacity, 1));
+}
+
 :is(#wcar-admin-app) .focus\:border-toggle-off-border:focus {
 	--tw-border-opacity: 1;
 	border-color: rgb(189 193 199 / var(--tw-border-opacity, 1));
@@ -3550,6 +3617,10 @@ a:focus-visible {
 :is(#wcar-admin-app) .focus\:bg-button-tertiary-hover:focus {
 	--tw-bg-opacity: 1;
 	background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
+}
+
+:is(#wcar-admin-app) .focus\:bg-transparent:focus {
+	background-color: transparent;
 }
 
 :is(#wcar-admin-app) .focus\:shadow-none:focus {
@@ -3668,6 +3739,10 @@ a:focus-visible {
 	border-color: rgb(240 100 52 / var(--tw-border-opacity, 1));
 }
 
+:is(#wcar-admin-app) .focus-visible\:rounded-sm:focus-visible {
+	border-radius: 0.125rem;
+}
+
 :is(#wcar-admin-app) .focus-visible\:text-flamingo-400:focus-visible {
 	--tw-text-opacity: 1;
 	color: rgb(240 100 52 / var(--tw-text-opacity, 1));
@@ -3678,18 +3753,19 @@ a:focus-visible {
 	outline-offset: 2px;
 }
 
-:is(#wcar-admin-app) .focus-visible\:outline:focus-visible {
-	outline-style: solid;
-}
-
-:is(#wcar-admin-app) .focus-visible\:outline-2:focus-visible {
-	outline-width: 2px;
-}
-
-:is(#wcar-admin-app) .focus-visible\:ring-1:focus-visible {
+:is(#wcar-admin-app) .focus-visible\:ring-2:focus-visible {
 	--tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-	--tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+	--tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
 	box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+
+:is(#wcar-admin-app) .focus-visible\:ring-focus:focus-visible {
+	--tw-ring-opacity: 1;
+	--tw-ring-color: rgb(240 100 52 / var(--tw-ring-opacity, 1));
+}
+
+:is(#wcar-admin-app) .focus-visible\:ring-offset-1:focus-visible {
+	--tw-ring-offset-width: 1px;
 }
 
 :is(#wcar-admin-app) .active\:text-button-primary:active {
@@ -3702,20 +3778,12 @@ a:focus-visible {
 	outline-offset: 2px;
 }
 
-:is(#wcar-admin-app) .disabled\:pointer-events-none:disabled {
-	pointer-events: none;
-}
-
 :is(#wcar-admin-app) .disabled\:cursor-default:disabled {
 	cursor: default;
 }
 
 :is(#wcar-admin-app) .disabled\:cursor-not-allowed:disabled {
 	cursor: not-allowed;
-}
-
-:is(#wcar-admin-app) .disabled\:border-none:disabled {
-	border-style: none;
 }
 
 :is(#wcar-admin-app) .disabled\:border-border-disabled:disabled {
@@ -3732,11 +3800,6 @@ a:focus-visible {
 	border-color: transparent;
 }
 
-:is(#wcar-admin-app) .disabled\:\!bg-gray-100:disabled {
-	--tw-bg-opacity: 1 !important;
-	background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1)) !important;
-}
-
 :is(#wcar-admin-app) .disabled\:bg-button-disabled:disabled {
 	--tw-bg-opacity: 1;
 	background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
@@ -3747,24 +3810,22 @@ a:focus-visible {
 	background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
 
-:is(#wcar-admin-app) .disabled\:bg-gray-200:disabled {
-	--tw-bg-opacity: 1;
-	background-color: rgb(229 231 235 / var(--tw-bg-opacity, 1));
-}
-
 :is(#wcar-admin-app) .disabled\:bg-white:disabled {
 	--tw-bg-opacity: 1;
 	background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
 
-:is(#wcar-admin-app) .disabled\:text-gray-400:disabled {
-	--tw-text-opacity: 1;
-	color: rgb(156 163 175 / var(--tw-text-opacity, 1));
-}
-
 :is(#wcar-admin-app) .disabled\:text-text-disabled:disabled {
 	--tw-text-opacity: 1;
 	color: rgb(189 193 199 / var(--tw-text-opacity, 1));
+}
+
+:is(#wcar-admin-app) .disabled\:opacity-50:disabled {
+	opacity: 0.5;
+}
+
+:is(#wcar-admin-app) .disabled\:opacity-60:disabled {
+	opacity: 0.6;
 }
 
 :is(#wcar-admin-app) .disabled\:shadow-none:disabled {
@@ -3859,6 +3920,11 @@ a:focus-visible {
 	background-color: rgb(189 193 199 / var(--tw-bg-opacity, 1));
 }
 
+:is(#wcar-admin-app) :is(.group\/quick-access:hover .group-hover\/quick-access\:text-link-primary-hover) {
+	--tw-text-opacity: 1;
+	color: rgb(229 78 26 / var(--tw-text-opacity, 1));
+}
+
 :is(#wcar-admin-app) :is(.group:hover .group-hover\:text-field-input) {
 	--tw-text-opacity: 1;
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
@@ -3938,6 +4004,33 @@ a:focus-visible {
 	left: 0.125rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	:is(#wcar-admin-app) .motion-reduce\:transition-none {
+		transition-property: none;
+	}
+}
+
+@media not all and (min-width: 640px) {
+	:is(#wcar-admin-app) .max-sm\:right-2 {
+		right: 0.5rem;
+	}
+	:is(#wcar-admin-app) .max-sm\:top-2 {
+		top: 0.5rem;
+	}
+	:is(#wcar-admin-app) .max-sm\:min-h-11 {
+		min-height: 2.75rem;
+	}
+	:is(#wcar-admin-app) .max-sm\:w-full {
+		width: 100%;
+	}
+	:is(#wcar-admin-app) .max-sm\:grow {
+		flex-grow: 1;
+	}
+	:is(#wcar-admin-app) .max-sm\:p-3\.5 {
+		padding: 0.875rem;
+	}
+}
+
 @media (min-width: 420px) {
 	:is(#wcar-admin-app) .xs\:flex {
 		display: flex;
@@ -3951,11 +4044,41 @@ a:focus-visible {
 	:is(#wcar-admin-app) .sm\:m-0 {
 		margin: 0px;
 	}
+	:is(#wcar-admin-app) .sm\:flex {
+		display: flex;
+	}
+	:is(#wcar-admin-app) .sm\:h-56 {
+		height: 14rem;
+	}
 	:is(#wcar-admin-app) .sm\:w-3\/5 {
 		width: 60%;
 	}
+	:is(#wcar-admin-app) .sm\:w-36 {
+		width: 9rem;
+	}
+	:is(#wcar-admin-app) .sm\:w-48 {
+		width: 12rem;
+	}
+	:is(#wcar-admin-app) .sm\:w-5\/12 {
+		width: 41.666667%;
+	}
+	:is(#wcar-admin-app) .sm\:w-56 {
+		width: 14rem;
+	}
 	:is(#wcar-admin-app) .sm\:w-\[70\%\] {
 		width: 70%;
+	}
+	:is(#wcar-admin-app) .sm\:w-auto {
+		width: auto;
+	}
+	:is(#wcar-admin-app) .sm\:w-max {
+		width: max-content;
+	}
+	:is(#wcar-admin-app) .sm\:max-w-64 {
+		max-width: 16rem;
+	}
+	:is(#wcar-admin-app) .sm\:shrink-0 {
+		flex-shrink: 0;
 	}
 	:is(#wcar-admin-app) .sm\:grid-cols-2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3966,11 +4089,32 @@ a:focus-visible {
 	:is(#wcar-admin-app) .sm\:flex-row {
 		flex-direction: row;
 	}
+	:is(#wcar-admin-app) .sm\:flex-wrap {
+		flex-wrap: wrap;
+	}
+	:is(#wcar-admin-app) .sm\:items-end {
+		align-items: flex-end;
+	}
+	:is(#wcar-admin-app) .sm\:items-center {
+		align-items: center;
+	}
 	:is(#wcar-admin-app) .sm\:justify-end {
 		justify-content: flex-end;
 	}
+	:is(#wcar-admin-app) .sm\:gap-3 {
+		gap: 0.75rem;
+	}
 	:is(#wcar-admin-app) .sm\:whitespace-normal {
 		white-space: normal;
+	}
+	:is(#wcar-admin-app) .sm\:p-4 {
+		padding: 1rem;
+	}
+	:is(#wcar-admin-app) .sm\:p-8 {
+		padding: 2rem;
+	}
+	:is(#wcar-admin-app) .sm\:text-right {
+		text-align: right;
 	}
 }
 
@@ -4092,11 +4236,17 @@ a:focus-visible {
 	:is(#wcar-admin-app) .md\:col-start-9 {
 		grid-column-start: 9;
 	}
-	:is(#wcar-admin-app) .md\:block {
-		display: block;
+	:is(#wcar-admin-app) .md\:mt-10 {
+		margin-top: 2.5rem;
 	}
-	:is(#wcar-admin-app) .md\:hidden {
-		display: none;
+	:is(#wcar-admin-app) .md\:flex {
+		display: flex;
+	}
+	:is(#wcar-admin-app) .md\:h-80 {
+		height: 20rem;
+	}
+	:is(#wcar-admin-app) .md\:min-h-10 {
+		min-height: 2.5rem;
 	}
 	:is(#wcar-admin-app) .md\:w-1\/10 {
 		width: 10%;
@@ -4134,8 +4284,29 @@ a:focus-visible {
 	:is(#wcar-admin-app) .md\:w-4\/5 {
 		width: 80%;
 	}
+	:is(#wcar-admin-app) .md\:w-80 {
+		width: 20rem;
+	}
+	:is(#wcar-admin-app) .md\:w-\[36rem\] {
+		width: 36rem;
+	}
+	:is(#wcar-admin-app) .md\:w-\[40rem\] {
+		width: 40rem;
+	}
+	:is(#wcar-admin-app) .md\:w-\[44rem\] {
+		width: 44rem;
+	}
+	:is(#wcar-admin-app) .md\:w-\[47rem\] {
+		width: 47rem;
+	}
 	:is(#wcar-admin-app) .md\:w-full {
 		width: 100%;
+	}
+	:is(#wcar-admin-app) .md\:min-w-\[34rem\] {
+		min-width: 34rem;
+	}
+	:is(#wcar-admin-app) .md\:flex-1 {
+		flex: 1 1 0%;
 	}
 	:is(#wcar-admin-app) .md\:shrink {
 		flex-shrink: 1;
@@ -4340,15 +4511,35 @@ a:focus-visible {
 	:is(#wcar-admin-app) .md\:justify-self-stretch {
 		justify-self: stretch;
 	}
+	:is(#wcar-admin-app) .md\:border-l {
+		border-left-width: 1px;
+	}
 	:is(#wcar-admin-app) .md\:p-8 {
 		padding: 2rem;
+	}
+	:is(#wcar-admin-app) .md\:px-0 {
+		padding-left: 0px;
+		padding-right: 0px;
 	}
 	:is(#wcar-admin-app) .md\:pl-3 {
 		padding-left: 0.75rem;
 	}
+	:is(#wcar-admin-app) .md\:pl-4 {
+		padding-left: 1rem;
+	}
 }
 
 @media (min-width: 1024px) {
+	:is(#wcar-admin-app) .lg\:not-sr-only {
+		position: static;
+		width: auto;
+		height: auto;
+		padding: 0;
+		margin: 0;
+		overflow: visible;
+		clip: auto;
+		white-space: normal;
+	}
 	:is(#wcar-admin-app) .lg\:top-4 {
 		top: 1rem;
 	}
@@ -4469,6 +4660,9 @@ a:focus-visible {
 	:is(#wcar-admin-app) .lg\:col-start-9 {
 		grid-column-start: 9;
 	}
+	:is(#wcar-admin-app) .lg\:ml-auto {
+		margin-left: auto;
+	}
 	:is(#wcar-admin-app) .lg\:block {
 		display: block;
 	}
@@ -4477,6 +4671,9 @@ a:focus-visible {
 	}
 	:is(#wcar-admin-app) .lg\:hidden {
 		display: none;
+	}
+	:is(#wcar-admin-app) .lg\:min-h-10 {
+		min-height: 2.5rem;
 	}
 	:is(#wcar-admin-app) .lg\:w-1\/10 {
 		width: 10%;
@@ -4523,11 +4720,14 @@ a:focus-visible {
 	:is(#wcar-admin-app) .lg\:w-\[47\.5rem\] {
 		width: 47.5rem;
 	}
-	:is(#wcar-admin-app) .lg\:w-auto {
-		width: auto;
-	}
 	:is(#wcar-admin-app) .lg\:w-full {
 		width: 100%;
+	}
+	:is(#wcar-admin-app) .lg\:min-w-0 {
+		min-width: 0px;
+	}
+	:is(#wcar-admin-app) .lg\:flex-1 {
+		flex: 1 1 0%;
 	}
 	:is(#wcar-admin-app) .lg\:shrink {
 		flex-shrink: 1;
@@ -4724,27 +4924,23 @@ a:focus-visible {
 	:is(#wcar-admin-app) .lg\:justify-self-stretch {
 		justify-self: stretch;
 	}
-	:is(#wcar-admin-app) .lg\:border {
-		border-width: 1px;
-	}
-	:is(#wcar-admin-app) .lg\:border-solid {
-		border-style: solid;
-	}
-	:is(#wcar-admin-app) .lg\:border-flamingo-400 {
-		--tw-border-opacity: 1;
-		border-color: rgb(240 100 52 / var(--tw-border-opacity, 1));
-	}
 	:is(#wcar-admin-app) .lg\:p-4 {
 		padding: 1rem;
 	}
 }
 
 @media (min-width: 1280px) {
+	:is(#wcar-admin-app) .xl\:flex {
+		display: flex;
+	}
+	:is(#wcar-admin-app) .xl\:w-52 {
+		width: 13rem;
+	}
+	:is(#wcar-admin-app) .xl\:flex-none {
+		flex: none;
+	}
 	:is(#wcar-admin-app) .xl\:grid-cols-6 {
 		grid-template-columns: repeat(6, minmax(0, 1fr));
-	}
-	:is(#wcar-admin-app) .xl\:flex-row {
-		flex-direction: row;
 	}
 }
 
@@ -4754,6 +4950,11 @@ a:focus-visible {
 
 :is(#wcar-admin-app) .rtl\:right-2\/4:where([dir="rtl"], [dir="rtl"] *) {
 	right: 50%;
+}
+
+:is(#wcar-admin-app) .rtl\:-scale-x-100:where([dir="rtl"], [dir="rtl"] *) {
+	--tw-scale-x: -1;
+	transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
 :is(#wcar-admin-app) .rtl\:before\:right-2\/4:where([dir="rtl"], [dir="rtl"] *)::before {
@@ -4857,14 +5058,44 @@ a:focus-visible {
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
 }
 
-:is(#wcar-admin-app) :is(.\[\&\>\*\]\:text-gray-900>*) {
+:is(#wcar-admin-app) :is(.\[\&\>\*\]\:text-support-error>*) {
+	--tw-text-opacity: 1;
+	color: rgb(220 38 38 / var(--tw-text-opacity, 1));
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>\*\]\:text-text-primary>*) {
 	--tw-text-opacity: 1;
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
 }
 
-:is(#wcar-admin-app) :is(.\[\&\>\*\]\:text-support-error>*) {
-	--tw-text-opacity: 1;
-	color: rgb(220 38 38 / var(--tw-text-opacity, 1));
+@media (min-width: 1024px) {
+	:is(#wcar-admin-app) :is(.lg\:\[\&\>div\>div\]\:gap-2>div>div) {
+		gap: 0.5rem;
+	}
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\:\:-webkit-inner-spin-button\]\:m-0>input)::-webkit-inner-spin-button {
+	margin: 0px;
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\:\:-webkit-inner-spin-button\]\:appearance-none>input)::-webkit-inner-spin-button {
+	appearance: none;
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\:\:-webkit-outer-spin-button\]\:m-0>input)::-webkit-outer-spin-button {
+	margin: 0px;
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\:\:-webkit-outer-spin-button\]\:appearance-none>input)::-webkit-outer-spin-button {
+	appearance: none;
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\]\:pr-16>input) {
+	padding-right: 4rem;
+}
+
+:is(#wcar-admin-app) :is(.\[\&\>input\]\:\[appearance\:textfield\]>input) {
+	appearance: textfield;
 }
 
 :is(#wcar-admin-app) :is(.focus\:\[\&\>input\]\:ring-focus>input:focus) {
@@ -5043,23 +5274,64 @@ a:focus-visible {
 	font-weight: 400;
 }
 
+:is(#wcar-admin-app) :is(.\[\&_\[role\=button\]\]\:-m-1\.5 [role=button]) {
+	margin: -0.375rem;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_\[role\=button\]\]\:p-1\.5 [role=button]) {
+	padding: 0.375rem;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_a\:hover\]\:text-link-primary-hover a:hover) {
+	--tw-text-opacity: 1;
+	color: rgb(229 78 26 / var(--tw-text-opacity, 1));
+}
+
+:is(#wcar-admin-app) :is(.\[\&_a\]\:text-link-primary a) {
+	--tw-text-opacity: 1;
+	color: rgb(240 100 52 / var(--tw-text-opacity, 1));
+}
+
 :is(#wcar-admin-app) :is(.\[\&_h2\]\:text-gray-900 h2) {
 	--tw-text-opacity: 1;
 	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
 }
 
-:is(#wcar-admin-app) :is(.\[\&_h4\]\:text-gray-900 h4) {
+:is(#wcar-admin-app) :is(.\[\&_input\]\:min-h-0 input) {
+	min-height: 0px;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_input\]\:text-support-success input) {
 	--tw-text-opacity: 1;
-	color: rgb(17 24 39 / var(--tw-text-opacity, 1));
+	color: rgb(22 163 74 / var(--tw-text-opacity, 1));
+}
+
+:is(#wcar-admin-app) :is(.\[\&_input\]\:disabled\:bg-gray-50:disabled input) {
+	--tw-bg-opacity: 1;
+	background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
+}
+
+:is(#wcar-admin-app) :is(.\[\&_input\]\:disabled\:text-support-success:disabled input) {
+	--tw-text-opacity: 1;
+	color: rgb(22 163 74 / var(--tw-text-opacity, 1));
+}
+
+:is(#wcar-admin-app) :is(.\[\&_label\]\:text-sm label) {
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_label\]\:font-medium label) {
+	font-weight: 500;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_label_\*\]\:text-sm label *) {
+	font-size: 0.875rem;
+	line-height: 1.25rem;
 }
 
 :is(#wcar-admin-app) :is(.\[\&_p\]\:m-0 p) {
 	margin: 0px;
-}
-
-:is(#wcar-admin-app) :is(.\[\&_p\]\:\!text-gray-600 p) {
-	--tw-text-opacity: 1 !important;
-	color: rgb(75 85 99 / var(--tw-text-opacity, 1)) !important;
 }
 
 :is(#wcar-admin-app) :is(.\[\&_p\]\:text-badge-color-disabled p) {
@@ -5067,8 +5339,20 @@ a:focus-visible {
 	color: rgb(189 193 199 / var(--tw-text-opacity, 1));
 }
 
+:is(#wcar-admin-app) :is(.\[\&_pre\]\:max-w-full pre) {
+	max-width: 100%;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_pre\]\:overflow-x-auto pre) {
+	overflow-x: auto;
+}
+
 :is(#wcar-admin-app) :is(.\[\&_span\]\:hidden span) {
 	display: none;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_strong\]\:font-medium strong) {
+	font-weight: 500;
 }
 
 :is(#wcar-admin-app) :is(.\[\&_svg\]\:size-3 svg) {
@@ -5094,5 +5378,89 @@ a:focus-visible {
 :is(#wcar-admin-app) :is(.\[\&_svg\]\:text-text-secondary svg) {
 	--tw-text-opacity: 1;
 	color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+}
+
+@media not all and (min-width: 1280px) {
+	:is(#wcar-admin-app) :is(.max-xl\:\[\&_td\]\:px-2 td) {
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
+	}
+	:is(#wcar-admin-app) :is(.max-xl\:\[\&_th\]\:px-2 th) {
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
+	}
+}
+
+:is(#wcar-admin-app) :is(.\[\&_tr\>\:first-child\:not\(\[colspan\]\)\]\:box-border tr>:first-child:not([colspan])) {
+	box-sizing: border-box;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_tr\>\:first-child\:not\(\[colspan\]\)\]\:w-11 tr>:first-child:not([colspan])) {
+	width: 2.75rem;
+}
+
+:is(#wcar-admin-app) :is(.\[\&_tr\>\:first-child\:not\(\[colspan\]\)\]\:min-w-11 tr>:first-child:not([colspan])) {
+	min-width: 2.75rem;
+}
+
+@media(pointer:coarse) {
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:h-11 {
+		height: 2.75rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:min-h-11 {
+		min-height: 2.75rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:w-11 {
+		width: 2.75rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:min-w-11 {
+		min-width: 2.75rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:p-3\.5 {
+		padding: 0.875rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:px-2 {
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:px-3 {
+		padding-left: 0.75rem;
+		padding-right: 0.75rem;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:before\:absolute::before {
+		content: var(--tw-content);
+		position: absolute;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:before\:-inset-\[15px\]::before {
+		content: var(--tw-content);
+		inset: -15px;
+	}
+	:is(#wcar-admin-app) .\[\@media\(pointer\:coarse\)\]\:before\:content-\[\'\'\]::before {
+		--tw-content: '';
+		content: var(--tw-content);
+	}
+	:is(#wcar-admin-app) :is(.\[\@media\(pointer\:coarse\)\]\:\[\&_tr\>\:first-child_label\]\:relative tr>:first-child label) {
+		position: relative;
+	}
+	:is(#wcar-admin-app) :is(.\[\@media\(pointer\:coarse\)\]\:\[\&_tr\>\:first-child_label\]\:after\:absolute tr>:first-child label)::after {
+		content: var(--tw-content);
+		position: absolute;
+	}
+	:is(#wcar-admin-app) :is(.\[\@media\(pointer\:coarse\)\]\:\[\&_tr\>\:first-child_label\]\:after\:-inset-3 tr>:first-child label)::after {
+		content: var(--tw-content);
+		inset: -0.75rem;
+	}
+	:is(#wcar-admin-app) :is(.\[\@media\(pointer\:coarse\)\]\:\[\&_tr\>\:first-child_label\]\:after\:content-\[\'\'\] tr>:first-child label)::after {
+		--tw-content: '';
+		content: var(--tw-content);
+	}
+}
+
+:is(#wcar-admin-app) :is(nav[style*='pointer-events: none'] .\[nav\[style\*\=\'pointer-events\:_none\'\]_\&\]\:invisible) {
+	visibility: hidden;
+}
+
+:is(#wcar-admin-app) :is(nav[style*='pointer-events: none'] .\[nav\[style\*\=\'pointer-events\:_none\'\]_\&\]\:opacity-0) {
+	opacity: 0;
 }
 

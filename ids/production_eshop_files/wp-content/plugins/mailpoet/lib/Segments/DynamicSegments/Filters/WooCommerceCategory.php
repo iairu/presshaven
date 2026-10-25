@@ -56,6 +56,7 @@ class WooCommerceCategory implements Filter {
 
     if ($operator === DynamicSegmentFilterData::OPERATOR_ANY) {
       $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
+      $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
       $this->applyProductJoin($queryBuilder, $orderStatsAlias);
       $this->applyTermRelationshipsJoin($queryBuilder);
       $this->applyTermTaxonomyJoin($queryBuilder, $parameterSuffix);
@@ -67,6 +68,7 @@ class WooCommerceCategory implements Filter {
         $categoryIdWithChildrenIds = $this->getCategoriesWithChildren([$categoryId]);
         $subQuery = $this->filterHelper->getNewSubscribersQueryBuilder();
         $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($subQuery);
+        $this->filterHelper->applyDatePeriodFilter($subQuery, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
         $this->applyProductJoin($subQuery, $orderStatsAlias);
         $this->applyTermRelationshipsJoin($subQuery);
         $this->applyTermTaxonomyJoin($subQuery, $uniqueParamaterSuffix);
@@ -85,6 +87,7 @@ class WooCommerceCategory implements Filter {
       $subQuery = $this->createQueryBuilder($subscribersTable);
       $subQuery->select("DISTINCT $subscribersTable.id");
       $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($subQuery);
+      $this->filterHelper->applyDatePeriodFilter($subQuery, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
       $subQuery = $this->applyProductJoin($subQuery, $orderStatsAlias);
       $subQuery = $this->applyTermRelationshipsJoin($subQuery);
       $subQuery = $this->applyTermTaxonomyJoin($subQuery, $parameterSuffix);
@@ -149,9 +152,12 @@ class WooCommerceCategory implements Filter {
     if (!is_array($subcategories) || empty($subcategories)) {
       return [$categoryId];
     }
-    $ids = array_map(function($category) {
-      return $category->term_id; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-    }, $subcategories);
+    $ids = [];
+    foreach ($subcategories as $category) {
+      if ($category instanceof \WP_Term) {
+        $ids[] = $category->term_id; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+      }
+    }
     $ids[] = $categoryId;
     return $ids;
   }

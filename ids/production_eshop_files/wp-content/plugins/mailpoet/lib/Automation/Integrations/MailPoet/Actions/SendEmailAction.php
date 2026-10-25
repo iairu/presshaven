@@ -16,10 +16,14 @@ use MailPoet\Automation\Engine\Exceptions\NotFoundException;
 use MailPoet\Automation\Engine\Integration\Action;
 use MailPoet\Automation\Engine\Integration\ValidationException;
 use MailPoet\Automation\Engine\WordPress;
+use MailPoet\Automation\Integrations\Core\Actions\DelayAction;
 use MailPoet\Automation\Integrations\MailPoet\Payloads\SegmentPayload;
 use MailPoet\Automation\Integrations\MailPoet\Payloads\SubscriberPayload;
 use MailPoet\Automation\Integrations\WooCommerce\Payloads\AbandonedCartPayload;
 use MailPoet\Automation\Integrations\WooCommerce\Payloads\OrderPayload;
+use MailPoet\Automation\Integrations\WooCommerce\Subjects\OrderSubject;
+use MailPoet\EmailEditor\Integrations\MailPoet\BlockEmailContentDetector;
+use MailPoet\EmailEditor\Integrations\MailPoet\PersonalizationTags\OrderReviewUrl;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\NewsletterOptionEntity;
 use MailPoet\Entities\NewsletterOptionFieldEntity;
@@ -67,11 +71,13 @@ class SendEmailAction implements Action {
   ];
   private const WAIT_OPTIN = 'wait_optin';
   private const OPTIN_RETRIES = 'optin_retries';
+  private const ORDER_REVIEW_URL_TOKEN = '[woocommerce/order-review-url]';
 
-  private const TRANSACTIONAL_TRIGGERS = [
+  public const TRANSACTIONAL_TRIGGERS = [
     'mailpoet:custom-trigger',
     'woocommerce:order-status-changed',
     'woocommerce:order-created',
+    'woocommerce:order-paid',
     'woocommerce:order-completed',
     'woocommerce:order-cancelled',
     'woocommerce:abandoned-cart',
@@ -85,6 +91,9 @@ class SendEmailAction implements Action {
     'woocommerce:buys-from-a-tag',
     'woocommerce:buys-from-a-category',
     'woocommerce:buys-a-product',
+    'woocommerce-bookings:booking-created',
+    'woocommerce-bookings:booking-status-changed',
+    'woocommerce-bookings:booking-starts',
   ];
 
   private AutomationController $automationController;
@@ -109,6 +118,10 @@ class SendEmailAction implements Action {
 
   private NewsletterSaveController $newsletterSaveController;
 
+  private BlockEmailContentDetector $blockEmailContentDetector;
+  private AutomationSendEmailSubjectResolver $subjectResolver;
+  private OrderReviewUrl $orderReviewUrl;
+
   public function __construct(
     AutomationController $automationController,
     SettingsController $settings,
@@ -120,7 +133,10 @@ class SendEmailAction implements Action {
     NewsletterOptionsRepository $newsletterOptionsRepository,
     NewsletterOptionFieldsRepository $newsletterOptionFieldsRepository,
     WordPress $wp,
-    NewsletterSaveController $newsletterSaveController
+    NewsletterSaveController $newsletterSaveController,
+    BlockEmailContentDetector $blockEmailContentDetector,
+    AutomationSendEmailSubjectResolver $subjectResolver,
+    OrderReviewUrl $orderReviewUrl
   ) {
     $this->automationController = $automationController;
     $this->settings = $settings;
@@ -133,6 +149,9 @@ class SendEmailAction implements Action {
     $this->newsletterOptionFieldsRepository = $newsletterOptionFieldsRepository;
     $this->wp = $wp;
     $this->newsletterSaveController = $newsletterSaveController;
+    $this->blockEmailContentDetector = $blockEmailContentDetector;
+    $this->subjectResolver = $subjectResolver;
+    $this->orderReviewUrl = $orderReviewUrl;
   }
 
   public function getKey(): string {
@@ -153,7 +172,9 @@ class SendEmailAction implements Action {
     $nonEmptyString = Builder::string()->required()->minLength(1);
     return Builder::object([
       // required fields
-      'email_id' => Builder::integer()->required(),
+      // The email is created when the user first opens the step, so it can be missing in drafts.
+      // validate() blocks activation until it exists.
+      'email_id' => Builder::integer(),
       'name' => $nonEmptyString->default(__('Send email', 'mailpoet')),
       'subject' => $nonEmptyString->default(__('Subject', 'mailpoet')),
       'preheader' => Builder::string()->required()->default(''),
@@ -168,6 +189,10 @@ class SendEmailAction implements Action {
         ? Builder::string()->formatEmail()->default($replyToAddressDefault)
         : Builder::string()->formatEmail(),
       'ga_campaign' => Builder::string()->minLength(1),
+      'email_wp_post_id' => Builder::integer(),
+      // template email pattern, used to create the email once the user picks an editor
+      'pattern' => Builder::string()->minLength(1),
+      'template_email_created' => Builder::boolean(),
     ]);
   }
 
@@ -178,24 +203,60 @@ class SendEmailAction implements Action {
   }
 
   public function validate(StepValidationArgs $args): void {
-    try {
-      $this->getEmailForStep($args->getStep());
-    } catch (InvalidStateException $exception) {
-      $exception = ValidationException::create()
-        ->withMessage(__('Cannot send the email because it was not found. Please, go to the automation editor and update the email contents.', 'mailpoet'));
+    $emailId = $args->getStep()->getArgs()['email_id'] ?? '';
+    if (empty($emailId)) {
+      throw ValidationException::create()
+        ->withMessage(__('Cannot activate the automation because an email has no content.', 'mailpoet'))
+        ->withError('email_id', __('Add email content before activating the automation.', 'mailpoet'));
+    }
 
-      $emailId = $args->getStep()->getArgs()['email_id'] ?? '';
-      if (empty($emailId)) {
-        $exception->withError('email_id', __("Automation email not found.", 'mailpoet'));
-      } else {
-        $exception->withError(
+    try {
+      $email = $this->getEmailForStep($args->getStep());
+    } catch (InvalidStateException $exception) {
+      throw ValidationException::create()
+        ->withMessage(__('Cannot send the email because it was not found. Please, go to the automation editor and update the email contents.', 'mailpoet'))
+        ->withError(
           'email_id',
           // translators: %s is the ID of email.
           sprintf(__("Automation email with ID '%s' not found.", 'mailpoet'), $emailId)
         );
-      }
-      throw $exception;
     }
+
+    if ($args->getAutomation()->getStatus() !== Automation::STATUS_ACTIVE) {
+      return;
+    }
+
+    $wpPostId = $email->getWpPostId();
+    if (!$wpPostId) {
+      return;
+    }
+
+    $wpPost = $this->wp->getPost($wpPostId);
+    $subjectKeys = $this->subjectResolver->getGuaranteedSubjectKeysForStep($args->getAutomation(), $args->getStep());
+    if ($this->newsletterContainsOrderReviewUrlToken($email)) {
+      if (!in_array(OrderSubject::KEY, $subjectKeys, true)) {
+        throw ValidationException::create()
+          ->withMessage(__('Cannot activate the automation because order review links require a WooCommerce order trigger.', 'mailpoet'))
+          ->withError('email_id', __('Use this email in an automation with a WooCommerce order subject or remove the order review link.', 'mailpoet'));
+      }
+
+      if (!$this->orderReviewUrl->isSupported()) {
+        throw ValidationException::create()
+          ->withMessage(__('Cannot activate the automation because WooCommerce cannot generate order review links.', 'mailpoet'))
+          ->withError('email_id', __('Update WooCommerce or remove the order review link from this email.', 'mailpoet'));
+      }
+    }
+
+    if (
+      $wpPost instanceof \WP_Post
+      && $this->blockEmailContentDetector->hasMeaningfulContent($wpPost)
+    ) {
+      return;
+    }
+
+    throw ValidationException::create()
+      ->withMessage(__('Cannot activate the automation because an email has no content.', 'mailpoet'))
+      ->withError('email_id', __('Add email content before activating the automation.', 'mailpoet'));
   }
 
   public function run(StepRunArgs $args, StepRunController $controller): void {
@@ -252,12 +313,50 @@ class SendEmailAction implements Action {
   }
 
   private function scheduleEmail(StepRunArgs $args, NewsletterEntity $newsletter, SubscriberEntity $subscriber): void {
+    $this->validateOrderReviewUrlToken($args, $newsletter);
+
     $meta = $this->getNewsletterMeta($args);
     try {
       $this->automationEmailScheduler->createSendingTask($newsletter, $subscriber, $meta);
     } catch (Throwable $e) {
       throw InvalidStateException::create()->withMessage(__('Could not create sending task.', 'mailpoet'));
     }
+  }
+
+  private function validateOrderReviewUrlToken(StepRunArgs $args, NewsletterEntity $newsletter): void {
+    if (!$this->newsletterContainsOrderReviewUrlToken($newsletter)) {
+      return;
+    }
+
+    try {
+      $orderPayload = $args->getSinglePayloadByClass(OrderPayload::class);
+    } catch (NotFoundException $e) {
+      throw InvalidStateException::create()->withMessage(__('Cannot send the email because an order is required to generate the review link.', 'mailpoet'));
+    }
+
+    if ($this->orderReviewUrl->getUrl(['order' => $orderPayload->getOrder()]) !== '') {
+      return;
+    }
+
+    throw InvalidStateException::create()->withMessage(__('Cannot send the email because WooCommerce cannot generate an order review link for this order.', 'mailpoet'));
+  }
+
+  private function newsletterContainsOrderReviewUrlToken(NewsletterEntity $newsletter): bool {
+    $wpPostId = $newsletter->getWpPostId();
+    if ($wpPostId) {
+      $wpPost = $this->wp->getPost($wpPostId);
+      if ($wpPost instanceof \WP_Post && $this->contentContainsOrderReviewUrlToken($wpPost->post_content)) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+        return true;
+      }
+    }
+
+    $body = json_encode($newsletter->getBody(), JSON_UNESCAPED_SLASHES);
+    return is_string($body) && $this->contentContainsOrderReviewUrlToken($body);
+  }
+
+  private function contentContainsOrderReviewUrlToken(string $content): bool {
+    $normalizedContent = rawurldecode(str_replace('\\/', '/', $content));
+    return strpos($normalizedContent, self::ORDER_REVIEW_URL_TOKEN) !== false;
   }
 
   private function getRunLogData(StepRunController $controller): array {
@@ -493,8 +592,8 @@ class SendEmailAction implements Action {
     $triggers = $automation->getTriggers();
     $transactionalTriggers = array_filter(
       $triggers,
-      function(Step $step): bool {
-        return in_array($step->getKey(), self::TRANSACTIONAL_TRIGGERS, true);
+      function(Step $triggerStep): bool {
+        return in_array($triggerStep->getKey(), self::TRANSACTIONAL_TRIGGERS, true);
       }
     );
 
@@ -503,11 +602,53 @@ class SendEmailAction implements Action {
     }
 
     foreach ($transactionalTriggers as $trigger) {
-      if (!in_array($step->getId(), $trigger->getNextStepIds(), true)) {
+      if (!$this->hasDelayFreePathToStep($trigger, $step, $automation)) {
         return false;
       }
     }
     return true;
+  }
+
+  /**
+   * Checks if there exists at least one path from $from step to $to step
+   * that doesn't contain a delay action.
+   */
+  private function hasDelayFreePathToStep(Step $from, Step $to, Automation $automation): bool {
+    $steps = $automation->getSteps();
+    $stack = [[$from, false]]; // [step, hasDelayOnPath]
+    $visited = [];
+
+    while (!empty($stack)) {
+      [$current, $hasDelayOnPath] = array_pop($stack);
+
+      $stateKey = $current->getId() . ':' . ($hasDelayOnPath ? '1' : '0');
+      if (isset($visited[$stateKey])) {
+        continue;
+      }
+      $visited[$stateKey] = true;
+
+      // Only delay actions convert transactional emails to marketing, as they introduce
+      // a significant time gap between the trigger event and email delivery.
+      // If new delay-like actions are added (e.g., "wait until date"), they should also be checked here.
+      if ($current->getKey() === DelayAction::KEY) {
+        $hasDelayOnPath = true;
+      }
+
+      if ($current->getId() === $to->getId()) {
+        if (!$hasDelayOnPath) {
+          return true;
+        }
+        continue;
+      }
+
+      foreach ($current->getNextStepIds() as $nextStepId) {
+        $nextStep = $steps[$nextStepId] ?? null;
+        if ($nextStep !== null) {
+          $stack[] = [$nextStep, $hasDelayOnPath];
+        }
+      }
+    }
+    return false;
   }
 
   private function automationHasWooCommerceTrigger(Automation $automation): bool {
@@ -548,7 +689,7 @@ class SendEmailAction implements Action {
 
   public function onDuplicate(Step $step): Step {
     $args = $step->getArgs();
-    $emailId = (int)$args['email_id'];
+    $emailId = (int)($args['email_id'] ?? 0);
     if (!$emailId) {
       // if the email is not yet designed, we don't need to duplicate it
       return $step;
@@ -570,6 +711,12 @@ class SendEmailAction implements Action {
 
     $args['email_id'] = $duplicatedNewsletter->getId();
     $args['subject'] = $duplicatedNewsletter->getSubject();
+    $wpPostId = $duplicatedNewsletter->getWpPostId();
+    if ($wpPostId) {
+      $args['email_wp_post_id'] = $wpPostId;
+    } else {
+      unset($args['email_wp_post_id']);
+    }
 
     return new Step(
       $step->getId(),

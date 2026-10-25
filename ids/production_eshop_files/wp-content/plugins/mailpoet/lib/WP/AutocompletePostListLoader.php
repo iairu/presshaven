@@ -28,6 +28,24 @@ class AutocompletePostListLoader {
     return $this->formatPosts($products);
   }
 
+  public function getVariableProducts() {
+    global $wpdb;
+
+    $products = $wpdb->get_results($wpdb->prepare(
+      "SELECT DISTINCT p.ID, p.post_title
+        FROM {$wpdb->posts} p
+        INNER JOIN {$wpdb->term_relationships} tr ON tr.object_id = p.ID
+        INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = %s
+        INNER JOIN {$wpdb->terms} t ON t.term_id = tt.term_id AND t.slug = %s
+        WHERE p.post_type = %s
+        ORDER BY p.post_title ASC;",
+      'product_type',
+      'variable',
+      'product'
+    ));
+    return $this->formatPosts($products);
+  }
+
   public function getMembershipPlans() {
     global $wpdb;
     $products = $wpdb->get_results($wpdb->prepare(
@@ -95,8 +113,11 @@ class AutocompletePostListLoader {
     if (!is_array($terms)) return []; // there can be instance of WP_Error instead of list of terms if woo commerce is not active
     $result = [];
     foreach ($terms as $term) {
+      if (!$term instanceof \WP_Term) {
+        continue;
+      }
       $result[] = [
-        'id' => (string)$term->term_id,// phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+        'id' => (string)$term->term_id, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         'name' => $term->name,
       ];
     }

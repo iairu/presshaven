@@ -8,26 +8,10 @@
 declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\Settings\Endpoint;
 
-use WooCommerce\PayPalCommerce\Axo\Gateway\AxoGateway;
-use WooCommerce\PayPalCommerce\Googlepay\GooglePayGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\BancontactGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\BlikGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\IDealGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\MultibancoGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\MyBankGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\P24Gateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\TrustlyGateway;
-use WooCommerce\PayPalCommerce\Settings\Data\PaymentSettings;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\CardButtonGateway;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\CreditCardGateway;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\OXXO\OXXO;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
-use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayUponInvoice\PayUponInvoiceGateway;
 use WP_REST_Server;
 use WP_REST_Response;
 use WP_REST_Request;
-use WooCommerce\PayPalCommerce\Applepay\ApplePayGateway;
-use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\EPSGateway;
+use WooCommerce\PayPalCommerce\Settings\Data\PaymentSettings;
 use WooCommerce\PayPalCommerce\Settings\Data\Definition\PaymentMethodsDefinition;
 use WooCommerce\PayPalCommerce\Settings\Data\Definition\PaymentMethodsDependenciesDefinition;
 /**
@@ -67,7 +51,7 @@ class PaymentRestEndpoint extends \WooCommerce\PayPalCommerce\Settings\Endpoint\
      *
      * @var array
      */
-    private array $field_map = array('paypal_show_logo' => array('js_name' => 'paypalShowLogo', 'sanitize' => 'to_boolean'), 'cardholder_name' => array('js_name' => 'cardholderName', 'sanitize' => 'to_boolean'), 'fastlane_display_watermark' => array('js_name' => 'fastlaneDisplayWatermark', 'sanitize' => 'to_boolean'));
+    private array $field_map = array('paypal_show_logo' => array('js_name' => 'paypalShowLogo', 'sanitize' => 'to_boolean'), 'cardholder_name' => array('js_name' => 'cardholderName', 'sanitize' => 'to_boolean'), 'show_card_logos' => array('js_name' => 'showCardLogos', 'sanitize' => 'to_boolean'), 'fastlane_display_watermark' => array('js_name' => 'fastlaneDisplayWatermark', 'sanitize' => 'to_boolean'), 'pui_brand_name' => array('js_name' => 'puiBrandName', 'sanitize' => 'sanitize_text_field'), 'pui_logo_url' => array('js_name' => 'puiLogoUrl', 'sanitize' => 'esc_url_raw'), 'pui_customer_service_instructions' => array('js_name' => 'puiCustomerServiceInstructions', 'sanitize' => 'sanitize_text_field'));
     /**
      * Constructor.
      *
@@ -131,7 +115,7 @@ class PaymentRestEndpoint extends \WooCommerce\PayPalCommerce\Settings\Endpoint\
             if ($key === '__meta') {
                 continue;
             }
-            $gateway_settings[$key] = array('id' => $payment_method['id'], 'title' => $payment_method['title'], 'description' => $payment_method['description'], 'enabled' => $payment_method['enabled'], 'icon' => $payment_method['icon'], 'itemTitle' => $payment_method['itemTitle'], 'itemDescription' => $payment_method['itemDescription'], 'warningMessages' => $payment_method['warningMessages']);
+            $gateway_settings[$key] = array('id' => $payment_method['id'], 'title' => $payment_method['title'], 'description' => $payment_method['description'], 'enabled' => $payment_method['enabled'], 'icon' => $payment_method['icon'], 'itemTitle' => $payment_method['itemTitle'], 'itemDescription' => $payment_method['itemDescription'], 'warningMessages' => $payment_method['warningMessages'], 'warningSeverity' => $payment_method['warningSeverity'] ?? 'warning');
             if (isset($payment_method['fields'])) {
                 $gateway_settings[$key]['fields'] = $payment_method['fields'];
             }
@@ -147,7 +131,11 @@ class PaymentRestEndpoint extends \WooCommerce\PayPalCommerce\Settings\Endpoint\
         }
         $gateway_settings['paypalShowLogo'] = $this->payment_settings->get_paypal_show_logo();
         $gateway_settings['cardholderName'] = $this->payment_settings->get_cardholder_name();
+        $gateway_settings['showCardLogos'] = $this->payment_settings->get_show_card_logos();
         $gateway_settings['fastlaneDisplayWatermark'] = $this->payment_settings->get_fastlane_display_watermark();
+        $gateway_settings['puiBrandName'] = $this->payment_settings->get_pui_brand_name();
+        $gateway_settings['puiLogoUrl'] = $this->payment_settings->get_pui_logo_url();
+        $gateway_settings['puiCustomerServiceInstructions'] = $this->payment_settings->get_pui_customer_service_instructions();
         return $this->return_success(apply_filters('woocommerce_paypal_payments_payment_methods', $gateway_settings));
     }
     /**
@@ -161,6 +149,9 @@ class PaymentRestEndpoint extends \WooCommerce\PayPalCommerce\Settings\Endpoint\
     {
         $request_data = $request->get_params();
         $all_methods = $this->gateways();
+        // Process field_map values first so PUI fields are available for validation.
+        $wp_data = $this->sanitize_for_wordpress($request->get_params(), $this->field_map);
+        $this->payment_settings->from_array($wp_data);
         foreach ($all_methods as $key => $value) {
             $new_data = $request_data[$key] ?? null;
             if (!$new_data) {
@@ -176,8 +167,6 @@ class PaymentRestEndpoint extends \WooCommerce\PayPalCommerce\Settings\Endpoint\
                 $this->payment_settings->set_method_description($key, wp_kses_post($new_data['description']));
             }
         }
-        $wp_data = $this->sanitize_for_wordpress($request->get_params(), $this->field_map);
-        $this->payment_settings->from_array($wp_data);
         $this->payment_settings->save();
         return $this->get_details();
     }

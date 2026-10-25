@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react';
 import debounce from 'lodash.debounce';
-import { ActionTypes, doApiFetch } from '@Store';
+import { ActionTypes, doApiFetch, useStateValue } from '@Store';
 
 /**
  * Custom hook to dispatch debounced setting updates.
@@ -19,20 +19,41 @@ const useDebounceDispatch = (
 	delay = 400,
 	showToast = false
 ) => {
-	const debounced = useRef(
-		debounce( ( value ) => {
+	const [ state ] = useStateValue();
+
+	// The debounced function outlives a render, so it reads these instead of closing over them.
+	const latest = useRef( {} );
+	latest.current = { dispatch, optionName, onSuccess, showToast };
+
+	// The last value the server accepted, so a refused save can put the field back. It stays
+	// undefined for an option that was never saved, which puts the field back to unset.
+	const confirmed = useRef( {
+		value: state?.settingsData?.values?.[ optionName ],
+	} );
+
+	// Saves are numbered so responses that come back out of order can't undo a newer save.
+	const lastSent = useRef( 0 );
+	const lastConfirmed = useRef( 0 );
+
+	const debounced = useRef( null );
+	if ( ! debounced.current ) {
+		debounced.current = debounce( ( value ) => {
+			const current = latest.current;
+			lastSent.current += 1;
+			const request = lastSent.current;
+
 			// Update the state with the new value
-			dispatch( {
+			current.dispatch( {
 				type: ActionTypes.UPDATE_SETTINGS_DATA,
 				payload: {
-					option: optionName,
+					option: current.optionName,
 					value,
 				},
 			} );
 			const formData = new window.FormData();
 
 			// Set the full option name in the form data
-			formData.append( 'option_name', optionName );
+			formData.append( 'option_name', current.optionName );
 			if ( Array.isArray( value ) ) {
 				value.forEach( ( v ) => formData.append( 'value[]', v ) );
 			} else {
@@ -46,21 +67,45 @@ const useDebounceDispatch = (
 
 			const ajaxUrl = cart_abandonment_admin?.ajax_url || window.ajaxurl;
 
+			// A newer save is on its way and its own response decides what the field shows.
+			const revert = () => {
+				if ( request !== lastSent.current ) {
+					return;
+				}
+				current.dispatch( {
+					type: ActionTypes.UPDATE_SETTINGS_DATA,
+					payload: {
+						option: current.optionName,
+						value: confirmed.current.value,
+					},
+				} );
+			};
+
 			doApiFetch(
 				ajaxUrl,
 				formData,
 				'POST',
-				() => {
-					if ( onSuccess ) {
-						onSuccess();
+				( response ) => {
+					if ( response?.success === false ) {
+						revert();
+						return;
+					}
+					if ( request > lastConfirmed.current ) {
+						lastConfirmed.current = request;
+						confirmed.current.value = value;
+					}
+					if ( current.onSuccess ) {
+						current.onSuccess();
 					}
 				},
-				undefined,
+				revert,
 				true,
-				showToast
-			);
-		}, delay )
-	);
+				current.showToast
+			).catch( () => {
+				// doApiFetch has already reported the failure through onError.
+			} );
+		}, delay );
+	}
 
 	return useCallback(
 		( value ) => debounced.current( value ),

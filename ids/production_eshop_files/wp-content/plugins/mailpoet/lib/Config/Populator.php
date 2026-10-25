@@ -10,12 +10,13 @@ use MailPoet\Captcha\CaptchaRenderer;
 use MailPoet\Cron\CronTrigger;
 use MailPoet\Cron\Workers\AuthorizedSendingEmailsCheck;
 use MailPoet\Cron\Workers\BackfillEngagementData;
-use MailPoet\Cron\Workers\InactiveSubscribers;
+use MailPoet\Cron\Workers\InactiveSubscribersMaintenance;
 use MailPoet\Cron\Workers\Mixpanel;
 use MailPoet\Cron\Workers\NewsletterTemplateThumbnails;
 use MailPoet\Cron\Workers\StatsNotifications\Worker;
 use MailPoet\Cron\Workers\SubscriberLinkTokens;
 use MailPoet\Cron\Workers\SubscribersLastEngagement;
+use MailPoet\Cron\Workers\SubscribersSegmentsCountSync;
 use MailPoet\Cron\Workers\Tracks;
 use MailPoet\Cron\Workers\UnsubscribeTokens;
 use MailPoet\Doctrine\WPDB\Connection;
@@ -156,6 +157,7 @@ class Populator {
       'FarmersMarket',
       'ConfirmInterestBeforeDeactivation',
       'ConfirmInterestOrUnsubscribe',
+      'BirthdayCelebration',
     ];
     $this->entityManager = $entityManager;
     $this->scheduledTasksRepository = $scheduledTasksRepository;
@@ -183,6 +185,7 @@ class Populator {
     $this->scheduleSubscriberLastEngagementDetection();
     $this->scheduleNewsletterTemplateThumbnails();
     $this->scheduleBackfillEngagementData();
+    $this->scheduleSubscribersSegmentsCountSync();
     $this->scheduleMixpanel();
     $this->scheduleTracks();
   }
@@ -220,7 +223,9 @@ class Populator {
       $captchaPageId = $captchaPage->ID;
     }
 
-    $this->settings->set('subscription.pages.captcha', $captchaPageId);
+    if (empty($this->settings->get('subscription.pages.captcha'))) {
+      $this->settings->set('subscription.pages.captcha', $captchaPageId);
+    }
   }
 
   private function createDefaultSettings() {
@@ -282,6 +287,8 @@ class Populator {
         'type' => $captchaType,
         'recaptcha_site_token' => !empty($reCaptcha['site_token']) ? $reCaptcha['site_token'] : '',
         'recaptcha_secret_token' => !empty($reCaptcha['secret_token']) ? $reCaptcha['secret_token'] : '',
+        'turnstile_site_token' => '',
+        'turnstile_secret_token' => '',
       ]);
     }
 
@@ -316,6 +323,11 @@ class Populator {
     } elseif (isset($woocommerceOptinOnCheckout['message']) && $woocommerceOptinOnCheckout['message'] === $legacyLabelText) {
       $this->settings->set('woocommerce.optin_on_checkout.message', $currentLabelText);
     }
+
+    if ($this->settings->get('editor_choice_modal.enabled') === null) {
+      $this->settings->set('editor_choice_modal.enabled', empty($settingsDbVersion)); // enable on new installs only
+    }
+
     // reset mailer log
     MailerLog::resetMailerLog();
   }
@@ -496,12 +508,32 @@ class Populator {
         'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
       ],
       [
+        'name' => NewsletterOptionFieldEntity::NAME_SCHEDULE_MODE,
+        'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
+      ],
+      [
+        'name' => NewsletterOptionFieldEntity::NAME_SCHEDULED_LOCAL_DATE,
+        'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
+      ],
+      [
+        'name' => NewsletterOptionFieldEntity::NAME_SCHEDULED_LOCAL_TIME,
+        'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
+      ],
+      [
+        'name' => NewsletterOptionFieldEntity::NAME_EXCLUDE_FROM_ARCHIVE,
+        'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
+      ],
+      [
         'name' => NewsletterOptionFieldEntity::NAME_FILTER_SEGMENT_ID,
         'newsletter_type' => NewsletterEntity::TYPE_RE_ENGAGEMENT,
       ],
       [
         'name' => NewsletterOptionFieldEntity::NAME_FILTER_SEGMENT_ID,
         'newsletter_type' => NewsletterEntity::TYPE_NOTIFICATION,
+      ],
+      [
+        'name' => NewsletterOptionFieldEntity::NAME_SHARE_VISIBILITY,
+        'newsletter_type' => NewsletterEntity::TYPE_STANDARD,
       ],
     ];
 
@@ -540,6 +572,7 @@ class Populator {
     foreach ($this->templates as $template) {
       $template = self::TEMPLATES_NAMESPACE . $template;
       $template = new $template(Env::$assetsUrl);
+      // @phpstan-ignore method.notFound (template classes live under PopulatorData/Templates which is excluded from analysis; each declares its own get())
       $templates[] = $template->get();
     }
 
@@ -651,7 +684,7 @@ class Populator {
 
   private function scheduleInitialInactiveSubscribersCheck() {
     $this->scheduleTask(
-      InactiveSubscribers::TASK_TYPE,
+      InactiveSubscribersMaintenance::TASK_TYPE,
       Carbon::now()->millisecond(0)->addHour()
     );
   }
@@ -736,17 +769,35 @@ class Populator {
   }
 
   private function scheduleBackfillEngagementData(): void {
+    $this->scheduleOneTimeBackfillTask(BackfillEngagementData::TASK_TYPE);
+  }
+
+  private function scheduleSubscribersSegmentsCountSync(): void {
+    $this->scheduleOneTimeBackfillTask(SubscribersSegmentsCountSync::TASK_TYPE);
+  }
+
+  /**
+   * Schedule a one-time backfill task unless a healthy instance already exists.
+   * Uses an allowlist of healthy statuses rather than finding any task, so a
+   * failed or cancelled task does not permanently block re-scheduling.
+   */
+  private function scheduleOneTimeBackfillTask(string $type): void {
     $existingTask = $this->scheduledTasksRepository->findOneBy(
       [
-        'type' => BackfillEngagementData::TASK_TYPE,
+        'type' => $type,
+        'status' => [
+          ScheduledTaskEntity::STATUS_SCHEDULED,
+          null, // running (stored as null for historical reasons)
+          ScheduledTaskEntity::STATUS_COMPLETED,
+          ScheduledTaskEntity::STATUS_PAUSED,
+          ScheduledTaskEntity::STATUS_CLI,
+        ],
       ]
     );
+
     if ($existingTask) {
       return;
     }
-    $this->scheduleTask(
-      BackfillEngagementData::TASK_TYPE,
-      Carbon::now()->millisecond(0)
-    );
+    $this->scheduleTask($type, Carbon::now()->millisecond(0));
   }
 }

@@ -18,24 +18,18 @@ use MailPoet\Doctrine\Validator\ValidationException;
 use MailPoet\Entities\SegmentEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Form\FormsRepository;
-use MailPoet\Listing;
 use MailPoet\Newsletter\Segment\NewsletterSegmentRepository;
-use MailPoet\Segments\SegmentListingRepository;
 use MailPoet\Segments\SegmentSaveController;
 use MailPoet\Segments\SegmentsRepository;
 use MailPoet\Segments\SegmentSubscribersRepository;
-use MailPoet\Segments\WooCommerce;
 use MailPoet\Segments\WP;
 use MailPoet\Subscribers\SubscribersRepository;
-use MailPoet\UnexpectedValueException;
+use Throwable;
 
 class Segments extends APIEndpoint {
   public $permissions = [
     'global' => AccessControl::PERMISSION_MANAGE_SEGMENTS,
   ];
-
-  /** @var Listing\Handler */
-  private $listingHandler;
 
   /** @var SegmentsRepository */
   private $segmentsRepository;
@@ -49,14 +43,8 @@ class Segments extends APIEndpoint {
   /** @var SubscribersRepository */
   private $subscribersRepository;
 
-  /** @var WooCommerce */
-  private $wooCommerceSync;
-
   /** @var WP */
   private $wpSegment;
-
-  /** @var SegmentListingRepository */
-  private $segmentListingRepository;
 
   /** @var NewsletterSegmentRepository */
   private $newsletterSegmentRepository;
@@ -71,27 +59,21 @@ class Segments extends APIEndpoint {
   private $segmentSubscribersRepository;
 
   public function __construct(
-    Listing\Handler $listingHandler,
     SegmentsRepository $segmentsRepository,
-    SegmentListingRepository $segmentListingRepository,
     SegmentsResponseBuilder $segmentsResponseBuilder,
     SegmentSaveController $segmentSavecontroller,
     SegmentSubscribersRepository $segmentSubscribersRepository,
     SubscribersRepository $subscribersRepository,
-    WooCommerce $wooCommerce,
     WP $wpSegment,
     NewsletterSegmentRepository $newsletterSegmentRepository,
     CronWorkerScheduler $cronWorkerScheduler,
     FormsRepository $formsRepository
   ) {
-    $this->listingHandler = $listingHandler;
-    $this->wooCommerceSync = $wooCommerce;
     $this->segmentsRepository = $segmentsRepository;
     $this->segmentsResponseBuilder = $segmentsResponseBuilder;
     $this->segmentSavecontroller = $segmentSavecontroller;
     $this->subscribersRepository = $subscribersRepository;
     $this->wpSegment = $wpSegment;
-    $this->segmentListingRepository = $segmentListingRepository;
     $this->newsletterSegmentRepository = $newsletterSegmentRepository;
     $this->cronWorkerScheduler = $cronWorkerScheduler;
     $this->formsRepository = $formsRepository;
@@ -110,26 +92,13 @@ class Segments extends APIEndpoint {
     }
   }
 
-  public function listing($data = []) {
-    $data['params'] = $data['params'] ?? ['lists']; // Dummy param to apply constraints properly
-    $definition = $this->listingHandler->getListingDefinition($data);
-    $items = $this->segmentListingRepository->getData($definition);
-    $count = $this->segmentListingRepository->getCount($definition);
-    $filters = $this->segmentListingRepository->getFilters($definition);
-    $groups = $this->segmentListingRepository->getGroups($definition);
-    $segments = $this->segmentsResponseBuilder->buildForListing($items);
-
-    return $this->successResponse($segments, [
-      'count' => $count,
-      'filters' => $filters,
-      'groups' => $groups,
-    ]);
-  }
-
   public function save($data = []) {
     try {
       $data['name'] = isset($data['name']) ? sanitize_text_field($data['name']) : '';
       $data['description'] = isset($data['description']) ? sanitize_textarea_field($data['description']) : '';
+      if (array_key_exists('public_description', $data)) {
+        $data['public_description'] = sanitize_textarea_field((string)$data['public_description']);
+      }
       $segment = $this->segmentSavecontroller->save($data);
     } catch (ValidationException $exception) {
       return $this->badRequest([
@@ -195,7 +164,7 @@ class Segments extends APIEndpoint {
         APIError::BAD_REQUEST => str_replace(
           '%1$s',
           "'" . join("', '", $activelyUsedNewslettersSubjects[$segment->getId()]) . "'",
-          // translators: %1$s is a comma-seperated list of emails for which the segment is used.
+          // translators: %1$s is a comma-separated list of emails for which the segment is used.
           _x('List cannot be deleted because it’s used for %1$s email', 'Alert shown when trying to delete segment, which is assigned to any automatic emails.', 'mailpoet')
         ),
       ]);
@@ -207,7 +176,7 @@ class Segments extends APIEndpoint {
         APIError::BAD_REQUEST => str_replace(
           '%1$s',
           "'" . join("', '", $activelyUsedFormNames[$segment->getId()]) . "'",
-          // translators: %1$s is a comma-seperated list of forms for which the segment is used.
+          // translators: %1$s is a comma-separated list of forms for which the segment is used.
           _nx(
             'List cannot be deleted because it’s used for %1$s form',
             'List cannot be deleted because it’s used for %1$s forms',
@@ -286,23 +255,6 @@ class Segments extends APIEndpoint {
     return $this->successResponse(null);
   }
 
-  public function bulkAction($data = []) {
-    $definition = $this->listingHandler->getListingDefinition($data['listing']);
-    $ids = $this->segmentListingRepository->getActionableIds($definition);
-    $count = 0;
-    if ($data['action'] === 'trash') {
-      $count = $this->segmentsRepository->bulkTrash($ids);
-    } elseif ($data['action'] === 'restore') {
-      $count = $this->segmentsRepository->bulkRestore($ids);
-    } elseif ($data['action'] === 'delete') {
-      $count = $this->segmentsRepository->bulkDelete($ids);
-    } else {
-      throw UnexpectedValueException::create()
-        ->withErrors([APIError::BAD_REQUEST => "Invalid bulk action '{$data['action']}' provided."]);
-    }
-    return $this->successResponse(null, ['count' => $count]);
-  }
-
   public function subscriberCount($data = []) {
     $segmentIds = $data['segmentIds'] ?? [];
     if (empty($segmentIds)) {
@@ -310,9 +262,26 @@ class Segments extends APIEndpoint {
         APIError::BAD_REQUEST => __('No segment IDs provided.', 'mailpoet'),
       ]);
     }
-    $filterSegmentId = $data['filterSegmentId'] ?? null;
+    // filterSegmentId arrives as a string (it can come straight from a URL query
+    // param). Empty and 0 mean "no filter segment"; anything else must be a valid
+    // positive segment id, otherwise the count would be silently wrong.
+    $filterSegmentId = null;
+    if (!empty($data['filterSegmentId'])) {
+      $filterSegmentId = filter_var($data['filterSegmentId'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+      if ($filterSegmentId === false) {
+        return $this->badRequest([
+          APIError::BAD_REQUEST => __('Invalid filter segment.', 'mailpoet'),
+        ]);
+      }
+    }
     $status = $data['status'] ?? SubscriberEntity::STATUS_SUBSCRIBED;
-    $response['count'] = $this->segmentSubscribersRepository->getSubscribersCountBySegmentIds($segmentIds, $status, $filterSegmentId);
+    try {
+      $response['count'] = $this->segmentSubscribersRepository->getSubscribersCountBySegmentIds($segmentIds, $status, $filterSegmentId);
+    } catch (Throwable $e) {
+      return $this->errorResponse([
+        APIError::UNKNOWN => __('The recipient count could not be calculated.', 'mailpoet'),
+      ], [], Response::STATUS_UNKNOWN);
+    }
 
     return $this->successResponse($response);
   }

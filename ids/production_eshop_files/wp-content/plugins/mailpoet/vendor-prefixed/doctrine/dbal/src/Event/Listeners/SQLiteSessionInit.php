@@ -7,12 +7,12 @@ use MailPoetVendor\Doctrine\DBAL\Events;
 use MailPoetVendor\Doctrine\DBAL\Exception;
 class SQLiteSessionInit implements EventSubscriber
 {
- public function postConnect(ConnectionEventArgs $args)
- {
- $args->getConnection()->executeStatement('PRAGMA foreign_keys=ON');
- }
- public function getSubscribedEvents()
- {
- return [Events::postConnect];
- }
+public function postConnect(ConnectionEventArgs $args)
+{
+$args->getConnection()->executeStatement('PRAGMA foreign_keys=ON');
+}
+public function getSubscribedEvents()
+{
+return [Events::postConnect];
+}
 }

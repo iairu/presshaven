@@ -9,8 +9,7 @@ use MailPoet\Newsletter\Renderer\Blocks\Coupon;
 
 class NewsletterCoupon {
   public function cleanupBodySensitiveData(array $newsletterBody): array {
-
-    if (!is_array($newsletterBody) || empty($newsletterBody['content'])) {
+    if (empty($newsletterBody['content'])) {
       return $newsletterBody;
     }
     $cleanBlocks = $this->cleanupCouponBlocks($newsletterBody['content']['blocks']);

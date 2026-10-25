@@ -19,7 +19,7 @@ class Url {
 
   public function getCurrentUrl() {
     $homeUrl = parse_url($this->wp->homeUrl());
-    $queryArgs = $this->wp->addQueryArg(null, null);
+    $queryArgs = $this->wp->addQueryArg([]);
 
     // Remove $this->wp->homeUrl() path from add_query_arg
     if (
@@ -39,7 +39,7 @@ class Url {
 
   public function redirectBack($params = []) {
     // check mailpoet_redirect parameter
-    $referer = (isset($_POST['mailpoet_redirect'])
+    $referer = (isset($_POST['mailpoet_redirect']) && is_string($_POST['mailpoet_redirect'])
       ? sanitize_text_field(wp_unslash($_POST['mailpoet_redirect']))
       : $this->wp->wpGetReferer()
     );

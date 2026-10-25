@@ -48,7 +48,7 @@ class __TwigTemplate_fabd1248ff21b91584686f92b4c5275cf43b599b650065f182e5564d092
     </div>
     <div class=\"clearfix\"></div>
     <div class=\"mailpoet_editor_messages\">
-        <div class=\"mailpoet_save_error\"></div>
+        <div class=\"mailpoet_save_error\" aria-live=\"polite\"></div>
         <div class=\"mailpoet_editor_last_saved\">
             &nbsp;
             <span class=\"mailpoet_autosaved_message mailpoet_hidden\">";
@@ -92,7 +92,7 @@ class __TwigTemplate_fabd1248ff21b91584686f92b4c5275cf43b599b650065f182e5564d092
     </div>
     <div class=\"clearfix\"></div>
     <div class=\"mailpoet_editor_messages_confirmation_email\">
-      <div class=\"mailpoet_save_error\"></div>
+      <div class=\"mailpoet_save_error\" aria-live=\"polite\"></div>
       <div class=\"mailpoet_editor_last_saved\">
         &nbsp;
         <span class=\"mailpoet_autosaved_message mailpoet_hidden\">";
@@ -131,7 +131,7 @@ class __TwigTemplate_fabd1248ff21b91584686f92b4c5275cf43b599b650065f182e5564d092
     </div>
     <div class=\"clearfix\"></div>
     <div class=\"mailpoet_editor_messages\">
-        <div class=\"mailpoet_save_error\"></div>
+        <div class=\"mailpoet_save_error\" aria-live=\"polite\"></div>
         <div class=\"mailpoet_editor_last_saved\">
             &nbsp;
             <span class=\"mailpoet_autosaved_message mailpoet_hidden\">";

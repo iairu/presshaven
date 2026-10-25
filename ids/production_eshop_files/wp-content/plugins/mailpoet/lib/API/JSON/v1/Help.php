@@ -9,6 +9,7 @@ use MailPoet\API\JSON\Endpoint as APIEndpoint;
 use MailPoet\API\JSON\Error as APIError;
 use MailPoet\API\JSON\Response;
 use MailPoet\Config\AccessControl;
+use MailPoet\Cron\Workers\SendingQueue\SendingQueue;
 use MailPoet\Entities\ScheduledTaskEntity;
 use MailPoet\Newsletter\Sending\ScheduledTasksRepository;
 use MailPoet\Util\DataInconsistency\DataInconsistencyController;
@@ -35,7 +36,7 @@ class Help extends APIEndpoint {
       $this->validateTaskId($data);
 
       $task = $this->scheduledTasksRepository->findOneById($data['id']);
-      if (!$task instanceof ScheduledTaskEntity) {
+      if (!$task instanceof ScheduledTaskEntity || $task->getType() !== SendingQueue::TASK_TYPE) {
         return $this->errorResponse([
           APIError::NOT_FOUND => __('Task not found.', 'mailpoet'),
         ]);
@@ -53,7 +54,7 @@ class Help extends APIEndpoint {
       $this->validateTaskId($data);
 
       $task = $this->scheduledTasksRepository->findOneById($data['id']);
-      if (!$task instanceof ScheduledTaskEntity) {
+      if (!$task instanceof ScheduledTaskEntity || $task->getType() !== SendingQueue::TASK_TYPE) {
         return $this->errorResponse([
           APIError::NOT_FOUND => __('Task not found.', 'mailpoet'),
         ]);

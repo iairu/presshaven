@@ -7,5 +7,5 @@ use MailPoetVendor\Doctrine\DBAL\Exception\DriverException;
 use MailPoetVendor\Doctrine\DBAL\Query;
 interface ExceptionConverter
 {
- public function convert(Exception $exception, ?Query $query) : DriverException;
+public function convert(Exception $exception, ?Query $query): DriverException;
 }

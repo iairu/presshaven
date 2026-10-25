@@ -6,6 +6,7 @@ import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useStateValue, doApiFetch } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 import AppTooltip from '@Components/common/AppTooltip';
 
@@ -22,6 +23,7 @@ const DynamicSelectField = ( {
 	disableStyle,
 	isPro = false,
 	proUpgradeMessage = '',
+	error,
 } ) => {
 	const [ state, dispatch ] = useStateValue();
 	const { shouldBlockProFeatures } = useProAccess();
@@ -93,9 +95,9 @@ const DynamicSelectField = ( {
 				}
 				setIsLoading( false );
 			},
-			( error ) => {
+			( requestError ) => {
 				toast.error( __( 'Error', 'woo-cart-abandonment-recovery' ), {
-					description: error.data?.message || '',
+					description: requestError.data?.message || '',
 				} );
 				setIsLoading( false );
 			},
@@ -128,10 +130,13 @@ const DynamicSelectField = ( {
 		}
 	}
 
+	const a11y = useFieldA11y( { description, error } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			disableStyle={ disableStyle }
 			isPro={ isPro }
@@ -140,6 +145,7 @@ const DynamicSelectField = ( {
 			<div className="flex gap-2 items-center">
 				<div className="flex-1">
 					<Select
+						id={ a11y.id }
 						onChange={ handleOnChange }
 						size="md"
 						name={ name }
@@ -147,9 +153,14 @@ const DynamicSelectField = ( {
 						disabled={ isPro && isFeatureBlocked }
 					>
 						<Select.Button
+							{ ...( a11y.controlProps[ 'aria-describedby' ] && {
+								'aria-describedby':
+									a11y.controlProps[ 'aria-describedby' ],
+							} ) }
+							aria-invalid={ a11y.controlProps[ 'aria-invalid' ] }
 							className="whitespace-nowrap"
 							placeholder={
-								placeholder ??
+								placeholder ||
 								__(
 									'Select an option',
 									'woo-cart-abandonment-recovery'
@@ -167,24 +178,25 @@ const DynamicSelectField = ( {
 							) ) }
 						</Select.Options>
 					</Select>
+					<FieldError id={ a11y.errorId }>{ error }</FieldError>
 				</div>
-				<AppTooltip content="Refresh Options" arrow placement="top">
-					<span
-						className={ `${
-							isLoading
-								? 'text-gray-400 cursor-not-allowed opacity-60 pointer-events-none'
-								: 'cursor-pointer'
-						} ` }
+				<AppTooltip
+					content={ __(
+						'Refresh Options',
+						'woo-cart-abandonment-recovery'
+					) }
+					arrow
+					placement="top"
+				>
+					<button
+						type="button"
+						className="m-0 inline-flex items-center justify-center rounded border-0 bg-transparent p-2 text-inherit cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
 						onClick={ fetchOptions }
-						onKeyDown={ ( e ) =>
-							e.key === 'Enter' && fetchOptions()
-						}
+						disabled={ isLoading }
 						aria-label={ __(
 							'Refresh Options',
-							'modern-cart-woo'
+							'woo-cart-abandonment-recovery'
 						) }
-						role="button"
-						tabIndex="0"
 					>
 						<ArrowPathIcon
 							className={ `h-5 w-5 stroke-2 transform ${
@@ -192,7 +204,7 @@ const DynamicSelectField = ( {
 							} transition-transform duration-500` }
 							aria-hidden="true"
 						/>
-					</span>
+					</button>
 				</AppTooltip>
 			</div>
 		</FieldWrapper>

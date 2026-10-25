@@ -12,6 +12,13 @@ use MailPoet\Cron\ActionScheduler\RemoteExecutorHandler;
 use MailPoet\WP\Functions as WPFunctions;
 
 class DaemonActionSchedulerRunner {
+  public const DEACTIVATION_FLAG_OPTION = 'mailpoet_cron_deactivating';
+
+  // The flag guards a short race window while cron actions are being unscheduled.
+  // An older flag is stale — e.g. left behind by an update flow that died before
+  // rescheduling — and must not block the daemon trigger forever.
+  public const DEACTIVATION_FLAG_TTL = 5 * 60;
+
   /** @var ActionScheduler */
   private $actionScheduler;
 
@@ -52,7 +59,27 @@ class DaemonActionSchedulerRunner {
   }
 
   public function deactivate(): void {
+    // Set flag BEFORE unscheduling to prevent race condition with parallel requests
+    $this->wp->updateOption(self::DEACTIVATION_FLAG_OPTION, $this->wp->currentTime('timestamp', true));
     $this->actionScheduler->unscheduleAllCronActions();
+  }
+
+  public function clearDeactivationFlag(): void {
+    $this->wp->deleteOption(self::DEACTIVATION_FLAG_OPTION);
+  }
+
+  public function isDeactivating(): bool {
+    return self::isDeactivationFlagFresh($this->wp);
+  }
+
+  // Static so DaemonTrigger can use it without a circular dependency.
+  // Legacy boolean values are treated as stale timestamps and expire immediately.
+  public static function isDeactivationFlagFresh(WPFunctions $wp): bool {
+    $flagValue = $wp->getOption(self::DEACTIVATION_FLAG_OPTION, false);
+    if (!$flagValue) {
+      return false;
+    }
+    return (int)$flagValue > $wp->currentTime('timestamp', true) - self::DEACTIVATION_FLAG_TTL;
   }
 
   /**

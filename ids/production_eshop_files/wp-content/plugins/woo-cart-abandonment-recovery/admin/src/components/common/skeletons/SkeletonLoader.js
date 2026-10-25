@@ -9,7 +9,7 @@ import PropTypes from 'prop-types';
  * @param {string} props.className Additional class names for the skeleton loader
  * @return {JSX.Element} Skeleton loader component
  */
-const SkeletonLoader = ( { height, width, className } ) => {
+const SkeletonLoader = ( { height, width, className = '' } ) => {
 	return (
 		<div
 			className={ `animate-pulse bg-gray-200 rounded-md ${ className }` }

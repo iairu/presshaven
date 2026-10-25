@@ -42,22 +42,14 @@ class Changelog {
   }
 
   public function init() {
-    $doingAjax = (bool)(defined('DOING_AJAX') && DOING_AJAX);
-
     // don't run any check when it's an ajax request
-    if ($doingAjax) {
+    if (wp_doing_ajax()) {
       return;
     }
 
     // don't run any check when we're not on our pages
-    if (
-      !(isset($_GET['page']))
-      or
-      (isset($_GET['page']) && strpos(
-        sanitize_text_field(wp_unslash($_GET['page'])),
-        'mailpoet'
-      ) !== 0)
-    ) {
+    $page = $this->getPageSlug();
+    if ($page === '' || strpos($page, 'mailpoet') !== 0) {
       return;
     }
 
@@ -65,6 +57,13 @@ class Changelog {
       'admin_init',
       [$this, 'check']
     );
+  }
+
+  private function getPageSlug(): string {
+    if (!isset($_GET['page']) || !is_string($_GET['page'])) {
+      return '';
+    }
+    return sanitize_text_field(wp_unslash($_GET['page']));
   }
 
   public function check() {
@@ -128,22 +127,23 @@ class Changelog {
   }
 
   private function isWelcomeWizardPage() {
-    return isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === Menu::WELCOME_WIZARD_PAGE_SLUG;
+    return $this->getPageSlug() === Menu::WELCOME_WIZARD_PAGE_SLUG;
   }
 
   private function isLandingPage() {
-    return isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === Menu::LANDINGPAGE_PAGE_SLUG;
+    return $this->getPageSlug() === Menu::LANDINGPAGE_PAGE_SLUG;
   }
 
   private function isExperimentalPage() {
-    return isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === Menu::EXPERIMENTS_PAGE_SLUG;
+    return $this->getPageSlug() === Menu::EXPERIMENTS_PAGE_SLUG;
   }
 
   private function checkWooCommerceListImportPage() {
+    $page = $this->getPageSlug();
     if (
-      !isset($_GET['page']) ||
+      $page === '' ||
       !in_array(
-        sanitize_text_field(wp_unslash($_GET['page'])),
+        $page,
         [
           'mailpoet-woocommerce-setup',
           'mailpoet-welcome-wizard',
@@ -158,10 +158,11 @@ class Changelog {
   }
 
   private function checkRevenueTrackingPermissionPage() {
+    $page = $this->getPageSlug();
     if (
-      !isset($_GET['page']) ||
+      $page === '' ||
       !in_array(
-        sanitize_text_field(wp_unslash($_GET['page'])),
+        $page,
         [
           'mailpoet-woocommerce-setup',
           'mailpoet-welcome-wizard',

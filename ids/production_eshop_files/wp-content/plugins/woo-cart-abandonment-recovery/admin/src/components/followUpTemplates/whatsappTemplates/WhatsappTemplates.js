@@ -1,230 +1,72 @@
-import { useState, useEffect } from 'react';
-import { Table, Input, Button, Switch, toast } from '@bsf/force-ui';
+import { useState } from 'react';
+import { Table } from '@bsf/force-ui';
 import { __, sprintf } from '@wordpress/i18n';
-import {
-	TrashIcon,
-	MagnifyingGlassIcon,
-	PlusIcon,
-	XMarkIcon,
-	PencilIcon,
-	DocumentDuplicateIcon,
-	ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
-import { doApiFetch } from '@Store';
-import { useProAccess } from '@Components/pro/useProAccess';
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 
-import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
-import { EmptyBlock } from '@Components/common/empty-blocks';
-import AppTooltip from '@Components/common/AppTooltip';
-import ConfirmationModal from '@Components/common/ConfirmationModal';
+import ConfirmDialog from '@Components/common/ConfirmDialog';
 import WhatsappTemplatesDrawer from './WhatsappTemplatesDrawer';
 import WhatsappPreview from './WhatsappPreview';
-import TemplatesNav from '../TemplatesNav';
+import TemplateNameButton from '../shared/TemplateNameButton';
+import TemplateRowActions from '../shared/TemplateRowActions';
+import TemplateStatusSwitch from '../shared/TemplateStatusSwitch';
+import TemplatesTableSkeleton from '../shared/TemplatesTableSkeleton';
+import TemplatesToolbar from '../shared/TemplatesToolbar';
+import {
+	TemplatesEmptyState,
+	TemplatesLoadError,
+	TemplatesNoMatchRow,
+} from '../shared/TemplatesStates';
+import useTemplatesList from '../shared/useTemplatesList';
+import {
+	formatDuration,
+	getRowClass,
+	TEMPLATES_TABLE_CLASS,
+} from '../shared/utils';
+import { useProAccess } from '@Components/pro/useProAccess';
+
+// Columns: checkbox, name, trigger, 3 metrics, status, actions.
+const COLUMN_COUNT = 8;
+
+const LIST_CONFIG = {
+	fetchPath: '/wcar-pro/api/admin/whatsapp-template',
+	fetchMethod: 'GET',
+	actions: {
+		delete: {
+			action: 'wcar_pro_delete_whatsapp_template',
+			nonce: 'delete_whatsapp_template_nonce',
+		},
+		status: {
+			action: 'wcar_pro_update_whatsapp_template_status',
+			nonce: 'update_whatsapp_template_status_nonce',
+		},
+		clone: {
+			action: 'wcar_pro_clone_whatsapp_template',
+			nonce: 'clone_whatsapp_template_nonce',
+		},
+	},
+};
+
+const formatRate = ( rate ) => ( rate ? `${ rate }%` : '-' );
+
+const MetricHeadCell = ( { label } ) => (
+	<Table.HeadCell>
+		<div className="flex items-center justify-center gap-1.5">
+			{ label }
+		</div>
+	</Table.HeadCell>
+);
 
 const WhatsappTemplates = () => {
-	const [ selected, setSelected ] = useState( [] );
-	const [ searchText, setSearchText ] = useState( '' );
-	const [ isLoading, setIsLoading ] = useState( true );
 	const [ open, setOpen ] = useState( false );
 	const [ template, setTemplate ] = useState( null );
-	const [ templates, setTemplates ] = useState( [] );
-	const [ deleteModal, setDeleteModal ] = useState( {
-		isOpen: false,
-		type: null,
-		id: null,
-	} );
-	const [ isDeleting, setIsDeleting ] = useState( false );
 	const { shouldBlockProFeatures } = useProAccess();
 	const isFeatureBlocked = shouldBlockProFeatures();
 
-	useEffect( () => {
-		if ( ! isFeatureBlocked ) {
-			fetchWhatsappTemplates();
-		} else {
-			setIsLoading( false );
-		}
-	}, [] );
-
-	const fetchWhatsappTemplates = async () => {
-		try {
-			await doApiFetch(
-				'/wcar-pro/api/admin/whatsapp-template',
-				{},
-				'GET',
-				( response ) => {
-					setTemplates( response );
-					setIsLoading( false );
-				},
-				( error ) => {
-					console.error(
-						'Error fetching whatsapp templates:',
-						error
-					);
-					setIsLoading( false );
-				}
-			);
-		} catch ( error ) {
-			console.error( 'Error in fetching templates:', error );
-			setIsLoading( false );
-		}
-	};
-
-	const handleCheckboxChange = ( checked, value ) => {
-		if ( checked ) {
-			setSelected( [ ...selected, value.id ] );
-		} else {
-			setSelected( selected.filter( ( item ) => item !== value.id ) );
-		}
-	};
-
-	const toggleSelectAll = ( checked ) => {
-		if ( checked ) {
-			setSelected( filteredData.map( ( item ) => item.id ) );
-		} else {
-			setSelected( [] );
-		}
-	};
-
-	const handleSearch = ( value ) => {
-		setSearchText( value );
-	};
-
-	const filteredData = templates.filter( ( item ) =>
-		item.template_name.toLowerCase().includes( searchText.toLowerCase() )
-	);
-
-	// Handle delete trigger
-	const handleDeleteTrigger = () => {
-		if ( ! selected.length ) {
-			return;
-		}
-		setDeleteModal( { isOpen: true, type: 'bulk', id: null } );
-	};
-
-	// Handle bulk delete
-	const handleBulkDelete = () => {
-		setIsDeleting( true );
-		const ajaxUrl = cart_abandonment_admin?.ajax_url || window.ajaxurl;
-		const nonce = cart_abandonment_admin?.delete_whatsapp_template_nonce;
-
-		const formData = new window.FormData();
-		formData.append( 'action', 'wcar_pro_delete_whatsapp_template' );
-		selected.forEach( ( id ) => formData.append( 'ids[]', id ) );
-		formData.append( 'security', nonce );
-
-		doApiFetch(
-			ajaxUrl,
-			formData,
-			'POST',
-			( response ) => {
-				if ( response.success ) {
-					// Ensure both sides are numbers for comparison
-					const deletedIds = ( response.data?.ids || selected ).map(
-						Number
-					);
-					setTemplates( ( prev ) =>
-						prev.filter(
-							( tpl ) => ! deletedIds.includes( Number( tpl.id ) )
-						)
-					);
-					toast.success(
-						__(
-							'Template(s) deleted',
-							'woo-cart-abandonment-recovery'
-						)
-					);
-				} else {
-					toast.error(
-						__( 'Delete failed', 'woo-cart-abandonment-recovery' ),
-						{
-							description: response.data?.message || '',
-						}
-					);
-				}
-				setSelected( [] );
-				setIsDeleting( false );
-				setDeleteModal( { isOpen: false, type: null, id: null } );
-			},
-			( error ) => {
-				toast.error(
-					__( 'Delete failed', 'woo-cart-abandonment-recovery' ),
-					{
-						description: error?.message || '',
-					}
-				);
-				setSelected( [] );
-				setIsDeleting( false );
-				setDeleteModal( { isOpen: false, type: null, id: null } );
-			},
-			true
-		);
-	};
-
-	// Handle single delete
-	const handleSingleDelete = () => {
-		setIsDeleting( true );
-		const ajaxUrl = cart_abandonment_admin?.ajax_url || window.ajaxurl;
-		const nonce = cart_abandonment_admin?.delete_whatsapp_template_nonce;
-
-		const formData = new window.FormData();
-		formData.append( 'action', 'wcar_pro_delete_whatsapp_template' );
-		formData.append( 'ids[]', deleteModal.id );
-		formData.append( 'security', nonce );
-
-		doApiFetch(
-			ajaxUrl,
-			formData,
-			'POST',
-			( response ) => {
-				if ( response.success ) {
-					setTemplates( ( prev ) =>
-						prev.filter(
-							( tpl ) =>
-								Number( tpl.id ) !== Number( deleteModal.id )
-						)
-					);
-					toast.success(
-						__(
-							'Template deleted',
-							'woo-cart-abandonment-recovery'
-						)
-					);
-				} else {
-					toast.error(
-						__( 'Delete failed', 'woo-cart-abandonment-recovery' ),
-						{
-							description: response.data?.message || '',
-						}
-					);
-				}
-				setIsDeleting( false );
-				setDeleteModal( { isOpen: false, type: null, id: null } );
-			},
-			( error ) => {
-				toast.error(
-					__( 'Delete failed', 'woo-cart-abandonment-recovery' ),
-					{
-						description: error?.message || '',
-					}
-				);
-				setIsDeleting( false );
-				setDeleteModal( { isOpen: false, type: null, id: null } );
-			},
-			true
-		);
-	};
-
-	const handleConfirmDelete = () => {
-		if ( deleteModal.type === 'bulk' ) {
-			handleBulkDelete();
-		} else {
-			handleSingleDelete();
-		}
-	};
-
-	const handleCancelSelect = () => {
-		setSelected( [] );
-	};
+	const list = useTemplatesList( {
+		...LIST_CONFIG,
+		skipFetch: isFeatureBlocked,
+	} );
+	const { selected, deleteModal } = list;
 
 	const handleEdit = ( record ) => {
 		setTemplate( record );
@@ -236,170 +78,11 @@ const WhatsappTemplates = () => {
 		setOpen( true );
 	};
 
-	const handleToggleStatus = ( id, val ) => {
-		/* eslint-disable */
-		setTemplates( ( prev ) =>
-			prev.map( ( p ) =>
-				p.id === id
-					? {
-							...p,
-							is_activated: val === true ? 'on' : '',
-					  }
-					: p
-			)
-		);
-		/* eslint-enable */
-		const formData = new window.FormData();
-		formData.append( 'action', 'wcar_pro_update_whatsapp_template_status' );
-		formData.append(
-			'security',
-			cart_abandonment_admin?.update_whatsapp_template_status_nonce
-		);
-		formData.append( 'id', id );
-		// Send 1 for enabled, 0 for disabled
-		formData.append( 'state', val === true ? 1 : 0 );
-
-		doApiFetch(
-			cart_abandonment_admin?.ajax_url || window.ajaxurl,
-			formData,
-			'POST',
-			( response ) => {
-				if ( response.success ) {
-					setTemplates( ( prev ) =>
-						prev.map(
-							( tplat ) =>
-								/* eslint-disable */
-								tplat.id === id
-									? {
-											...tplat,
-											is_activated:
-												response.data.is_active ===
-													'1' ||
-												response.data.is_active === 1
-													? 'on'
-													: '',
-									  }
-									: tplat
-							/* eslint-enable */
-						)
-					);
-					toast.success( 'Success!', {
-						description: __(
-							'Template status updated successfully',
-							'woo-cart-abandonment-recovery'
-						),
-					} );
-				} else {
-					toast.error( 'Error!', {
-						description:
-							response.data?.message ||
-							__(
-								'Failed to update status',
-								'woo-cart-abandonment-recovery'
-							),
-					} );
-				}
-			},
-			( error ) => {
-				toast.error( 'Error!', {
-					description:
-						error?.message ||
-						__(
-							'Failed to update status',
-							'woo-cart-abandonment-recovery'
-						),
-				} );
-			},
-			true // useUrl: true for regular AJAX
-		);
-	};
-
-	const handleDuplicate = ( item ) => {
-		const formData = new window.FormData();
-		formData.append( 'action', 'wcar_pro_clone_whatsapp_template' );
-		formData.append(
-			'security',
-			cart_abandonment_admin?.clone_whatsapp_template_nonce
-		);
-		formData.append( 'id', item.id );
-
-		doApiFetch(
-			cart_abandonment_admin?.ajax_url || window.ajaxurl,
-			formData,
-			'POST',
-			( response ) => {
-				if ( response.success ) {
-					setTemplates( ( prev ) => [
-						...prev,
-						response.data.template,
-					] );
-					toast.success(
-						__(
-							'Template cloned successfully',
-							'woo-cart-abandonment-recovery'
-						)
-					);
-				} else {
-					toast.error(
-						__( 'Clone failed', 'woo-cart-abandonment-recovery' ),
-						{
-							description: response.data?.message || '',
-						}
-					);
-				}
-			},
-			( error ) => {
-				toast.error(
-					__( 'Clone failed', 'woo-cart-abandonment-recovery' ),
-					{
-						description: error?.message || '',
-					}
-				);
-			},
-			true
-		);
-	};
-
-	const handleDrawerSave = ( newOrUpdatedTemplate ) => {
-		// Add or update the template in state
-		const isCreate = ! templates.some(
-			( t ) => t.id === newOrUpdatedTemplate.id
-		);
-
-		setTemplates( ( prev ) => {
-			if ( isCreate ) {
-				return [ ...prev, newOrUpdatedTemplate ];
-			}
-			return prev.map( ( t ) =>
-				t.id === newOrUpdatedTemplate.id ? newOrUpdatedTemplate : t
-			);
-		} );
-
-		if ( isCreate ) {
+	const handleDrawerSave = ( saved ) => {
+		if ( list.upsertTemplate( saved ) ) {
 			setOpen( false );
 			setTemplate( null );
 		}
-	};
-
-	const truncateText = ( text, maxLength = 60 ) => {
-		return text.length > maxLength
-			? text.slice( 0, maxLength ) + '...'
-			: text;
-	};
-
-	const formatDuration = ( value, unit ) => {
-		const units = {
-			MINUTE: 'Minutes',
-			HOUR: 'Hours',
-			DAY: 'Days',
-		};
-		unit = units[ unit ];
-		const formattedUnit =
-			parseInt( value ) === 1
-				? unit.slice( 0, -1 ) // remove 's' for singular: "days" -> "day"
-				: unit;
-
-		return `${ value } ${ formattedUnit }`;
 	};
 
 	if ( isFeatureBlocked ) {
@@ -409,118 +92,99 @@ const WhatsappTemplates = () => {
 		);
 	}
 
+	let deleteTitle = __( 'Delete Template', 'woo-cart-abandonment-recovery' );
+	let deleteDescription = __(
+		'Are you sure you want to delete this template? This action cannot be undone.',
+		'woo-cart-abandonment-recovery'
+	);
+	if ( deleteModal.type === 'single' && deleteModal.name ) {
+		deleteDescription = sprintf(
+			/* translators: %s: template name */
+			__(
+				'Are you sure you want to delete “%s”? This action cannot be undone.',
+				'woo-cart-abandonment-recovery'
+			),
+			deleteModal.name
+		);
+	}
+	if ( deleteModal.type === 'bulk' ) {
+		deleteTitle = __(
+			'Delete Selected Templates',
+			'woo-cart-abandonment-recovery'
+		);
+		deleteDescription = sprintf(
+			/* translators: %d: number of selected templates */
+			__(
+				'Are you sure you want to delete %d selected template(s)? This action cannot be undone.',
+				'woo-cart-abandonment-recovery'
+			),
+			selected.length
+		);
+	}
+
 	return (
 		<>
-			<div className="flex flex-col md:flex-row gap-4 md:gap-0 justify-between relative">
-				<div className="flex flex-row flex-wrap gap-4 items-center">
-					<TemplatesNav currentTab="whatsapp" />
-					{ ! isLoading && selected.length > 0 && (
-						<div className="flex gap-4 items-center border-0 border-l border-solid border-gray-200">
-							<Button
-								variant="ghost"
-								icon={
-									<XMarkIcon className="h-6 w-6 text-gray-500" />
-								}
-								size="xs"
-								className="text-icon-secondary hover:text-icon-primary"
-								onClick={ handleCancelSelect }
-							/>
-							<span className="text-sm font-normal text-gray-500">
-								{ selected.length }{ ' ' }
-								{ __(
-									'Selected',
-									'woo-cart-abandonment-recovery'
-								) }
-							</span>
-							<Button
-								className="py-2 px-4 bg-red-50 text-red-600 outline-red-600 hover:bg-red-50 hover:outline-red-600"
-								size="sm"
-								tag="button"
-								type="button"
-								variant="outline"
-								icon={ <TrashIcon className="h-4 w-4" /> }
-								iconPosition="left"
-								onClick={ handleDeleteTrigger }
-							>
-								{ __(
-									'Delete',
-									'woo-cart-abandonment-recovery'
-								) }
-							</Button>
-						</div>
+			<TemplatesToolbar
+				currentTab="whatsapp"
+				isLoading={ list.isLoading }
+				selectedCount={ selected.length }
+				onClearSelection={ list.clearSelection }
+				onBulkDelete={ list.requestBulkDelete }
+				searchText={ list.searchText }
+				onSearch={ list.handleSearch }
+				onCreate={ handleCreateNew }
+			/>
+			{ list.isLoading && (
+				<TemplatesTableSkeleton
+					metricLabels={ [
+						__( 'Sent', 'woo-cart-abandonment-recovery' ),
+						__( 'Click Rate', 'woo-cart-abandonment-recovery' ),
+						__( 'Conversion Rate', 'woo-cart-abandonment-recovery' ),
+					] }
+				/>
+			) }
+			{ ! list.isLoading && list.loadError && (
+				<TemplatesLoadError
+					description={ __(
+						'Something went wrong while loading your WhatsApp templates. Check your connection and try again.',
+						'woo-cart-abandonment-recovery'
 					) }
-				</div>
-				<div className="flex flex-col md:flex-row gap-4">
-					<Input
-						placeholder={ __(
-							'Search…',
-							'woo-cart-abandonment-recovery'
-						) }
-						prefix={
-							<MagnifyingGlassIcon className="h-6 w-6 text-gray-500" />
-						}
-						size="md"
-						type="text"
-						aria-label={ __(
-							'Search',
-							'woo-cart-abandonment-recovery'
-						) }
-						value={ searchText }
-						onChange={ handleSearch }
-						className="w-full lg:w-52"
-						disabled={ isLoading }
-					/>
-					<Button
-						className=""
-						icon={ <PlusIcon aria-label="icon" role="img" /> }
-						iconPosition="left"
-						size="sm"
-						tag="button"
-						type="button"
-						variant="primary"
-						disabled={ isLoading || isFeatureBlocked }
-						onClick={ handleCreateNew }
-					>
-						{ __(
-							'Create New Template',
-							'woo-cart-abandonment-recovery'
-						) }
-					</Button>
-				</div>
-			</div>
-			{ isLoading ? (
-				<div className="flex flex-col gap-4">
-					<SkeletonLoader height="40px" />
-					{ [ ...Array( 5 ) ].map( ( _, index ) => (
-						<SkeletonLoader key={ index } height="50px" />
-					) ) }
-				</div>
-			) : templates.length === 0 ? (
-				<EmptyBlock
-					className="my-2"
+					onRetry={ list.retry }
+				/>
+			) }
+			{ ! list.isLoading &&
+				! list.loadError &&
+				list.templates.length === 0 && (
+				<TemplatesEmptyState
 					icon={
-						<ExclamationTriangleIcon className="h-12 w-12 text-yellow-500" />
+						<ChatBubbleLeftRightIcon
+							className="h-12 w-12 text-gray-400"
+							aria-hidden="true"
+						/>
 					}
 					title={ __(
-						'No Templates available',
+						'No WhatsApp templates yet',
 						'woo-cart-abandonment-recovery'
 					) }
 					description={ __(
-						'Follow Up WhatsApp Templates data will appear here after templates are created',
+						'Create a template to message shoppers on WhatsApp when they leave items in their cart.',
 						'woo-cart-abandonment-recovery'
 					) }
 				/>
-			) : (
+			) }
+			{ ! list.isLoading &&
+				! list.loadError &&
+				list.templates.length > 0 && (
 				<Table
 					checkboxSelection={ true }
-					className="whitespace-nowrap sm:whitespace-normal"
+					className={ TEMPLATES_TABLE_CLASS }
 				>
 					<Table.Head
 						selected={ selected.length > 0 }
-						onChangeSelection={ toggleSelectAll }
+						onChangeSelection={ list.toggleSelectAll }
 						indeterminate={
 							selected.length > 0 &&
-							selected.length < filteredData.length
+								selected.length < list.filteredData.length
 						}
 					>
 						<Table.HeadCell>
@@ -535,30 +199,24 @@ const WhatsappTemplates = () => {
 								'woo-cart-abandonment-recovery'
 							) }
 						</Table.HeadCell>
-						<Table.HeadCell>
-							<div className="flex items-center justify-center gap-1.5">
-								{ __(
-									'Sent',
-									'woo-cart-abandonment-recovery'
-								) }
-							</div>
-						</Table.HeadCell>
-						<Table.HeadCell>
-							<div className="flex items-center justify-center gap-1.5">
-								{ __(
-									'Click Rate',
-									'woo-cart-abandonment-recovery'
-								) }
-							</div>
-						</Table.HeadCell>
-						<Table.HeadCell>
-							<div className="flex items-center justify-center gap-1.5">
-								{ __(
-									'Conversion Rate',
-									'woo-cart-abandonment-recovery'
-								) }
-							</div>
-						</Table.HeadCell>
+						<MetricHeadCell
+							label={ __(
+								'Sent',
+								'woo-cart-abandonment-recovery'
+							) }
+						/>
+						<MetricHeadCell
+							label={ __(
+								'Click Rate',
+								'woo-cart-abandonment-recovery'
+							) }
+						/>
+						<MetricHeadCell
+							label={ __(
+								'Conversion Rate',
+								'woo-cart-abandonment-recovery'
+							) }
+						/>
 						<Table.HeadCell>
 							{ __( 'Status', 'woo-cart-abandonment-recovery' ) }
 						</Table.HeadCell>
@@ -567,186 +225,77 @@ const WhatsappTemplates = () => {
 						</Table.HeadCell>
 					</Table.Head>
 					<Table.Body>
-						{ filteredData.length > 0 ? (
-							filteredData.map( ( item ) => (
+						{ list.filteredData.length > 0 ? (
+							list.filteredData.map( ( item ) => (
 								<Table.Row
 									key={ item.id }
+									data-template-id={ item.id }
+									className={ getRowClass( {
+										isHighlighted: list.isHighlighted( item.id ),
+										isSelected: selected.includes( item.id ),
+									} ) }
 									value={ item }
 									selected={ selected.includes( item.id ) }
-									onChangeSelection={ handleCheckboxChange }
+									onChangeSelection={
+										list.handleCheckboxChange
+									}
 								>
 									<Table.Cell>
-										<AppTooltip
-											content={ item.template_name }
-											arrow
-											placement="top"
-										>
-											<span
-												className="cursor-pointer hover:text-flamingo-400 focus-visible:text-flamingo-400"
-												onClick={ () =>
-													handleEdit( item )
-												}
-												onKeyDown={ ( e ) => {
-													if (
-														e.key === 'Enter' ||
-														e.key === ' '
-													) {
-														handleEdit( item );
-													}
-												} }
-												role="button"
-												tabIndex={ 0 }
-											>
-												{ truncateText(
-													item.template_name,
-													30
-												) }
-											</span>
-										</AppTooltip>
+										<TemplateNameButton
+											name={ item.template_name }
+											onClick={ () =>
+												handleEdit( item )
+											}
+										/>
 									</Table.Cell>
-
 									<Table.Cell>
 										{ formatDuration(
 											item.whatsapp_frequency,
 											item.whatsapp_frequency_unit
 										) }
 									</Table.Cell>
-									<Table.Cell className="text-center">
+									<Table.Cell
+										className="text-center"
+									>
 										{ item?.sent || '-' }
 									</Table.Cell>
-									<Table.Cell className="text-center">
-										{ item?.click_rate
-											? `${ item.click_rate }%`
-											: '-' }
+									<Table.Cell
+										className="text-center"
+									>
+										{ formatRate( item?.click_rate ) }
 									</Table.Cell>
-									<Table.Cell className="text-center">
-										{ item?.conversion_rate
-											? `${ item.conversion_rate }%`
-											: '-' }
+									<Table.Cell
+										className="text-center"
+									>
+										{ formatRate( item?.conversion_rate ) }
 									</Table.Cell>
 									<Table.Cell>
-										<Switch
-											aria-label={ `${
-												item.template_name
-											} - ${
-												'on' === item?.is_activated
-													? 'Enabled'
-													: 'Disabled'
-											}` }
-											aria-checked={
-												'on' === item?.is_activated
-											}
-											value={
-												'on' === item?.is_activated
-											}
-											name={
-												'wcf_activate_whatsapp_template'
-											}
-											onChange={ ( val ) =>
-												handleToggleStatus(
-													item.id,
-													val
-												)
-											}
-											size="md"
-											className="border-none moderncart-toggle-field"
-											role="switch"
+										<TemplateStatusSwitch
+											item={ item }
+											name="wcf_activate_whatsapp_template"
+											onToggle={ list.toggleStatus }
 										/>
 									</Table.Cell>
 									<Table.Cell>
-										<div className="flex items-center justify-end gap-2">
-											<AppTooltip
-												content={ __(
-													'Edit',
-													'woo-cart-abandonment-recovery'
-												) }
-												arrow
-												placement="top"
-											>
-												<Button
-													variant="ghost"
-													icon={
-														<PencilIcon className="h-6 w-6" />
-													}
-													size="xs"
-													className="text-gray-500 hover:text-flamingo-400"
-													aria-label={ __(
-														'Edit',
-														'woo-cart-abandonment-recovery'
-													) }
-													onClick={ () =>
-														handleEdit( item )
-													}
-												/>
-											</AppTooltip>
-											<AppTooltip
-												content={ __(
-													'Duplicate',
-													'woo-cart-abandonment-recovery'
-												) }
-												arrow
-												placement="top"
-											>
-												<Button
-													variant="ghost"
-													icon={
-														<DocumentDuplicateIcon className="h-6 w-6" />
-													}
-													size="xs"
-													className="text-gray-500 hover:text-flamingo-400"
-													aria-label={ __(
-														'Duplicate',
-														'woo-cart-abandonment-recovery'
-													) }
-													onClick={ () =>
-														handleDuplicate( item )
-													}
-												/>
-											</AppTooltip>
-											<AppTooltip
-												content={ __(
-													'Delete',
-													'woo-cart-abandonment-recovery'
-												) }
-												arrow
-												placement="top"
-											>
-												<Button
-													variant="ghost"
-													icon={
-														<TrashIcon className="h-6 w-6" />
-													}
-													size="xs"
-													className="text-gray-500 hover:text-red-600"
-													aria-label={ __(
-														'Delete',
-														'woo-cart-abandonment-recovery'
-													) }
-													onClick={ () =>
-														setDeleteModal( {
-															isOpen: true,
-															type: 'single',
-															id: item.id,
-														} )
-													}
-												/>
-											</AppTooltip>
-										</div>
+										<TemplateRowActions
+											onEdit={ () =>
+												handleEdit( item )
+											}
+											onDuplicate={ () =>
+												list.duplicate( item )
+											}
+											isDuplicating={
+												list.duplicatingId !== null
+											}
+											onDelete={ () =>
+												list.requestDelete( item )
+											}
+										/>
 									</Table.Cell>
 								</Table.Row>
 							) )
 						) : (
-							<tr>
-								<td
-									colSpan="9"
-									className="p-4 w-full text-center"
-								>
-									{ __(
-										'No matching data available',
-										'woo-cart-abandonment-recovery'
-									) }
-								</td>
-							</tr>
+							<TemplatesNoMatchRow colSpan={ COLUMN_COUNT } />
 						) }
 					</Table.Body>
 				</Table>
@@ -758,48 +307,18 @@ const WhatsappTemplates = () => {
 				template={ template }
 				onSave={ handleDrawerSave }
 			/>
-			<ConfirmationModal
-				isOpen={ deleteModal.isOpen }
-				onClose={ () =>
-					setDeleteModal( {
-						isOpen: false,
-						type: null,
-						id: null,
-					} )
-				}
-				onConfirm={ handleConfirmDelete }
-				title={
-					/* eslint-disable no-mixed-spaces-and-tabs, indent, @wordpress/i18n-no-variables, @wordpress/i18n-no-collapsible-whitespace, @wordpress/i18n-translator-comments */
-					deleteModal.type === 'bulk'
-						? __(
-								'Delete Selected Templates',
-								'woo-cart-abandonment-recovery'
-						  )
-						: __(
-								'Delete Template',
-								'woo-cart-abandonment-recovery'
-						  )
-				}
-				message={
-					deleteModal.type === 'bulk'
-						? sprintf(
-								/* translators: %s: number of selected templates */
-								__(
-									'Are you sure you want to delete %s selected template(s)? This action cannot be undone.',
-									'woo-cart-abandonment-recovery'
-								),
-								selected.length
-						  )
-						: __(
-								'Are you sure you want to delete this template? This action cannot be undone.',
-								'woo-cart-abandonment-recovery'
-						  )
-				}
-				isLoading={ isDeleting }
+			<ConfirmDialog
+				open={ deleteModal.isOpen }
+				setOpen={ list.closeDeleteModal }
+				onConfirm={ list.confirmDelete }
+				title={ deleteTitle }
+				description={ deleteDescription }
+				isConfirming={ list.isDeleting }
+				isDestructive
+				confirmLabel={ __( 'Delete', 'woo-cart-abandonment-recovery' ) }
 			/>
 		</>
 	);
 };
 
 export default WhatsappTemplates;
-

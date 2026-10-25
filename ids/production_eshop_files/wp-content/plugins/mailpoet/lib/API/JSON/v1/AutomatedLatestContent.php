@@ -77,6 +77,31 @@ class AutomatedLatestContent extends APIEndpoint {
     $args = (array)$this->wp->applyFilters('mailpoet_search_terms_args', $args);
     $terms = WPFunctions::get()->getTerms($args);
 
+    $parentIds = array_unique(array_filter(array_column((array)$terms, 'parent')));
+    if ($parentIds) {
+      $parentArgs = (array)$this->wp->applyFilters('mailpoet_search_terms_args', [
+        'taxonomy' => $taxonomies,
+        'include' => $parentIds,
+        'hide_empty' => false,
+        'number' => 0,
+      ]);
+      $parents = WPFunctions::get()->getTerms($parentArgs);
+      $parentMap = [];
+      foreach ($parents as $parent) {
+        $parentMap[$parent->term_id] = $parent->name; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+      }
+      foreach ($terms as $key => $term) {
+        if (!$term instanceof \WP_Term) {
+          continue;
+        }
+        if ($term->parent && isset($parentMap[$term->parent])) {
+          $cloned = clone $term;
+          $cloned->name = $parentMap[$term->parent] . ' > ' . $term->name;
+          $terms[$key] = $cloned;
+        }
+      }
+    }
+
     return $this->successResponse(array_values($terms));
   }
 

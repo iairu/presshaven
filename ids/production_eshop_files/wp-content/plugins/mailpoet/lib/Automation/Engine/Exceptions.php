@@ -33,13 +33,14 @@ class Exceptions {
   private const NEXT_STEP_NOT_FOUND = 'mailpoet_next_step_not_found';
   private const NEXT_STEP_NOT_SCHEDULED = 'mailpoet_next_step_not_scheduled';
   private const AUTOMATION_STRUCTURE_MODIFICATION_NOT_SUPPORTED = 'mailpoet_automation_structure_modification_not_supported';
+  private const AUTOMATION_TRIGGER_MODIFICATION_NOT_SUPPORTED = 'mailpoet_automation_trigger_modification_not_supported';
   private const AUTOMATION_STRUCTURE_NOT_VALID = 'mailpoet_automation_structure_not_valid';
   private const AUTOMATION_STEP_MODIFIED_WHEN_UNKNOWN = 'mailpoet_automation_step_modified_when_unknown';
   private const AUTOMATION_NOT_VALID = 'mailpoet_automation_not_valid';
   private const MISSING_REQUIRED_SUBJECTS = 'mailpoet_automation_missing_required_subjects';
   private const AUTOMATION_NOT_TRASHED = 'mailpoet_automation_not_trashed';
   private const AUTOMATION_TEMPLATE_NOT_FOUND = 'mailpoet_automation_template_not_found';
-  private const AUTOMATION_HAS_ACTIVE_RUNS = 'mailpoet_automation_has_active_runs';
+  private const AUTOMATION_TEMPLATE_EMAIL_PATTERN_NOT_FOUND = 'mailpoet_automation_template_email_pattern_not_found';
   private const AUTOMATION_STEP_NOT_STARTED = 'mailpoet_automation_step_not_started';
   private const AUTOMATION_STEP_NOT_RUNNING = 'mailpoet_automation_step_not_running';
   private const AUTOMATION_STEP_ACTION_PROCESSED = 'mailpoet_automation_step_action_processed';
@@ -218,6 +219,12 @@ class Exceptions {
       ->withMessage(__('Automation structure modification not supported.', 'mailpoet'));
   }
 
+  public static function automationTriggerModificationNotSupported(): UnexpectedValueException {
+    return UnexpectedValueException::create()
+      ->withErrorCode(self::AUTOMATION_TRIGGER_MODIFICATION_NOT_SUPPORTED)
+      ->withMessage(__('Changing the trigger of an existing automation is not supported. You can edit its settings or filters instead.', 'mailpoet'));
+  }
+
   public static function automationStructureNotValid(string $detail, string $ruleId): UnexpectedValueException {
     return UnexpectedValueException::create()
       ->withErrorCode(self::AUTOMATION_STRUCTURE_NOT_VALID)
@@ -278,14 +285,11 @@ class Exceptions {
       ->withMessage(sprintf(__("Automation template with ID '%d' not found.", 'mailpoet'), $id));
   }
 
-  /**
-   * This is a temporary block, see MAILPOET-4744
-   */
-  public static function automationHasActiveRuns(int $id): InvalidStateException {
-    return InvalidStateException::create()
-      ->withErrorCode(self::AUTOMATION_HAS_ACTIVE_RUNS)
-      // translators: %d is the ID of the automation.
-      ->withMessage(sprintf(__("Can not update automation with ID '%d' because users are currently active.", 'mailpoet'), $id));
+  public static function automationTemplateEmailPatternNotFound(string $pattern): NotFoundException {
+    return NotFoundException::create()
+      ->withErrorCode(self::AUTOMATION_TEMPLATE_EMAIL_PATTERN_NOT_FOUND)
+      // translators: %s is the name of the automation template email pattern.
+      ->withMessage(sprintf(__("Automation template email pattern '%s' not found.", 'mailpoet'), $pattern));
   }
 
   public static function stepNotStarted(string $id, int $runId): InvalidStateException {

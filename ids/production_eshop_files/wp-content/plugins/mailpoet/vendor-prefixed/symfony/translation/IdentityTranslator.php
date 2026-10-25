@@ -6,5 +6,5 @@ use MailPoetVendor\Symfony\Contracts\Translation\TranslatorInterface;
 use MailPoetVendor\Symfony\Contracts\Translation\TranslatorTrait;
 class IdentityTranslator implements TranslatorInterface, LocaleAwareInterface
 {
- use TranslatorTrait;
+use TranslatorTrait;
 }

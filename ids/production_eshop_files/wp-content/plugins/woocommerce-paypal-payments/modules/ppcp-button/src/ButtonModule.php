@@ -11,23 +11,19 @@ namespace WooCommerce\PayPalCommerce\Button;
 use WC_Order;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\OrderEndpoint;
 use WooCommerce\PayPalCommerce\ApiClient\Factory\ReturnUrlFactory;
+use WooCommerce\PayPalCommerce\Button\Assets\SmartButtonInterface;
 use WooCommerce\PayPalCommerce\Button\Endpoint\ApproveSubscriptionEndpoint;
 use WooCommerce\PayPalCommerce\Button\Endpoint\CartScriptParamsEndpoint;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\CreateOrderEndpoint;
+use WooCommerce\PayPalCommerce\Button\Endpoint\DataClientIdEndpoint;
+use WooCommerce\PayPalCommerce\Button\Endpoint\GetOrderEndpoint;
 use WooCommerce\PayPalCommerce\Button\Endpoint\SaveCheckoutFormEndpoint;
 use WooCommerce\PayPalCommerce\Button\Endpoint\SimulateCartEndpoint;
 use WooCommerce\PayPalCommerce\Button\Endpoint\ValidateCheckoutEndpoint;
-use WooCommerce\PayPalCommerce\Button\Assets\SmartButtonInterface;
-use WooCommerce\PayPalCommerce\Button\Endpoint\ApproveOrderEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\ChangeCartEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\CreateOrderEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\DataClientIdEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\GetOrderEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\StartPayPalVaultingEndpoint;
-use WooCommerce\PayPalCommerce\Button\Helper\EarlyOrderHandler;
-use WooCommerce\PayPalCommerce\Button\Helper\WooCommerceOrderCreator;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Helper\EarlyOrderHandler;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Helper\WooCommerceOrderCreator;
 use WooCommerce\PayPalCommerce\Button\Session\CartDataTransientStorage;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExecutableModule;
-use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExtendingModule;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ModuleClassNameIdTrait;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ServiceModule;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
@@ -35,7 +31,7 @@ use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
 /**
  * Class ButtonModule
  */
-class ButtonModule implements ServiceModule, ExtendingModule, ExecutableModule
+class ButtonModule implements ServiceModule, ExecutableModule
 {
     use ModuleClassNameIdTrait;
     /**
@@ -44,13 +40,6 @@ class ButtonModule implements ServiceModule, ExtendingModule, ExecutableModule
     public function services(): array
     {
         return require __DIR__ . '/../services.php';
-    }
-    /**
-     * {@inheritDoc}
-     */
-    public function extensions(): array
-    {
-        return require __DIR__ . '/../extensions.php';
     }
     /**
      * {@inheritDoc}
@@ -108,11 +97,6 @@ class ButtonModule implements ServiceModule, ExtendingModule, ExecutableModule
              */
             $endpoint->handle_request();
         });
-        add_action('wc_ajax_' . StartPayPalVaultingEndpoint::ENDPOINT, static function () use ($container) {
-            $endpoint = $container->get('button.endpoint.vault-paypal');
-            assert($endpoint instanceof StartPayPalVaultingEndpoint);
-            $endpoint->handle_request();
-        });
         add_action('wc_ajax_' . SimulateCartEndpoint::ENDPOINT, static function () use ($container) {
             $endpoint = $container->get('button.endpoint.simulate-cart');
             /**
@@ -122,36 +106,9 @@ class ButtonModule implements ServiceModule, ExtendingModule, ExecutableModule
              */
             $endpoint->handle_request();
         });
-        add_action('wc_ajax_' . ChangeCartEndpoint::ENDPOINT, static function () use ($container) {
-            $endpoint = $container->get('button.endpoint.change-cart');
-            /**
-             * The Change Cart Endpoint.
-             *
-             * @var ChangeCartEndpoint $endpoint
-             */
-            $endpoint->handle_request();
-        });
-        add_action('wc_ajax_' . ApproveOrderEndpoint::ENDPOINT, static function () use ($container) {
-            $endpoint = $container->get('button.endpoint.approve-order');
-            /**
-             * The Approve Order Endpoint.
-             *
-             * @var ApproveOrderEndpoint $endpoint
-             */
-            $endpoint->handle_request();
-        });
         add_action('wc_ajax_' . ApproveSubscriptionEndpoint::ENDPOINT, static function () use ($container) {
             $endpoint = $container->get('button.endpoint.approve-subscription');
             assert($endpoint instanceof ApproveSubscriptionEndpoint);
-            $endpoint->handle_request();
-        });
-        add_action('wc_ajax_' . CreateOrderEndpoint::ENDPOINT, static function () use ($container) {
-            $endpoint = $container->get('button.endpoint.create-order');
-            /**
-             * The Create Order Endpoint.
-             *
-             * @var CreateOrderEndpoint $endpoint
-             */
             $endpoint->handle_request();
         });
         add_action('wc_ajax_' . SaveCheckoutFormEndpoint::ENDPOINT, static function () use ($container) {
@@ -252,7 +209,7 @@ class ButtonModule implements ServiceModule, ExtendingModule, ExecutableModule
          * present, forces the chosen method back to PayPalGateway. This ensures the
          * resumed PayPal flow continues as expected.
          */
-        add_action('template_redirect', function () use ($container) {
+        add_action('template_redirect', function () {
             // phpcs:ignore WordPress.Security.NonceVerification
             if (!isset($_GET[ReturnUrlFactory::PCP_QUERY_ARG])) {
                 return;

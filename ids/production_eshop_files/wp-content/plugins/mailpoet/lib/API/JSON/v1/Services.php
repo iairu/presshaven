@@ -14,6 +14,7 @@ use MailPoet\Config\Installer;
 use MailPoet\Config\ServicesChecker;
 use MailPoet\Cron\Workers\KeyCheck\PremiumKeyCheck;
 use MailPoet\Cron\Workers\KeyCheck\SendingServiceKeyCheck;
+use MailPoet\Mailer\MailerError;
 use MailPoet\Mailer\MailerLog;
 use MailPoet\Services\AuthorizedEmailsController;
 use MailPoet\Services\AuthorizedSenderDomainController;
@@ -22,6 +23,7 @@ use MailPoet\Services\CongratulatoryMssEmailController;
 use MailPoet\Services\SubscribersCountReporter;
 use MailPoet\Settings\SettingsController;
 use MailPoet\Util\Helpers;
+use MailPoet\Util\Notices\PendingApprovalNotice;
 use MailPoet\WP\DateTime;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -62,6 +64,9 @@ class Services extends APIEndpoint {
   /** @var SubscribersCountReporter */
   private $subscribersCountReporter;
 
+  /** @var PendingApprovalNotice */
+  private $pendingApprovalNotice;
+
   public $permissions = [
     'global' => AccessControl::PERMISSION_MANAGE_SETTINGS,
     'methods' => ['pingBridge' => AccessControl::PERMISSION_ACCESS_PLUGIN_ADMIN],
@@ -78,7 +83,8 @@ class Services extends APIEndpoint {
     CongratulatoryMssEmailController $congratulatoryMssEmailController,
     WPFunctions $wp,
     AuthorizedSenderDomainController $senderDomainController,
-    AuthorizedEmailsController $authorizedEmailsController
+    AuthorizedEmailsController $authorizedEmailsController,
+    PendingApprovalNotice $pendingApprovalNotice
   ) {
     $this->bridge = $bridge;
     $this->settings = $settings;
@@ -92,34 +98,49 @@ class Services extends APIEndpoint {
     $this->wp = $wp;
     $this->senderDomainController = $senderDomainController;
     $this->authorizedEmailsController = $authorizedEmailsController;
+    $this->pendingApprovalNotice = $pendingApprovalNotice;
   }
 
   public function checkMSSKey($data = []) {
     $key = isset($data['key']) ? trim($data['key']) : null;
 
     if (!$key) {
-      return $this->badRequest([
-        APIError::BAD_REQUEST => __('Please specify a key.', 'mailpoet'),
-      ]);
+      return $this->badRequest(
+        [
+          APIError::BAD_REQUEST => __('Please specify a key.', 'mailpoet'),
+        ],
+        $this->getMetaForLogging($key)
+      );
     }
 
     $wasPendingApproval = $this->servicesChecker->isMailPoetAPIKeyPendingApproval();
 
     try {
       $result = $this->bridge->checkMSSKey($key);
+      $previousKey = $this->settings->get(Bridge::API_KEY_SETTING_NAME);
       $this->bridge->storeMSSKeyAndState($key, $result);
+      if ($this->settings->get(Bridge::API_KEY_SETTING_NAME) !== $previousKey) {
+        $this->senderDomainController->clearCache();
+        $this->authorizedEmailsController->clearCache();
+      }
     } catch (\Exception $e) {
-      return $this->errorResponse([
-        $e->getCode() => $e->getMessage(),
-      ]);
+      return $this->errorResponse(
+        [
+          $e->getCode() => $e->getMessage(),
+        ],
+        $this->getMetaForLogging($key)
+      );
     }
 
-    // pause sending when key is pending approval, resume when not pending anymore
+    // pause sending when key becomes pending approval; Bridge resumes once a state that is no longer pending is stored
     $isPendingApproval = $this->servicesChecker->isMailPoetAPIKeyPendingApproval();
     if (!$wasPendingApproval && $isPendingApproval) {
-      MailerLog::pauseSending(MailerLog::getMailerLog());
-    } elseif ($wasPendingApproval && !$isPendingApproval) {
-      MailerLog::resumeSending();
+      $mailerLog = MailerLog::setError(
+        MailerLog::getMailerLog(),
+        MailerError::OPERATION_PENDING_APPROVAL,
+        $this->pendingApprovalNotice->getPendingApprovalMessage()
+      );
+      MailerLog::pauseSending($mailerLog);
     }
 
     $state = !empty($result['state']) ? $result['state'] : null;
@@ -167,25 +188,34 @@ class Services extends APIEndpoint {
         break;
     }
 
-    return $this->errorResponse([APIError::BAD_REQUEST => $error]);
+    return $this->errorResponse(
+      [APIError::BAD_REQUEST => $error],
+      $this->getMetaForLogging($key)
+    );
   }
 
   public function checkPremiumKey($data = []) {
     $key = isset($data['key']) ? trim($data['key']) : null;
 
     if (!$key) {
-      return $this->badRequest([
-        APIError::BAD_REQUEST => __('Please specify a key.', 'mailpoet'),
-      ]);
+      return $this->badRequest(
+        [
+          APIError::BAD_REQUEST => __('Please specify a key.', 'mailpoet'),
+        ],
+        $this->getMetaForLogging($key)
+      );
     }
 
     try {
       $result = $this->bridge->checkPremiumKey($key);
       $this->bridge->storePremiumKeyAndState($key, $result);
     } catch (\Exception $e) {
-      return $this->errorResponse([
-        $e->getCode() => $e->getMessage(),
-      ]);
+      return $this->errorResponse(
+        [
+          $e->getCode() => $e->getMessage(),
+        ],
+        $this->getMetaForLogging($key)
+      );
     }
 
     $state = !empty($result['state']) ? $result['state'] : null;
@@ -232,9 +262,23 @@ class Services extends APIEndpoint {
     }
 
     return $this->errorResponse(
-      [APIError::BAD_REQUEST => $error],
-      ['code' => $result['code'] ?? null]
+      [
+        APIError::BAD_REQUEST => $error,
+      ],
+      array_merge(
+        $this->getMetaForLogging($key),
+        ['code' => $result['code'] ?? null]
+      )
     );
+  }
+
+  private function getMetaForLogging(?string $key): array {
+    $obfuscatedKey = $key ? substr($key, 0, 4) . "..." . substr($key, -4) : '';
+    return [
+      'key' => $obfuscatedKey,
+      'home_url' => $this->wp->homeUrl(),
+      'site_url' => $this->wp->siteUrl(),
+    ];
   }
 
   public function recheckKeys() {
@@ -275,7 +319,7 @@ class Services extends APIEndpoint {
     $emailDomain = Helpers::extractEmailDomain($fromEmail);
 
     if (!$this->isItemInArray($emailDomain, $verifiedDomains)) {
-      $authorizedEmails = $this->authorizedEmailsController->getAuthorizedEmailAddresses();
+      $authorizedEmails = $this->authorizedEmailsController->getAuthorizedEmailAddressesIgnoringCache();
 
       if (!$authorizedEmails) {
         return $this->createBadRequest(__('No FROM email addresses are authorized.', 'mailpoet'));

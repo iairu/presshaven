@@ -53,17 +53,15 @@ class CartScriptParamsEndpoint implements \WooCommerce\PayPalCommerce\Button\End
     }
     /**
      * Handles the request.
-     *
-     * @return bool
      */
-    public function handle_request(): bool
+    public function handle_request(): void
     {
         try {
             if (!$this->smart_button instanceof SmartButton) {
                 wp_send_json_error();
-                return \false;
             }
             if (is_callable('wc_maybe_define_constant')) {
+                // @phpstan-ignore function.alreadyNarrowedType
                 wc_maybe_define_constant('WOOCOMMERCE_CART', \true);
             }
             // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -71,23 +69,38 @@ class CartScriptParamsEndpoint implements \WooCommerce\PayPalCommerce\Button\End
             $script_data = $this->smart_button->script_data();
             if (!$script_data) {
                 wp_send_json_error();
-                return \false;
             }
             $total = (float) WC()->cart->get_total('numeric');
             // Shop settings.
             $base_location = wc_get_base_location();
             $shop_country_code = $base_location['country'] ?? '';
             $currency_code = get_woocommerce_currency();
-            $response = array('url_params' => $script_data['url_params'], 'button' => $script_data['button'], 'messages' => $script_data['messages'], 'amount' => WC()->cart->get_total('raw'), 'total' => $total, 'total_str' => (new Money($total, $currency_code))->value_str(), 'currency_code' => $currency_code, 'country_code' => $shop_country_code);
+            $response = array(
+                'url_params' => $script_data['url_params'],
+                'button' => $script_data['button'],
+                'messages' => $script_data['messages'],
+                'amount' => WC()->cart->get_total('raw'),
+                // Recomputed against the current cart so the client can re-route the
+                // button to the save-without-purchase flow when a coupon turns a
+                // subscription cart into a $0 total after the page has loaded.
+                'is_free_trial_cart' => (bool) ($script_data['is_free_trial_cart'] ?? \false),
+                // Recomputed against the current cart so the client can hide the
+                // button when a cart change makes the subscription cart one that
+                // PayPal cannot process (e.g. a second subscription is removed/added).
+                'subscription_button_allowed' => (bool) ($script_data['subscription_button_allowed'] ?? \true),
+                'locations_with_subscription_product' => $script_data['locations_with_subscription_product'] ?? array(),
+                'total' => $total,
+                'total_str' => (new Money($total, $currency_code))->value_str(),
+                'currency_code' => $currency_code,
+                'country_code' => $shop_country_code,
+            );
             if ($include_shipping) {
                 $response = $this->append_shipping_data($response, $currency_code);
             }
             wp_send_json_success($response);
-            return \true;
         } catch (Throwable $error) {
             $this->logger->error("CartScriptParamsEndpoint execution failed. {$error->getMessage()} {$error->getFile()}:{$error->getLine()}");
             wp_send_json_error();
-            return \false;
         }
     }
     /**

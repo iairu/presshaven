@@ -20,6 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Base API Methods
+ *
+ * @class   Base
+ * @version 1.6.0
  */
 class Base {
 
@@ -30,7 +33,7 @@ class Base {
 	/**
 	 * Holds the instance of the class.
 	 *
-	 * @var Base
+	 * @var Base|null
 	 */
 	protected static $instance = null;
 
@@ -38,7 +41,7 @@ class Base {
 	/**
 	 * The token as saved in the settings.
 	 *
-	 * @var array
+	 * @var array|null
 	 */
 	protected static $token = null;
 
@@ -51,6 +54,8 @@ class Base {
 
 	/**
 	 * Initialize and/or return the instance
+	 *
+	 * @return Base
 	 */
 	public static function instance() {
 		if ( is_null( self::$instance ) ) {
@@ -68,13 +73,13 @@ class Base {
 	 * Request parameter:
 	 * $endpoint
 	 *
-	 * @param string $endpoint        the endpoint to perform the request on.
-	 * @param string $method          eg, POST, GET, PUT etc.
-	 * @param array  $payload         Payload to be sent on the request's body.
-	 * @param string $api             The specific Endpoints subset.
-	 * @param int    $cache_expiry    When set, enables caching on the request and the value is used as the cache's TTL (in seconds).
+	 * @param string    $endpoint        the endpoint to perform the request on.
+	 * @param string    $method          eg, POST, GET, PUT etc.
+	 * @param array     $payload         Payload to be sent on the request's body.
+	 * @param string    $api             The specific Endpoints subset.
+	 * @param int|false $cache_expiry    When set, enables caching on the request and the value is used as the cache's TTL (in seconds).
 	 *
-	 * @return array
+	 * @return mixed Decoded JSON response body: usually an array, null when the body is empty or is not valid JSON.
 	 *
 	 * @throws PinterestApiException Pinterest API exception in case of API error in response.
 	 */
@@ -90,26 +95,21 @@ class Base {
 		$request = static::prepare_request( $endpoint, $method, $payload, $api );
 		try {
 			$response = static::handle_request( $request );
-			static::maybe_cache_api_response( $endpoint, $method, $payload, $api, $response, $cache_expiry );
+			self::maybe_cache_api_response( $endpoint, $method, $payload, $api, $response, $cache_expiry );
 			return $response;
 		} catch ( PinterestApiException $e ) {
-			if ( ! empty( Pinterest_For_WooCommerce()::get_setting( 'enable_debug_logging' ) ) ) {
-				/* Translators: 1: Error message 2: Stack trace */
-				Logger::log( sprintf( "%1\$s\n%2\$s", $e->getMessage(), $e->getTraceAsString() ), 'error' );
-			} else {
-				Logger::log(
-					sprintf(
-						/* Translators: 1: Request method 2: Request endpoint 3: Response status code 4: Response message 5: Pinterest code */
-						esc_html__( "%1\$s Request: %2\$s\nStatus Code: %3\$s\nAPI response: %4\$s\nPinterest Code: %5\$s", 'pinterest-for-woocommerce' ),
-						$method,
-						$request['url'],
-						$e->getCode(),
-						$e->getMessage(),
-						$e->get_pinterest_code(),
-					),
-					'error'
-				);
-			}
+			Logger::log(
+				sprintf(
+					/* Translators: 1: Request method 2: Request endpoint 3: Response status code 4: Response message 5: Pinterest code */
+					esc_html__( "%1\$s Request: %2\$s\nStatus Code: %3\$s\nAPI response: %4\$s\nPinterest Code: %5\$s", 'pinterest-for-woocommerce' ),
+					$method,
+					Logger::get_url_path( $request['url'] ),
+					$e->getCode(),
+					$e->getMessage(),
+					$e->get_pinterest_code(),
+				),
+				'error'
+			);
 
 			/**
 			 * Filter to disconnect the merchant from the Pinterest platform on authentication failure.
@@ -213,12 +213,12 @@ class Base {
 	 * Caches the API response if cache expiry is set.
 	 *
 	 * @since 1.3.8
-	 * @param string $endpoint     The API endpoint.
-	 * @param string $method       The HTTP method.
-	 * @param array  $payload      The API request payload.
-	 * @param string $api          The API version.
-	 * @param mixed  $response     The API response.
-	 * @param int    $cache_expiry The cache expiry in seconds.
+	 * @param string    $endpoint     The API endpoint.
+	 * @param string    $method       The HTTP method.
+	 * @param array     $payload      The API request payload.
+	 * @param string    $api          The API version.
+	 * @param mixed     $response     The API response.
+	 * @param int|false $cache_expiry The cache expiry in seconds, or false to skip caching.
 	 *
 	 * @return void
 	 */
@@ -260,7 +260,7 @@ class Base {
 	 *
 	 * @param array $request (See above).
 	 *
-	 * @return array
+	 * @return mixed Decoded JSON response body: usually an array, null when the body is empty or is not valid JSON.
 	 *
 	 * @throws PinterestApiException Pinterest API exception in case of API error during response or problems with request.
 	 */
@@ -281,11 +281,10 @@ class Base {
 		}
 
 		$request_args = array(
-			'method'    => $request['method'],
-			'headers'   => $request['headers'],
-			'sslverify' => false,
-			'body'      => $request['args'],
-			'timeout'   => 15,
+			'method'  => $request['method'],
+			'headers' => $request['headers'],
+			'body'    => $request['args'],
+			'timeout' => 15,
 		);
 
 		Logger::log_request( $request['url'], $request_args );
@@ -348,7 +347,7 @@ class Base {
 	 *
 	 * @param mixed $response The response to parse.
 	 *
-	 * @return array
+	 * @return mixed Decoded JSON response body: usually an array, null when the body is empty or is not valid JSON.
 	 *
 	 * @throws Exception PHP exception.
 	 */
@@ -643,7 +642,7 @@ class Base {
 	 * @param string $merchant_id The merchant ID the feed belongs to.
 	 * @param string $feed_profile_id The ID of the feed to be disabled.
 	 *
-	 * @return mixed
+	 * @return array
 	 * @throws PinterestApiException If the API request fails with other than 2xx status code.
 	 */
 	public static function disable_merchant_feed( $merchant_id, $feed_profile_id ): array {
@@ -660,7 +659,7 @@ class Base {
 	 * @param string $merchant_id The merchant ID the feed belongs to.
 	 * @param string $feed_profile_id The ID of the feed to be enabled.
 	 *
-	 * @return mixed
+	 * @return array
 	 * @throws PinterestApiException If the API request fails with other than 2xx status code.
 	 */
 	public static function enable_merchant_feed( $merchant_id, $feed_profile_id ): array {

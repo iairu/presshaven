@@ -22,6 +22,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Endpoint handing Domain verification.
+ *
+ * @class   DomainVerification
+ * @version 1.6.0
  */
 class DomainVerification extends VendorAPI {
 
@@ -77,7 +80,7 @@ class DomainVerification extends VendorAPI {
 				$th->getMessage(),
 				array(
 					'status'         => $th->getCode(),
-					'pinterest_code' => method_exists( $th, 'get_pinterest_code' ) ? $th->get_pinterest_code() : 0,
+					'pinterest_code' => $th->get_pinterest_code(),
 				)
 			);
 		}

@@ -46,7 +46,8 @@ a:focus {
 	box-shadow: none;
 }
 
-a:focus-visible {
+a:focus-visible,
+.wcar-focus-ring:focus-visible {
 	box-shadow: 0 0 0 2px #000;
 	outline: 2px solid transparent;
 }

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { Select, Button } from '@bsf/force-ui';
 
 import FieldWrapper from '@Components/common/FieldWrapper';
-import ConfirmationModal from '@Components/common/ConfirmationModal';
+import ConfirmDialog from '@Components/common/ConfirmDialog';
 
 const RollbackField = ( {
 	title,
@@ -15,6 +15,33 @@ const RollbackField = ( {
 	const [ previousVersion, setPreviousVersion ] = useState( options[ 0 ] );
 	const [ isPopupOpen, setIsPopupOpen ] = useState( false );
 	const [ pluginName, setPluginName ] = useState( '' );
+	const [ isRollingBack, setIsRollingBack ] = useState( false );
+
+	// Coming back via the browser's back button restores this page from cache, mid-spinner.
+	useEffect( () => {
+		const reset = ( event ) => event.persisted && setIsRollingBack( false );
+		window.addEventListener( 'pageshow', reset );
+		return () => window.removeEventListener( 'pageshow', reset );
+	}, [] );
+
+	// The version list comes from wordpress.org and can arrive empty.
+	if ( ! previousVersion ) {
+		return (
+			<FieldWrapper
+				title={ title }
+				description={ description }
+				type="inline"
+				disableStyle={ disableStyle }
+			>
+				<p className="m-0 text-sm text-gray-600">
+					{ __(
+						'Previous versions could not be loaded. Reload the page to try again.',
+						'woo-cart-abandonment-recovery'
+					) }
+				</p>
+			</FieldWrapper>
+		);
+	}
 
 	const rollbackButtonClickHandler = () => {
 		setPluginName( 'Cart Abandonment Recovery' );
@@ -26,7 +53,8 @@ const RollbackField = ( {
 			'VERSION',
 			previousVersion.name
 		);
-		setIsPopupOpen( false );
+		// Keep the dialog open, spinning, until the browser leaves the page.
+		setIsRollingBack( true );
 		window.location.href = rollbackUrl;
 	};
 
@@ -38,7 +66,7 @@ const RollbackField = ( {
 				type="inline"
 				disableStyle={ disableStyle }
 			>
-				<div className="flex gap-8 items-center">
+				<div className="flex flex-wrap gap-3 items-center">
 					<Select
 						onChange={ ( val ) => {
 							setPreviousVersion( val );
@@ -48,6 +76,10 @@ const RollbackField = ( {
 						value={ previousVersion.name }
 					>
 						<Select.Button
+							aria-label={ __(
+								'Version to roll back to',
+								'woo-cart-abandonment-recovery'
+							) }
 							placeholder={ __(
 								'Select an option',
 								'woo-cart-abandonment-recovery'
@@ -65,29 +97,27 @@ const RollbackField = ( {
 						</Select.Options>
 					</Select>
 					<Button
-						className=""
 						iconPosition="left"
-						size="sm"
+						size="md"
 						tag="button"
 						type="button"
 						variant="primary"
 						disabled={ isPopupOpen }
-						loading={ isPopupOpen }
 						onClick={ rollbackButtonClickHandler }
 					>
 						{ __( 'Rollback', 'woo-cart-abandonment-recovery' ) }
 					</Button>
 				</div>
 			</FieldWrapper>
-			<ConfirmationModal
-				isOpen={ isPopupOpen }
-				onClose={ () => setIsPopupOpen( false ) }
+			<ConfirmDialog
+				open={ isPopupOpen }
+				setOpen={ () => setIsPopupOpen( false ) }
 				onConfirm={ onConfirm }
 				title={ __(
 					'Rollback to Previous Version',
 					'woo-cart-abandonment-recovery'
 				) }
-				message={ sprintf(
+				description={ sprintf(
 					// translators: %1$s is the selected product of CartFlows, %2$s is the selected version of CartFlows.
 					__(
 						'Are you sure you want to rollback to %1$s v%2$s?',
@@ -96,7 +126,8 @@ const RollbackField = ( {
 					pluginName,
 					previousVersion.name
 				) }
-				confirmText={ __( 'Confirm', 'woo-cart-abandonment-recovery' ) }
+				confirmLabel={ __( 'Confirm', 'woo-cart-abandonment-recovery' ) }
+				isConfirming={ isRollingBack }
 			/>
 		</>
 	);

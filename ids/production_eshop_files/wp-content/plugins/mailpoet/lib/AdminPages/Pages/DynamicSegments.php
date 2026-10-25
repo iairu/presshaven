@@ -15,7 +15,6 @@ use MailPoet\Entities\DynamicSegmentFilterData;
 use MailPoet\Entities\FormEntity;
 use MailPoet\Entities\SegmentEntity;
 use MailPoet\Form\FormsRepository;
-use MailPoet\Listing\PageLimit;
 use MailPoet\Newsletter\NewslettersRepository;
 use MailPoet\Segments\SegmentDependencyValidator;
 use MailPoet\Segments\SegmentsRepository;
@@ -30,9 +29,6 @@ class DynamicSegments {
 
   /** @var PageRenderer */
   private $pageRenderer;
-
-  /** @var PageLimit */
-  private $listingPageLimit;
 
   /** @var WPFunctions */
   private $wp;
@@ -67,7 +63,6 @@ class DynamicSegments {
   public function __construct(
     AssetsController $assetsController,
     PageRenderer $pageRenderer,
-    PageLimit $listingPageLimit,
     WPFunctions $wp,
     WooCommerceHelper $woocommerceHelper,
     WPPostListLoader $wpPostListLoader,
@@ -81,7 +76,6 @@ class DynamicSegments {
   ) {
     $this->assetsController = $assetsController;
     $this->pageRenderer = $pageRenderer;
-    $this->listingPageLimit = $listingPageLimit;
     $this->wp = $wp;
     $this->woocommerceHelper = $woocommerceHelper;
     $this->wpPostListLoader = $wpPostListLoader;
@@ -99,13 +93,7 @@ class DynamicSegments {
    */
   public function render() {
     $data = [];
-    $data['dynamic_segment_count'] = $this->segmentsRepository->countBy([
-      'deletedAt' => null,
-      'type' => SegmentEntity::TYPE_DYNAMIC,
-    ]);
-    $data['items_per_page'] = $this->listingPageLimit->getLimitPerPage('segments');
-
-    $customFields = $this->customFieldsRepository->findBy([], ['name' => 'asc']);
+    $customFields = $this->customFieldsRepository->findBy(['deletedAt' => null], ['name' => 'asc']);
     $data['custom_fields'] = $this->customFieldsResponseBuilder->buildBatch($customFields);
 
     $wpRoles = $this->wp->getEditableRoles();
@@ -171,6 +159,9 @@ class DynamicSegments {
     $data['product_tags'] = $this->wpPostListLoader->getWooCommerceTags();
 
     $data['products'] = $this->wpPostListLoader->getProducts();
+    $data['variable_products'] = $this->woocommerceHelper->isWooCommerceActive()
+      ? $this->wpPostListLoader->getVariableProducts()
+      : [];
     $data['membership_plans'] = $this->wpPostListLoader->getMembershipPlans();
     $data['subscription_products'] = $this->wpPostListLoader->getSubscriptionProducts();
     $wcCountries = $this->woocommerceHelper->isWooCommerceActive() ? $this->woocommerceHelper->getAllowedCountries() : [];
@@ -219,6 +210,11 @@ class DynamicSegments {
     }, $this->automationStorage->getAutomations());
 
     $this->assetsController->setupDynamicSegmentsDependencies();
+    $this->assetsController->setupDataViewsDependencies();
+    $data['api'] = [
+      'root' => rtrim($this->wp->escUrlRaw($this->wp->restUrl()), '/'),
+      'nonce' => $this->wp->wpCreateNonce('wp_rest'),
+    ];
     $this->pageRenderer->displayPage('segments/dynamic.html', $data);
   }
 
@@ -252,11 +248,12 @@ class DynamicSegments {
 
   private function getNewslettersList(): array {
     $result = [];
-    foreach ($this->newslettersRepository->getStandardNewsletterList() as $newsletter) {
+    foreach ($this->newslettersRepository->getStandardAndAutomationNewsletterList() as $newsletter) {
       $result[] = [
         'id' => (string)$newsletter->getId(),
         'subject' => $newsletter->getSubject(),
         'name' => $newsletter->getCampaignNameOrSubject(),
+        'type' => $newsletter->getType(),
         'sent_at' => ($sentAt = $newsletter->getSentAt()) ? $sentAt->format('Y-m-d H:i:s') : null,
       ];
     }

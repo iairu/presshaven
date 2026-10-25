@@ -1,13 +1,22 @@
 import { Tabs } from '@bsf/force-ui';
+import { __ } from '@wordpress/i18n';
 import { useNavigate } from 'react-router-dom';
+
+import { cn } from '@Utils/helper';
 
 const TemplatesNav = ( { currentTab } ) => {
 	const navigate = useNavigate();
 
 	const tabs = [
-		{ slug: 'email', text: 'Email' },
-		{ slug: 'sms', text: 'SMS' },
-		{ slug: 'whatsapp', text: 'WhatsApp' },
+		{
+			slug: 'email',
+			text: __( 'Email', 'woo-cart-abandonment-recovery' ),
+		},
+		{ slug: 'sms', text: __( 'SMS', 'woo-cart-abandonment-recovery' ) },
+		{
+			slug: 'whatsapp',
+			text: __( 'WhatsApp', 'woo-cart-abandonment-recovery' ),
+		},
 	];
 
 	return (
@@ -30,10 +39,11 @@ const TemplatesNav = ( { currentTab } ) => {
 						key={ index }
 						slug={ tab.slug }
 						text={ tab.text }
-						className={ `${
+						className={ cn(
+							'hover:text-primary-600 [@media(pointer:coarse)]:min-h-11',
 							currentTab === tab.slug &&
-							'text-primary-600 bg-primary-25 outline outline-1 outline-primary-300 focus:outline-1'
-						} hover:text-primary-600` }
+								'text-primary-600 bg-primary-25 outline outline-1 outline-primary-300 focus:outline-1'
+						) }
 					/>
 				) ) }
 			</Tabs.Group>

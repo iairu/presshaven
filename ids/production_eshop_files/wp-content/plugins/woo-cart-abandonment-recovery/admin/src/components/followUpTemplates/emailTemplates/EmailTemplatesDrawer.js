@@ -1,127 +1,113 @@
-import { useState, useEffect } from 'react';
-import { Drawer, Button, toast } from '@bsf/force-ui';
-import { CheckIcon } from '@heroicons/react/24/outline';
+import { useEffect, useState } from 'react';
+import { Drawer, toast } from '@bsf/force-ui';
 import { __ } from '@wordpress/i18n';
 import parse from 'html-react-parser';
 
 import { doApiFetch } from '@Store';
 
 import SettingsDrawerBody from '@Components/followUpTemplates/emailTemplates//EmailTemplatesDrawerBody';
-import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
 import { useProAccess } from '@Components/pro/useProAccess';
+import TemplateDrawerHeader from '../shared/TemplateDrawerHeader';
+import TemplateDrawerShell, {
+	DRAWER_TRANSITION_S,
+	useTemplateDrawer,
+} from '../shared/TemplateDrawerShell';
+import {
+	focusFirstInvalid,
+	getRuleEngineError,
+	isFormDirty,
+} from '../shared/templateDrawerUtils';
 
-const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
+const DEFAULT_VISIBLE_COLUMNS = [
+	'image',
+	'name',
+	'quantity',
+	'price',
+	'subtotal',
+];
+
+const DEFAULT_EMAIL_BODY = `<p>Hi {{customer.firstname}}!</p>
+<p>We're having trouble processing your recent purchase. Would you mind completing it?</p>
+<p>Here's a link to continue where you left off: </p>
+<p><a href="{{cart.checkout_url}}" target="_blank" rel="noopener"> Continue Your Purchase Now </a></p>
+<p>Kindly,<br>
+{{admin.firstname}}<br>
+{{admin.company}}<br>
+{{cart.unsubscribe}}</p>`;
+
+const NEW_TEMPLATE_STATE = {
+	template_name: '',
+	email_subject: '',
+	email_body: DEFAULT_EMAIL_BODY,
+	email_frequency: 10,
+	email_frequency_unit: 'MINUTE',
+	is_activated: false,
+	override_global_coupon: false,
+	discount_type: 'percent',
+	coupon_amount: '',
+	coupon_expiry_date: 1,
+	coupon_expiry_unit: 'days',
+	use_woo_email_style: false,
+	auto_coupon: false,
+	free_shipping_coupon: false,
+	individual_use_only: false,
+	modify_product_table: false,
+	product_image_size: 'medium',
+	show_prices_with_tax: false,
+	visible_columns: DEFAULT_VISIBLE_COLUMNS,
+	admin_email_copy_status: false,
+	admin_email_copy_type: 'bcc',
+	admin_email_copy_address: '',
+	enable_email_rule_engine: false,
+	email_rule_engine: [],
+	exclude_product_ids: [],
+};
+
+// TinyMCE is the heaviest thing the drawer does, so it boots once the slide-in has finished
+// instead of competing with the animation for the main thread.
+const EDITOR_INIT_DELAY_MS = Math.round( DRAWER_TRANSITION_S * 1000 ) + 50;
+
+/**
+ * Form state for the drawer: the template being edited, or the defaults for a new one.
+ *
+ * @param {Object|null} template Template to edit, or null to create one.
+ * @return {Object} Initial form state.
+ */
+const getInitialFormState = ( template ) => {
+	if ( ! template ) {
+		return NEW_TEMPLATE_STATE;
+	}
+
+	let visibleColumns = DEFAULT_VISIBLE_COLUMNS;
+	if ( Array.isArray( template.visible_columns ) ) {
+		visibleColumns = template.visible_columns.length
+			? template.visible_columns
+			: DEFAULT_VISIBLE_COLUMNS;
+	} else if ( typeof template.visible_columns === 'string' ) {
+		const parsed = template.visible_columns.split( ',' ).filter( Boolean );
+		visibleColumns = parsed.length ? parsed : DEFAULT_VISIBLE_COLUMNS;
+	}
+
+	return { ...template, visible_columns: visibleColumns };
+};
+
+// Lives inside the Drawer, which only mounts its content while open: the state below is
+// seeded from the template on every open, so the first frame already shows the right data
+// (syncing it in an effect rendered the previous template first).
+const EmailTemplateForm = ( { template, onSave } ) => {
 	const { canAccessProFeatures } = useProAccess();
-	const [ formState, setFormState ] = useState( {
-		template_name: '',
-		email_subject: '',
-		email_body: `<p>Hi {{customer.firstname}}!</p>
-			<p>We're having trouble processing your recent purchase. Would you mind completing it?</p>
-			<p>Here's a link to continue where you left off: </p>
-			<p><a href="{{cart.checkout_url}}" target="_blank" rel="noopener"> Continue Your Purchase Now </a></p>
-			<p>Kindly,<br>
-			{{admin.firstname}}<br>
-			{{admin.company}}<br>
-			{{cart.unsubscribe}}</p>`,
-		email_frequency: 1,
-		email_frequency_unit: 'MINUTE',
-		is_activated: false,
-		override_global_coupon: false,
-		discount_type: 'percent',
-		coupon_amount: '',
-		coupon_expiry_date: 10,
-		coupon_expiry_unit: 'days',
-		use_woo_email_style: false,
-		auto_coupon: false,
-		free_shipping_coupon: false,
-		individual_use_only: false,
-		modify_product_table: false,
-		product_image_size: 'medium',
-		show_prices_with_tax: false,
-		visible_columns: [ 'image', 'name', 'quantity', 'price', 'subtotal' ],
-		admin_email_copy_status: false,
-		admin_email_copy_type: 'bcc',
-		admin_email_copy_address: '',
-		enable_email_rule_engine: false,
-		email_rule_engine: [],
-		exclude_product_ids: [],
-	} );
-
+	const { setDirty, markSaved } = useTemplateDrawer();
+	const [ formState, setFormState ] = useState( () =>
+		getInitialFormState( template )
+	);
+	// What was loaded or last saved, to tell whether closing would lose anything.
+	const [ savedState, setSavedState ] = useState( formState );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
-	const [ isLoading, setIsLoading ] = useState( true );
 	const [ errors, setErrors ] = useState( {} );
 
 	useEffect( () => {
-		setIsLoading( true );
-		if ( template ) {
-			const defaultColumns = [
-				'image',
-				'name',
-				'quantity',
-				'price',
-				'subtotal',
-			];
-			let visibleColumns = defaultColumns;
-			if ( Array.isArray( template.visible_columns ) ) {
-				visibleColumns = template.visible_columns.length
-					? template.visible_columns
-					: defaultColumns;
-			} else if ( typeof template.visible_columns === 'string' ) {
-				const parsed = template.visible_columns
-					.split( ',' )
-					.filter( Boolean );
-				visibleColumns = parsed.length ? parsed : defaultColumns;
-			}
-			setFormState( {
-				...template,
-				visible_columns: visibleColumns,
-			} );
-		} else {
-			// Reset form for new template with default values
-			setFormState( {
-				template_name: '',
-				email_subject: '',
-				email_body: `<p>Hi {{customer.firstname}}!</p>
-					<p>We're having trouble processing your recent purchase. Would you mind completing it?</p>
-					<p>Here's a link to continue where you left off: </p>
-					<p><a href="{{cart.checkout_url}}" target="_blank" rel="noopener"> Continue Your Purchase Now </a></p>
-					<p>Kindly,<br>
-					{{admin.firstname}}<br>
-					{{admin.company}}<br>
-					{{cart.unsubscribe}}</p>`,
-				email_frequency: 10,
-				email_frequency_unit: 'MINUTE',
-				is_activated: false,
-				override_global_coupon: false,
-				discount_type: 'percent',
-				coupon_amount: '',
-				coupon_expiry_date: 1,
-				coupon_expiry_unit: 'days',
-				use_woo_email_style: false,
-				auto_coupon: false,
-				free_shipping_coupon: false,
-				individual_use_only: false,
-				modify_product_table: false,
-				product_image_size: 'medium',
-				show_prices_with_tax: false,
-				visible_columns: [
-					'image',
-					'name',
-					'quantity',
-					'price',
-					'subtotal',
-				],
-				admin_email_copy_status: false,
-				admin_email_copy_type: 'bcc',
-				admin_email_copy_address: '',
-				enable_email_rule_engine: false,
-				email_rule_engine: [],
-				exclude_product_ids: [],
-			} );
-		}
-		setErrors( {} );
-		setIsLoading( false );
-	}, [ template, open ] );
+		setDirty( isFormDirty( formState, savedState ) );
+	}, [ formState, savedState ] );
 
 	const handleChange = ( name, value ) => {
 		setFormState( ( prev ) => {
@@ -132,13 +118,6 @@ const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 		if ( errors[ name ] ) {
 			setErrors( { ...errors, [ name ]: null } );
 		}
-	};
-
-	const isEmptyStringOrArray = ( val ) => {
-		return (
-			( typeof val === 'string' && val.trim() === '' ) ||
-			( Array.isArray( val ) && val.length === 0 )
-		);
 	};
 
 	const validateForm = () => {
@@ -172,47 +151,22 @@ const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 		}
 
 		// Validate email rule engine
-		if (
-			canAccessProFeatures() &&
-			! [ '', '0', false ].includes( formState?.enable_email_rule_engine )
-		) {
-			let rules = formState.email_rule_engine || [];
-			if ( typeof rules === 'string' ) {
-				try {
-					rules = JSON.parse( rules );
-				} catch ( e ) {
-					newErrors.email_rule_engine = __(
-						'Invalid JSON in rule engine',
-						'woo-cart-abandonment-recovery'
-					);
-					return false;
-				}
-			}
-			if (
-				rules.length === 0 ||
-				rules.some(
-					( group ) =>
-						group.rules &&
-						group.rules.some(
-							( rule ) =>
-								isEmptyStringOrArray( rule.condition ) ||
-								isEmptyStringOrArray( rule.value ) ||
-								isEmptyStringOrArray( rule.operator )
-						)
-				)
-			) {
-				newErrors.email_rule_engine = __(
-					'Missing fields in rule: condition, operator, or value.',
-					'woo-cart-abandonment-recovery'
-				);
+		if ( canAccessProFeatures() ) {
+			const ruleEngineError = getRuleEngineError(
+				formState?.enable_email_rule_engine,
+				formState.email_rule_engine
+			);
+			if ( ruleEngineError ) {
+				newErrors.email_rule_engine = ruleEngineError;
 			}
 		}
 
 		setErrors( newErrors );
 		if ( Object.keys( newErrors ).length !== 0 ) {
-			toast.error( 'Error!', {
+			toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 				description: parse( Object.values( newErrors ).join( '<br>' ) ),
 			} );
+			focusFirstInvalid( newErrors );
 			return false;
 		}
 
@@ -340,15 +294,17 @@ const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 			( response ) => {
 				if ( response.success ) {
 					// Call the parent's onSave callback with the updated template
+					setSavedState( formState );
+					markSaved();
 					onSave( response.data.template );
-					toast.success( 'Success!', {
+					toast.success( __( 'Success!', 'woo-cart-abandonment-recovery' ), {
 						description: __(
 							'Template saved successfully',
 							'woo-cart-abandonment-recovery'
 						),
 					} );
 				} else {
-					toast.success( 'Error!', {
+					toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 						description:
 							response.data.message ||
 							__(
@@ -359,7 +315,7 @@ const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 				}
 			},
 			( error ) => {
-				toast.error( 'Error!', {
+				toast.error( __( 'Error!', 'woo-cart-abandonment-recovery' ), {
 					description:
 						error.message ||
 						__(
@@ -369,137 +325,44 @@ const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => {
 				} );
 			},
 			true
-		).finally( () => {
-			setIsSubmitting( false );
-		} );
-	};
-
-	const truncateText = ( text, maxLength = 60 ) => {
-		return text.length > maxLength
-			? text.slice( 0, maxLength ) + '...'
-			: text;
+		)
+			.catch( () => {} )
+			.finally( () => {
+				setIsSubmitting( false );
+			} );
 	};
 
 	return (
-		<Drawer
-			open={ open }
-			design="simple"
-			exitOnEsc
-			position="right"
-			scrollLock
-			setOpen={ () => setOpen( ( prev ) => ! prev ) }
-			transitionDuration={ 0.2 }
-			className="z-[100000]"
-		>
-			<Drawer.Panel className="w-full md:w-4/5 lg:w-2/5">
-				<Drawer.Header className="flex flex-col gpa-2 z-10 bg-white">
-					<div className="flex items-center justify-between">
-						{ isLoading ? (
-							<>
-								<SkeletonLoader height="1rem" width="30%" />
-								<div className="flex items-center gap-3">
-									<SkeletonLoader
-										height="2rem"
-										width="5rem"
-									/>
-									<Drawer.CloseButton as="span" />
-								</div>
-							</>
-						) : (
-							<>
-								<Drawer.Title className="text-lg text-gray-900 z-10">
-									{ truncateText(
-										formState?.template_name
-											? formState.template_name
-											: 'New Email Template'
-									) }
-								</Drawer.Title>
-								<div className="flex items-center gap-3">
-									<Button
-										className="whitespace-nowrap hidden xs:flex"
-										icon={
-											<CheckIcon
-												className="h-4 w-4"
-												aria-label="icon"
-												role="img"
-											/>
-										}
-										iconPosition="left"
-										size="sm"
-										tag="button"
-										type="button"
-										variant="primary"
-										onClick={ handleSubmit }
-										disabled={ isSubmitting }
-									>
-										{ isSubmitting
-											? 'Saving...'
-											: 'Save Changes' }
-									</Button>
-									<Drawer.CloseButton as="span" />
-								</div>
-							</>
-						) }
-					</div>
-					<Button
-						className="xs:hidden"
-						icon={
-							<CheckIcon
-								className="h-4 w-4"
-								aria-label="icon"
-								role="img"
-							/>
-						}
-						iconPosition="left"
-						size="sm"
-						tag="button"
-						type="button"
-						variant="primary"
-						onClick={ handleSubmit }
-						disabled={ isSubmitting }
-					>
-						{ isSubmitting ? 'Saving...' : 'Save Changes' }
-					</Button>
-				</Drawer.Header>
-				<Drawer.Body className="overflow-x-hidden">
-					{ isLoading ? (
-						<div className="space-y-4">
-							<SkeletonLoader height="2rem" className="mb-6" />
-							<SkeletonLoader height="1.5rem" width="50%" />
-							<SkeletonLoader height="3rem" />
-							<SkeletonLoader height="1.5rem" width="70%" />
-							<SkeletonLoader height="8rem" />
-							<SkeletonLoader height="1.5rem" width="60%" />
-							<SkeletonLoader height="3rem" />
-							<SkeletonLoader height="1.5rem" width="40%" />
-							<SkeletonLoader height="3rem" />
-						</div>
-					) : (
-						<>
-							{ errors.submit && (
-								<div className="mb-4 rounded-md bg-red-50 p-4">
-									<div className="flex">
-										<div className="ml-3">
-											<h3 className="text-sm font-medium text-red-800">
-												{ errors.submit }
-											</h3>
-										</div>
-									</div>
-								</div>
-							) }
-							<SettingsDrawerBody
-								formState={ formState }
-								handleChange={ handleChange }
-								errors={ errors }
-								isLoading={ isSubmitting }
-							/>
-						</>
-					) }
-				</Drawer.Body>
-			</Drawer.Panel>
-			<Drawer.Backdrop />
-		</Drawer>
+		<>
+			<TemplateDrawerHeader
+				title={
+					formState?.template_name
+						? formState.template_name
+						: __( 'New Email Template', 'woo-cart-abandonment-recovery' )
+				}
+				isSubmitting={ isSubmitting }
+				onSave={ handleSubmit }
+			/>
+			<Drawer.Body className="overflow-x-hidden">
+				<SettingsDrawerBody
+					formState={ formState }
+					handleChange={ handleChange }
+					errors={ errors }
+					editorInitDelay={ EDITOR_INIT_DELAY_MS }
+				/>
+			</Drawer.Body>
+		</>
 	);
 };
+
+const EmailTemplatesDrawer = ( { open, setOpen, template, onSave } ) => (
+	<TemplateDrawerShell open={ open } setOpen={ setOpen }>
+		<EmailTemplateForm
+			key={ template?.id ?? 'new' }
+			template={ template }
+			onSave={ onSave }
+		/>
+	</TemplateDrawerShell>
+);
 
 export default EmailTemplatesDrawer;

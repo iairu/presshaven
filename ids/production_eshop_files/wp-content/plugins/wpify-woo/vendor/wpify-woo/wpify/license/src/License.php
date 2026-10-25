@@ -138,7 +138,7 @@ class License
     {
         if (function_exists('as_schedule_recurring_action')) {
             if (!as_has_scheduled_action($this->get_api_check_hook())) {
-                as_schedule_recurring_action(time(), 12 * HOUR_IN_SECONDS, $this->get_api_check_hook());
+                as_schedule_recurring_action(time(), 12 * \HOUR_IN_SECONDS, $this->get_api_check_hook());
             }
         }
     }

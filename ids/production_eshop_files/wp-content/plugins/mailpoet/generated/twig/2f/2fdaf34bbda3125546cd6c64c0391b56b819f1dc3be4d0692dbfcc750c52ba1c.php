@@ -56,31 +56,31 @@ class __TwigTemplate_fb71bf89a426c5b5b4c882632d479b3cffbaded39146d864b8aea902ce9
 <script type=\"text/javascript\">
   var mailpoet_locale_full = ";
         // line 7
-        yield json_encode(($context["locale_full"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["locale_full"] ?? null));
         yield ";
   var mailpoet_automation_api = ";
         // line 8
-        yield json_encode(($context["api"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["api"] ?? null));
         yield ";
   var mailpoet_json_api = ";
         // line 9
-        yield json_encode(($context["jsonapi"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["jsonapi"] ?? null));
         yield ";
   var mailpoet_segments = ";
         // line 10
-        yield json_encode(($context["segments"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["segments"] ?? null));
         yield ";
   var mailpoet_automation_registry = ";
         // line 11
-        yield json_encode(($context["registry"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["registry"] ?? null));
         yield ";
   var mailpoet_automation_context = ";
         // line 12
-        yield json_encode(($context["context"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["context"] ?? null));
         yield ";
   var mailpoet_automation = ";
         // line 13
-        yield ((($context["automation"] ?? null)) ? (json_encode(($context["automation"] ?? null))) : ("undefined"));
+        yield ((($context["automation"] ?? null)) ? ($this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["automation"] ?? null))) : ("undefined"));
         yield ";
 </script>
 ";

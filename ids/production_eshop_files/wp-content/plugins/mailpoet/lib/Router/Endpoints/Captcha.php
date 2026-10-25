@@ -43,20 +43,18 @@ class Captcha {
   }
 
   public function image($data) {
-    $width = !empty($data['width']) ? (int)$data['width'] : null;
-    $height = !empty($data['height']) ? (int)$data['height'] : null;
     $sessionId = $data['captcha_session_id'] ?? null;
-    if (!$sessionId) {
+    if (!is_string($sessionId) || $sessionId === '') {
       return;
     }
 
-    $this->captchaRenderer->renderImage($sessionId, $width, $height);
+    $this->captchaRenderer->renderImage($sessionId);
     exit;
   }
 
   public function audio($data) {
     $sessionId = $data['captcha_session_id'] ?? null;
-    if (!$sessionId) {
+    if (!is_string($sessionId) || $sessionId === '') {
       return;
     }
 
@@ -66,7 +64,7 @@ class Captcha {
 
   public function refresh($data) {
     $sessionId = $data['captcha_session_id'] ?? null;
-    if (!$sessionId) {
+    if (!is_string($sessionId) || $sessionId === '') {
       return;
     }
 

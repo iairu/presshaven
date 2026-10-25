@@ -18,8 +18,15 @@ class BigIntType extends DoctrineBigIntType {
     return ParameterType::INTEGER;
   }
 
+  /**
+   * @param mixed $value
+   * @return int|null
+   */
   public function convertToPHPValue($value, AbstractPlatform $platform) {
-    return $value === null ? null : (int)$value;
+    if ($value === null) {
+      return null;
+    }
+    return is_numeric($value) ? (int)$value : 0;
   }
 
   public function getName() {

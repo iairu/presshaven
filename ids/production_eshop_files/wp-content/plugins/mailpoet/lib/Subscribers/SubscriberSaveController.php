@@ -46,6 +46,9 @@ class SubscriberSaveController {
   /** @var SubscriberTagRepository */
   private $subscriberTagRepository;
 
+  /** @var SourceUrlResolver */
+  private $sourceUrlResolver;
+
   /** @var TagRepository */
   private $tagRepository;
 
@@ -70,7 +73,8 @@ class SubscriberSaveController {
     TagRepository $tagRepository,
     Unsubscribes $unsubscribesTracker,
     WelcomeScheduler $welcomeScheduler,
-    WPFunctions $wp
+    WPFunctions $wp,
+    SourceUrlResolver $sourceUrlResolver
   ) {
     $this->customFieldsRepository = $customFieldsRepository;
     $this->security = $security;
@@ -83,6 +87,7 @@ class SubscriberSaveController {
     $this->unsubscribesTracker = $unsubscribesTracker;
     $this->welcomeScheduler = $welcomeScheduler;
     $this->wp = $wp;
+    $this->sourceUrlResolver = $sourceUrlResolver;
     $this->subscriberTagRepository = $subscriberTagRepository;
   }
 
@@ -115,6 +120,12 @@ class SubscriberSaveController {
     if (!empty($data)) {
       $data = $this->wp->stripslashesDeep($data);
     }
+
+    // Proof-of-consent fields are stamped server-side only. The manage page sets
+    // them by calling createOrUpdate() directly; this client-data path (admin/API)
+    // may change the consent state but must never forge the record of how or
+    // against what wording it was given.
+    unset($data['tracking_consent_method'], $data['tracking_consent_copy']);
 
     if (empty($data['segments'])) {
       $data['segments'] = [];
@@ -150,7 +161,7 @@ class SubscriberSaveController {
     $subscriber = $this->createOrUpdate($data, $oldSubscriber);
 
     $this->updateCustomFields($data, $subscriber);
-    $this->updateTags($data, $subscriber);
+    $this->updateTags($data['tags'] ?? [], $subscriber);
 
     $segments = isset($data['segments']) ? $this->findSegments($data['segments']) : null;
     // check for status change
@@ -201,7 +212,7 @@ class SubscriberSaveController {
   }
 
   private function findSegments(array $segmentIds): array {
-    return $this->segmentsRepository->findBy(['id' => $segmentIds]);
+    return $this->segmentsRepository->findByIds($segmentIds);
   }
 
   private function findNewSegments(array $data): array {
@@ -230,14 +241,35 @@ class SubscriberSaveController {
     }
 
     if (isset($data['email'])) $subscriber->setEmail($data['email']);
-    if (isset($data['first_name'])) $subscriber->setFirstName($data['first_name']);
-    if (isset($data['last_name'])) $subscriber->setLastName($data['last_name']);
+    if (isset($data['first_name'])) $subscriber->setFirstName(sanitize_text_field($data['first_name']));
+    if (isset($data['last_name'])) $subscriber->setLastName(sanitize_text_field($data['last_name']));
     if (isset($data['status'])) $subscriber->setStatus($data['status']);
+    if (isset($data['tracking_consent'])) {
+      $subscriber->setTrackingConsent(
+        (string)$data['tracking_consent'],
+        $data['tracking_consent_method'] ?? SubscriberEntity::TRACKING_CONSENT_METHOD_ADMIN,
+        $data['tracking_consent_copy'] ?? null
+      );
+    }
     if (isset($data['source'])) $subscriber->setSource($data['source']);
+    // The plugin only describes the API source; setSource() clears it for any other source
+    if (array_key_exists('source_plugin', $data) && $subscriber->getSource() === Source::API) $subscriber->setSourcePlugin($data['source_plugin']);
     if (isset($data['wp_user_id'])) $subscriber->setWpUserId($data['wp_user_id']);
     if (isset($data['subscribed_ip'])) $subscriber->setSubscribedIp($data['subscribed_ip']);
     if (isset($data['confirmed_ip'])) $subscriber->setConfirmedIp($data['confirmed_ip']);
     if (isset($data['is_woocommerce_user'])) $subscriber->setIsWoocommerceUser((bool)$data['is_woocommerce_user']);
+    if ($this->settings->isSettingEnabled('collect_subscriber_timezones.enabled')) {
+      $timeZone = SubscriberEntity::sanitizeTimeZone($data[SubscriberEntity::TIME_ZONE_FIELD_NAME] ?? null);
+      if ($timeZone !== null) {
+        $subscriber->setTimeZone($timeZone);
+        $subscriber->setTimeZoneSource(SubscriberEntity::TIME_ZONE_SOURCE_FORM);
+        $subscriber->setTimeZoneConfidence(SubscriberEntity::TIME_ZONE_CONFIDENCE_BROWSER);
+        $subscriber->setTimeZoneUpdatedAt(Carbon::now()->millisecond(0));
+      }
+    }
+    if (array_key_exists('timezone', $data)) {
+      $this->updateTimeZoneManually($subscriber, $data['timezone']);
+    }
     $createdAt = isset($data['created_at']) ? Carbon::createFromFormat('Y-m-d H:i:s', $data['created_at']) : null;
     if ($createdAt) $subscriber->setCreatedAt($createdAt);
     $confirmedAt = isset($data['confirmed_at']) ? Carbon::createFromFormat('Y-m-d H:i:s', $data['confirmed_at']) : null;
@@ -261,6 +293,31 @@ class SubscriberSaveController {
     return $subscriber;
   }
 
+  /**
+   * @param mixed $value
+   */
+  private function updateTimeZoneManually(SubscriberEntity $subscriber, $value): void {
+    if ($value === '' || $value === null) {
+      if ($subscriber->getTimeZone() === null) {
+        return;
+      }
+      $subscriber->setTimeZone(null);
+      $subscriber->setTimeZoneSource(null);
+      $subscriber->setTimeZoneConfidence(null);
+      $subscriber->setTimeZoneUpdatedAt(null);
+      return;
+    }
+
+    $timeZone = SubscriberEntity::sanitizeTimeZone($value);
+    if ($timeZone === null || $timeZone === $subscriber->getTimeZone()) {
+      return;
+    }
+    $subscriber->setTimeZone($timeZone);
+    $subscriber->setTimeZoneSource(SubscriberEntity::TIME_ZONE_SOURCE_MANUAL);
+    $subscriber->setTimeZoneConfidence(SubscriberEntity::TIME_ZONE_CONFIDENCE_MANUAL);
+    $subscriber->setTimeZoneUpdatedAt(Carbon::now()->millisecond(0));
+  }
+
   private function isNewEmail(string $email, ?SubscriberEntity $subscriber): bool {
     if ($subscriber && ($subscriber->getEmail() === $email)) return false;
     return true;
@@ -282,26 +339,20 @@ class SubscriberSaveController {
     $subscriber = new SubscriberEntity();
     $subscriber->setUnsubscribeToken($this->security->generateUnsubscribeTokenByEntity($subscriber));
     $subscriber->setLinkToken(Security::generateHash(SubscriberEntity::LINK_TOKEN_LENGTH));
+    $subscriber->setSourceUrl($this->sourceUrlResolver->resolve());
     $subscriber->setStatus(!$this->settings->get('signup_confirmation.enabled') ? SubscriberEntity::STATUS_SUBSCRIBED : SubscriberEntity::STATUS_UNCONFIRMED);
 
     return $subscriber;
   }
 
   private function findSubscriber(array &$data): ?SubscriberEntity {
-    $subscriber = null;
     if (isset($data['id']) && (int)$data['id'] > 0) {
-      $subscriber = $this->subscribersRepository->findOneById(((int)$data['id']));
+      $subscriber = $this->subscribersRepository->findOneById((int)$data['id']);
       unset($data['id']);
+      return $subscriber;
     }
 
-    if (!$subscriber && !empty($data['email'])) {
-      $subscriber = $this->subscribersRepository->findOneBy(['email' => $data['email']]);
-      if ($subscriber) {
-        unset($data['email']);
-      }
-    }
-
-    return $subscriber;
+    return null;
   }
 
   public function updateCustomFields(array $data, SubscriberEntity $subscriber): void {
@@ -316,21 +367,28 @@ class SubscriberSaveController {
       return;
     }
 
-    $customFields = $this->customFieldsRepository->findBy(['id' => array_keys($customFieldsMap)]);
+    $customFields = $this->customFieldsRepository->findBy(['id' => array_keys($customFieldsMap), 'deletedAt' => null]);
     foreach ($customFields as $customField) {
-      $this->subscriberCustomFieldRepository->createOrUpdate($subscriber, $customField, $customFieldsMap[$customField->getId()]);
+      $customFieldId = $customField->getId();
+      if ($customFieldId === null || !array_key_exists($customFieldId, $customFieldsMap)) {
+        continue;
+      }
+      $this->subscriberCustomFieldRepository->createOrUpdate($subscriber, $customField, $customFieldsMap[$customFieldId]);
     }
   }
 
-  private function updateTags(array $data, SubscriberEntity $subscriber): void {
+  /**
+   * Replaces the subscriber's tags with the given list.
+   *
+   * $tags is either an array of arrays containing name, id etc. of the tag or an array of strings - the names
+   * of the tag. The tag names are used to upsert tags; any existing tag not present in the list is removed.
+   *
+   * Fires the `mailpoet_subscriber_tag_added` and `mailpoet_subscriber_tag_removed` WP actions, which is how
+   * tag automations are triggered.
+   */
+  public function updateTags(array $tags, SubscriberEntity $subscriber): void {
     $removedTags = [];
 
-    /**
-     * $data['tags'] is either an array of arrays containing name, id etc. of the tag or an array of strings - the names
-     * of the tag.
-     *
-     * Therefore we map it to be only an array of strings, containing the names of the tag.
-     */
     $tags = array_map(
       function($tag): string {
         if (is_array($tag)) {
@@ -338,7 +396,7 @@ class SubscriberSaveController {
         }
         return (string)$tag;
       },
-      (array)$data['tags']
+      $tags
     );
     foreach ($subscriber->getSubscriberTags() as $subscriberTag) {
       $tag = $subscriberTag->getTag();

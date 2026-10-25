@@ -1,22 +1,22 @@
-# Copyright (C) 2025 Omega Themes
+# Copyright (C) 2026 Omega Themes
 # This file is distributed under the GNU General Public License v2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Omega Storefront 1.1.5\n"
+"Project-Id-Version: Omega Storefront 1.2.5\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/theme/omega-storefront\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-08-30T11:44:55+00:00\n"
+"POT-Creation-Date: 2026-03-14T18:25:57+05:30\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.11.0\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: omega-storefront\n"
 
 #. Theme Name of the theme
 #: style.css
-#: inc/customizer/customizer.php:133
+#: inc/customizer/customizer.php:134
 msgid "Omega Storefront"
 msgstr ""
 
@@ -27,7 +27,7 @@ msgstr ""
 
 #. Description of the theme
 #: style.css
-msgid "Omega Storefront is a versatile and powerful WordPress theme designed to elevate any ecommerce venture. Tailored for both new and established online stores, this premium theme is crafted to create an exceptional digital storefront that enhances the user experience and drives sales. It’s ideal for a range of ecommerce businesses, like online retail shops, complex B2B platforms, retail storefront, online storefront, e-commerce storefront, storefront design, storefront solutions, digital storefront, storefront setup, storefront management, storefront marketing, storefront optimization, storefront customization, storefront branding, storefront software, storefront layout, storefront features, One of the standout benefits of the Omega Storefront WordPress Theme is its seamless integration with major ecommerce platforms, enabling businesses to manage their products, transactions, and customer interactions efficiently. Its clean, minimalistic design ensures a visually appealing and professional appearance, while its responsive layout guarantees that your store looks stunning on all devices, from desktops to mobile phones. With customizable banners, sleek product displays, and intuitive navigation, Omega Storefront helps create a streamlined shopping experience that encourages conversions. Additionally, its modern aesthetic is complemented by elegant typography and a well-organised layout, making it easy for users to browse and purchase products. The theme also supports various ecommerce functionalities, such as inventory management, payment gateways, and shipping options, ensuring a smooth operational flow. Enhanced with ecommerce analytics, Omega Storefront provides insights into sales performance and customer behaviour, enabling data-driven decisions to maximise revenue and growth."
+msgid "Omega Storefront is a versatile and powerful WordPress theme designed to elevate any ecommerce venture. Tailored for both new and established online shops, this premium theme creates an exceptional digital storefront that enhances user experience and drives sales. It’s perfect for various ecommerce businesses, including retail shops, B2B marketplaces, and digital storefront solutions, focusing on design, customization, branding, optimization, and marketing. One standout benefit of the Omega Storefront WordPress Theme is its seamless integration with major ecommerce platforms, allowing businesses to efficiently manage products, transactions, and customer interactions. Its clean, minimalistic design ensures a visually appealing and professional appearance, while the responsive, retina-ready layout guarantees that your ecommerce website looks stunning on all devices, from desktops to mobile phones. With customizable banners, sleek product displays, and intuitive navigation powered by AJAX features, Omega Storefront helps create a streamlined shopping experience that encourages conversions. Additionally, its modern aesthetic is complemented by elegant typography and a well-organized layout, making it easy for users to browse and purchase products. The theme also supports various functionalities, such as inventory management, payment gateways, and shipping options, and works smoothly with WooCommerce for store operations, Contact Form 7 for customer inquiries, and YITH WooCommerce Wishlist for improved shopping engagement. Enhanced with ecommerce analytics, Omega Storefront provides insights into sales performance and customer behavior, enabling data-driven decisions to maximize revenue and growth."
 msgstr ""
 
 #. Author of the theme
@@ -46,6 +46,7 @@ msgstr ""
 
 #. translators: %d: ID of a post.
 #: classes/class-walker-menu.php:76
+#, php-format
 msgid "#%d (no title)"
 msgstr ""
 
@@ -56,11 +57,13 @@ msgstr ""
 
 #. translators: 1: title.
 #: comments.php:22
+#, php-format
 msgid "One thought on &ldquo;%1$s&rdquo;"
 msgstr ""
 
 #. translators: 1: comment count number, 2: title.
 #: comments.php:28
+#, php-format
 msgctxt "comments title"
 msgid "%1$s thought on &ldquo;%2$s&rdquo;"
 msgid_plural "%1$s thoughts on &ldquo;%2$s&rdquo;"
@@ -193,7 +196,7 @@ msgid "WordPress"
 msgstr ""
 
 #: inc/custom-functions.php:379
-msgid "WordPress."
+msgid "wordpress."
 msgstr ""
 
 #: inc/custom-functions.php:389
@@ -362,52 +365,52 @@ msgstr ""
 msgid "Breadcrumb Font Size"
 msgstr ""
 
-#: inc/customizer/customizer.php:33
+#: inc/customizer/customizer.php:34
 msgid "Color Options"
 msgstr ""
 
-#: inc/customizer/customizer.php:54
+#: inc/customizer/customizer.php:55
 msgid "General Settings"
 msgstr ""
 
-#: inc/customizer/customizer.php:62
+#: inc/customizer/customizer.php:63
 msgid "Color Settings"
 msgstr ""
 
-#: inc/customizer/customizer.php:71
+#: inc/customizer/customizer.php:72
 #: inc/customizer/footer.php:12
 msgid "Footer Settings"
 msgstr ""
 
-#: inc/customizer/customizer.php:80
+#: inc/customizer/customizer.php:81
 msgid "Frontpage Settings"
 msgstr ""
 
-#: inc/customizer/customizer.php:89
+#: inc/customizer/customizer.php:90
 msgid "Theme Addons"
 msgstr ""
 
-#: inc/customizer/customizer.php:98
+#: inc/customizer/customizer.php:99
 msgid "Theme Options"
 msgstr ""
 
-#: inc/customizer/customizer.php:112
+#: inc/customizer/customizer.php:113
 msgid "Logo width"
 msgstr ""
 
-#: inc/customizer/customizer.php:113
+#: inc/customizer/customizer.php:114
 msgid "Specify the range for logo size with a minimum of 200px and a maximum of 700px, in increments of 20px."
 msgstr ""
 
-#: inc/customizer/customizer.php:134
+#: inc/customizer/customizer.php:135
 msgid "Upgrade To Pro"
 msgstr ""
 
-#: inc/customizer/customizer.php:147
+#: inc/customizer/customizer.php:148
 msgid "Buy WP Theme Bundle"
 msgstr ""
 
-#: inc/customizer/customizer.php:148
+#: inc/customizer/customizer.php:149
 msgid "Get Bundle"
 msgstr ""
 
@@ -575,11 +578,27 @@ msgstr ""
 msgid "Lowercase"
 msgstr ""
 
-#: inc/customizer/header-button.php:116
+#: inc/customizer/header-button.php:111
+msgid "Main Menu Color"
+msgstr ""
+
+#: inc/customizer/header-button.php:120
+msgid "Main Menu Hover Color"
+msgstr ""
+
+#: inc/customizer/header-button.php:129
+msgid "Submenu Color"
+msgstr ""
+
+#: inc/customizer/header-button.php:138
+msgid "Submenu Hover Color"
+msgstr ""
+
+#: inc/customizer/header-button.php:151
 msgid "Enable Sticky Header"
 msgstr ""
 
-#: inc/customizer/header-button.php:131
+#: inc/customizer/header-button.php:166
 msgid "Enable Translater"
 msgstr ""
 
@@ -663,6 +682,22 @@ msgstr ""
 
 #: inc/customizer/layout-setting.php:83
 msgid "Enable/Disable Sticky Sidebar"
+msgstr ""
+
+#: inc/customizer/nothing-found-page-settings.php:12
+msgid "Nothing Found Page Settings"
+msgstr ""
+
+#: inc/customizer/nothing-found-page-settings.php:28
+msgid "Main Title"
+msgstr ""
+
+#: inc/customizer/nothing-found-page-settings.php:43
+msgid "Para Text"
+msgstr ""
+
+#: inc/customizer/nothing-found-page-settings.php:58
+msgid "Enable/Disable Search"
 msgstr ""
 
 #: inc/customizer/post.php:13
@@ -832,7 +867,7 @@ msgid "Support Forum"
 msgstr ""
 
 #: inc/homepage-setup/homepage-setup-contents.php:298
-msgid "Upgrade To Pro With Just $40"
+msgid "Upgrade To Pro With Just $39"
 msgstr ""
 
 #: inc/homepage-setup/homepage-setup-contents.php:321
@@ -921,11 +956,13 @@ msgstr ""
 
 #. translators: %s: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:330
+#, php-format
 msgid "Installing Plugin: %s"
 msgstr ""
 
 #. translators: %s: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:332
+#, php-format
 msgid "Updating Plugin: %s"
 msgstr ""
 
@@ -935,6 +972,7 @@ msgstr ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:334
+#, php-format
 msgid "This theme requires the following plugin: %1$s."
 msgid_plural "This theme requires the following plugins: %1$s."
 msgstr[0] ""
@@ -942,6 +980,7 @@ msgstr[1] ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:340
+#, php-format
 msgid "This theme recommends the following plugin: %1$s."
 msgid_plural "This theme recommends the following plugins: %1$s."
 msgstr[0] ""
@@ -949,6 +988,7 @@ msgstr[1] ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:346
+#, php-format
 msgid "The following plugin needs to be updated to its latest version to ensure maximum compatibility with this theme: %1$s."
 msgid_plural "The following plugins need to be updated to their latest version to ensure maximum compatibility with this theme: %1$s."
 msgstr[0] ""
@@ -956,6 +996,7 @@ msgstr[1] ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:352
+#, php-format
 msgid "There is an update available for: %1$s."
 msgid_plural "There are updates available for the following plugins: %1$s."
 msgstr[0] ""
@@ -963,6 +1004,7 @@ msgstr[1] ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:358
+#, php-format
 msgid "The following required plugin is currently inactive: %1$s."
 msgid_plural "The following required plugins are currently inactive: %1$s."
 msgstr[0] ""
@@ -970,6 +1012,7 @@ msgstr[1] ""
 
 #. translators: 1: plugin name(s).
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:364
+#, php-format
 msgid "The following recommended plugin is currently inactive: %1$s."
 msgid_plural "The following recommended plugins are currently inactive: %1$s."
 msgstr[0] ""
@@ -1018,16 +1061,19 @@ msgstr[1] ""
 
 #. translators: 1: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:390
+#, php-format
 msgid "No action taken. Plugin %1$s was already active."
 msgstr ""
 
 #. translators: 1: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:392
+#, php-format
 msgid "Plugin not activated. A higher version of %s is needed for this theme. Please update the plugin."
 msgstr ""
 
 #. translators: 1: dashboard link.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:394
+#, php-format
 msgid "All plugins installed and activated successfully. %1$s"
 msgstr ""
 
@@ -1072,6 +1118,7 @@ msgstr ""
 
 #. translators: %s: version number
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:1982
+#, php-format
 msgid "TGMPA v%s"
 msgstr ""
 
@@ -1121,12 +1168,14 @@ msgstr ""
 
 #. translators: 1: install status, 2: update status
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2342
+#, php-format
 msgctxt "Install/Update Status"
 msgid "%1$s, %2$s"
 msgstr ""
 
 #. translators: 1: number of plugins.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2388
+#, php-format
 msgctxt "plugins"
 msgid "All <span class=\"count\">(%s)</span>"
 msgid_plural "All <span class=\"count\">(%s)</span>"
@@ -1135,6 +1184,7 @@ msgstr[1] ""
 
 #. translators: 1: number of plugins.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2392
+#, php-format
 msgid "To Install <span class=\"count\">(%s)</span>"
 msgid_plural "To Install <span class=\"count\">(%s)</span>"
 msgstr[0] ""
@@ -1142,6 +1192,7 @@ msgstr[1] ""
 
 #. translators: 1: number of plugins.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2396
+#, php-format
 msgid "Update Available <span class=\"count\">(%s)</span>"
 msgid_plural "Update Available <span class=\"count\">(%s)</span>"
 msgstr[0] ""
@@ -1149,6 +1200,7 @@ msgstr[1] ""
 
 #. translators: 1: number of plugins.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2400
+#, php-format
 msgid "To Activate <span class=\"count\">(%s)</span>"
 msgid_plural "To Activate <span class=\"count\">(%s)</span>"
 msgstr[0] ""
@@ -1193,16 +1245,19 @@ msgstr ""
 
 #. translators: %2$s: plugin name in screen reader markup
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2603
+#, php-format
 msgid "Install %2$s"
 msgstr ""
 
 #. translators: %2$s: plugin name in screen reader markup
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2608
+#, php-format
 msgid "Update %2$s"
 msgstr ""
 
 #. translators: %2$s: plugin name in screen reader markup
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:2614
+#, php-format
 msgid "Activate %2$s"
 msgstr ""
 
@@ -1252,16 +1307,19 @@ msgstr ""
 
 #. translators: 1: plugin name, 2: action number 3: total number of actions.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3498
+#, php-format
 msgid "Updating Plugin %1$s (%2$d/%3$d)"
 msgstr ""
 
 #. translators: 1: plugin name, 2: error message.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3501
+#, php-format
 msgid "An error occurred while installing %1$s: <strong>%2$s</strong>."
 msgstr ""
 
 #. translators: 1: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3503
+#, php-format
 msgid "The installation of %1$s failed."
 msgstr ""
 
@@ -1271,6 +1329,7 @@ msgstr ""
 
 #. translators: 1: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3509
+#, php-format
 msgid "%1$s installed and activated successfully."
 msgstr ""
 
@@ -1292,6 +1351,7 @@ msgstr ""
 
 #. translators: 1: plugin name, 2: action number 3: total number of actions.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3512
+#, php-format
 msgid "Installing and Activating Plugin %1$s (%2$d/%3$d)"
 msgstr ""
 
@@ -1301,6 +1361,7 @@ msgstr ""
 
 #. translators: 1: plugin name.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3517
+#, php-format
 msgid "%1$s installed successfully."
 msgstr ""
 
@@ -1310,6 +1371,7 @@ msgstr ""
 
 #. translators: 1: plugin name, 2: action number 3: total number of actions.
 #: inc/homepage-setup/tgm/class-tgm-plugin-activation.php:3520
+#, php-format
 msgid "Installing Plugin %1$s (%2$d/%3$d)"
 msgstr ""
 
@@ -1386,6 +1448,7 @@ msgstr ""
 
 #. translators: %s: Name of current post. Only visible to screen readers
 #: inc/template-tags.php:312
+#, php-format
 msgid "Edit <span class=\"screen-reader-text\">%s</span>"
 msgstr ""
 
@@ -1434,26 +1497,31 @@ msgstr ""
 
 #. Translators: %s is the search query.
 #: lib/breadcrumbs/breadcrumbs.php:314
+#, php-format
 msgid "Search results for: %s"
 msgstr ""
 
 #. Translators: %s is the page number.
 #: lib/breadcrumbs/breadcrumbs.php:316
+#, php-format
 msgid "Page %s"
 msgstr ""
 
 #. Translators: %s is the page number.
 #: lib/breadcrumbs/breadcrumbs.php:318
+#, php-format
 msgid "Comment Page %s"
 msgstr ""
 
 #. Translators: Minute archive title. %s is the minute time format.
 #: lib/breadcrumbs/breadcrumbs.php:320
+#, php-format
 msgid "Minute %s"
 msgstr ""
 
 #. Translators: Weekly archive title. %s is the week date format.
 #: lib/breadcrumbs/breadcrumbs.php:322
+#, php-format
 msgid "Week %s"
 msgstr ""
 
@@ -1529,14 +1597,15 @@ msgstr ""
 
 #. translators: %1$s: Link to create a new post.
 #: template-parts/content-none.php:22
+#, php-format
 msgid "Ready to publish your first post? <a href=\"%1$s\">Get started here</a>."
 msgstr ""
 
-#: template-parts/content-none.php:33
+#: template-parts/content-none.php:34
 msgid "Sorry, but nothing matched your search terms. Please try again with some different keywords."
 msgstr ""
 
-#: template-parts/content-none.php:40
+#: template-parts/content-none.php:45
 msgid "It seems we can’t find what you’re looking for. Perhaps searching can help."
 msgstr ""
 
@@ -1546,6 +1615,7 @@ msgstr ""
 
 #. translators: %s: Name of current post.
 #: template-parts/content-single.php:69
+#, php-format
 msgid "Read More %s <span class=\"meta-nav\">&rarr;</span>"
 msgstr ""
 

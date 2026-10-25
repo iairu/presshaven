@@ -16,6 +16,9 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce_Ads_Supported_Countries' ) ) :
 
 	/**
 	 * Class handling the settings page and onboarding Wizard registration and rendering.
+	 *
+	 * @class   Pinterest_For_Woocommerce_Ads_Supported_Countries
+	 * @version 1.5.2
 	 */
 	class Pinterest_For_Woocommerce_Ads_Supported_Countries {
 
@@ -96,7 +99,7 @@ if ( ! class_exists( 'Pinterest_For_Woocommerce_Ads_Supported_Countries' ) ) :
 		 *
 		 * @since 1.2.5
 		 *
-		 * @return bool Wether this is ads supported location.
+		 * @return bool Whether this is ads supported location.
 		 */
 		public static function is_ads_supported_country() {
 			$store_country = Pinterest_For_Woocommerce()::get_base_country();

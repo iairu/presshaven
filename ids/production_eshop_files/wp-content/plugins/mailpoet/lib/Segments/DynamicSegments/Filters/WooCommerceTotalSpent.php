@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\Entities\DynamicSegmentFilterData;
 use MailPoet\Entities\DynamicSegmentFilterEntity;
 use MailPoet\Util\Security;
-use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\DBAL\Query\QueryBuilder;
 
 class WooCommerceTotalSpent implements Filter {
@@ -17,28 +16,25 @@ class WooCommerceTotalSpent implements Filter {
   /** @var WooFilterHelper */
   private $wooFilterHelper;
 
+  /** @var FilterHelper */
+  private $filterHelper;
+
   public function __construct(
-    WooFilterHelper $wooFilterHelper
+    WooFilterHelper $wooFilterHelper,
+    FilterHelper $filterHelper
   ) {
     $this->wooFilterHelper = $wooFilterHelper;
+    $this->filterHelper = $filterHelper;
   }
 
   public function apply(QueryBuilder $queryBuilder, DynamicSegmentFilterEntity $filter): QueryBuilder {
     $filterData = $filter->getFilterData();
     $type = $filterData->getParam('total_spent_type');
     $amount = $filterData->getParam('total_spent_amount');
-    $isAllTime = $filterData->getParam('timeframe') === DynamicSegmentFilterData::TIMEFRAME_ALL_TIME;
 
     $parameterSuffix = $filter->getId() ?? Security::generateRandomString();
     $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
-
-    if (!$isAllTime) {
-      $days = $filterData->getParam('days');
-      $date = Carbon::now()->subDays($days);
-      $dateParam = "date_$parameterSuffix";
-      $queryBuilder->andWhere("$orderStatsAlias.date_created >= :$dateParam")
-        ->setParameter($dateParam, $date->toDateTimeString());
-    }
+    $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData);
 
     $queryBuilder->groupBy('inner_subscriber_id');
 

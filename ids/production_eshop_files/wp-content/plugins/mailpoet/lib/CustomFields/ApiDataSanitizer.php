@@ -97,6 +97,9 @@ class ApiDataSanitizer {
   private function getExtraParamsForText($params) {
     if (isset($params['validate'])) {
       $validate = trim(strtolower($params['validate']));
+      if ($validate === '') {
+        return [];
+      }
       if (in_array($validate, ['number', 'alphanum', 'phone'], true)) {
         return ['validate' => $validate];
       }
@@ -131,7 +134,7 @@ class ApiDataSanitizer {
         $dateFormat = $inputDateFormat;
         break;
       case 'year_month':
-        if (!in_array($inputDateFormat, ['YYYY/MM', 'MM/YY'], true)) {
+        if (!in_array($inputDateFormat, ['YYYY/MM', 'MM/YYYY', 'MM/YY'], true)) {
           throw new InvalidArgumentException(__('Invalid date_format for year_month', 'mailpoet'), self::ERROR_INVALID_DATE_FORMAT);
         }
         $dateFormat = $inputDateFormat;
@@ -151,6 +154,7 @@ class ApiDataSanitizer {
     return [
       'date_type' => $dateType,
       'date_format' => $dateFormat,
+      'is_default_today' => !empty($params['is_default_today']) ? '1' : '',
     ];
   }
 

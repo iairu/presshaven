@@ -23,6 +23,18 @@ class Wcar_Admin {
 	private static $instance;
 
 	/**
+	 * Wizard step slugs valid as an exit/resume point.
+	 *
+	 * Mirrors the `analyticsSlug` values in
+	 * admin/src/components/onboarding/onboardingRoutesConfig.js, same order, minus the
+	 * terminal "finish" step (onboarding is already complete by then, never a resume
+	 * target). Keep both lists in sync when a step is added, renamed, or reordered.
+	 *
+	 * @var string[]
+	 */
+	private const ONBOARDING_STEP_SLUGS = [ 'welcome', 'recovery-settings', 'follow-up-channels', 'report-email', 'addons' ];
+
+	/**
 	 * Constructor function that initializes required actions and hooks.
 	 */
 	public function __construct() {
@@ -33,6 +45,7 @@ class Wcar_Admin {
 		add_action( 'wp_ajax_cart_abandonment_install_plugin', 'wp_ajax_install_plugin' );
 		add_action( 'wp_ajax_cart_abandonment_activate_plugin', [ $this, 'cart_abandonment_activate_plugin' ] );
 		add_action( 'wp_ajax_wcar_complete_onboarding', [ $this, 'complete_onboarding' ] );
+		add_action( 'wp_ajax_wcar_onboarding_exit', [ $this, 'onboarding_exit' ] );
 		add_action( 'admin_post_wcar_rollback', [ $this, 'post_wcar_rollback' ] );
 	}
 
@@ -106,14 +119,13 @@ class Wcar_Admin {
 		// Enqueue media scripts for the media uploader.
 		wp_enqueue_media();
 
-		wp_enqueue_script( $handle . '-ottokit-integration', 'https://app.suretriggers.com/js/v2/embed.js', [], CARTFLOWS_CA_VER, true );
-
 		$data_vars = [
 			'ajax_url'                => admin_url( 'admin-ajax.php' ),
 			
 			// Pro Plugin Status - Following CartFlows pattern.
 			'wcar_pro_status'         => $this->get_plugin_status( 'woo-cart-abandonment-recovery-pro/woo-cart-abandonment-recovery-pro.php' ),
 			'wcar_pro_type'           => $this->get_version_display(),
+			'version'                 => CARTFLOWS_CA_VER,
 			'is_pro'                  => _is_wcar_pro(),
 			'upgrade_to_pro_url'      => wcf_ca()->helper->get_upgrade_to_pro_url( 'cart-abandonment-recovery/pricing/' ),
 			'license_status'          => _is_wcar_pro_license_activated(),
@@ -160,6 +172,15 @@ class Wcar_Admin {
 					],
 					admin_url( 'admin-ajax.php' )
 				),
+				'exitUrl'              => add_query_arg(
+					[
+						'action' => 'wcar_onboarding_exit',
+						'nonce'  => wp_create_nonce( 'wcar_onboarding_nonce' ),
+					],
+					admin_url( 'admin-ajax.php' )
+				),
+				'skipped'              => (bool) get_option( 'wcar_onboarding_skipped', false ),
+				'resume_step'          => sanitize_key( get_option( 'wcar_onboarding_exit_step', '' ) ),
 				'defaults'             => $this->get_onboarding_defaults(),
 			],
 			'rollback_url'            => esc_url( add_query_arg( 'version', 'VERSION', wp_nonce_url( admin_url( 'admin-post.php?action=wcar_rollback' ), 'wcar_rollback' ) ) ),
@@ -315,11 +336,29 @@ class Wcar_Admin {
 		if ( empty( $plugin_slug ) ) {
 			wp_send_json_error( [ 'message' => 'Invalid plugin slug.' ] );
 		}
+		// Not silent: a silent activation skips the plugin's own activation hook, so its
+		// tables, default options and roles would never be created.
 		$activation_result = activate_plugin( $plugin_slug );
 		if ( is_wp_error( $activation_result ) ) {
 			wp_send_json_error( [ 'message' => 'Plugin activation failed: ' . $activation_result->get_error_message() ] );
 		}
+		$this->clear_activation_redirects();
 		wp_send_json_success( [ 'message' => 'Plugin activated successfully.' ] );
+	}
+
+	/**
+	 * Drop the redirect flags that the add-ons set on activation.
+	 *
+	 * Left in place, the next admin request would send the merchant into the add-on's own
+	 * onboarding and away from this wizard or dashboard.
+	 *
+	 * @return void
+	 */
+	private function clear_activation_redirects(): void {
+		delete_transient( 'moderncart_redirect_to_onboarding' );
+		delete_transient( 'st-redirect-after-activation' );
+		delete_transient( 'power_coupons_redirect_to_onboarding' );
+		delete_option( 'wcf_start_onboarding' );
 	}
 
 	/**
@@ -418,27 +457,28 @@ class Wcar_Admin {
 		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'woo-cart-abandonment-recovery' ) );
+			// JSON, not wp_die()'s HTML page: this is an AJAX endpoint, and the caller
+			// expects a JSON body to parse either way.
+			wp_send_json_error( [ 'message' => esc_html__( 'You do not have sufficient permissions to access this page.', 'woo-cart-abandonment-recovery' ) ] );
 		}
 
 		$raw_input       = file_get_contents( 'php://input' ); // phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsRemoteFile
 		$onboarding_data = is_string( $raw_input ) ? json_decode( $raw_input, true ) : null;
 
 		if ( empty( $onboarding_data ) || ! is_array( $onboarding_data ) ) {
-			Wcar_Onboarding::get_instance()->set_onboarding_status( true );
-			update_option( 'wcar_onboarding_skipped', true );
-			wp_send_json_success();
+			wp_send_json_error( [ 'message' => esc_html__( 'Missing onboarding data.', 'woo-cart-abandonment-recovery' ) ] );
 		}
 
-		$plugin_slugs = $onboarding_data['plugins'];
+		$has_skipped_user_details = ! empty( $onboarding_data['hasSkippedUserDetails'] );
 
 		$user_details_data = [
-			'first_name' => $onboarding_data['userDetails']['user_detail_firstname'],
-			'last_name'  => $onboarding_data['userDetails']['user_detail_lastname'],
-			'email'      => $onboarding_data['userDetails']['user_detail_email'],
+			'first_name' => sanitize_text_field( $onboarding_data['userDetails']['user_detail_firstname'] ?? '' ),
+			'last_name'  => sanitize_text_field( $onboarding_data['userDetails']['user_detail_lastname'] ?? '' ),
+			'email'      => sanitize_email( $onboarding_data['userDetails']['user_detail_email'] ?? '' ),
 		];
 
-		if ( ! empty( $user_details_data ) && ! empty( $user_details_data['email'] ) ) {
+		// A skipped step never reaches the subscribe webhook, even if it left behind a valid-looking email.
+		if ( ! $has_skipped_user_details && ! empty( $user_details_data['email'] ) && is_email( $user_details_data['email'] ) ) {
 			$encoded_body = wp_json_encode( $user_details_data );
 			wp_remote_post(
 				WCAR_ONBOARDING_USER_SUB_WORKFLOW_URL,
@@ -452,101 +492,57 @@ class Wcar_Admin {
 		}
 		
 		// Convert analytics optin value to 'yes' if it's truthy, otherwise keep as is.
-		$analytics_optin_value = $onboarding_data['userDetails']['wcar_usage_optin'];
-		
+		$analytics_optin_value = $onboarding_data['userDetails']['wcar_usage_optin'] ?? false;
+
 		if ( true === $analytics_optin_value ) {
 			$analytics_optin_value = 'yes';
 		}
 		
 		wcf_ca()->helper->save_meta_fields( 'wcar_usage_optin', $analytics_optin_value );
 
-		$installable_plugin_slugs = [];
-		if ( ! empty( $plugin_slugs ) && is_array( $plugin_slugs ) ) {
-			foreach ( $plugin_slugs as $slug => $should_install ) {
-				if ( filter_var( $should_install, FILTER_VALIDATE_BOOLEAN ) ) {
-					$installable_plugin_slugs[] = sanitize_key( $slug );
-				}
-			}
-		}
-
-		// Add plugin installation logic in complete_onboarding() method after mapped_data loop.
-		if ( ! empty( $installable_plugin_slugs ) ) {
-			$this->install_plugin( $installable_plugin_slugs );
-		}
-
+		// Selected add-ons are installed one at a time by the Add-ons step itself, via
+		// `cart_abandonment_install_plugin`/`cart_abandonment_activate_plugin`, before this
+		// request is ever sent — so the choices in `$onboarding_data['plugins']` are already
+		// acted on and this request only has to record completion.
 		Wcar_Onboarding::get_instance()->set_onboarding_status( true );
+		// Clear any earlier skip so a genuine finish is the recorded outcome.
+		delete_option( 'wcar_onboarding_skipped' );
+		delete_option( 'wcar_onboarding_exit_step' );
 
 		wp_send_json_success();
 	}
 
 	/**
-	 * Installs and activates the requested plugins if they are not already active.
+	 * Records that the merchant left the wizard partway through, and where, so the
+	 * dashboard's Quick Access widget can offer "Resume Setup" at the right step.
 	 *
-	 * @param array $installable_plugin_slugs List of sanitized plugin slugs to install/activate.
-	 * @return void
+	 * Deliberately separate from complete_onboarding(): that endpoint does real work
+	 * (webhook, saved settings, onboarding_completed), none of which an exit should
+	 * trigger.
 	 */
-	public function install_plugin( $installable_plugin_slugs ) {
-		
-		require_once ABSPATH . 'wp-admin/includes/plugin.php';
-		require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
-		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
-
-		$installed_plugins = get_plugins();
-
-		foreach ( $installable_plugin_slugs as $plugin_slug ) {
-			$installed_path = null;
-
-			// Detect an existing installation.
-			foreach ( $installed_plugins as $installed_plugin_path => $data ) {
-				if ( strpos( $installed_plugin_path, $plugin_slug . '/' ) === 0 ) {
-					$installed_path = $installed_plugin_path;
-					break;
-				}
-			}
-
-			// Install if not present.
-			if ( ! $installed_path ) {
-				$api = plugins_api(
-					'plugin_information',
-					[
-						'slug'   => (string) $plugin_slug,
-						'fields' => [
-							'short_description' => false,
-							'sections'          => false,
-							'requires'          => false,
-							'rating'            => false,
-							'ratings'           => false,
-							'downloaded'        => false,
-							'last_updated'      => false,
-							'added'             => false,
-							'tags'              => false,
-							'compatibility'     => false,
-							'homepage'          => false,
-							'donate_link'       => false,
-						],
-					]
-				);
-
-				if ( is_wp_error( $api ) || ! is_object( $api ) || empty( $api->download_link ) ) {
-					continue;
-				}
-
-				$upgrader = new \Plugin_Upgrader( new \WP_Ajax_Upgrader_Skin() );
-				$install  = $upgrader->install( $api->download_link );
-
-				if ( is_wp_error( $install ) ) {
-					continue;
-				}
-
-				$installed_path = $upgrader->plugin_info();
-			}
-
-			// Activate if we have a path and it isn't active yet.
-			if ( $installed_path && ! is_plugin_active( $installed_path ) ) {
-				activate_plugin( $installed_path );
-			}
+	public function onboarding_exit(): void {
+		if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'wcar_onboarding_nonce' ) ) {
+			wp_send_json_error( [ 'message' => esc_html__( 'Nonce verification failed.', 'woo-cart-abandonment-recovery' ) ] );
 		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => esc_html__( 'You do not have sufficient permissions to access this page.', 'woo-cart-abandonment-recovery' ) ] );
+		}
+
+		$raw_input = file_get_contents( 'php://input' ); // phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsRemoteFile
+		$body      = is_string( $raw_input ) ? json_decode( $raw_input, true ) : null;
+		$exit_step = is_array( $body ) && ! empty( $body['exit_step'] ) ? sanitize_key( $body['exit_step'] ) : '';
+
+		// Checked against the real step list rather than trusted outright, since it
+		// ends up in a redirect URL the next time the dashboard is loaded.
+		if ( ! in_array( $exit_step, self::ONBOARDING_STEP_SLUGS, true ) ) {
+			$exit_step = 'welcome';
+		}
+
+		update_option( 'wcar_onboarding_skipped', true );
+		update_option( 'wcar_onboarding_exit_step', $exit_step );
+
+		wp_send_json_success();
 	}
 
 	/**
@@ -554,7 +550,7 @@ class Wcar_Admin {
 	 *
 	 * Rollback to previous WCAR version.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access public
 	 * @return void
 	 */

@@ -12,9 +12,11 @@ use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
 use WooCommerce\PayPalCommerce\Session\Cancellation\CancelController;
 use WooCommerce\PayPalCommerce\Session\Cancellation\CancelView;
 return array('session.handler' => function (ContainerInterface $container): \WooCommerce\PayPalCommerce\Session\SessionHandler {
-    return new \WooCommerce\PayPalCommerce\Session\SessionHandler();
+    return new \WooCommerce\PayPalCommerce\Session\SessionHandler($container->get('woocommerce.logger.woocommerce'));
+}, 'session.order-reloader' => static function (ContainerInterface $container): \WooCommerce\PayPalCommerce\Session\SessionOrderReloader {
+    return new \WooCommerce\PayPalCommerce\Session\SessionOrderReloader($container->get('api.endpoint.order'), $container->get('woocommerce.logger.woocommerce'));
 }, 'session.cancellation.view' => function (ContainerInterface $container): CancelView {
-    return new CancelView($container->get('wcgateway.settings'), $container->get('wcgateway.funding-source.renderer'));
+    return new CancelView($container->get('settings.settings-provider'), $container->get('wcgateway.funding-source.renderer'));
 }, 'session.cancellation.controller' => function (ContainerInterface $container): CancelController {
     return new CancelController($container->get('session.handler'), $container->get('session.cancellation.view'), $container->get('button.helper.context'));
 });

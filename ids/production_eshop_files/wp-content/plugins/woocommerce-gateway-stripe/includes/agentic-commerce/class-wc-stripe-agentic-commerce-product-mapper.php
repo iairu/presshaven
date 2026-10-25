@@ -1,0 +1,1469 @@
+<?php
+/**
+ * Product Mapper class for Stripe Agentic Commerce.
+ *
+ * @package WooCommerce_Stripe
+ * @since 10.5.0
+ */
+
+declare(strict_types=1);
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+use Automattic\WooCommerce\Enums\ProductStockStatus;
+use Automattic\WooCommerce\Enums\ProductType;
+use Automattic\WooCommerce\Internal\ProductFeed\Feed\ProductMapperInterface;
+use Automattic\WooCommerce\Internal\ProductFeed\Utils\StringHelper;
+
+/**
+ * Maps WooCommerce products to Stripe Agentic Commerce feed format.
+ *
+ * Converts WooCommerce product data into Stripe Product Catalog CSV specification.
+ * Uses schema-driven approach to ensure all required fields are mapped correctly.
+ *
+ * @since 10.5.0
+ */
+class WC_Stripe_Agentic_Commerce_Product_Mapper implements ProductMapperInterface {
+	/**
+	 * Reasons a product is excluded from the feed, as reported by
+	 * {@see self::get_sync_exclusion_reason()} and surfaced in the feed preview.
+	 */
+	public const SYNC_EXCLUSION_REASON_SUBSCRIPTION = 'subscription';
+	public const SYNC_EXCLUSION_REASON_ADDONS       = 'addons';
+	public const SYNC_EXCLUSION_REASON_FILTER       = 'filter';
+
+	/**
+	 * Postmeta keys whose non-empty presence marks a product as carrying add-on /
+	 * configurator options: Product Add-Ons, TM Extra Product Options, and
+	 * Composite Products. Seeds the
+	 * `wc_stripe_agentic_commerce_addon_detection_meta_keys` filter default;
+	 * the Bundles key is checked separately (only `yes` counts). See
+	 * {@see self::product_has_addons()}.
+	 */
+	private const ADDON_DETECTION_META_KEYS = [
+		'_product_addons',
+		'tm_meta_cpf_options',
+		'composite_data',
+	];
+
+	/**
+	 * Product Bundles' priced-individually flag; an add-on signal only when `yes`.
+	 */
+	private const ADDON_META_BUNDLE_PRICED_INDIVIDUALLY = '_wc_pb_priced_individually';
+
+	/**
+	 * Stripe feed schema definition.
+	 *
+	 * @var array
+	 */
+	protected array $schema;
+
+	/**
+	 * Cached shipping data to prevent repeated queries.
+	 *
+	 * @var string|null
+	 */
+	private ?string $cached_shipping_data = null;
+
+	/**
+	 * Cached shipping zones to prevent repeated API calls.
+	 *
+	 * @var array|null
+	 */
+	private ?array $cached_shipping_zones = null;
+
+	/**
+	 * Initialize mapper with schema.
+	 *
+	 * @since 10.5.0
+	 */
+	public function __construct() {
+		$this->schema = WC_Stripe_Agentic_Commerce_Feed_Schema::get_schema();
+	}
+
+	/**
+	 * Map WooCommerce product to feed row.
+	 *
+	 * Main entry point for converting a WooCommerce product into Stripe feed format.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product to map.
+	 * @return array Mapped product data array.
+	 * @throws RuntimeException If the parent product is not found.
+	 */
+	public function map_product( \WC_Product $product ): array {
+		return $this->map_product_with_diagnostics( $product )['row'];
+	}
+
+	/**
+	 * Map a product and capture the diagnostic context in the same pass: whether
+	 * it was excluded (and why), and which layer disabled its checkout.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product $product Product to map.
+	 * @return array{row: array, excluded: bool, exclusion_reason: ?string, disable_checkout_source: ?string}
+	 * @throws RuntimeException When a variation's parent product no longer exists.
+	 */
+	public function map_product_with_diagnostics( \WC_Product $product ): array {
+		// Per-product visibility gate. Returning an empty row causes the validator's
+		// required-field check to reject it, so the walker skips the entry. Adapters
+		// (e.g. WC AI Storefront) that want to scope the catalog at query time should
+		// prefer the `wc_stripe_agentic_commerce_product_query_args` filter so excluded
+		// products aren't iterated at all; this hook is the per-product safety net.
+		if ( ! self::should_sync_product( $product ) ) {
+			return [
+				'row'                     => [],
+				'excluded'                => true,
+				// should_sync_product() is already false here, so classify directly
+				// instead of get_sync_exclusion_reason() to avoid re-firing the sync
+				// filter and risking a verdict that disagrees with this evaluation.
+				'exclusion_reason'        => self::classify_sync_exclusion( $product ),
+				'disable_checkout_source' => null,
+			];
+		}
+
+		$row = [];
+
+		$parent_product = null;
+		if ( ProductType::VARIATION === $product->get_type() ) {
+			$parent_product = wc_get_product( $product->get_parent_id() );
+			if ( ! $parent_product ) {
+				throw new RuntimeException(
+					esc_html(
+						sprintf(
+							/* translators: %s: product ID */
+							__( 'Parent product not found for variation: %s', 'woocommerce-gateway-stripe' ),
+							$product->get_id()
+						)
+					)
+				);
+			}
+		}
+
+		$disable_checkout_source = null;
+
+		foreach ( $this->schema as $field => $config ) {
+			// Resolve checkout once and reuse it for both the row and the advisory
+			// source, keeping the field's mapped value identical to map_field()
+			// (this field has no schema default, so convert_type() alone matches).
+			if ( 'disable_checkout' === $field ) {
+				$checkout                = $this->resolve_disable_checkout( $product, $parent_product );
+				$disable_checkout_source = $checkout['disabled'] ? $checkout['source'] : null;
+				$row[ $field ]           = $this->convert_type( $checkout['disabled'], $config );
+				continue;
+			}
+
+			$row[ $field ] = $this->map_field( $product, $field, $config, $parent_product );
+		}
+
+		/**
+		 * Filter mapped product data before validation.
+		 *
+		 * @since 10.5.0
+		 * @param array            $row             Mapped product data.
+		 * @param \WC_Product      $product         Product object.
+		 * @param \WC_Product|null $parent_product  Parent product for variations.
+		 */
+		$row = apply_filters( 'wc_stripe_agentic_commerce_map_product', $row, $product, $parent_product );
+
+		return [
+			'row'                     => $row,
+			'excluded'                => false,
+			'exclusion_reason'        => null,
+			'disable_checkout_source' => $disable_checkout_source,
+		];
+	}
+
+	/**
+	 * Map individual field based on configuration.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param string           $field          Field name to map.
+	 * @param array            $config         Field configuration from schema.
+	 * @param \WC_Product|null $parent_product Parent product for variations.
+	 * @return mixed Mapped field value.
+	 */
+	protected function map_field( \WC_Product $product, string $field, array $config, ?\WC_Product $parent_product = null ) {
+		$mapper_method = 'get_' . $field;
+
+		if ( method_exists( $this, $mapper_method ) ) {
+			$value = $this->$mapper_method( $product, $parent_product );
+		} else {
+			$value = null;
+		}
+
+		if ( empty( $value ) && isset( $config['default'] ) ) {
+			$value = $config['default'];
+		}
+
+		return $this->convert_type( $value, $config );
+	}
+
+	/**
+	 * Convert value to appropriate type.
+	 *
+	 * @since 10.5.0
+	 * @param mixed $value  Value to convert.
+	 * @param array $config Field configuration.
+	 * @return mixed Converted value.
+	 */
+	protected function convert_type( $value, array $config ) {
+		if ( null === $value || '' === $value ) {
+			return $value;
+		}
+
+		switch ( $config['type'] ) {
+			case 'integer':
+				return (int) $value;
+
+			case 'string':
+				$value = (string) $value;
+				if ( isset( $config['max_length'] ) ) {
+					$value = StringHelper::truncate( $value, $config['max_length'] );
+				}
+				return $value;
+
+			case 'boolean':
+				return $value ? 'true' : 'false';
+
+			default:
+				return $value;
+		}
+	}
+
+	/**
+	 * Get the catalog row id Stripe will surface back as `price.external_reference`.
+	 *
+	 * Returns the WooCommerce SKU when present so the merchant's identifier shows
+	 * up in Stripe's UI and downstream lookups can resolve via `wc_get_product_id_by_sku()`.
+	 * Falls back to the product ID for SKU-less products so the legacy contract — which
+	 * keyed catalogs by product ID — keeps working.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string SKU when present, otherwise the product ID as a string.
+	 */
+	protected function get_id( \WC_Product $product ): string {
+		$sku = $product->get_sku();
+		if ( '' !== $sku ) {
+			return $sku;
+		}
+		return (string) $product->get_id();
+	}
+
+	/**
+	 * Get product title.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Product title with HTML tags stripped.
+	 */
+	protected function get_title( \WC_Product $product ): string {
+		return wp_strip_all_tags( $product->get_name() );
+	}
+
+	/**
+	 * Get product description.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Product description with HTML tags stripped.
+	 */
+	protected function get_description( \WC_Product $product ): string {
+		$description = $product->get_description() ? $product->get_description() : $product->get_short_description();
+		$description = wp_strip_all_tags( $description );
+
+		// If no description, use the product title as fallback.
+		if ( empty( $description ) ) {
+			$description = wp_strip_all_tags( $product->get_name() );
+		}
+
+		return $description;
+	}
+
+	/**
+	 * Get product permalink.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Product permalink URL.
+	 */
+	protected function get_link( \WC_Product $product ): string {
+		return $product->get_permalink();
+	}
+
+	/**
+	 * Whether to exclude this product from in-agent checkout (feed-only / redirect).
+	 *
+	 * @since 10.9.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for variations.
+	 * @return bool
+	 */
+	protected function get_disable_checkout( \WC_Product $product, ?\WC_Product $parent_product = null ): bool {
+		return $this->resolve_disable_checkout( $product, $parent_product )['disabled'];
+	}
+
+	/**
+	 * Resolve the `disable_checkout` (feed-only / redirect) decision plus the
+	 * source it came from, for the feed preview. Precedence, lowest first:
+	 * store-wide option, add-on auto-default, then filters (a hook always wins,
+	 * keeping the first two opt-in defaults). Applies the `disable_checkout`
+	 * filters, so any merchant hook runs here.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for variations.
+	 * @return array{disabled: bool, source: string|null} Decision plus its source
+	 *         ('store_wide' | 'addons' | 'filter' | null when not disabled).
+	 */
+	public function resolve_disable_checkout( \WC_Product $product, ?\WC_Product $parent_product = null ): array {
+		$store_wide = WC_Stripe_Agentic_Commerce_Integration::is_checkout_disabled();
+
+		// Only relevant when store-wide hasn't already disabled checkout.
+		$addon_default = ! $store_wide
+			&& WC_Stripe_Agentic_Commerce_Integration::is_auto_redirect_checkout_addons_enabled()
+			&& self::product_has_addons( $product );
+
+		$default = $store_wide || $addon_default;
+
+		// The woocommerce_-prefixed filter shipped in 10.9.0 anticipating a shared
+		// cross-plugin contract that was never implemented, so it has been deprecated.
+		$disabled = apply_filters_deprecated(
+			'woocommerce_agentic_commerce_disable_checkout',
+			[ $default, $product, $parent_product ],
+			'11.1.0',
+			'wc_stripe_agentic_commerce_disable_checkout',
+			'The woocommerce_agentic_commerce_disable_checkout filter is deprecated since WooCommerce Stripe Gateway 11.1.0. Use wc_stripe_agentic_commerce_disable_checkout instead.'
+		);
+
+		/**
+		 * Filter whether a product is excluded from in-agent checkout (redirect to its `link`).
+		 *
+		 * Variations receive the parent product.
+		 *
+		 * @since 10.9.0
+		 * @param bool             $disabled       Resolved default (store-wide option, plus the add-on auto-default).
+		 * @param \WC_Product      $product        Product object.
+		 * @param \WC_Product|null $parent_product Parent product for variations.
+		 */
+		$disabled = apply_filters( 'wc_stripe_agentic_commerce_disable_checkout', $disabled, $product, $parent_product );
+
+		// wp_validate_boolean() rather than a plain (bool) cast: a callback that
+		// returns the string 'false' would be truthy under a cast and wrongly
+		// enable redirect mode. This still normalises null / 0 / '' to false.
+		$disabled = wp_validate_boolean( $disabled );
+
+		$source = null;
+		if ( $disabled ) {
+			if ( $store_wide ) {
+				$source = 'store_wide';
+			} elseif ( $addon_default ) {
+				$source = 'addons';
+			} else {
+				// Default was false but a filter forced it true.
+				$source = 'filter';
+			}
+		}
+
+		return [
+			'disabled' => $disabled,
+			'source'   => $source,
+		];
+	}
+
+	/**
+	 * Get product GTIN.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product GTIN or null.
+	 */
+	protected function get_gtin( \WC_Product $product ): ?string {
+		$override = $product->get_meta( '_gtin' );
+		if ( empty( $override ) ) {
+			return $product->get_global_unique_id();
+		}
+		return $override;
+	}
+
+	/**
+	 * Get product MPN.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product MPN or null.
+	 */
+	protected function get_mpn( \WC_Product $product ): ?string {
+		$mpn = $product->get_meta( '_mpn' );
+		if ( $mpn ) {
+			return $mpn;
+		}
+
+		if ( ! $product->get_global_unique_id() ) {
+			return $this->generate_mpn( $product );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Generate MPN using product ID and trimmed product name.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Generated MPN.
+	 */
+	private function generate_mpn( \WC_Product $product ): string {
+		$product_id   = $product->get_id();
+		$product_name = trim( wp_strip_all_tags( $product->get_name() ) );
+
+		$hash_input = $product_id . '_' . $product_name;
+		$hash       = hash( 'crc32', $hash_input );
+
+		return 'MPN-' . str_pad( $hash, 8, '0', STR_PAD_LEFT );
+	}
+
+	/**
+	 * Get product category path.
+	 *
+	 * Returns the deepest (most specific) category path with hierarchical structure using " > " separator.
+	 * When a product has multiple categories, selects the one with the most levels.
+	 * Example: "Apparel & Accessories > Shoes > Running Shoes"
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for variations.
+	 * @return string|null Product category path or null.
+	 */
+	protected function get_product_category( \WC_Product $product, ?\WC_Product $parent_product ): ?string {
+		$check_product = $parent_product ?? $product;
+
+		// Find the deepest category by counting ancestors.
+		$category_deepest_id  = null;
+		$ancestor_deepest_ids = [];
+		$max_depth            = -1;
+
+		foreach ( $check_product->get_category_ids() as $category_id ) {
+			$ancestor_ids = get_ancestors( $category_id, 'product_cat', 'taxonomy' );
+			$depth        = count( $ancestor_ids );
+
+			if ( $depth > $max_depth ) {
+				$max_depth            = $depth;
+				$category_deepest_id  = $category_id;
+				$ancestor_deepest_ids = $ancestor_ids;
+			}
+		}
+
+		if ( null === $category_deepest_id ) {
+			return null;
+		}
+
+		// Build up the ID list with correct hierarchical order.
+		$ordered_ids   = array_reverse( $ancestor_deepest_ids );
+		$ordered_ids[] = $category_deepest_id;
+
+		// Get all ordered category names, and concatenate them.
+		$ordered_names = [];
+		foreach ( $ordered_ids as $term_id ) {
+			$term = get_term( $term_id, 'product_cat' );
+			if ( $term && ! is_wp_error( $term ) ) {
+				$ordered_names[ $term_id ] = $term->name;
+			}
+		}
+
+		return empty( $ordered_names ) ? null : implode( ' > ', $ordered_names );
+	}
+
+	/**
+	 * Get product brand.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for fallback.
+	 * @return string|null Product brand or Generic.
+	 */
+	protected function get_brand( \WC_Product $product, ?\WC_Product $parent_product = null ): ?string {
+		$brand = $product->get_attribute( 'pa_brand' );
+		if ( ! $brand && $parent_product ) {
+			$brand = $parent_product->get_attribute( 'pa_brand' );
+		}
+
+		// Try product_brand taxonomy if it exists.
+		if ( ! $brand && taxonomy_exists( 'product_brand' ) ) {
+			$terms = get_the_terms( $product->get_id(), 'product_brand' );
+			if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+				$brand = $terms[0]->name;
+			}
+		}
+
+		return $brand ? $brand : 'Generic';
+	}
+
+	/**
+	 * Get product material.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product material or null.
+	 */
+	protected function get_material( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_material' );
+	}
+
+	/**
+	 * Get product condition.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Product condition, defaults to 'new'.
+	 */
+	protected function get_condition( \WC_Product $product ): string {
+		$condition = $product->get_meta( '_condition' );
+		return empty( $condition ) ? 'new' : $condition;
+	}
+
+	/**
+	 * Get product age group.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product age group or null.
+	 */
+	protected function get_age_group( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_age_group' );
+	}
+
+	/**
+	 * Get product weight with unit.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product weight with unit or null.
+	 */
+	protected function get_weight( \WC_Product $product ): ?string {
+		$weight = $product->get_weight();
+		if ( ! $weight ) {
+			return null;
+		}
+
+		$unit = $this->get_weight_unit();
+		return $weight . ' ' . $unit;
+	}
+
+	/**
+	 * Get product length with unit.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product length with unit or null.
+	 */
+	protected function get_length( \WC_Product $product ): ?string {
+		return $this->format_dimension( $product->get_length() );
+	}
+
+	/**
+	 * Get product width with unit.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product width with unit or null.
+	 */
+	protected function get_width( \WC_Product $product ): ?string {
+		return $this->format_dimension( $product->get_width() );
+	}
+
+	/**
+	 * Get product height with unit.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product height with unit or null.
+	 */
+	protected function get_height( \WC_Product $product ): ?string {
+		return $this->format_dimension( $product->get_height() );
+	}
+
+	/**
+	 * Get product main image link.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for fallback.
+	 * @return string Product image URL.
+	 */
+	protected function get_image_link( \WC_Product $product, ?\WC_Product $parent_product ): string {
+		return $this->get_main_image( $product, $parent_product );
+	}
+
+	/**
+	 * Get product additional image links.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for fallback.
+	 * @return string|null Comma-separated product gallery image URLs.
+	 */
+	protected function get_additional_image_link( \WC_Product $product, ?\WC_Product $parent_product ): ?string {
+		$gallery_ids = $product->get_gallery_image_ids();
+		if ( empty( $gallery_ids ) && $parent_product ) {
+			$gallery_ids = $parent_product->get_gallery_image_ids();
+		}
+
+		$urls = array_filter( array_map( 'wp_get_attachment_url', $gallery_ids ) );
+
+		// Limit to 10 images per Stripe spec.
+		$urls = array_slice( $urls, 0, 10 );
+
+		return empty( $urls ) ? null : implode( ',', $urls );
+	}
+
+	/**
+	 * Get product price with currency.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product price or null.
+	 */
+	protected function get_price( \WC_Product $product ): ?string {
+		return $this->format_price( $product->get_regular_price(), $this->get_currency_code() );
+	}
+
+	/**
+	 * Get product sale price with currency.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product sale price or null.
+	 */
+	protected function get_sale_price( \WC_Product $product ): ?string {
+		return $this->format_price( $product->get_sale_price(), $this->get_currency_code() );
+	}
+
+	/**
+	 * Get product sale price effective date.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product sale price effective date or null.
+	 */
+	protected function get_sale_price_effective_date( \WC_Product $product ): ?string {
+		return $this->get_sale_date_range( $product );
+	}
+
+	/**
+	 * Get product availability status.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string Product availability status.
+	 */
+	protected function get_availability( \WC_Product $product ): string {
+		$stock_status = $product->get_stock_status();
+
+		switch ( $stock_status ) {
+			case ProductStockStatus::IN_STOCK:
+				return 'in_stock';
+			case ProductStockStatus::OUT_OF_STOCK:
+				return 'out_of_stock';
+			case ProductStockStatus::ON_BACKORDER:
+				return 'backorder';
+			default:
+				return 'out_of_stock';
+		}
+	}
+
+	/**
+	 * Get product inventory quantity.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return int|null Product inventory quantity or null.
+	 */
+	protected function get_inventory_quantity( \WC_Product $product ): ?int {
+		// When stock is not tracked, inventory_quantity must be blank per Stripe spec.
+		if ( ! $product->managing_stock() ) {
+			return null;
+		}
+
+		return $product->get_stock_quantity();
+	}
+
+	/**
+	 * Get inventory_not_tracked flag.
+	 *
+	 * Returns 'true' for products without stock management (virtual, digital, etc.)
+	 * and 'false' for products that track inventory.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return bool Whether inventory is not tracked.
+	 */
+	protected function get_inventory_not_tracked( \WC_Product $product ): bool {
+		return ! $product->managing_stock();
+	}
+
+	/**
+	 * Get product item group ID.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for group ID.
+	 * @return string|null Parent product ID or null.
+	 */
+	protected function get_item_group_id( \WC_Product $product, ?\WC_Product $parent_product = null ): ?string {
+		if ( ! $parent_product ) {
+			return null;
+		}
+		return (string) $parent_product->get_id();
+	}
+
+	/**
+	 * Get product item group title.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for title.
+	 * @return string|null Parent product title or null.
+	 */
+	protected function get_item_group_title( \WC_Product $product, ?\WC_Product $parent_product = null ): ?string {
+		return $parent_product ? wp_strip_all_tags( $parent_product->get_name() ) : null;
+	}
+
+	/**
+	 * Get product color.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product color or null.
+	 */
+	protected function get_color( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_color' );
+	}
+
+	/**
+	 * Get product size.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product size or null.
+	 */
+	protected function get_size( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_size' );
+	}
+
+	/**
+	 * Get product size system.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product size system or null.
+	 */
+	protected function get_size_system( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_size_system' );
+	}
+
+	/**
+	 * Get product gender.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Product gender or null.
+	 */
+	protected function get_gender( \WC_Product $product ): ?string {
+		return $this->get_attribute_or_return_null( $product, 'pa_gender' );
+	}
+
+	/**
+	 * Get Stripe product tax code.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Stripe tax code or null.
+	 */
+	protected function get_stripe_product_tax_code( \WC_Product $product ): ?string {
+		$tax_class = $product->get_tax_class();
+
+		/**
+		 * Filter to map WooCommerce tax class to Stripe tax code.
+		 *
+		 * @since 10.5.0
+		 * @param string|null $tax_code  Stripe tax code (format: txcd_99999999) or null.
+		 * @param string      $tax_class WooCommerce tax class.
+		 * @param \WC_Product $product   Product object.
+		 */
+		return apply_filters( 'wc_stripe_agentic_commerce_tax_code', null, $tax_class, $product );
+	}
+
+	/**
+	 * Get tax behavior (inclusive/exclusive).
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Tax behavior or null.
+	 */
+	protected function get_tax_behavior( \WC_Product $product ): ?string {
+		$prices_include_tax = get_option( 'woocommerce_prices_include_tax' );
+		return 'yes' === $prices_include_tax ? 'inclusive' : 'exclusive';
+	}
+
+	/**
+	 * Get product review count.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return int|null Number of reviews or null.
+	 */
+	protected function get_product_review_count( \WC_Product $product ): ?int {
+		$count = $product->get_review_count();
+		return $count > 0 ? $count : null;
+	}
+
+	/**
+	 * Get product review rating.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return float|null Average rating (1-5 scale) or null.
+	 */
+	protected function get_product_review_rating( \WC_Product $product ): ?float {
+		$rating = $product->get_average_rating();
+		return $rating > 0 ? (float) $rating : null;
+	}
+
+	/**
+	 * Get delete flag.
+	 *
+	 * Always returns null for products being included in the feed.
+	 * This field is used to mark products for removal from Stripe's catalog.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return null Always null for active products.
+	 */
+	protected function get_delete( \WC_Product $product ): ?string {
+		return null;
+	}
+
+	/**
+	 * Get shipping options.
+	 *
+	 * Format: country:region:service:speed:price
+	 * Multiple entries separated by commas.
+	 *
+	 * @since 10.5.0
+	 * @return string|null Shipping data string or null.
+	 */
+	protected function get_shipping(): ?string {
+		if ( null !== $this->cached_shipping_data ) {
+			return $this->cached_shipping_data;
+		}
+
+		$shipping_data = [];
+		$zones         = $this->get_cached_shipping_zones();
+		$currency      = $this->get_currency_code();
+
+		// Collected across all zones so the log carries a single summary entry
+		// instead of one line per zone, which could swamp the log on stores with
+		// many live-rate-only zones.
+		$zones_without_flat_rate = [];
+
+		foreach ( $zones as $zone ) {
+			$locations = $zone['zone_locations'];
+			$zone_name = isset( $zone['zone_name'] ) && '' !== $zone['zone_name']
+				? (string) $zone['zone_name']
+				: __( '(unnamed zone)', 'woocommerce-gateway-stripe' );
+
+			// A zone with zero flat-rate methods is surfaced as a warning below.
+			$methods_with_flat_cost = 0;
+
+			foreach ( $zone['shipping_methods'] as $method ) {
+				// Escape colons in method title.
+				$method_title = str_replace( ':', '\:', trim( $method->get_title(), ':' ) );
+
+				$price = $this->compute_shipping_method_flat_cost( $method );
+
+				if ( null === $price ) {
+					// A method with no static cost (live-rate / calculated) can't be a
+					// fixed feed value and is dropped. Zones left with no flat-rate
+					// method at all are reported once after the loop.
+					continue;
+				}
+
+				++$methods_with_flat_cost;
+
+				foreach ( $locations as $location ) {
+					$country = null;
+					$region  = null;
+					$speed   = ''; // TODO: Extract from method settings if available.
+
+					switch ( $location->type ) {
+						case 'country':
+							$country = $location->code;
+							break;
+						case 'state':
+							list( $country, $region ) = array_pad( explode( ':', $location->code ), 2, '' );
+							break;
+						case 'continent':
+							$country = $location->code;
+							break;
+						case 'not_covered':
+							$country = '';
+							break;
+					}
+
+					if ( null === $country ) {
+						continue;
+					}
+
+					// Stripe spec requires format: country:region:service:speed:price
+					// All 5 parts must be present, even if region/speed is empty.
+					$parts = [
+						trim( $country, ':' ),
+						trim( $region ?? '', ':' ),
+						$method_title,
+						$speed,
+						sprintf( '%s %s', $price, $currency ),
+					];
+
+					$shipping_data[] = implode( ':', $parts );
+				}
+			}
+
+			if ( 0 === $methods_with_flat_cost ) {
+				// Every method here prices at checkout (e.g. ShipStation Live Rates
+				// with no flat-rate fallback), so agents see no shipping for this
+				// destination. Collected for the single summary warning below.
+				$zones_without_flat_rate[] = $zone_name;
+			}
+		}
+
+		if ( ! empty( $zones_without_flat_rate ) ) {
+			// One summary line rather than one warning per zone, which could swamp
+			// the log on stores with many live-rate-only zones. The merchant adds a
+			// flat-rate fallback to the listed zones so agents see shipping there.
+			WC_Stripe_Logger::warning(
+				'Agentic Commerce: some shipping zones have no flat-rate method and contribute no shipping options to the feed.',
+				[ 'zones' => $zones_without_flat_rate ]
+			);
+		}
+
+		$shipping_data              = array_values( array_unique( $shipping_data ) );
+		$this->cached_shipping_data = empty( $shipping_data ) ? null : implode( ',', $shipping_data );
+
+		return $this->cached_shipping_data;
+	}
+
+	/**
+	 * The flat numeric cost a shipping method contributes to the feed's
+	 * `shipping` column, or null when it has no static cost (live-rate /
+	 * calculated methods price at checkout and can't be a fixed feed value).
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Shipping_Method $method Shipping method instance.
+	 * @return string|null Formatted price (e.g. "5.00"), or null when not flat-rate.
+	 */
+	private function compute_shipping_method_flat_cost( $method ): ?string {
+		if ( 'free_shipping' === $method->id ) {
+			return '0.00';
+		}
+
+		if ( isset( $method->cost ) && is_numeric( $method->cost ) ) {
+			return number_format( (float) $method->cost, 2, '.', '' );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Shipping diagnostics for the feed preview: zones that contribute no
+	 * flat-rate shipping. Mirrors the skip logic in {@see self::get_shipping()}
+	 * without emitting log lines. Each entry carries the zone id so the preview
+	 * can deep-link to the zone's shipping settings.
+	 *
+	 * @since 11.1.0
+	 * @return array{zones_without_flat_rate: array<int, array{id: int, name: string}>}
+	 */
+	public function get_shipping_diagnostics(): array {
+		$zones_without_flat_rate = [];
+
+		foreach ( $this->get_cached_shipping_zones() as $zone ) {
+			$zone_id   = isset( $zone['zone_id'] ) ? (int) $zone['zone_id'] : 0;
+			$zone_name = isset( $zone['zone_name'] ) && '' !== $zone['zone_name']
+				? (string) $zone['zone_name']
+				: __( '(unnamed zone)', 'woocommerce-gateway-stripe' );
+
+			$has_flat_rate = false;
+			foreach ( $zone['shipping_methods'] as $method ) {
+				if ( null !== $this->compute_shipping_method_flat_cost( $method ) ) {
+					$has_flat_rate = true;
+					break;
+				}
+			}
+
+			if ( ! $has_flat_rate ) {
+				// Keyed by id so a zone is reported once even if it surfaces twice.
+				$zones_without_flat_rate[ $zone_id ] = [
+					'id'   => $zone_id,
+					'name' => $zone_name,
+				];
+			}
+		}
+
+		return [ 'zones_without_flat_rate' => array_values( $zones_without_flat_rate ) ];
+	}
+
+	/**
+	 * Get attribute or return null.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product   Product object.
+	 * @param string      $attribute Attribute name.
+	 * @return string|null Attribute value or null.
+	 */
+	private function get_attribute_or_return_null( \WC_Product $product, string $attribute ): ?string {
+		$value = $product->get_attribute( $attribute );
+		return $value ? (string) $value : null;
+	}
+
+	/**
+	 * Get weight unit.
+	 *
+	 * @since 10.5.0
+	 * @return string Weight unit.
+	 */
+	private function get_weight_unit(): string {
+		static $cached;
+		if ( ! isset( $cached ) ) {
+			$wc_unit = get_option( 'woocommerce_weight_unit' );
+
+			// Stripe accepts: lb, oz, g, kg. WooCommerce uses 'lbs' for pounds.
+			$unit_map = [
+				'lbs' => 'lb',
+				'lb'  => 'lb',
+				'oz'  => 'oz',
+				'g'   => 'g',
+				'kg'  => 'kg',
+			];
+
+			$cached = $unit_map[ $wc_unit ] ?? $wc_unit;
+		}
+		return $cached;
+	}
+
+	/**
+	 * Format dimension with unit.
+	 *
+	 * @since 10.5.0
+	 * @param string|null $dimension Dimension value.
+	 * @return string|null Formatted dimension or null.
+	 */
+	private function format_dimension( ?string $dimension ): ?string {
+		if ( ! $dimension ) {
+			return null;
+		}
+
+		return $dimension . ' ' . $this->get_dimension_unit();
+	}
+
+	/**
+	 * Get dimension unit.
+	 *
+	 * @since 10.5.0
+	 * @return string Dimension unit.
+	 */
+	private function get_dimension_unit(): string {
+		static $cached;
+		if ( ! isset( $cached ) ) {
+			$cached = get_option( 'woocommerce_dimension_unit' );
+		}
+		return $cached;
+	}
+
+	/**
+	 * Get main product image.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product      $product        Product object.
+	 * @param \WC_Product|null $parent_product Parent product for fallback.
+	 * @return string Product image URL or empty string.
+	 */
+	private function get_main_image( \WC_Product $product, ?\WC_Product $parent_product ): string {
+		$image_id = $product->get_image_id();
+		if ( ! $image_id && $parent_product ) {
+			$image_id = $parent_product->get_image_id();
+		}
+
+		if ( $image_id ) {
+			$url = wp_get_attachment_url( (int) $image_id );
+			if ( $url ) {
+				return $url;
+			}
+		}
+
+		// Return WooCommerce placeholder image as fallback.
+		return wc_placeholder_img_src();
+	}
+
+	/**
+	 * Get currency code.
+	 *
+	 * @since 10.5.0
+	 * @return string Currency code.
+	 */
+	private function get_currency_code(): string {
+		static $cached;
+		if ( ! isset( $cached ) ) {
+			$cached = get_woocommerce_currency();
+		}
+		return $cached;
+	}
+
+	/**
+	 * Format price with currency.
+	 *
+	 * @since 10.5.0
+	 * @param string|null $price    Price value.
+	 * @param string      $currency Currency code.
+	 * @return string|null Formatted price or null.
+	 */
+	private function format_price( ?string $price, string $currency ): ?string {
+		if ( null === $price || '' === $price ) {
+			return null;
+		}
+
+		return sprintf( '%s %s', number_format( (float) $price, 2, '.', '' ), $currency );
+	}
+
+	/**
+	 * Get sale date range.
+	 *
+	 * @since 10.5.0
+	 * @param \WC_Product $product Product object.
+	 * @return string|null Sale date range or null.
+	 */
+	private function get_sale_date_range( \WC_Product $product ): ?string {
+		$sale_price = $product->get_sale_price();
+		if ( ! $sale_price ) {
+			return null;
+		}
+
+		$sale_from = $product->get_date_on_sale_from();
+		$sale_to   = $product->get_date_on_sale_to();
+
+		if ( ! $sale_from ) {
+			$sale_from = new \WC_DateTime();
+		}
+
+		if ( ! $sale_to ) {
+			$now       = new \WC_DateTime();
+			$base_date = max( $sale_from, $now );
+			$sale_to   = clone $base_date;
+			$sale_to->modify( '+30 days' );
+		}
+
+		return $sale_from->date_i18n( 'Y-m-d' ) . '/' . $sale_to->date_i18n( 'Y-m-d' );
+	}
+
+	/**
+	 * Get cached shipping zones (prevents repeated API calls).
+	 *
+	 * @since 10.5.0
+	 * @return array Shipping zones.
+	 */
+	private function get_cached_shipping_zones(): array {
+		if ( null !== $this->cached_shipping_zones ) {
+			return $this->cached_shipping_zones;
+		}
+
+		$zones = \WC_Shipping_Zones::get_zones();
+
+		// get_zones() omits the built-in catch-all zone 0 ("Locations not covered
+		// by your other zones"), which still ships real orders. Append it so its
+		// shipping — or a missing flat rate — is mapped and diagnosed alongside the
+		// named zones, not only when a store has no named zones at all.
+		$generic_zone = \WC_Shipping_Zones::get_zone( 0 );
+		if ( $generic_zone instanceof \WC_Shipping_Zone ) {
+			$zones[] = [
+				'zone_id'          => 0,
+				'zone_name'        => __( 'Locations not covered by your other zones', 'woocommerce-gateway-stripe' ),
+				'zone_locations'   => [
+					(object) [
+						'type' => 'not_covered',
+						'code' => '',
+					],
+				],
+				// Get only enabled shipping methods, matching what get_zones() returns for named zones.
+				'shipping_methods' => $generic_zone->get_shipping_methods( true ),
+			];
+		}
+
+		$this->cached_shipping_zones = $zones;
+		return $this->cached_shipping_zones;
+	}
+
+	/**
+	 * Whether the product is a subscription type the feed excludes by default.
+	 *
+	 * Exposed so callers can report the exclusion reason without duplicating the
+	 * type list.
+	 *
+	 * @since 10.9.0
+	 * @param \WC_Product $product Product to check.
+	 * @return bool
+	 */
+	public static function is_subscription_product( \WC_Product $product ): bool {
+		return $product->is_type( [ 'subscription', 'variable-subscription', 'subscription_variation' ] );
+	}
+
+	/**
+	 * Whether the product sits behind a post password.
+	 *
+	 * Unlike catalog visibility, a variation does NOT inherit the parent's
+	 * password — it is a separate post with its own (empty) value. Resolve to the
+	 * parent, or every variation of a protected variable product keeps syncing.
+	 *
+	 * @since 10.9.0
+	 * @param \WC_Product $product Product to check.
+	 * @return bool
+	 */
+	public static function is_password_protected( \WC_Product $product ): bool {
+		$parent_id = $product->get_parent_id();
+		if ( $parent_id > 0 ) {
+			$parent = wc_get_product( $parent_id );
+			if ( $parent instanceof \WC_Product ) {
+				$product = $parent;
+			}
+		}
+
+		return '' !== (string) $product->get_post_password();
+	}
+
+	/**
+	 * Whether the merchant hid the product from both the catalog and search.
+	 *
+	 * The partial values (`catalog`, `search`) are deliberately not exclusions:
+	 * the product is still reachable by the other route.
+	 *
+	 * @since 10.9.0
+	 * @param \WC_Product $product Product to check.
+	 * @return bool
+	 */
+	public static function is_hidden_from_catalog( \WC_Product $product ): bool {
+		return 'hidden' === $product->get_catalog_visibility();
+	}
+
+	/**
+	 * Whether the given product should be included in any Agentic Commerce sync
+	 * (full feed, inventory updates, archive events).
+	 *
+	 * Defaults to true, minus the built-in exclusions: subscriptions,
+	 * password-protected products, and products hidden from catalog and search.
+	 * Integrations such as WC AI Storefront can return false to exclude a product,
+	 * or true to re-include one the defaults dropped.
+	 *
+	 * @since 10.8.0
+	 * @param \WC_Product $product Product to check.
+	 * @return bool
+	 */
+	public static function should_sync_product( \WC_Product $product ): bool {
+		// A variable-subscription's variations share the `product_variation`
+		// post type, so the feed's simple/variation query returns them; left in,
+		// they fail validation and downgrade every sync to a partial success.
+		// Excluded by default, still overridable via the filters below.
+		//
+		// The other two express intent the query cannot: it selects on status and
+		// type only, so a protected or hidden product is still `publish`.
+		$default_should_sync = ! self::is_subscription_product( $product )
+			&& ! self::is_password_protected( $product )
+			&& ! self::is_hidden_from_catalog( $product );
+
+		// Opt-in default: drop detector-flagged configurator products, whose
+		// runtime-variable pricing the static feed can't honour. A filter below
+		// still overrides this.
+		if ( $default_should_sync
+			&& WC_Stripe_Agentic_Commerce_Integration::is_auto_exclude_addons_enabled()
+			&& self::product_has_addons( $product )
+		) {
+			$default_should_sync = false;
+		}
+
+		// The woocommerce_-prefixed name shipped in 10.9.0 anticipating a shared
+		// cross-plugin contract that was not implemented.
+		$should_sync = apply_filters_deprecated(
+			'woocommerce_agentic_commerce_should_sync_product',
+			[ $default_should_sync, $product ],
+			'11.1.0',
+			'wc_stripe_agentic_commerce_should_sync_product',
+			'The woocommerce_agentic_commerce_should_sync_product filter is deprecated since WooCommerce Stripe Gateway 11.1.0. Use wc_stripe_agentic_commerce_should_sync_product instead.'
+		);
+
+		/**
+		 * Filter whether a product should be included in any Agentic Commerce sync.
+		 *
+		 * Applied per product at three entry points: the full-feed mapper, the
+		 * inventory-change tracker, and the archive tracker. Returning false from
+		 * any caller suppresses that product across all three surfaces.
+		 *
+		 * For large-scale exclusions, also hook `wc_stripe_agentic_commerce_product_query_args`
+		 * to scope the full-feed query — that avoids loading the product at all
+		 * and keeps the validator's skipped-product log unpolluted.
+		 *
+		 * Lifecycle contract: this filter only governs what gets *sent* to Stripe.
+		 * A product that was previously exported and is now excluded stays in
+		 * Stripe's catalog until the next full feed replacement overwrites it —
+		 * the inventory tracker intentionally drops delta events for excluded
+		 * products. Adapters that want immediate convergence when their filter
+		 * outcome changes (e.g. a merchant flips a visibility setting) MUST fire
+		 * `do_action( 'wc_stripe_agentic_commerce_schedule_full_resync' )` to
+		 * enqueue an immediate full-catalog sync.
+		 *
+		 * Also runs per row on the admin Products list (sync-status column),
+		 * so callbacks must be fast.
+		 *
+		 * @since 10.8.0
+		 * @param bool        $should_sync Whether to include the product. Default true, except for
+		 *                                 subscriptions, password-protected products, and products
+		 *                                 hidden from catalog and search.
+		 * @param \WC_Product $product     Product being evaluated.
+		 */
+		$should_sync = apply_filters( 'wc_stripe_agentic_commerce_should_sync_product', $should_sync, $product );
+
+		// wp_validate_boolean() rather than a plain (bool) cast: an adapter that
+		// returns the string 'false' would be truthy under a cast and wrongly
+		// sync the product. This still normalises null / 0 / '' to false.
+		return wp_validate_boolean( $should_sync );
+	}
+
+	/**
+	 * Whether a product carries add-on / configurator metadata that makes its
+	 * price depend on runtime shopper choices the static feed can't honour.
+	 *
+	 * Detection is via product meta fields, which are resolved on the parent for variations.
+	 * The product meta checks include the following:
+	 *  - Product Add-Ons - `_product_addons`
+	 *  - TM Extra Product Options - `tm_meta_cpf_options`
+	 *  - Composite Products - `composite_data`
+	 *  - Product Bundles when they are priced individually - `_wc_pb_priced_individually` is `'yes'`
+	 *
+	 * The set of meta keys to check can be filtered via the wc_stripe_agentic_commerce_addon_detection_meta_keys filter.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product $product Product (or variation) to inspect.
+	 * @return bool
+	 */
+	public static function product_has_addons( \WC_Product $product ): bool {
+		// Configurator options live on the parent; a variation inherits them.
+		$target = $product;
+		if ( ProductType::VARIATION === $product->get_type() ) {
+			$parent = wc_get_product( $product->get_parent_id() );
+			if ( $parent instanceof \WC_Product ) {
+				$target = $parent;
+			}
+		}
+
+		$has_addons = self::matches_addon_meta_keys( $target );
+
+		// Bundles only vary at runtime when priced individually; the meta is `no`
+		// on fixed-price bundles, which must stay eligible.
+		if ( ! $has_addons && 'yes' === $target->get_meta( self::ADDON_META_BUNDLE_PRICED_INDIVIDUALLY ) ) {
+			$has_addons = true;
+		}
+
+		/**
+		 * Whether a product carries add-on / configurator options. Lets plugins
+		 * whose options are not stored in a detectable meta key mark a product as
+		 * configurable (or clear a false positive) directly, instead of only
+		 * extending the meta-key set.
+		 *
+		 * @since 11.1.0
+		 * @param bool        $has_addons Whether meta-key detection flagged the product.
+		 * @param \WC_Product $product    The product (or variation) inspected.
+		 * @param \WC_Product $target     The product whose meta was read (parent for variations).
+		 */
+		$has_addons = apply_filters( 'wc_stripe_agentic_commerce_product_has_addon', $has_addons, $product, $target );
+
+		// wp_validate_boolean() rather than a plain (bool) cast: a callback that
+		// returns the string 'false' would otherwise cast to true and wrongly flag
+		// the product as configurable, matching the sibling filters above.
+		return wp_validate_boolean( $has_addons );
+	}
+
+	/**
+	 * Whether any of the (filterable) add-on detection meta keys is non-empty
+	 * on the given product.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product $target Product whose meta is inspected (parent for variations).
+	 * @return bool
+	 */
+	private static function matches_addon_meta_keys( \WC_Product $target ): bool {
+		/**
+		 * Meta keys whose non-empty presence marks a product as carrying add-on /
+		 * configurator options. Extend to support plugins not covered here.
+		 *
+		 * @since 11.1.0
+		 * @param string[]    $meta_keys Meta keys treated as add-on signals.
+		 * @param \WC_Product $target    Product whose meta is inspected (parent for variations).
+		 */
+		$meta_keys = apply_filters( 'wc_stripe_agentic_commerce_addon_detection_meta_keys', self::ADDON_DETECTION_META_KEYS, $target );
+
+		if ( ! is_array( $meta_keys ) || [] === $meta_keys ) {
+			return false;
+		}
+
+		foreach ( $meta_keys as $meta_key ) {
+			if ( is_string( $meta_key ) && '' !== $meta_key && ! empty( $target->get_meta( $meta_key ) ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Diagnostic companion to {@see self::should_sync_product()}: report the most
+	 * likely reason a product is excluded from the feed, or null when it syncs.
+	 * Branch order matches how the default is built (subscription, then add-on
+	 * auto-exclude), falling through to the filter reason when a custom hook
+	 * forced it.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product $product Product to inspect.
+	 * @return string|null One of the SYNC_EXCLUSION_REASON_* constants, or null when the product syncs.
+	 */
+	public static function get_sync_exclusion_reason( \WC_Product $product ): ?string {
+		if ( self::should_sync_product( $product ) ) {
+			return null;
+		}
+
+		return self::classify_sync_exclusion( $product );
+	}
+
+	/**
+	 * Bucket an already-excluded product into the reason a merchant can act on.
+	 *
+	 * Split from {@see self::get_sync_exclusion_reason()} so a caller that has
+	 * already resolved should_sync_product() to false can classify without firing
+	 * the sync filter a second time. First match wins; anything the built-in
+	 * defaults did not catch is attributed to a third-party filter.
+	 *
+	 * @since 11.1.0
+	 * @param \WC_Product $product Product known to be excluded from the feed.
+	 * @return string One of the SYNC_EXCLUSION_REASON_* constants.
+	 */
+	private static function classify_sync_exclusion( \WC_Product $product ): string {
+		if ( $product->is_type( [ 'subscription', 'variable-subscription', 'subscription_variation' ] ) ) {
+			return self::SYNC_EXCLUSION_REASON_SUBSCRIPTION;
+		}
+
+		if ( WC_Stripe_Agentic_Commerce_Integration::is_auto_exclude_addons_enabled() && self::product_has_addons( $product ) ) {
+			return self::SYNC_EXCLUSION_REASON_ADDONS;
+		}
+
+		return self::SYNC_EXCLUSION_REASON_FILTER;
+	}
+}

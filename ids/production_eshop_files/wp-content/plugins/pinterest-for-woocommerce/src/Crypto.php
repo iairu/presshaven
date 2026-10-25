@@ -20,6 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class handling encryption and decryption of sensitive data.
+ *
+ * @class   Crypto
+ * @version 1.6.0
  */
 class Crypto {
 
@@ -61,7 +64,8 @@ class Crypto {
 	/**
 	 * Get the encoded user key.
 	 *
-	 * @param string $retry The retry attempt #.
+	 * @param int|null $retry The retry attempt #.
+	 * @return string|false
 	 */
 	private static function get_key( $retry = null ) {
 
@@ -107,11 +111,14 @@ class Crypto {
 	 * @param string $value the value to encrypt.
 	 *
 	 * @return string
+	 *
+	 * @throws DefuseException\BadFormatException When the encryption key could not be loaded.
 	 */
 	public static function encrypt( $value ) {
 
 		$user_key_encoded = self::get_key();
-		$user_key         = Key::loadFromAsciiSafeString( $user_key_encoded );
+		// Nothing can be encrypted without a key: '' makes Defuse throw the same BadFormatException that false did.
+		$user_key = Key::loadFromAsciiSafeString( (string) $user_key_encoded );
 
 		return DefuseCrypto::encrypt( $value, $user_key );
 	}
@@ -122,13 +129,18 @@ class Crypto {
 	 *
 	 * @param string $encrypted_value the value to decrypt.
 	 *
-	 * @return string
+	 * @return string|false The decrypted value, or false if it could not be decrypted.
 	 */
 	public static function decrypt( $encrypted_value ) {
 
 		$user_key_encoded = self::get_key();
-		$user_key         = Key::loadFromAsciiSafeString( $user_key_encoded );
-		$value            = false;
+		if ( false === $user_key_encoded ) {
+			// get_key() has already logged the failure.
+			return false;
+		}
+
+		$user_key = Key::loadFromAsciiSafeString( $user_key_encoded );
+		$value    = false;
 
 		try {
 			$value = DefuseCrypto::decrypt( $encrypted_value, $user_key );

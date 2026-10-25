@@ -113,6 +113,14 @@ class ShortcodesHelper {
             __('View in your browser', 'mailpoet')
           ),
         ],
+        [
+          'text' => __('Tracking opt-out link', 'mailpoet'),
+          'shortcode' => sprintf(
+            '<a target="_blank" href="%s">%s</a>',
+            '[link:subscription_tracking_opt_out_url]',
+            __('Opt out of tracking', 'mailpoet')
+          ),
+        ],
       ],
       __('Site', 'mailpoet') => [
         [
@@ -144,7 +152,7 @@ class ShortcodesHelper {
   }
 
   public function getCustomFields(): array {
-    $customFields = $this->customFieldsRepository->findAll();
+    $customFields = $this->customFieldsRepository->findAllActive();
     return array_map(function($customField) {
       return [
         'text' => $customField->getName(),

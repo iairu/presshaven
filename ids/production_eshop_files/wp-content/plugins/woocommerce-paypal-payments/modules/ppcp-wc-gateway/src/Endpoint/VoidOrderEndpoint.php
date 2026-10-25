@@ -15,7 +15,8 @@ use WC_Order_Item_Fee;
 use WC_Order_Item_Product;
 use WC_Order_Item_Shipping;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\OrderEndpoint;
-use WooCommerce\PayPalCommerce\Button\Endpoint\RequestData;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\RequestData;
+use WooCommerce\PayPalCommerce\Button\Exception\NonceValidationException;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
 use WooCommerce\PayPalCommerce\WcGateway\Processor\RefundProcessor;
 /**
@@ -75,30 +76,30 @@ class VoidOrderEndpoint
      */
     public function handle_request(): void
     {
-        $request = $this->request_data->read_request(self::nonce());
+        try {
+            $request = $this->request_data->read_request(self::nonce());
+        } catch (NonceValidationException $error) {
+            wp_send_json_error(array('message' => $error->getMessage()), 400);
+        }
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error(array('message' => 'Invalid request.'));
-            return;
         }
         $wc_order_id = (int) $request['wc_order_id'];
         $wc_order = wc_get_order($wc_order_id);
         if (!$wc_order instanceof WC_Order) {
             wp_send_json_error(array('message' => 'WC order not found.'));
-            return;
         }
         $order_id = $wc_order->get_meta(PayPalGateway::ORDER_ID_META_KEY);
         if (!$order_id) {
             wp_send_json_error(array('message' => 'PayPal order ID not found in meta.'));
-            return;
         }
         try {
             $order = $this->order_endpoint->order($order_id);
             $this->refund_processor->void($order);
             $this->make_refunded($wc_order);
         } catch (Exception $exception) {
-            wp_send_json_error(array('message' => 'Void failed. ' . $exception->getMessage()));
             $this->logger->error('Void failed. ' . $exception->getMessage());
-            return;
+            wp_send_json_error(array('message' => 'Void failed. ' . $exception->getMessage()));
         }
         wp_send_json_success();
     }

@@ -20,7 +20,7 @@ abstract class ActionScheduler_Lock
      *
      * @var int
      */
-    protected static $lock_duration = \WpifyWooDeps\MINUTE_IN_SECONDS;
+    protected static $lock_duration = \MINUTE_IN_SECONDS;
     /**
      * Check if a lock is set for a given lock type.
      *

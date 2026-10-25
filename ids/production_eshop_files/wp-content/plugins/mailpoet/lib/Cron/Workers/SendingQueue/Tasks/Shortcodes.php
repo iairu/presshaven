@@ -18,8 +18,9 @@ class Shortcodes {
    * @param NewsletterEntity|null $newsletter
    * @param SubscriberEntity|null $subscriber
    * @param SendingQueueEntity|null $queue
+   * @param bool $isPlainText see NewsletterShortcodes::replace()
    */
-  public static function process($content, $contentSource = null, ?NewsletterEntity $newsletter = null, ?SubscriberEntity $subscriber = null, ?SendingQueueEntity $queue = null) {
+  public static function process($content, $contentSource = null, ?NewsletterEntity $newsletter = null, ?SubscriberEntity $subscriber = null, ?SendingQueueEntity $queue = null, bool $isPlainText = false) {
     /** @var NewsletterShortcodes $shortcodes */
     $shortcodes = ContainerWrapper::getInstance()->get(NewsletterShortcodes::class);
 
@@ -40,6 +41,6 @@ class Shortcodes {
     } else {
       $shortcodes->setSubscriber(null);
     }
-    return $shortcodes->replace($content, $contentSource);
+    return $shortcodes->replace($content, $contentSource, null, $isPlainText);
   }
 }

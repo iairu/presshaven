@@ -16,6 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class which handles all feed file filesystem operations.
+ *
+ * @class   FeedFileOperations
+ * @version 1.6.0
  */
 class FeedFileOperations {
 
@@ -71,6 +74,20 @@ class FeedFileOperations {
 	}
 
 	/**
+	 * Delete the temporary feed files.
+	 * Used when a generation cycle fails or is aborted, so partial feeds do not accumulate on disk.
+	 *
+	 * @since 1.5.0
+	 */
+	public function delete_temporary_feed_files(): void {
+		foreach ( $this->configurations->get_configurations() as $config ) {
+			if ( isset( $config['tmp_file'] ) && file_exists( $config['tmp_file'] ) ) {
+				wp_delete_file( $config['tmp_file'] );
+			}
+		}
+	}
+
+	/**
 	 * Check if we have a feed file on the disk.
 	 *
 	 * @since 1.2.9
@@ -90,8 +107,8 @@ class FeedFileOperations {
 	 * Utility function for functions using file_put_contents.
 	 *
 	 * @since 1.2.9
-	 * @param integer $bytes_written How much data was written to the file.
-	 * @param string  $file          File location.
+	 * @param int|false $bytes_written How much data was written to the file, or false on failure.
+	 * @param string    $file          File location.
 	 *
 	 * @throws FeedFileOperationsException Can't open or write to the file.
 	 */
@@ -147,7 +164,7 @@ class FeedFileOperations {
 	/**
 	 * Write pre-populated buffers to feed files.
 	 *
-	 * @param array $buffers an array of (locale => content) elements.
+	 * @param string[] $buffers an array of (locale => content) elements.
 	 * @since 1.2.9
 	 * @throws FeedFileOperationsException Can't open or write to the file.
 	 */

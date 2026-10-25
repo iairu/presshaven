@@ -38,7 +38,7 @@ export function initMonitorReviewBanner() {
       }) => {
         const embedder = getOrCreateBackgroundApp(accessToken, expiresIn);
         const container = $(domElements.reviewBannerContainer);
-        if (container && userIsAfterIntroductoryPeriod()) {
+        if (embedder && container && userIsAfterIntroductoryPeriod()) {
           $(domElements.reviewBannerLeaveReviewLink)
             .off('click')
             .on('click', () => {

@@ -5,5 +5,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Doctrine\DBAL\Driver;
 interface Middleware
 {
- public function wrap(Driver $driver) : Driver;
+public function wrap(Driver $driver): Driver;
 }

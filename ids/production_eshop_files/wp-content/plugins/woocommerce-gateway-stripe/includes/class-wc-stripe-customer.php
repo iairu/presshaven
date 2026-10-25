@@ -21,22 +21,28 @@ class WC_Stripe_Customer {
 	public const CUSTOMER_CONTEXT_PAY_FOR_ORDER = 'pay_for_order';
 
 	/**
+	 * Constant for the customer context when creating a Checkout Session (Optimized Checkout).
+	 */
+	public const CUSTOMER_CONTEXT_CHECKOUT_SESSION = 'checkout_session';
+
+	/**
 	 * Constants for the customer contexts where minimal billing details are permitted.
 	 */
 	public const MINIMAL_BILLING_DETAILS_CONTEXTS = [
 		self::CUSTOMER_CONTEXT_ADD_PAYMENT_METHOD,
 		self::CUSTOMER_CONTEXT_PAY_FOR_ORDER,
+		self::CUSTOMER_CONTEXT_CHECKOUT_SESSION,
 	];
 
 	/**
 	 * String prefix for Stripe payment methods request transient.
 	 */
-	const PAYMENT_METHODS_TRANSIENT_KEY = 'stripe_payment_methods_';
+	public const PAYMENT_METHODS_TRANSIENT_KEY = 'stripe_payment_methods_';
 
 	/**
 	 * Queryable Stripe payment method types.
 	 */
-	const STRIPE_PAYMENT_METHODS = [
+	public const STRIPE_PAYMENT_METHODS = [
 		WC_Stripe_UPE_Payment_Method_CC::STRIPE_ID,
 		WC_Stripe_UPE_Payment_Method_LINK::STRIPE_ID,
 		WC_Stripe_UPE_Payment_Method_Sepa::STRIPE_ID,
@@ -100,7 +106,9 @@ class WC_Stripe_Customer {
 	/**
 	 * Set Stripe customer ID.
 	 *
-	 * @param [type] $id [description]
+	 * @param string|array $id The Stripe customer ID, or an array containing the customer ID for backwards compatibility with pre-3.0 data storage.
+	 *
+	 * @return void
 	 */
 	public function set_id( $id ) {
 		// Backwards compat for customer ID stored in array format. (Pre 3.0)
@@ -150,10 +158,18 @@ class WC_Stripe_Customer {
 	/**
 	 * Generates the customer request, used for both creating and updating customers.
 	 *
-	 * @param  array $args Additional arguments (optional).
+	 * @param  array        $args  Additional arguments for the request (optional).
+	 * @param WC_Order|null $order The order object (optional). If provided, billing details will be retrieved from the order.
+	 *
 	 * @return array
 	 */
-	protected function generate_customer_request( $args = [] ) {
+	protected function generate_customer_request( $args = [], $order = null ) {
+		// The $order parameter was added in 10.2.0, so check for `$args['order'] for backwards compatibility.
+		if ( null === $order && isset( $args['order'] ) && $args['order'] instanceof WC_Order ) {
+			$order = $args['order'];
+		}
+		// Always ensure the old 'order' key is unset
+		unset( $args['order'] );
 		$user = $this->get_user();
 		if ( $user ) {
 			$billing_first_name = get_user_meta( $user->ID, 'billing_first_name', true );
@@ -169,11 +185,19 @@ class WC_Stripe_Customer {
 				$billing_last_name = get_user_meta( $user->ID, 'last_name', true );
 			}
 
+			// If still empty, fall back to POST/order data (e.g. during auto-account creation).
+			if ( empty( $billing_first_name ) ) {
+				$billing_first_name = $this->get_billing_data_field( 'billing_first_name', $order );
+			}
+			if ( empty( $billing_last_name ) ) {
+				$billing_last_name = $this->get_billing_data_field( 'billing_last_name', $order );
+			}
+
 			$email = $user->user_email;
 
 			// If the user email is not set, use the billing email.
 			if ( empty( $email ) ) {
-				$email = $this->get_billing_data_field( 'billing_email', $args );
+				$email = $this->get_billing_data_field( 'billing_email', $order );
 			}
 
 			// translators: %1$s First name, %2$s Second name, %3$s Username.
@@ -189,9 +213,9 @@ class WC_Stripe_Customer {
 				$defaults['name'] = $billing_full_name;
 			}
 		} else {
-			$billing_email      = $this->get_billing_data_field( 'billing_email', $args );
-			$billing_first_name = $this->get_billing_data_field( 'billing_first_name', $args );
-			$billing_last_name  = $this->get_billing_data_field( 'billing_last_name', $args );
+			$billing_email      = $this->get_billing_data_field( 'billing_email', $order );
+			$billing_first_name = $this->get_billing_data_field( 'billing_first_name', $order );
+			$billing_last_name  = $this->get_billing_data_field( 'billing_last_name', $order );
 
 			// translators: %1$s First name, %2$s Second name.
 			$description = sprintf( __( 'Name: %1$s %2$s, Guest', 'woocommerce-gateway-stripe' ), $billing_first_name, $billing_last_name );
@@ -207,9 +231,27 @@ class WC_Stripe_Customer {
 			}
 		}
 
-		$metadata                      = [];
+		$metadata = [];
+		/**
+		 * Filters the metadata added to a Stripe customer request.
+		 *
+		 * @param array        $metadata Customer metadata.
+		 * @param WP_User|null $user     WordPress user associated with the customer, if any.
+		 */
 		$defaults['metadata']          = apply_filters( 'wc_stripe_customer_metadata', $metadata, $user );
 		$defaults['preferred_locales'] = $this->get_customer_preferred_locale( $user );
+
+		// Add the billing phone, when available. Issuers and Stripe Radar may use it for risk decisioning.
+		$billing_phone = '';
+		if ( $user ) {
+			$billing_phone = get_user_meta( $user->ID, 'billing_phone', true );
+		}
+		if ( empty( $billing_phone ) ) {
+			$billing_phone = $this->get_billing_data_field( 'billing_phone', $order );
+		}
+		if ( ! empty( $billing_phone ) ) {
+			$defaults['phone'] = $billing_phone;
+		}
 
 		// Add customer address default values.
 		$address_fields = [
@@ -221,11 +263,14 @@ class WC_Stripe_Customer {
 			'country'     => 'billing_country',
 		];
 		foreach ( $address_fields as $key => $field ) {
+			$value = '';
 			if ( $user ) {
-				$defaults['address'][ $key ] = get_user_meta( $user->ID, $field, true );
-			} else {
-				$defaults['address'][ $key ] = $this->get_billing_data_field( $field, $args );
+				$value = get_user_meta( $user->ID, $field, true );
 			}
+			if ( empty( $value ) ) {
+				$value = $this->get_billing_data_field( $field, $order );
+			}
+			$defaults['address'][ $key ] = $value;
 		}
 
 		return wp_parse_args( $args, $defaults );
@@ -244,35 +289,38 @@ class WC_Stripe_Customer {
 		 * Filters the required customer fields when creating a customer in Stripe.
 		 *
 		 * @since 9.7.0
-		 * @param array $required_fields The required customer fields as derived from the required billing fields in checkout. In some contexts, like adding a payment method, we allow minimal details to be provided.
+		 * @since 10.2.0 Added the $create_customer_request parameter.
+		 *
+		 * @param array $required_fields         The required customer fields as derived from the required billing fields in checkout. In some contexts, like adding a payment method, we allow minimal details to be provided.
+		 * @param array $create_customer_request The initial data to build the customer request. This can be used to provide country-specific conditions.
 		 */
-		$required_fields = apply_filters( 'wc_stripe_create_customer_required_fields', $this->get_create_customer_required_fields( $current_context ) );
+		$required_fields = apply_filters( 'wc_stripe_create_customer_required_fields', $this->get_create_customer_required_fields( $current_context ), $create_customer_request );
 
 		foreach ( $required_fields as $field => $field_requirements ) {
 			if ( true === $field_requirements ) {
 				if ( empty( trim( $create_customer_request[ $field ] ?? '' ) ) ) {
 					throw new WC_Stripe_Exception(
-						sprintf( 'missing_required_customer_field: %s', $field ),
+						sprintf( 'missing_required_customer_field: %s', $field ), // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 						/* translators: %s is a field name, e.g. 'email' or 'name'. */
-						sprintf( __( 'Missing required customer field: %s', 'woocommerce-gateway-stripe' ), $field )
+						sprintf( __( 'Missing required customer field: %s', 'woocommerce-gateway-stripe' ), $field ) // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					);
 				}
 			}
 			if ( is_array( $field_requirements ) ) {
 				if ( ! isset( $create_customer_request[ $field ] ) || ! is_array( $create_customer_request[ $field ] ) ) {
 					throw new WC_Stripe_Exception(
-						sprintf( 'missing_required_customer_field: %s', $field ),
+						sprintf( 'missing_required_customer_field: %s', $field ), // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 						/* translators: %s is a field name, e.g. 'email' or 'name'. */
-						sprintf( __( 'Missing required customer field: %s', 'woocommerce-gateway-stripe' ), $field )
+						sprintf( __( 'Missing required customer field: %s', 'woocommerce-gateway-stripe' ), $field ) // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					);
 				}
 
 				foreach ( $field_requirements as $sub_field => $sub_field_requirements ) {
 					if ( true === $sub_field_requirements && empty( trim( $create_customer_request[ $field ][ $sub_field ] ?? '' ) ) ) {
 						throw new WC_Stripe_Exception(
-							sprintf( 'missing_required_customer_field: %s->%s', $field, $sub_field ),
+							sprintf( 'missing_required_customer_field: %s->%s', $field, $sub_field ), // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 							/* translators: %1$s is a field name, e.g. address, and %2$s is a secondary field name, e.g. line1 or city. */
-							sprintf( __( 'Missing required customer field: %1$s->%2$s', 'woocommerce-gateway-stripe' ), $field, $sub_field )
+							sprintf( __( 'Missing required customer field: %1$s->%2$s', 'woocommerce-gateway-stripe' ), $field, $sub_field ) // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 						);
 					}
 				}
@@ -338,16 +386,17 @@ class WC_Stripe_Customer {
 	/**
 	 * Get value of billing data field, either from POST or order object.
 	 *
-	 * @param string $field Field name.
-	 * @param array  $args  Additional arguments (optional).
+	 * @param string        $field Field name.
+	 * @param WC_Order|null $order The order object (optional).
 	 *
 	 * @return string
 	 */
-	private function get_billing_data_field( $field, $args = [] ) {
+	private function get_billing_data_field( $field, $order = null ) {
 		$valid_fields = [
 			'billing_email',
 			'billing_first_name',
 			'billing_last_name',
+			'billing_phone',
 			'billing_address_1',
 			'billing_address_2',
 			'billing_postcode',
@@ -363,31 +412,32 @@ class WC_Stripe_Customer {
 
 		// Prioritize POST data, if available.
 		if ( isset( $_POST[ $field ] ) ) {
-			if ( 'billing_email' === $field ) {
-				return filter_var( wp_unslash( $_POST[ $field ] ), FILTER_SANITIZE_EMAIL ); // phpcs:ignore WordPress.Security.NonceVerification
-			}
+			$filter = 'billing_email' === $field ? FILTER_SANITIZE_EMAIL : FILTER_SANITIZE_SPECIAL_CHARS;
+			return filter_var( wp_unslash( $_POST[ $field ] ), $filter ); // phpcs:ignore WordPress.Security.NonceVerification
+		}
 
-			return filter_var( wp_unslash( $_POST[ $field ] ), FILTER_SANITIZE_SPECIAL_CHARS ); // phpcs:ignore WordPress.Security.NonceVerification
-		} elseif ( isset( $args['order'] ) && $args['order'] instanceof WC_Order ) {
+		if ( $order instanceof WC_Order ) {
 			switch ( $field ) {
 				case 'billing_email':
-					return $args['order']->get_billing_email();
+					return $order->get_billing_email();
 				case 'billing_first_name':
-					return $args['order']->get_billing_first_name();
+					return $order->get_billing_first_name();
 				case 'billing_last_name':
-					return $args['order']->get_billing_last_name();
+					return $order->get_billing_last_name();
+				case 'billing_phone':
+					return $order->get_billing_phone();
 				case 'billing_address_1':
-					return $args['order']->get_billing_address_1();
+					return $order->get_billing_address_1();
 				case 'billing_address_2':
-					return $args['order']->get_billing_address_2();
+					return $order->get_billing_address_2();
 				case 'billing_postcode':
-					return $args['order']->get_billing_postcode();
+					return $order->get_billing_postcode();
 				case 'billing_city':
-					return $args['order']->get_billing_city();
+					return $order->get_billing_city();
 				case 'billing_state':
-					return $args['order']->get_billing_state();
+					return $order->get_billing_state();
 				case 'billing_country':
-					return $args['order']->get_billing_country();
+					return $order->get_billing_country();
 				default:
 					return '';
 			}
@@ -400,13 +450,18 @@ class WC_Stripe_Customer {
 	 * If customer does not exist, create a new customer. Else retrieve the Stripe customer through the API to check it's existence.
 	 * Recreate the customer if it does not exist in this Stripe account.
 	 *
+	 * @param string|null $current_context The context the customer is being created in. Some contexts (e.g. creating a Checkout
+	 *                                     Session before the buyer has entered any details) permit minimal billing details.
+	 *
 	 * @return string Customer ID
 	 *
 	 * @throws WC_Stripe_Exception
 	 */
-	public function maybe_create_customer() {
+	public function maybe_create_customer( ?string $current_context = null ) {
 		if ( ! $this->get_id() ) {
-			return $this->set_id( $this->create_customer() );
+			$customer_id = $this->create_customer( [], $current_context );
+			$this->set_id( $customer_id );
+			return $customer_id;
 		}
 
 		$response = WC_Stripe_API::retrieve( 'customers/' . $this->get_id() );
@@ -415,10 +470,10 @@ class WC_Stripe_Customer {
 			if ( $this->is_no_such_customer_error( $response->error ) ) {
 				// This can happen when switching the main Stripe account or importing users from another site.
 				// Recreate the customer in this case.
-				return $this->recreate_customer();
+				return $this->recreate_customer( [], $current_context );
 			}
 
-			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message );
+			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
 		return $response->id;
@@ -427,11 +482,15 @@ class WC_Stripe_Customer {
 	/**
 	 * Search for an existing customer in Stripe account by email and name.
 	 *
+	 * @deprecated 10.9.0 No longer used internally and no replacement is provided.
+	 *
 	 * @param string $email Customer email.
 	 * @param string $name  Customer name.
 	 * @return array
 	 */
 	public function get_existing_customer( $email, $name ) {
+		wc_deprecated_function( __METHOD__, '10.9.0' );
+
 		$search_query    = [ 'query' => 'name:\'' . $name . '\' AND email:\'' . $email . '\'' ];
 		$search_response = WC_Stripe_API::request( $search_query, 'customers/search', 'GET' );
 
@@ -445,46 +504,38 @@ class WC_Stripe_Customer {
 	/**
 	 * Create a customer via API.
 	 *
-	 * @param array $args
-	 * @param string|null $current_context The context we are creating the customer in.
-	 * @return WP_Error|int
+	 * @param array         $args            Additional arguments for the request (optional).
+	 * @param string|null   $current_context The context we are creating the customer in (optional).
+	 * @param WC_Order|null $order           The order object (optional). If provided, billing details will be retrieved from the order.
+	 *
+	 * @return string Stripe customer ID in the format `cus_XXXXXXXXXXXXXX`
 	 *
 	 * @throws WC_Stripe_Exception
 	 */
-	public function create_customer( $args = [], $current_context = null ) {
-		$args = $this->generate_customer_request( $args );
-
-		// For guest users, check if a customer already exists with the same email and name in Stripe account before creating a new one.
-		if ( ! $this->get_id() && 0 === $this->get_user_id() && ! empty( $args['email'] ) && ! empty( $args['name'] ) ) {
-			$response = $this->get_existing_customer( $args['email'], $args['name'] );
-		}
+	public function create_customer( $args = [], $current_context = null, $order = null ) {
+		$args = $this->generate_customer_request( $args, $order );
 
 		// $current_context was initially introduced as a boolean flag, so check for old callers.
 		$current_context = $this->normalize_current_context( $current_context );
 
-		if ( empty( $response ) ) {
-			/**
-			 * Filters the arguments used to create a customer.
-			 *
-			 * @since 4.0.0
-			 *
-			 * @param array $args The arguments used to create a customer.
-			 */
-			$create_customer_args = apply_filters( 'wc_stripe_create_customer_args', $args );
+		// Logged-in customers should already be resolved by ID.
+		// Guests always get a fresh customer.
 
-			$this->validate_create_customer_request( $create_customer_args, $current_context );
+		/**
+		 * Filters the arguments used to create a customer.
+		 *
+		 * @since 4.0.0
+		 *
+		 * @param array $args The arguments used to create a customer.
+		 */
+		$create_customer_args = apply_filters( 'wc_stripe_create_customer_args', $args );
 
-			$response = WC_Stripe_API::request( $create_customer_args, 'customers' );
-		} else {
-			/**
-			 * This filter is documented in includes/class-wc-stripe-customer.php.
-			 */
-			$update_customer_args = apply_filters( 'wc_stripe_update_customer_args', $args );
-			$response             = WC_Stripe_API::request( $update_customer_args, 'customers/' . $response->id );
-		}
+		$this->validate_create_customer_request( $create_customer_args, $current_context );
+
+		$response = WC_Stripe_API::request( $create_customer_args, 'customers' );
 
 		if ( ! empty( $response->error ) ) {
-			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message );
+			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
 		$this->set_id( $response->id );
@@ -495,6 +546,12 @@ class WC_Stripe_Customer {
 			$this->update_id_in_meta( $response->id );
 		}
 
+		/**
+		 * Fires after a Stripe customer is created.
+		 *
+		 * @param array          $args     Arguments sent to the Stripe Customers API.
+		 * @param stdClass|array $response Stripe customer response.
+		 */
 		do_action( 'woocommerce_stripe_add_customer', $args, $response );
 
 		return $response->id;
@@ -503,19 +560,20 @@ class WC_Stripe_Customer {
 	/**
 	 * Updates the Stripe customer through the API.
 	 *
-	 * @param array $args     Additional arguments for the request (optional).
-	 * @param bool  $is_retry Whether the current call is a retry (optional, defaults to false). If true, then an exception will be thrown instead of further retries on error.
+	 * @param array         $args     Additional arguments for the request (optional).
+	 * @param bool          $is_retry Whether the current call is a retry (optional, defaults to false). If true, then an exception will be thrown instead of further retries on error.
+	 * @param WC_Order|null $order    The order object (optional). If provided, billing details will be retrieved from the order.
 	 *
-	 * @return string Customer ID
+	 * @return string Stripe customer ID in the format `cus_XXXXXXXXXXXXXX`
 	 *
 	 * @throws WC_Stripe_Exception
 	 */
-	public function update_customer( $args = [], $is_retry = false ) {
+	public function update_customer( $args = [], $is_retry = false, $order = null ) {
 		if ( empty( $this->get_id() ) ) {
-			throw new WC_Stripe_Exception( 'id_required_to_update_user', __( 'Attempting to update a Stripe customer without a customer ID.', 'woocommerce-gateway-stripe' ) );
+			throw new WC_Stripe_Exception( 'id_required_to_update_user', __( 'Attempting to update a Stripe customer without a customer ID.', 'woocommerce-gateway-stripe' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
-		$args = $this->generate_customer_request( $args );
+		$args = $this->generate_customer_request( $args, $order );
 
 		/**
 		 * Filters the arguments used to update a customer.
@@ -535,12 +593,18 @@ class WC_Stripe_Customer {
 				return $this->update_customer( $args, true );
 			}
 
-			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message );
+			throw new WC_Stripe_Exception( print_r( $response, true ), $response->error->message ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
 		$this->clear_cache();
 		$this->set_customer_data( $response );
 
+		/**
+		 * Fires after a Stripe customer is updated.
+		 *
+		 * @param array          $args     Arguments sent to the Stripe Customers API.
+		 * @param stdClass|array $response Stripe customer response.
+		 */
 		do_action( 'woocommerce_stripe_update_customer', $args, $response );
 
 		return $this->get_id();
@@ -549,21 +613,22 @@ class WC_Stripe_Customer {
 	/**
 	 * Updates existing Stripe customer or creates new customer for User through API.
 	 *
-	 * @param array $args     Additional arguments for the request (optional).
-	 * @param string|null $current_context The context we are creating the customer in.
+	 * @param array         $args            Additional arguments for the request (optional).
+	 * @param string|null   $current_context The context we are creating the customer in (optional).
+	 * @param WC_Order|null $order           The order object (optional). If provided, billing details will be retrieved from the order.
 	 *
-	 * @return string Customer ID
+	 * @return string Stripe customer ID in the format `cus_XXXXXXXXXXXXXX`
 	 *
 	 * @throws WC_Stripe_Exception
 	 */
-	public function update_or_create_customer( $args = [], $current_context = null ) {
+	public function update_or_create_customer( $args = [], $current_context = null, $order = null ) {
 		if ( empty( $this->get_id() ) ) {
 			// $current_context was initially introduced as a boolean flag, so check for old callers.
 			$current_context = $this->normalize_current_context( $current_context );
 
-			return $this->recreate_customer( $args, $current_context );
+			return $this->recreate_customer( $args, $current_context, $order );
 		} else {
-			return $this->update_customer( $args );
+			return $this->update_customer( $args, false, $order );
 		}
 	}
 
@@ -594,11 +659,22 @@ class WC_Stripe_Customer {
 	 * error and it is no such customer.
 	 *
 	 * @since 4.1.2
-	 * @param array $error
+	 * @param \stdClass|null $error The error object from a Stripe API response.
+	 * @return bool
 	 */
 	public function is_no_such_customer_error( $error ) {
+		if ( ! $error ) {
+			return false;
+		}
+
+		// Some endpoints reference the customer as a request param and return the
+		// code/param pair; others only carry the message, so both shapes identify
+		// a missing customer.
+		if ( isset( $error->code, $error->param ) && 'resource_missing' === $error->code && 'customer' === $error->param ) {
+			return true;
+		}
+
 		return (
-			$error &&
 			'invalid_request_error' === $error->type &&
 			preg_match( '/No such customer/i', $error->message )
 		);
@@ -609,7 +685,7 @@ class WC_Stripe_Customer {
 	 * error and it is no such customer.
 	 *
 	 * @since 4.5.6
-	 * @param array $error
+	 * @param \stdClass|null $error The error object from a Stripe API response.
 	 * @return bool
 	 */
 	public function is_source_already_attached_error( $error ) {
@@ -658,6 +734,7 @@ class WC_Stripe_Customer {
 							$wc_token->set_expiry_month( $response->card->exp_month );
 							$wc_token->set_expiry_year( $response->card->exp_year );
 							$wc_token->set_fingerprint( $response->card->fingerprint );
+							$wc_token->set_wallet_type( (string) ( $response->card->wallet->type ?? '' ) );
 						}
 						break;
 				}
@@ -679,6 +756,14 @@ class WC_Stripe_Customer {
 
 		$this->clear_cache();
 
+		/**
+		 * Fires after a payment source is added to a Stripe customer.
+		 *
+		 * @param string                  $customer_id Stripe customer ID.
+		 * @param WC_Payment_Token|false  $wc_token    WooCommerce payment token, or false when no token was saved.
+		 * @param stdClass|array          $response    Stripe source or payment method response.
+		 * @param string                  $source_id   Stripe source or payment method ID.
+		 */
 		do_action( 'woocommerce_stripe_add_source', $this->get_id(), $wc_token, $response, $source_id );
 
 		return $response->id;
@@ -806,14 +891,16 @@ class WC_Stripe_Customer {
 	 *
 	 * @param string[] $payment_method_types The payment method types to look for using Stripe method IDs. If the array is empty, it implies all payment method types.
 	 * @param int      $limit                The maximum number of payment methods to return. If the value is -1, no limit is applied.
+	 * @param bool     $throw_on_error       Throw on generic API errors instead of returning []. A missing customer still returns [].
 	 * @return array
+	 * @throws WC_Stripe_Exception When $throw_on_error is true and the error is not a missing customer.
 	 */
-	public function get_all_payment_methods( array $payment_method_types = [], int $limit = -1 ) {
+	public function get_all_payment_methods( array $payment_method_types = [], int $limit = -1, bool $throw_on_error = false ) {
 		if ( ! $this->get_id() ) {
 			return [];
 		}
 
-		$cache_key = self::PAYMENT_METHODS_TRANSIENT_KEY . '__all_' . $this->get_id();
+		$cache_key           = self::PAYMENT_METHODS_TRANSIENT_KEY . '__all_' . $this->get_id();
 		$all_payment_methods = get_transient( $cache_key );
 
 		if ( false === $all_payment_methods || ! is_array( $all_payment_methods ) ) {
@@ -833,14 +920,21 @@ class WC_Stripe_Customer {
 				$response = WC_Stripe_API::request( $request_params, 'payment_methods?expand[]=data.sepa_debit.generated_from.charge&expand[]=data.sepa_debit.generated_from.setup_attempt', 'GET' );
 
 				if ( ! empty( $response->error ) ) {
-					if (
-						isset( $response->error->param, $response->error->code )
-						&& 'customer' === $response->error->param
-						&& 'resource_missing' === $response->error->code
-					) {
+					if ( $this->is_no_such_customer_error( $response->error ) ) {
 						// If the customer doesn't exist, cache an empty array.
 						set_transient( $cache_key, [], DAY_IN_SECONDS );
+						return [];
 					}
+
+					// A generic error is not proof the payment methods are gone; callers reconciling
+					// local tokens must be able to tell it apart from a genuinely empty list.
+					if ( $throw_on_error ) {
+						throw new WC_Stripe_Exception(
+							print_r( $response->error, true ), // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+							__( 'There was a problem retrieving data from the Stripe API endpoint.', 'woocommerce-gateway-stripe' ) // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+						);
+					}
+
 					return [];
 				}
 
@@ -902,6 +996,12 @@ class WC_Stripe_Customer {
 
 		if ( empty( $response->error ) ) {
 			$this->clear_cache( $source_id );
+			/**
+			 * Fires after a source is detached from a Stripe customer.
+			 *
+			 * @param string         $customer_id Stripe customer ID.
+			 * @param stdClass|array $response    Stripe API response.
+			 */
 			do_action( 'wc_stripe_delete_source', $this->get_id(), $response );
 
 			return true;
@@ -924,6 +1024,12 @@ class WC_Stripe_Customer {
 
 		if ( empty( $response->error ) ) {
 			$this->clear_cache( $payment_method_id );
+			/**
+			 * Fires after a payment method is detached from a Stripe customer.
+			 *
+			 * @param string         $customer_id Stripe customer ID.
+			 * @param stdClass|array $response    Stripe API response.
+			 */
 			do_action( 'wc_stripe_detach_payment_method', $this->get_id(), $response );
 
 			return true;
@@ -935,9 +1041,11 @@ class WC_Stripe_Customer {
 	/**
 	 * Set default source in Stripe
 	 *
-	 * @param string $source_id
+	 * @param string $source_id The ID of the source to set as default.
+	 * @return bool True if the default source was set successfully, false otherwise.
+	 * @throws WC_Stripe_Exception
 	 */
-	public function set_default_source( $source_id ) {
+	public function set_default_source( $source_id ): bool {
 		$response = WC_Stripe_API::request(
 			[
 				'default_source' => sanitize_text_field( $source_id ),
@@ -947,7 +1055,15 @@ class WC_Stripe_Customer {
 		);
 
 		if ( empty( $response->error ) ) {
+			// Clear cache so that the payment methods list from Stripe is refreshed to have the correct default payment method.
 			$this->clear_cache();
+
+			/**
+			 * Fires after a customer's default source is updated in Stripe.
+			 *
+			 * @param string         $customer_id Stripe customer ID.
+			 * @param stdClass|array $response    Stripe API response.
+			 */
 			do_action( 'wc_stripe_set_default_source', $this->get_id(), $response );
 
 			return true;
@@ -959,9 +1075,11 @@ class WC_Stripe_Customer {
 	/**
 	 * Set default payment method in Stripe
 	 *
-	 * @param string $payment_method_id
+	 * @param string $payment_method_id The ID of the payment method to set as default.
+	 * @return bool True if the default payment method was set successfully, false otherwise.
+	 * @throws WC_Stripe_Exception
 	 */
-	public function set_default_payment_method( $payment_method_id ) {
+	public function set_default_payment_method( $payment_method_id ): bool {
 		$response = WC_Stripe_API::request(
 			[
 				'invoice_settings' => [
@@ -973,7 +1091,15 @@ class WC_Stripe_Customer {
 		);
 
 		if ( empty( $response->error ) ) {
+			// Clear cache so that the payment methods list from Stripe is refreshed to have the correct default payment method.
 			$this->clear_cache();
+
+			/**
+			 * Fires after a customer's default payment method is updated in Stripe.
+			 *
+			 * @param string         $customer_id Stripe customer ID.
+			 * @param stdClass|array $response    Stripe API response.
+			 */
 			do_action( 'wc_stripe_set_default_payment_method', $this->get_id(), $response );
 
 			return true;
@@ -1030,14 +1156,15 @@ class WC_Stripe_Customer {
 	/**
 	 * Recreates the customer for this user.
 	 *
-	 * @param array $args Additional arguments for the request (optional).
-	 * @param string|null $current_context The context we are creating the customer in.
+	 * @param array         $args            Additional arguments for the request (optional).
+	 * @param string|null   $current_context The context we are creating the customer in (optional).
+	 * @param WC_Order|null $order           The order object (optional). If provided, billing details will be retrieved from the order.
 	 *
 	 * @return string ID of the new Customer object.
 	 */
-	private function recreate_customer( $args = [], ?string $current_context = null ) {
+	private function recreate_customer( $args = [], ?string $current_context = null, $order = null ) {
 		$this->delete_id_from_meta();
-		return $this->create_customer( $args, $current_context );
+		return $this->create_customer( $args, $current_context, $order );
 	}
 
 	/**
@@ -1077,6 +1204,7 @@ class WC_Stripe_Customer {
 			'it_IT'          => 'it-IT',
 			'ja'             => 'ja-JP',
 			'nl_NL'          => 'nl-NL',
+			'nb_NO'          => 'no-NO',
 			'nn_NO'          => 'no-NO',
 			'pt_BR'          => 'pt-BR',
 			'sv_SE'          => 'sv-SE',
@@ -1152,6 +1280,11 @@ class WC_Stripe_Customer {
 					'country'     => $object_to_parse->get_shipping_country(),
 				],
 			];
+
+			$shipping_phone = $object_to_parse->get_shipping_phone();
+			if ( ! empty( $shipping_phone ) ) {
+				$data['shipping']['phone'] = $shipping_phone;
+			}
 		}
 
 		return $data;

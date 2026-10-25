@@ -29,14 +29,7 @@ if (!function_exists('humbug_phpscoper_expose_class')) {
         }
     }
 }
-humbug_phpscoper_expose_class('ComposerAutoloaderInitf1ad62ff0a56f3dbf9600eef6de90a8a', 'WooCommerce\PayPalCommerce\Vendor\ComposerAutoloaderInitf1ad62ff0a56f3dbf9600eef6de90a8a');
-humbug_phpscoper_expose_class('Attribute', 'WooCommerce\PayPalCommerce\Vendor\Attribute');
-humbug_phpscoper_expose_class('UnhandledMatchError', 'WooCommerce\PayPalCommerce\Vendor\UnhandledMatchError');
-humbug_phpscoper_expose_class('PhpToken', 'WooCommerce\PayPalCommerce\Vendor\PhpToken');
-humbug_phpscoper_expose_class('Stringable', 'WooCommerce\PayPalCommerce\Vendor\Stringable');
-humbug_phpscoper_expose_class('ValueError', 'WooCommerce\PayPalCommerce\Vendor\ValueError');
-humbug_phpscoper_expose_class('FlattedString', 'WooCommerce\PayPalCommerce\Vendor\FlattedString');
-humbug_phpscoper_expose_class('Flatted', 'WooCommerce\PayPalCommerce\Vendor\Flatted');
+humbug_phpscoper_expose_class('ComposerAutoloaderInit844a779aae516bed9e0beccea9d01fda', 'WooCommerce\PayPalCommerce\Vendor\ComposerAutoloaderInit844a779aae516bed9e0beccea9d01fda');
 
 // Function aliases. For more information see:
 // https://github.com/humbug/php-scoper/blob/master/docs/further-reading.md#function-aliases

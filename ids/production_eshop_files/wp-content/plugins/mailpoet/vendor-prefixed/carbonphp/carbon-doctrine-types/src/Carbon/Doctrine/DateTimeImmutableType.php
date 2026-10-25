@@ -5,9 +5,9 @@ use MailPoetVendor\Carbon\CarbonImmutable;
 use MailPoetVendor\Doctrine\DBAL\Types\VarDateTimeImmutableType;
 class DateTimeImmutableType extends VarDateTimeImmutableType implements CarbonDoctrineType
 {
- use CarbonTypeConverter;
- protected function getCarbonClassName() : string
- {
- return CarbonImmutable::class;
- }
+use CarbonTypeConverter;
+protected function getCarbonClassName(): string
+{
+return CarbonImmutable::class;
+}
 }

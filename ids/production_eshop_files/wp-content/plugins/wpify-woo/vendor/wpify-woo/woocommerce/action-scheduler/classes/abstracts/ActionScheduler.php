@@ -181,7 +181,7 @@ abstract class ActionScheduler
         $logger = self::logger();
         $runner = self::runner();
         $admin_view = self::admin_view();
-        $recurring_action_scheduler = new ActionScheduler_RecurringActionScheduler();
+        $recurring_action_scheduler = new \ActionScheduler_RecurringActionScheduler();
         // Ensure initialization on plugin activation.
         if (!\did_action('init')) {
             // phpcs:ignore Squiz.PHP.CommentedOutCode
@@ -228,7 +228,7 @@ abstract class ActionScheduler
         if (\apply_filters('action_scheduler_load_deprecated_functions', \true)) {
             require_once self::plugin_path('deprecated/functions.php');
         }
-        if (\defined('WpifyWooDeps\WP_CLI') && \WP_CLI) {
+        if (\defined('WpifyWooDeps\WP_CLI') && \WpifyWooDeps\WP_CLI) {
             WP_CLI::add_command('action-scheduler', 'ActionScheduler_WPCLI_Scheduler_command');
             WP_CLI::add_command('action-scheduler', 'ActionScheduler_WPCLI_Clean_Command');
             WP_CLI::add_command('action-scheduler action', '\Action_Scheduler\WP_CLI\Action_Command');

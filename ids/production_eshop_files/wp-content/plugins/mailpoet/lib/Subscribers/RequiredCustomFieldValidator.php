@@ -58,9 +58,9 @@ class RequiredCustomFieldValidator {
       if (!$ids) {
         return [];
       }
-      $requiredCustomFields = $this->customFieldRepository->findBy(['id' => $ids]);
+      $requiredCustomFields = $this->customFieldRepository->findBy(['id' => $ids, 'deletedAt' => null]);
     } else {
-      $requiredCustomFields = $this->customFieldRepository->findAll();
+      $requiredCustomFields = $this->customFieldRepository->findAllActive();
     }
 
     foreach ($requiredCustomFields as $customField) {

@@ -88,6 +88,20 @@ class Subscribers {
     return $count;
   }
 
+  public function getFreshSubscribersCount(): int {
+    return $this->subscribersRepository->getTotalSubscribers();
+  }
+
+  public function getSubscriberLimitForNotifications(): ?int {
+    $limit = $this->getSubscribersLimit();
+    if (!is_numeric($limit)) {
+      return null;
+    }
+
+    $limit = (int)$limit;
+    return $limit > 0 ? $limit : null;
+  }
+
   public function isSubscribersCountEnoughForCache(?int $count = null): bool {
     if (is_null($count) && func_num_args() === 0) {
       $count = $this->getSubscribersCount();

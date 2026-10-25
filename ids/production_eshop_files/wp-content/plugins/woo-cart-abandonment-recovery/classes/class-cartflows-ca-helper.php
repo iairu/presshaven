@@ -49,6 +49,12 @@ class Cartflows_Ca_Helper {
 		$global_param = get_option( 'wcf_ca_global_param', false );
 		$checkout_url = get_permalink( $post_id );
 
+		// Fall back to the WooCommerce checkout page when the stored checkout_id resolves to no permalink.
+		// Guards against legacy rows whose checkout_id overflowed the old INT column and points to a non-existent post.
+		if ( empty( $checkout_url ) ) {
+			$checkout_url = wc_get_page_permalink( 'checkout' );
+		}
+
 		$token_param  = [
 			'wcf_ac_token' => $token,
 		];
@@ -358,11 +364,24 @@ class Cartflows_Ca_Helper {
 		// Sanitize the value using universal sanitization.
 		$sanitized_value = wcf_ca()->options->sanitize_setting_value( $option_key, $value );
 
+		// The update functions return false when nothing changed, which is not a failure.
+		$unset   = '__cartflows_ca_unset__';
+		$current = ( $network && is_multisite() ) ? get_site_option( $option_key, $unset ) : get_option( $option_key, $unset );
+
+		// Options are stored as strings, so 0 and '0' are the same saved value.
+		$normalize = static function ( $item ) {
+			return is_scalar( $item ) ? (string) $item : maybe_serialize( $item );
+		};
+
+		if ( $unset !== $current && $normalize( $current ) === $normalize( $sanitized_value ) ) {
+			return true;
+		}
+
 		// Save option (network or regular).
 		if ( $network && is_multisite() ) {
 			return update_site_option( $option_key, $sanitized_value );
 		}
-		
+
 		return update_option( $option_key, $sanitized_value );
 	}
 
@@ -433,7 +452,7 @@ class Cartflows_Ca_Helper {
 	/**
 	 * Get Rollback versions.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @return array
 	 * @access public
 	 */
@@ -491,7 +510,7 @@ class Cartflows_Ca_Helper {
 	/**
 	 * Sort Rollback versions.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @param string $prev Previous Version.
 	 * @param string $next Next Version.
 	 *
@@ -513,7 +532,7 @@ class Cartflows_Ca_Helper {
 	/**
 	 * Get Rollback versions.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @return array
 	 * @access public
 	 */

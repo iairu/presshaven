@@ -5,6 +5,153 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.38.2 - 2026-10-05
+### Fixed
+- Decide the dashboard's paywalls from the site's current features rather than from a plan it cached before its last upgrade. [#52098]
+
+## 0.38.1 - 2026-09-28
+### Fixed
+- Notices: Prevent a dismissed notice from coming back for up to 5 minutes after it is dismissed. [#52599]
+
+## 0.38.0 - 2026-09-23
+### Added
+- Add a REST route to read and change the Stats settings, for the Settings tab in the Stats dashboard. [#52540]
+- Add the views chart and Stats link to the admin bar, and let any plugin that ships Stats add the Stats widget to the WordPress dashboard. [#52528]
+
+## 0.37.0 - 2026-09-21
+### Changed
+- Hide WordPress admin notices on the Stats dashboard, and let hosts show or hide the Stats sidebar entry. [#52351]
+
+## 0.36.0 - 2026-09-15
+### Added
+- Notices: Add an `include_details` parameter that returns a detail record per notice, so a dismissal can escalate, and accept a dismissal that omits `postponed_for`. [#52075]
+
+## 0.35.1 - 2026-09-08
+### Fixed
+- Stats: Fix endless spinner when the blog token is invalid. [#51998]
+
+## 0.35.0 - 2026-09-01
+### Removed
+- Minimum supported PHP version is now 7.4. [#51515]
+
+## 0.34.0 - 2026-08-25
+### Added
+- Add a filter for the post list table's views column link. [#51357]
+
+### Changed
+- Make the Blaze package a development-only dependency. [#51462]
+
+## 0.33.0 - 2026-08-20
+### Added
+- Show the Stats dashboard before the site is connected to WordPress.com, so a plan can be picked and the site connected from there. [#51200]
+
+### Changed
+- Load the post list Stats column CSS through the stylesheet queue. [#51353]
+- Load the Stats dashboard bootstrap script through the script queue. [#51355]
+- Update dependencies. [#51190]
+
+### Fixed
+- Return a clear error instead of a server error when a stats request is made before the site is connected to WordPress.com. [#51200]
+
+## 0.32.1 - 2026-08-10
+### Security
+- Cast the quick-edit post ID to an integer before requesting its view counts. [#51049]
+
+## 0.32.0 - 2026-08-03
+### Fixed
+- Stats Dashboard: Declare `wp-components` as a stylesheet dependency, so the dashboard's own component styling (Button, Card, Modal, etc.) no longer relies on another admin feature enqueuing it as a side effect, and is emitted in the correct cascade order. [#50881]
+
+## 0.31.11 - 2026-07-27
+### Changed
+- Update dependencies. [#50719]
+
+## 0.31.10 - 2026-07-20
+### Changed
+- Update dependencies. [#44736]
+
+## 0.31.9 - 2026-07-13
+### Changed
+- Internal updates.
+
+## 0.31.8 - 2026-07-06
+### Changed
+- Internal updates.
+
+## 0.31.7 - 2026-06-25
+### Changed
+- Defer Stats Admin REST controller instantiation so the controller class only loads on REST API requests. [#49803]
+
+## 0.31.6 - 2026-06-15
+### Changed
+- Internal updates.
+
+## 0.31.5 - 2026-06-08
+### Changed
+- Internal updates.
+
+## 0.31.4 - 2026-05-25
+### Fixed
+- Phan: Address `PhanPluginDuplicateConditionalNullCoalescing` violations. [#48887]
+
+## 0.31.3 - 2026-05-19
+### Changed
+- Internal updates.
+
+## 0.31.2 - 2026-05-04
+### Changed
+- Internal: No longer require automattic/jetpack-changelogger as a per-project dev dependency. [#48225]
+
+## 0.31.1 - 2026-04-15
+### Changed
+- Update purchases endpoint from v1.1 /sites/$site/purchases to v1.2 /upgrades?site=$site. [#48035]
+
+## 0.31.0 - 2026-04-10
+### Added
+- Add GET endpoint for retrieving spam site referrers. [#47566]
+
+## 0.30.9 - 2026-03-23
+### Fixed
+- Hide stats column for non-public post types in the WP Admin post list. [#47704]
+
+## 0.30.8 - 2026-02-26
+### Changed
+- Add `AGENTS.md` and `CLAUDE.md` for coding agent guidelines compliance. [#47333]
+
+## 0.30.7 - 2026-02-23
+### Added
+- Register `STATS_REST_RESP_` transient prefix for cleanup by the stats package transient cleanup cron. [#47213]
+
+## 0.30.6 - 2026-02-02
+### Changed
+- Update dependencies. [#44736]
+
+## 0.30.5 - 2026-01-26
+### Changed
+- Update dependencies. [#44736]
+
+## 0.30.4 - 2025-12-15
+### Changed
+- Internal updates.
+
+## 0.30.3 - 2025-12-08
+### Fixed
+- Ensure proper flags are used with `json_encode()`. [#46092]
+
+## 0.30.2 - 2025-12-01
+### Changed
+- Update dependencies. [#44736]
+
+## 0.30.1 - 2025-11-10
+### Changed
+- Tests: Ensure PHP 8.5 compatibility. [#45769]
+
+### Fixed
+- Stats: Display post views after quick edit. [#45793]
+
+## 0.30.0 - 2025-10-27
+### Removed
+- Remove "Jetpack > Stats" menu. [#45607]
+
 ## 0.29.1 - 2025-09-29
 ### Fixed
 - Fix dashboard.wordpress.com breaking non-odyssey stats on older versions of Jetpack. [#45283]

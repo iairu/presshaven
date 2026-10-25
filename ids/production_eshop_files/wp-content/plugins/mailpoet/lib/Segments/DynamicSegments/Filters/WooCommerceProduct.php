@@ -46,26 +46,40 @@ class WooCommerceProduct implements Filter {
     $filterData = $filter->getFilterData();
     $operator = $filterData->getOperator();
     $productIds = $filterData->getParam('product_ids');
+    $productIds = is_array($productIds) ? $productIds : [];
     $subscribersTable = $this->entityManager->getClassMetadata(SubscriberEntity::class)->getTableName();
     $parameterSuffix = $filter->getId() ?? Security::generateRandomString();
 
     if ($operator === DynamicSegmentFilterData::OPERATOR_ANY) {
       $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
+      $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
       $this->applyProductJoin($queryBuilder, $orderStatsAlias);
       $queryBuilder->andWhere("product.product_id IN (:products_{$parameterSuffix})");
     } elseif ($operator === DynamicSegmentFilterData::OPERATOR_ALL) {
-      $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
-      $this->applyProductJoin($queryBuilder, $orderStatsAlias);
-      $queryBuilder->andWhere("product.product_id IN (:products_{$parameterSuffix})")
-        ->groupBy("{$subscribersTable}.id, $orderStatsAlias.order_id")
-        ->having("COUNT($orderStatsAlias.order_id) = :count" . $parameterSuffix)
-        ->setParameter('count' . $parameterSuffix, count($productIds));
-
+      $subQueryCount = 1;
+      foreach ($productIds as $productId) {
+        $uniqueParameterSuffix = Security::generateRandomString();
+        $subQuery = $this->filterHelper->getNewSubscribersQueryBuilder();
+        $subOrderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($subQuery);
+        $this->filterHelper->applyDatePeriodFilter($subQuery, "$subOrderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
+        $this->applyProductJoin($subQuery, $subOrderStatsAlias);
+        $subQuery->andWhere("product.product_id = :product_{$uniqueParameterSuffix}");
+        $subQuery->setParameter("product_{$uniqueParameterSuffix}", $productId);
+        $alias = sprintf('productSubQuery%d', $subQueryCount);
+        $queryBuilder->innerJoin(
+          $subscribersTable,
+          sprintf('(%s)', $this->filterHelper->getInterpolatedSQL($subQuery)),
+          $alias,
+          "$subscribersTable.id = $alias.id"
+        );
+        $subQueryCount++;
+      }
     } elseif ($operator === DynamicSegmentFilterData::OPERATOR_NONE) {
       // subQuery with subscriber ids that bought products
       $subQuery = $this->createQueryBuilder($subscribersTable);
       $subQuery->select("DISTINCT $subscribersTable.id");
       $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($subQuery);
+      $this->filterHelper->applyDatePeriodFilter($subQuery, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
       $subQuery = $this->applyProductJoin($subQuery, $orderStatsAlias);
       $subQuery->andWhere("product.product_id IN (:products_{$parameterSuffix})");
       // application subQuery for negation

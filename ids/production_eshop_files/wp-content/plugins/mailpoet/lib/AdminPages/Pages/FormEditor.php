@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\AdminPages\AssetsController;
 use MailPoet\AdminPages\PageRenderer;
 use MailPoet\API\JSON\ResponseBuilders\CustomFieldsResponseBuilder;
+use MailPoet\Config\AccessControl;
 use MailPoet\Config\Localizer;
 use MailPoet\CustomFields\CustomFieldsRepository;
 use MailPoet\Entities\FormEntity;
@@ -84,6 +85,7 @@ use MailPoet\Router\Router;
 use MailPoet\Segments\SegmentsSimpleListRepository;
 use MailPoet\Settings\Pages;
 use MailPoet\Settings\UserFlagsController;
+use MailPoet\Subscribers\TrackingConsentCapture;
 use MailPoet\WP\AutocompletePostListLoader as WPPostListLoader;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -200,6 +202,9 @@ class FormEditor {
   /** @var AssetsController */
   private $assetsController;
 
+  /** @var TrackingConsentCapture */
+  private $trackingConsentCapture;
+
   public function __construct(
     AssetsController $assetsController,
     PageRenderer $pageRenderer,
@@ -213,7 +218,8 @@ class FormEditor {
     WPPostListLoader $wpPostListLoader,
     TemplateRepository $templateRepository,
     FormsRepository $formsRepository,
-    SegmentsSimpleListRepository $segmentsListRepository
+    SegmentsSimpleListRepository $segmentsListRepository,
+    TrackingConsentCapture $trackingConsentCapture
   ) {
     $this->assetsController = $assetsController;
     $this->pageRenderer = $pageRenderer;
@@ -228,6 +234,7 @@ class FormEditor {
     $this->wpPostListLoader = $wpPostListLoader;
     $this->segmentsListRepository = $segmentsListRepository;
     $this->formsRepository = $formsRepository;
+    $this->trackingConsentCapture = $trackingConsentCapture;
   }
 
   public function render() {
@@ -235,13 +242,15 @@ class FormEditor {
       $this->renderTemplateSelection();
       return;
     }
-    if (isset($_GET['template_id'])) {
+    if (is_string($_GET['template_id'] ?? null)) {
       $template = $this->templatesRepository->getFormTemplate(sanitize_text_field(wp_unslash($_GET['template_id'])));
       $form = $template->toFormEntity();
     } else {
-      $form = $this->getFormData((int)$_GET['id']);
+      // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- is_numeric guard plus int cast is the sanitization
+      $idParam = $_GET['id'] ?? null;
+      $form = $this->getFormData(is_numeric($idParam) ? (int)$idParam : 0);
     }
-    $customFields = $this->customFieldsRepository->findAll();
+    $customFields = $this->customFieldsRepository->findAllActive();
     if (!$form instanceof FormEntity) {
       throw new NotFoundException('Form does not exist');
     }
@@ -267,6 +276,7 @@ class FormEditor {
       'editor_tutorial_seen' => $this->userFlags->get('form_editor_tutorial_seen'),
       'preview_page_url' => $this->getPreviewPageUrl(),
       'custom_fonts' => CustomFonts::FONTS,
+      'editor_color_palette' => $this->getEditorColorPalette(),
       'translations' => $this->getGutenbergScriptsTranslations(),
       'posts' => $this->wpPostListLoader->getPosts(),
       'pages' => $this->wpPostListLoader->getPages(),
@@ -276,12 +286,64 @@ class FormEditor {
       'product_categories' => $this->wpPostListLoader->getWooCommerceCategories(),
       'product_tags' => $this->wpPostListLoader->getWooCommerceTags(),
       'is_administrator' => $this->wp->currentUserCan('administrator'),
+      'can_manage_subscribers' => $this->wp->currentUserCan(AccessControl::PERMISSION_MANAGE_SUBSCRIBERS),
+      'tracking_consent_capture_enabled' => $this->trackingConsentCapture->isCaptureEnabled(),
       'theme_support_widgets' => $this->wp->wpGetThemeSupport('widgets'),
       'theme_support_fse' => $this->wp->wpGetTheme()->is_block_theme(),
     ];
     $this->wp->wpEnqueueMedia();
     $this->assetsController->setupFormEditorDependencies();
     $this->pageRenderer->displayPage('form/editor.html', $data);
+  }
+
+  private function getEditorColorPalette(): array {
+    $palette = $this->normalizeColorPalette(
+      $this->wp->wpGetGlobalSettings(['color', 'palette', 'theme'])
+    );
+    if ($palette) {
+      return $palette;
+    }
+    return $this->normalizeColorPalette(
+      $this->wp->wpGetThemeSupport('editor-color-palette')
+    );
+  }
+
+  private function normalizeColorPalette($palette): array {
+    if (!is_array($palette)) {
+      return [];
+    }
+    if (
+      isset($palette[0])
+      && is_array($palette[0])
+      && !isset($palette[0]['color'])
+    ) {
+      $palette = $palette[0];
+    }
+
+    $normalizedPalette = [];
+    foreach ($palette as $color) {
+      if (!is_array($color)) {
+        continue;
+      }
+      $name = isset($color['name']) && is_scalar($color['name'])
+        ? $this->wp->sanitizeTextField((string)$color['name'])
+        : '';
+      $slug = isset($color['slug']) && is_scalar($color['slug'])
+        ? $this->wp->sanitizeKey((string)$color['slug'])
+        : '';
+      $colorValue = isset($color['color']) && is_scalar($color['color'])
+        ? $this->wp->sanitizeTextField((string)$color['color'])
+        : '';
+      if (!$name || !$slug || !$colorValue) {
+        continue;
+      }
+      $normalizedPalette[] = [
+        'name' => $name,
+        'slug' => $slug,
+        'color' => $colorValue,
+      ];
+    }
+    return $normalizedPalette;
   }
 
   public function renderTemplateSelection() {

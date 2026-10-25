@@ -12,18 +12,26 @@ class Social {
     $iconsBlock = '';
     if (is_array($element['icons'])) {
       foreach ($element['icons'] as $index => $icon) {
-        if (empty($icon['image'])) {
+        if (!is_array($icon) || empty($icon['image'])) {
           continue;
         }
 
-        $style = 'width:' . $icon['width'] . ';height:' . $icon['width'] . ';-ms-interpolation-mode:bicubic;border:0;display:inline;outline:none;';
-        $iconsBlock .= '<a href="' . EHelper::escapeHtmlLinkAttr($icon['link']) . '" style="text-decoration:none!important;"
+        // Width/height typically arrive as CSS strings like "32px"; PHP's lenient string-to-int strips the unit.
+        $widthRaw = is_scalar($icon['width'] ?? null) ? (string)$icon['width'] : '';
+        $heightRaw = is_scalar($icon['height'] ?? null) ? (string)$icon['height'] : '';
+        $width = (int)$widthRaw;
+        $height = (int)$heightRaw;
+        $link = is_string($icon['link'] ?? null) ? $icon['link'] : '';
+        $image = is_string($icon['image']) ? $icon['image'] : '';
+        $iconType = is_string($icon['iconType'] ?? null) ? $icon['iconType'] : '';
+        $style = 'width:' . $width . 'px;height:' . $height . 'px;-ms-interpolation-mode:bicubic;border:0;display:inline;outline:none;';
+        $iconsBlock .= '<a href="' . EHelper::escapeHtmlLinkAttr($link) . '" style="text-decoration:none!important;"
         ><img
-          src="' . EHelper::escapeHtmlLinkAttr($icon['image']) . '"
-          width="' . (int)$icon['width'] . '"
-          height="' . (int)$icon['height'] . '"
+          src="' . EHelper::escapeHtmlLinkAttr($image) . '"
+          width="' . $width . '"
+          height="' . $height . '"
           style="' . EHelper::escapeHtmlStyleAttr($style) . '"
-          alt="' . EHelper::escapeHtmlAttr($icon['iconType']) . '"
+          alt="' . EHelper::escapeHtmlAttr($iconType) . '"
         ></a>&nbsp;';
       }
     }

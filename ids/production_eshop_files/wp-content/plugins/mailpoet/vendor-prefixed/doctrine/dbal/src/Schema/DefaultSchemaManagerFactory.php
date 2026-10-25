@@ -6,8 +6,8 @@ use MailPoetVendor\Doctrine\DBAL\Connection;
 use MailPoetVendor\Doctrine\DBAL\Exception;
 final class DefaultSchemaManagerFactory implements SchemaManagerFactory
 {
- public function createSchemaManager(Connection $connection) : AbstractSchemaManager
- {
- return $connection->getDatabasePlatform()->createSchemaManager($connection);
- }
+public function createSchemaManager(Connection $connection): AbstractSchemaManager
+{
+return $connection->getDatabasePlatform()->createSchemaManager($connection);
+}
 }

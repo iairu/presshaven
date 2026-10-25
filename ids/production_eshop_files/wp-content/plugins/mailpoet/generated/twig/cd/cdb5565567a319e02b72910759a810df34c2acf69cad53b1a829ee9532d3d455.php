@@ -98,9 +98,12 @@ class __TwigTemplate_e9532cf0026e4c617bee1d3c81fed011d9d7ae14ad609d02eaa36481262
                         <h1 style=\"margin:0 0 12px;color:#111111;font-family:'Trebuchet MS','Lucida Grande','Lucida Sans Unicode','Lucida Sans',Tahoma,sans-serif;font-size:40px;line-height:64px;margin-bottom:0;text-align:center;padding:0;font-style:normal;font-weight:normal\"><strong>";
         // line 50
         yield $this->extensions['MailPoet\Twig\I18n']->translate("Congrats!");
-        yield "<br />";
+        yield "<br />
+                        ";
+        // line 51
         yield $this->extensions['MailPoet\Twig\I18n']->translate("MailPoet is now sending your emails");
-        yield "</strong></h1>
+        yield "
+                        </strong></h1>
                       </td>
                     </tr>
                     <tr>
@@ -112,7 +115,7 @@ class __TwigTemplate_e9532cf0026e4c617bee1d3c81fed011d9d7ae14ad609d02eaa36481262
                           <tr>
                             <td class=\"mailpoet_paragraph\" style=\"border-collapse:collapse;color:#000000;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:16px;line-height:25.6px;word-break:break-word;word-wrap:break-word;text-align:center\">
                               ";
-        // line 61
+        // line 63
         yield $this->extensions['MailPoet\Twig\I18n']->translate("This email was sent automatically with the MailPoet Sending Service after you activated your key in your MailPoet settings.");
         yield "
                             </td>
@@ -149,7 +152,7 @@ class __TwigTemplate_e9532cf0026e4c617bee1d3c81fed011d9d7ae14ad609d02eaa36481262
                       <tr>
                         <td class=\"mailpoet_image mailpoet_padded_vertical mailpoet_padded_side\" align=\"left\" valign=\"top\" style=\"border-collapse:collapse;padding-top:10px;padding-bottom:10px;padding-left:20px;padding-right:20px\">
                           <img src=\"";
-        // line 95
+        // line 97
         yield $this->extensions['MailPoet\Twig\Assets']->generateCdnUrl("logo-white-400x122.png");
         yield "\" width=\"130\" alt=\"new_logo_white\" style=\"height:auto;max-width:100%;-ms-interpolation-mode:bicubic;border:0;display:block;outline:none;text-align:center\" />
                         </td>
@@ -222,7 +225,7 @@ class __TwigTemplate_e9532cf0026e4c617bee1d3c81fed011d9d7ae14ad609d02eaa36481262
      */
     public function getDebugInfo()
     {
-        return array (  150 => 95,  113 => 61,  97 => 50,  86 => 42,  48 => 7,  38 => 1,);
+        return array (  153 => 97,  116 => 63,  101 => 51,  97 => 50,  86 => 42,  48 => 7,  38 => 1,);
     }
 
     public function getSourceContext()

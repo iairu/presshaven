@@ -7,16 +7,22 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\Automation\Engine\Data\Automation;
 use MailPoet\Automation\Engine\Exceptions;
+use MailPoet\Automation\Engine\Hooks;
 use MailPoet\Automation\Engine\Storage\AutomationStorage;
 
 class DeleteAutomationController {
   /** @var AutomationStorage */
   private $automationStorage;
 
+  /** @var Hooks */
+  private $hooks;
+
   public function __construct(
-    AutomationStorage $automationStorage
+    AutomationStorage $automationStorage,
+    Hooks $hooks
   ) {
     $this->automationStorage = $automationStorage;
+    $this->hooks = $hooks;
   }
 
   public function deleteAutomation(int $id): Automation {
@@ -30,6 +36,7 @@ class DeleteAutomationController {
     }
 
     $this->automationStorage->deleteAutomation($automation);
+    $this->hooks->doAutomationAfterDelete($automation);
     return $automation;
   }
 }

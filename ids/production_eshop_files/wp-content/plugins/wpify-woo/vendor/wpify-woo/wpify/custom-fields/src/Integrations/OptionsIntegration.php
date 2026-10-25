@@ -48,6 +48,9 @@ abstract class OptionsIntegration extends BaseIntegration
 			data-fields="<?php 
         echo esc_attr($this->custom_fields->helpers->json_encode($items));
         ?>"
+			data-preresolved-options="<?php 
+        echo esc_attr($this->custom_fields->helpers->json_encode($this->build_preresolved_options($items)));
+        ?>"
 			<?php 
         foreach ($data_attributes as $key => $value) {
             printf(' data-%s="%s"', esc_attr($key), esc_attr($value));
@@ -82,6 +85,87 @@ abstract class OptionsIntegration extends BaseIntegration
             }
         }
         return $prepared;
+    }
+    /**
+     * Builds a per-options_key map of selected value => label, resolving each
+     * key's selected values with a single in-process callback call. Embedded in
+     * the page so the UI can show selected labels without a value-bound request.
+     *
+     * Fields with cache_options=false (dependent/cascading selects) are
+     * included as well. Their async_params placeholders ({{field}}) cannot be
+     * interpolated server-side, so those params are dropped and the callback
+     * receives only the static params plus `value` — labels of saved values
+     * rarely depend on the dynamic params that shape the browse list.
+     *
+     * @param array $items Prepared items (with values).
+     *
+     * @return array<string, array<string, string>>
+     */
+    public function build_preresolved_options(array $items): array
+    {
+        $callbacks = array();
+        // Index callbacks + static async_params by options_key from the flat tree.
+        $walker = function (array $items) use (&$walker, &$callbacks) {
+            foreach ($items as $item) {
+                if (!empty($item['options_key']) && !empty($item['options_callback'])) {
+                    $callbacks[$item['options_key']] = array('callback' => $item['options_callback'], 'async_params' => $this->static_async_params($item['async_params'] ?? array()));
+                }
+                if (isset($item['items'])) {
+                    $walker($item['items']);
+                }
+            }
+        };
+        $walker($items);
+        // Collect selected values per key. Prepared items carry their own
+        // `value`, so collect_async_values reads them straight from the tree.
+        $by_key = $this->custom_fields->collect_async_values($items, array());
+        $preresolved = array();
+        foreach ($by_key as $key => $vals) {
+            if (empty($callbacks[$key])) {
+                continue;
+            }
+            $vals = array_values(array_unique($vals));
+            $params = array_merge($callbacks[$key]['async_params'], array('value' => $vals));
+            $options = call_user_func($callbacks[$key]['callback'], $params);
+            $options = is_array($options) ? $this->normalize_options($options) : array();
+            foreach ($options as $option) {
+                if (in_array((string) $option['value'], $vals, \true)) {
+                    $preresolved[$key][(string) $option['value']] = (string) $option['label'];
+                }
+            }
+            // Cover every stored value so the UI never has to issue a per-value
+            // resolve request. Values the callback could not resolve (e.g. a saved
+            // option that no longer exists in the source) fall back to the raw
+            // value as its own label — matching the client-side display fallback.
+            foreach ($vals as $value) {
+                if (!isset($preresolved[$key][$value])) {
+                    $preresolved[$key][$value] = $value;
+                }
+            }
+        }
+        /**
+         * Filters the preresolved value => label map embedded in the app
+         * container. Lets integrations supply labels the options callback
+         * cannot produce without its dynamic async_params.
+         *
+         * @param array<string, array<string, string>> $preresolved Map of options_key => ( value => label ).
+         * @param array<string, array<int, string>>    $by_key      Map of options_key => selected values.
+         * @param array                                $items       Prepared items (with values).
+         */
+        return apply_filters('wpifycf_preresolved_options', $preresolved, $by_key, $items);
+    }
+    /**
+     * Returns async_params without entries whose value contains a `{{…}}`
+     * placeholder. Placeholders reference other fields' current values, which
+     * only the client knows, so they cannot be interpolated when preresolving.
+     *
+     * @param array $async_params Raw async_params from the field definition.
+     *
+     * @return array
+     */
+    private function static_async_params(array $async_params): array
+    {
+        return array_filter($async_params, static fn($param) => !(is_string($param) && 1 === preg_match('/\{\{.+?\}\}/', $param)));
     }
     /**
      * Builds the input name attribute for a field.

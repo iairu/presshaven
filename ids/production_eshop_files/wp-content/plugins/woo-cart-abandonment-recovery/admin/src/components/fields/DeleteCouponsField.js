@@ -1,17 +1,39 @@
 import { useState } from 'react';
-import { Button, Loader, toast } from '@bsf/force-ui';
+import { Button, toast } from '@bsf/force-ui';
 import { __ } from '@wordpress/i18n';
 
+import ConfirmDialog from '@Components/common/ConfirmDialog';
 import FieldWrapper from '@Components/common/FieldWrapper';
 import { doApiFetch } from '@Store';
 
 const DeleteCouponsField = ( { title, description } ) => {
 	const [ isDeleting, setIsDeleting ] = useState( false );
+	const [ confirming, setConfirming ] = useState( false );
+
+	const finish = () => {
+		setIsDeleting( false );
+		setConfirming( false );
+	};
 
 	const handleTrigger = () => {
+		const nonce = window.wcf_ca_localized_vars?._delete_coupon_nonce;
+
+		if ( ! nonce ) {
+			toast.error(
+				__( 'Delete failed', 'woo-cart-abandonment-recovery' ),
+				{
+					description: __(
+						'This page is out of date. Reload it and try again.',
+						'woo-cart-abandonment-recovery'
+					),
+				}
+			);
+			setConfirming( false );
+			return;
+		}
+
 		setIsDeleting( true );
 		const ajaxUrl = cart_abandonment_admin?.ajax_url;
-		const nonce = wcf_ca_localized_vars._delete_coupon_nonce;
 
 		const formData = new window.FormData();
 		formData.append( 'action', 'wcf_ca_delete_garbage_coupons' );
@@ -40,7 +62,7 @@ const DeleteCouponsField = ( { title, description } ) => {
 						}
 					);
 				}
-				setIsDeleting( false );
+				finish();
 			},
 			( error ) => {
 				toast.error(
@@ -49,38 +71,49 @@ const DeleteCouponsField = ( { title, description } ) => {
 						description: error.data || '',
 					}
 				);
-				setIsDeleting( false );
+				finish();
 			},
 			true,
 			false
-		);
+		).catch( () => {
+			// doApiFetch has already reported the failure through onError.
+		} );
 	};
 
 	return (
 		<FieldWrapper title={ title } description={ description } type="inline">
 			<div className="my-auto">
 				<Button
-					className="py-2 px-4 bg-red-50 text-red-600 outline-red-600 hover:bg-red-50 hover:outline-red-600"
 					size="md"
 					tag="button"
 					type="button"
 					variant="outline"
-					onClick={ handleTrigger }
+					destructive
+					onClick={ () => setConfirming( true ) }
 					disabled={ isDeleting }
-					icon={
-						isDeleting && (
-							<Loader
-								className="text-primary-600"
-								size="md"
-								variant="primary"
-							/>
-						)
-					}
-					iconPosition="left"
 				>
-					Delete
+					{ __( 'Delete coupons', 'woo-cart-abandonment-recovery' ) }
 				</Button>
 			</div>
+			<ConfirmDialog
+				open={ confirming }
+				setOpen={ setConfirming }
+				title={ __(
+					'Delete used and expired coupons?',
+					'woo-cart-abandonment-recovery'
+				) }
+				description={ __(
+					'Coupons this plugin created that were fully used or have expired will be deleted. This cannot be undone.',
+					'woo-cart-abandonment-recovery'
+				) }
+				confirmLabel={ __(
+					'Delete coupons',
+					'woo-cart-abandonment-recovery'
+				) }
+				onConfirm={ handleTrigger }
+				isConfirming={ isDeleting }
+				isDestructive
+			/>
 		</FieldWrapper>
 	);
 };

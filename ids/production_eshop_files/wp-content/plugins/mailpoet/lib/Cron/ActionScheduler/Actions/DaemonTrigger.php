@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\Cron\ActionScheduler\ActionScheduler;
 use MailPoet\Cron\ActionScheduler\RemoteExecutorHandler;
+use MailPoet\Cron\DaemonActionSchedulerRunner;
 use MailPoet\Cron\Triggers\WordPress;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -40,7 +41,15 @@ class DaemonTrigger {
 
   public function init() {
     $this->wp->addAction(self::NAME, [$this, 'process']);
+
     if (!$this->actionScheduler->hasScheduledAction(self::NAME)) {
+      // Don't schedule if plugin is being deactivated (prevents race condition with parallel requests)
+      if (DaemonActionSchedulerRunner::isDeactivationFlagFresh($this->wp)) {
+        return;
+      }
+      // A stale flag (e.g. left behind by an interrupted update) must not block rescheduling.
+      // It is intentionally not deleted here — that could race with a concurrent deactivation
+      // writing a fresh flag. Activator::reactivateCronActions() clears it on the next activation.
       $this->actionScheduler->scheduleRecurringAction($this->wp->currentTime('timestamp', true), self::TRIGGER_RUN_INTERVAL, self::NAME);
     }
   }

@@ -32,8 +32,9 @@ class TablePrefixMetadataFactory extends ClassMetadataFactory {
     if (Env::$dbPrefix === null) {
       throw new \RuntimeException('DB table prefix not initialized');
     }
+    global $wpdb;
     $this->prefix = Env::$dbPrefix;
-    $this->wpDbPrefix = Env::$wpDbPrefix;
+    $this->wpDbPrefix = $wpdb->prefix ?? ''; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
     $this->setProxyClassNameResolver(new ProxyClassNameResolver());
   }
 
@@ -68,7 +69,7 @@ class TablePrefixMetadataFactory extends ClassMetadataFactory {
     }
 
     foreach ($classMetadata->getAssociationMappings() as $fieldName => $mapping) {
-      if ($mapping['type'] === ClassMetadataInfo::MANY_TO_MANY && $mapping['isOwningSide']) {
+      if ($mapping['type'] === ClassMetadataInfo::MANY_TO_MANY && $mapping['isOwningSide'] && isset($mapping['joinTable'])) {
         /** @var string $mappedTableName */
         $mappedTableName = $mapping['joinTable']['name'];
         $classMetadata->associationMappings[$fieldName]['joinTable']['name'] = $this->createPrefixedName($mappedTableName);

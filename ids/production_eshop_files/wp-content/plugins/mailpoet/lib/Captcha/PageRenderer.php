@@ -36,7 +36,11 @@ class PageRenderer {
     $this->wp->addFilter('the_content', [$this, 'setPageContent']);
   }
 
-  public function setWindowTitle($title, $separator, $separatorLocation = 'right') {
+  public function setWindowTitle($title, $separator = '', $separatorLocation = 'right') {
+    // If no separator is provided, just modify the entire title
+    if (empty($separator)) {
+      return $this->getPageTitle();
+    }
     $titleParts = explode(" $separator ", $title);
     if (!is_array($titleParts)) {
       return $title;
@@ -71,11 +75,23 @@ class PageRenderer {
   }
 
   public function setPageContent($pageContent) {
+    if (strpos($pageContent, '[mailpoet_page]') === false) {
+      return $pageContent;
+    }
+
     $this->assetsController->setupFrontEndDependencies();
 
-    $content = $this->formRenderer->render($this->data);
-    if (!$content) {
-      return false;
+    // For preview, show a placeholder message since we don't have a real captcha session
+    if (isset($this->data['preview']) && $this->data['preview']) {
+      $content = '<div class="mailpoet_captcha_preview">' .
+        '<p>' . __('This is a preview of the CAPTCHA page.', 'mailpoet') . '</p>' .
+        '<p>' . __('When users need to verify they’re not a robot, the CAPTCHA form will be displayed here.', 'mailpoet') . '</p>' .
+        '</div>';
+    } else {
+      $content = $this->formRenderer->render($this->data);
+      if (!$content) {
+        return str_replace('[mailpoet_page]', '', $pageContent);
+      }
     }
 
     return str_replace('[mailpoet_page]', trim($content), $pageContent);

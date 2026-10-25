@@ -37,7 +37,6 @@ class WC_Admin {
 		add_action( 'current_screen', array( $this, 'conditional_includes' ) );
 		add_action( 'admin_init', array( $this, 'buffer' ), 1 );
 		add_action( 'admin_init', array( $this, 'preview_emails' ) );
-		add_action( 'admin_init', array( $this, 'preview_email_editor_dummy_content' ) );
 		add_action( 'admin_init', array( $this, 'prevent_admin_access' ) );
 		add_action( 'admin_init', array( $this, 'admin_redirects' ) );
 		add_action( 'admin_footer', 'wc_print_js', 25 );
@@ -153,12 +152,12 @@ class WC_Admin {
 			return;
 		}
 
-		// phpcs:disable WordPress.Security.NonceVerification.Recommended
 		// Nonced plugin install redirects.
 		if ( ! empty( $_GET['wc-install-plugin-redirect'] ) ) {
-			$plugin_slug = wc_clean( wp_unslash( $_GET['wc-install-plugin-redirect'] ) );
+			$plugin_slug    = is_string( $_GET['wc-install-plugin-redirect'] ) ? sanitize_text_field( wp_unslash( $_GET['wc-install-plugin-redirect'] ) ) : '';
+			$redirect_nonce = isset( $_GET['_wpnonce'] ) && is_string( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
 
-			if ( current_user_can( 'install_plugins' ) && in_array( $plugin_slug, array( 'woocommerce-gateway-stripe' ), true ) ) {
+			if ( wp_verify_nonce( $redirect_nonce, 'wc-install-plugin-redirect_' . $plugin_slug ) && current_user_can( 'install_plugins' ) && in_array( $plugin_slug, array( 'woocommerce-gateway-stripe' ), true ) ) {
 				$nonce = wp_create_nonce( 'install-plugin_' . $plugin_slug );
 				$url   = self_admin_url( 'update.php?action=install-plugin&plugin=' . $plugin_slug . '&_wpnonce=' . $nonce );
 			} else {
@@ -168,7 +167,6 @@ class WC_Admin {
 			wp_safe_redirect( $url );
 			exit;
 		}
-		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 	}
 
 	/**
@@ -268,44 +266,6 @@ class WC_Admin {
 	}
 
 	/**
-	 * Preview email editor placeholder dummy content.
-	 */
-	public function preview_email_editor_dummy_content() {
-		$message = '';
-		if ( ! isset( $_GET['preview_woocommerce_mail_editor_content'] ) ) {
-			return;
-		}
-
-		if ( ! isset( $_REQUEST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ), 'preview-mail' ) ) {
-			die( 'Security check' );
-		}
-
-		/**
-		 * Email preview instance for rendering dummy content.
-		 *
-		 * @var EmailPreview $email_preview - email preview instance
-		 */
-		$email_preview = wc_get_container()->get( EmailPreview::class );
-
-		$type_param = EmailPreview::DEFAULT_EMAIL_TYPE;
-		if ( isset( $_GET['type'] ) ) {
-			$type_param = sanitize_text_field( wp_unslash( $_GET['type'] ) );
-		}
-
-		try {
-			$message = $email_preview->generate_placeholder_content( $type_param );
-		} catch ( \Exception $e ) {
-			// Catch other potential errors during content generation.
-			wp_die( esc_html__( 'There was an error rendering the email preview.', 'woocommerce' ), 404 );
-		}
-
-		// Print the placeholder content.
-		// phpcs:ignore WordPress.Security.EscapeOutput
-		echo $message;
-		exit;
-	}
-
-	/**
 	 * Change the admin footer text on WooCommerce admin pages.
 	 *
 	 * @since 2.3
@@ -337,12 +297,36 @@ class WC_Admin {
 					sprintf( '<strong>%s</strong>', esc_html__( 'WooCommerce', 'woocommerce' ) ),
 					'<a href="https://wordpress.org/support/plugin/woocommerce/reviews?rate=5#new-post" target="_blank" class="wc-rating-link" aria-label="' . esc_attr__( 'five star', 'woocommerce' ) . '" data-rated="' . esc_attr__( 'Thanks :)', 'woocommerce' ) . '">&#9733;&#9733;&#9733;&#9733;&#9733;</a>'
 				);
-				wc_enqueue_js(
-					"jQuery( 'a.wc-rating-link' ).on( 'click', function() {
-						jQuery.post( '" . WC()->ajax_url() . "', { action: 'woocommerce_rated' } );
-						jQuery( this ).parent().text( jQuery( this ).data( 'rated' ) );
-					});"
-				);
+
+				$script = "
+		            (function() {
+		                'use strict';
+		                var ratingLink = document.querySelector('a.wc-rating-link');
+		                if (ratingLink) {
+		                    ratingLink.addEventListener('click', function(e) {
+		                        var link = e.currentTarget;
+		                        var formData = new FormData();
+		                        formData.append('action', 'woocommerce_rated');
+		                        
+		                        fetch('" . esc_js( WC()->ajax_url() ) . "', {
+		                            method: 'POST',
+		                            body: formData,
+		                            credentials: 'same-origin'
+		                        });
+		                        
+		                        var parent = link.parentElement;
+		                        if (parent) {
+		                            parent.textContent = link.getAttribute('data-rated');
+		                        }
+		                    });
+		                }
+		            })();
+		            ";
+
+				$handle = 'wc-admin-footer-rating';
+				wp_register_script( $handle, '', array(), WC_VERSION, true );
+				wp_enqueue_script( $handle );
+				wp_add_inline_script( $handle, $script );
 			} else {
 				$footer_text = __( 'Thank you for selling with WooCommerce.', 'woocommerce' );
 			}
@@ -354,7 +338,7 @@ class WC_Admin {
 	/**
 	 * Update the footer version text.
 	 *
-	 * @since $VID:$
+	 * @since 10.2.0
 	 *
 	 * @param string $version The current version string.
 	 * @return string
@@ -424,22 +408,27 @@ class WC_Admin {
 	 * @return string
 	 */
 	public function include_admin_body_class( $classes ) {
-		if ( in_array( array( 'wc-wp-version-gte-53', 'wc-wp-version-gte-55' ), explode( ' ', $classes ), true ) ) {
+		$raw_version = get_bloginfo( 'version' );
+
+		if ( ! $raw_version ) {
 			return $classes;
 		}
 
-		$raw_version   = get_bloginfo( 'version' );
 		$version_parts = explode( '-', $raw_version );
 		$version       = count( $version_parts ) > 1 ? $version_parts[0] : $raw_version;
+		$class_list    = explode( ' ', $classes );
 
-		// Add WP 5.3+ compatibility class.
-		if ( $raw_version && version_compare( $version, '5.3', '>=' ) ) {
-			$classes .= ' wc-wp-version-gte-53';
-		}
+		// WP version compatibility classes.
+		$version_classes = array(
+			'5.3' => 'wc-wp-version-gte-53',
+			'5.5' => 'wc-wp-version-gte-55',
+			'7.0' => 'wc-wp-version-gte-70',
+		);
 
-		// Add WP 5.5+ compatibility class.
-		if ( $raw_version && version_compare( $version, '5.5', '>=' ) ) {
-			$classes .= ' wc-wp-version-gte-55';
+		foreach ( $version_classes as $min_version => $class_name ) {
+			if ( ! in_array( $class_name, $class_list, true ) && version_compare( $version, $min_version, '>=' ) ) {
+				$classes .= ' ' . $class_name;
+			}
 		}
 
 		return $classes;

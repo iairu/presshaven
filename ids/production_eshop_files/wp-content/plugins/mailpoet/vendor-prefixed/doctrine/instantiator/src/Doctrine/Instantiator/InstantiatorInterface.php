@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Doctrine\Instantiator\Exception\ExceptionInterface;
 interface InstantiatorInterface
 {
- public function instantiate($className);
+public function instantiate($className);
 }

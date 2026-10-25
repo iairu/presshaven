@@ -72,7 +72,6 @@
   var mailpoet_admin_plugins_url = '<%= admin_plugins_url %>';
   var mailpoet_is_dotcom = <%= json_encode(is_dotcom()) %>;
   var mailpoet_cron_trigger_method = <%= json_encode(cron_trigger_method) %>;
-  var mailpoet_use_block_email_editor_for_automation_emails = <%= json_encode(use_block_email_editor_for_automation_emails) %>;
 
   var mailpoet_site_name = '<%= site_name %>';
   var mailpoet_site_url = "<%= site_url %>";
@@ -83,7 +82,6 @@
   var mailpoet_premium_link = <%= json_encode(link_premium) %>;
   var mailpoet_premium_plugin_installed = <%= json_encode(premium_plugin_installed) %>;
   var mailpoet_premium_active = <%= json_encode(premium_plugin_active) %>;
-  var mailpoet_premium_plugin_download_url = <%= json_encode(premium_plugin_download_url) %>;
   var mailpoet_premium_plugin_activation_url = <%= json_encode(premium_plugin_activation_url) %>;
   var mailpoet_has_valid_api_key = <%= json_encode(has_valid_api_key) %>;
   var mailpoet_has_valid_premium_key = <%= json_encode(has_valid_premium_key) %>;
@@ -171,10 +169,11 @@
 <% endif %>
 
 <% if display_chatbot_widget and not is_dotcom_ecommerce_plan() %>
+  <% set chatbot_bot_id = 'mailpoet-workflow-support_chat' %>
   <script type="text/javascript" src="<%= getJavascriptScriptUrl('haw.js') %>"></script>
   <chat-widget
     id="chat"
-    bot="mailpoet-chat-support"
+    bot="<%= chatbot_bot_id %>"
     avatar="<%= cdn_url('chat-avatar.png') %>"
     title="<%= __('MailPoet support', 'mailpoet') %>"
     subtitle="<%= __('Chat with our AI assistant', 'mailpoet') %>"
@@ -191,7 +190,8 @@
     </a>
   </chat-widget>
   <script>
-    const getChatId = () => localStorage.getItem('ai-widget-mailpoet-chat-support-chat-id');
+    const botId = '<%= chatbot_bot_id %>';
+    const getChatId = () => localStorage.getItem(`ai-widget-${botId}-chat-id`);
 
     document.addEventListener('DOMContentLoaded', function() {
       const supportLink = document.getElementById('mailpoet-support-link');

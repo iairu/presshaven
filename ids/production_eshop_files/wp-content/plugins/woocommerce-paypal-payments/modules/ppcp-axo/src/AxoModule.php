@@ -8,6 +8,7 @@
 declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\Axo;
 
+use WooCommerce\PayPalCommerce\Assets\AssetGetter;
 use WooCommerce\PayPalCommerce\Axo\Assets\AxoManager;
 use WooCommerce\PayPalCommerce\Axo\Endpoint\AxoScriptAttributes;
 use WooCommerce\PayPalCommerce\Axo\Endpoint\FrontendLogger;
@@ -15,16 +16,14 @@ use WooCommerce\PayPalCommerce\Axo\Gateway\AxoGateway;
 use WooCommerce\PayPalCommerce\Axo\Service\AxoApplies;
 use WooCommerce\PayPalCommerce\Button\Assets\SmartButtonInterface;
 use WooCommerce\PayPalCommerce\Button\Helper\Context;
-use WooCommerce\PayPalCommerce\Onboarding\Render\OnboardingOptionsRenderer;
 use WooCommerce\PayPalCommerce\Session\SessionHandler;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsProvider;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExecutableModule;
-use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExtendingModule;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ModuleClassNameIdTrait;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ServiceModule;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\CreditCardGateway;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\SettingsListener;
+use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
 use WooCommerce\PayPalCommerce\WcSubscriptions\Helper\SubscriptionHelper;
 use WC_Payment_Gateways;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\CardPaymentsConfiguration;
@@ -33,7 +32,7 @@ use WooCommerce\PayPalCommerce\WcGateway\Helper\CardPaymentsConfiguration;
  *
  * @psalm-suppress MissingConstructor
  */
-class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
+class AxoModule implements ServiceModule, ExecutableModule
 {
     use ModuleClassNameIdTrait;
     /**
@@ -52,13 +51,6 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
     /**
      * {@inheritDoc}
      */
-    public function extensions(): array
-    {
-        return require __DIR__ . '/../extensions.php';
-    }
-    /**
-     * {@inheritDoc}
-     */
     public function run(ContainerInterface $c): bool
     {
         add_filter(
@@ -68,7 +60,7 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
              *
              * @psalm-suppress MissingClosureParamType
              */
-            function ($methods) use ($c): array {
+            function ($methods) use ($c) {
                 if (!is_array($methods)) {
                     return $methods;
                 }
@@ -136,22 +128,11 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
                 }
             }
         });
-        // Force 'cart-block' and 'cart' Smart Button locations in the settings.
-        add_action('admin_init', static function () use ($c) {
-            $listener = $c->get('wcgateway.settings.listener');
-            assert($listener instanceof SettingsListener);
-            $dcc_configuration = $c->get('wcgateway.configuration.card-configuration');
-            assert($dcc_configuration instanceof CardPaymentsConfiguration);
-            $listener->filter_settings($dcc_configuration->use_fastlane(), 'smart_button_locations', function (array $existing_setting_value) {
-                $axo_forced_locations = array('cart-block', 'cart');
-                return array_unique(array_merge($existing_setting_value, $axo_forced_locations));
-            });
-        });
         add_action('wp_loaded', function () use ($c) {
             $this->session_handler = $c->get('session.handler');
-            $settings = $c->get('wcgateway.settings');
-            assert($settings instanceof Settings);
-            $is_paypal_enabled = $settings->has('enabled') && $settings->get('enabled') ?? \false;
+            $settings_provider = $c->get('settings.settings-provider');
+            assert($settings_provider instanceof SettingsProvider);
+            $is_paypal_enabled = $settings_provider->is_method_enabled(PayPalGateway::ID);
             $subscription_helper = $c->get('wc-subscriptions.helper');
             assert($subscription_helper instanceof SubscriptionHelper);
             /**
@@ -170,7 +151,11 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
                 assert($smart_button instanceof SmartButtonInterface);
                 $axo_applies = $c->get('axo.service.axo-applies');
                 assert($axo_applies instanceof AxoApplies);
-                if ($axo_applies->should_render_fastlane() && $smart_button->should_load_ppcp_script()) {
+                // v5's script gate is false on pages the v6 SDK owns, where
+                // the smart button is a DisabledSmartButton. Fastlane still
+                // renders there: only the SDK object comes from v6 now, so
+                // the assets must load either way.
+                if ($axo_applies->should_render_fastlane() && ($smart_button->should_load_ppcp_script() || self::v6_supplies_sdk($c))) {
                     $manager->enqueue();
                 }
             });
@@ -214,25 +199,6 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
                     $this->add_feature_detection_tag(\false);
                 }
             });
-            add_filter(
-                'ppcp_onboarding_dcc_table_rows',
-                /**
-                 * Param types removed to avoid third-party issues.
-                 *
-                 * @psalm-suppress MissingClosureParamType
-                 */
-                function ($rows, $renderer): array {
-                    if (!is_array($rows)) {
-                        return $rows;
-                    }
-                    if ($renderer instanceof OnboardingOptionsRenderer) {
-                        $rows[] = $renderer->render_table_row(__('Fastlane by PayPal', 'woocommerce-paypal-payments'), __('Yes', 'woocommerce-paypal-payments'), __('Help accelerate guest checkout with PayPal\'s autofill solution.', 'woocommerce-paypal-payments'));
-                    }
-                    return $rows;
-                },
-                10,
-                2
-            );
             // Set Axo as the default payment method on checkout for guest customers.
             add_action('template_redirect', function () use ($c) {
                 $axo_applies = $c->get('axo.service.axo-applies');
@@ -253,6 +219,22 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
         add_action('wp_enqueue_scripts', function () use ($c) {
             $this->enqueue_paypal_insights_script_on_order_received($c);
         });
+        add_filter(
+            'ppcp_return_url_error_args',
+            /**
+             * Param types removed to avoid third-party issues.
+             *
+             * @psalm-suppress MissingClosureParamType
+             */
+            function ($args) use ($c): array {
+                $axo_applies = $c->get('axo.service.axo-applies');
+                assert($axo_applies instanceof AxoApplies);
+                if ($axo_applies->should_render_fastlane()) {
+                    $args['ppcp_fastlane_error'] = '1';
+                }
+                return $args;
+            }
+        );
         // Remove Fastlane on the Pay for Order page.
         add_filter(
             'woocommerce_available_payment_gateways',
@@ -358,11 +340,32 @@ class AxoModule implements ServiceModule, ExtendingModule, ExecutableModule
         if (!$order || !$order instanceof \WC_Order) {
             return;
         }
-        $module_url = $c->get('axo.url');
+        //phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        $order_key_from_url = isset($_GET['key']) ? wc_clean(wp_unslash($_GET['key'])) : '';
+        //phpcs:ignore WordPress.WP.Capabilities.Unknown
+        if ($order->get_order_key() !== $order_key_from_url && !current_user_can('view_order', $order_id)) {
+            return;
+        }
+        $asset_getter = $c->get('axo.asset_getter');
+        assert($asset_getter instanceof AssetGetter);
         $asset_version = $c->get('ppcp.asset-version');
         $insights_data = $c->get('axo.insights');
-        wp_register_script('wc-ppcp-paypal-insights-end-checkout', untrailingslashit($module_url) . '/assets/js/TrackEndCheckout.js', array('wp-plugins', 'wp-data', 'wp-element', 'wc-blocks-registry'), $asset_version, \true);
-        wp_localize_script('wc-ppcp-paypal-insights-end-checkout', 'wc_ppcp_axo_insights_data', array_merge($insights_data, array('orderId' => $order_id, 'orderTotal' => (string) $order->get_total(), 'orderCurrency' => (string) $order->get_currency(), 'paymentMethod' => (string) $order->get_payment_method(), 'orderKey' => (string) $order->get_order_key())));
+        wp_register_script('wc-ppcp-paypal-insights-end-checkout', $asset_getter->get_asset_url('Insights/EndCheckoutTracker.js'), array('wp-plugins', 'wp-data', 'wp-element', 'wc-blocks-registry'), $asset_version, \true);
+        wp_localize_script('wc-ppcp-paypal-insights-end-checkout', 'wc_ppcp_axo_insights_data', array_merge($insights_data, array('orderId' => $order_id, 'orderTotal' => (string) $order->get_total(), 'orderCurrency' => (string) $order->get_currency(), 'paymentMethod' => (string) $order->get_payment_method())));
         wp_enqueue_script('wc-ppcp-paypal-insights-end-checkout');
+    }
+    /**
+     * Whether the v6 SDK owns this page and supplies the Fastlane instance.
+     *
+     * The service is has()-guarded because the v6 module sits behind its own
+     * feature flag.
+     */
+    private static function v6_supplies_sdk(ContainerInterface $c): bool
+    {
+        if (!$c->has('sdk-v6.owns-current-page')) {
+            return \false;
+        }
+        $owns_current_page = $c->get('sdk-v6.owns-current-page');
+        return $owns_current_page();
     }
 }

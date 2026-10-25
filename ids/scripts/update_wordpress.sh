@@ -216,6 +216,14 @@ case "$MODE" in
             rc=1
         fi
 
+        # The update_plugins site transient still holds the compatibility
+        # verdicts computed against the OLD core version, so a WooCommerce
+        # release that needs the new core is refused ("This update requires
+        # WordPress version 7.0, but the version installed is 7.1.3" --
+        # confirmed live on the 6.8.3 -> 7.1.3 jump). Dropping it makes wp-cli
+        # re-check against the core that is now installed.
+        $WP transient delete update_plugins --network >/dev/null 2>&1 || true
+
         log "Updating WooCommerce plugin files..."
         if ! run_logged "wc-plugin" $WP plugin update woocommerce; then
             log "  ERROR: 'wp plugin update woocommerce' failed (download.wordpress.org unreachable?)."
@@ -226,6 +234,15 @@ case "$MODE" in
         # BEFORE the DB migrations run (so db.php is intact for anything that
         # loads WordPress thereafter).
         restore_preserved
+
+        # wp-cli runs as root, so every file it just wrote is root-owned --
+        # in production that's the host's git checkout, which its owner then
+        # can't edit or `git checkout` over (confirmed live on the 6.8.3 ->
+        # 7.1.3 update: ~37k files). Hand them back to whoever owns the tree.
+        owner="$(stat -c '%u:%g' /var/www/html 2>/dev/null)"
+        if [ -n "$owner" ] && [ "$owner" != "0:0" ]; then
+            chown -R "$owner" /var/www/html || log "  WARNING: could not chown updated files to $owner."
+        fi
 
         log "Running WordPress core DB migration..."
         run_logged "core-db" $WP core update-db || rc=1

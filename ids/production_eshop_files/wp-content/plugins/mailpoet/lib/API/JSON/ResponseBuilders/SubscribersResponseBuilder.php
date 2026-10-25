@@ -8,9 +8,12 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\CustomFields\CustomFieldsRepository;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\SegmentEntity;
+use MailPoet\Entities\StatisticsUnsubscribeEntity;
 use MailPoet\Entities\SubscriberCustomFieldEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Statistics\StatisticsUnsubscribesRepository;
+use MailPoet\Statistics\UnsubscribeReasonTracker;
+use MailPoet\Subscribers\Statistics\SubscriberStatisticsRepository;
 use MailPoet\Subscribers\SubscriberCustomFieldRepository;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 
@@ -29,28 +32,42 @@ class SubscribersResponseBuilder {
   /** @var EntityManager */
   private $entityManager;
 
+  /** @var UnsubscribeReasonTracker */
+  private $unsubscribeReasonTracker;
+
+  /** @var SubscriberStatisticsRepository */
+  private $subscriberStatisticsRepository;
+
   public function __construct(
     EntityManager $entityManager,
     CustomFieldsRepository $customFieldsRepository,
     SubscriberCustomFieldRepository $subscriberCustomFieldRepository,
-    StatisticsUnsubscribesRepository $statisticsUnsubscribesRepository
+    StatisticsUnsubscribesRepository $statisticsUnsubscribesRepository,
+    UnsubscribeReasonTracker $unsubscribeReasonTracker,
+    SubscriberStatisticsRepository $subscriberStatisticsRepository
   ) {
     $this->statisticsUnsubscribesRepository = $statisticsUnsubscribesRepository;
     $this->customFieldsRepository = $customFieldsRepository;
     $this->subscriberCustomFieldRepository = $subscriberCustomFieldRepository;
     $this->entityManager = $entityManager;
+    $this->unsubscribeReasonTracker = $unsubscribeReasonTracker;
+    $this->subscriberStatisticsRepository = $subscriberStatisticsRepository;
   }
 
   public function buildForListing(array $subscribers): array {
     $this->prefetchRelations($subscribers);
+    $engagementScoreTypes = $this->subscriberStatisticsRepository->getEngagementScoreTypes($subscribers);
     $data = [];
     foreach ($subscribers as $subscriber) {
-      $data[] = $this->buildListingItem($subscriber);
+      $data[] = $this->buildListingItem(
+        $subscriber,
+        $engagementScoreTypes[(int)$subscriber->getId()] ?? SubscriberStatisticsRepository::ENGAGEMENT_SCORE_UNKNOWN
+      );
     }
     return $data;
   }
 
-  private function buildListingItem(SubscriberEntity $subscriber): array {
+  private function buildListingItem(SubscriberEntity $subscriber, string $engagementScoreType): array {
     return [
       'id' => (string)$subscriber->getId(), // (string) for BC
       'email' => $subscriber->getEmail(),
@@ -62,9 +79,12 @@ class SubscribersResponseBuilder {
       'wp_user_id' => $subscriber->getWpUserId(),
       'is_woocommerce_user' => $subscriber->getIsWoocommerceUser(),
       'created_at' => ($createdAt = $subscriber->getCreatedAt()) ? $createdAt->format(self::DATE_FORMAT) : null,
+      'deleted_at' => ($deletedAt = $subscriber->getDeletedAt()) ? $deletedAt->format(self::DATE_FORMAT) : null,
       'last_subscribed_at' => ($lastSubscribedAt = $subscriber->getLastSubscribedAt()) ? $lastSubscribedAt->format(self::DATE_FORMAT) : null,
       'engagement_score' => $subscriber->getEngagementScore(),
+      'engagement_score_type' => $engagementScoreType,
       'tags' => $this->buildTags($subscriber),
+      'tracking_consent' => $subscriber->getTrackingConsent(),
     ];
   }
 
@@ -92,6 +112,12 @@ class SubscribersResponseBuilder {
       'unsubscribe_token' => $subscriberEntity->getUnsubscribeToken(),
       'link_token' => $subscriberEntity->getLinkToken(),
       'tags' => $this->buildTags($subscriberEntity),
+      'timezone' => $subscriberEntity->getTimeZone(),
+      'tracking_consent' => $subscriberEntity->getTrackingConsent(),
+      'tracking_consent_updated_at' => ($trackingConsentUpdatedAt = $subscriberEntity->getTrackingConsentUpdatedAt())
+        ? $trackingConsentUpdatedAt->format(self::DATE_FORMAT) : null,
+      'tracking_consent_method' => $subscriberEntity->getTrackingConsentMethod(),
+      'tracking_consent_copy' => $subscriberEntity->getTrackingConsentCopy(),
     ];
 
     return $this->buildCustomFields($subscriberEntity, $data);
@@ -122,11 +148,16 @@ class SubscribersResponseBuilder {
       'createdAt' => 'desc',
     ]);
     $result = [];
+    $reasonLabels = $this->unsubscribeReasonTracker->getReasonLabels();
     foreach ($unsubscribes as $unsubscribe) {
       $mapped = [
         'source' => $unsubscribe->getSource(),
         'meta' => $unsubscribe->getMeta(),
         'createdAt' => $unsubscribe->getCreatedAt(),
+        'reason' => $unsubscribe->getReason(),
+        'reasonLabel' => $this->getUnsubscribeReasonLabel($unsubscribe->getReason(), $reasonLabels),
+        'reasonText' => $unsubscribe->getReasonText(),
+        'reasonSubmittedAt' => $unsubscribe->getReasonSubmittedAt(),
       ];
       $newsletter = $unsubscribe->getNewsletter();
       if ($newsletter instanceof NewsletterEntity) {
@@ -138,8 +169,21 @@ class SubscribersResponseBuilder {
     return $result;
   }
 
+  /**
+   * @param array<string, string> $reasonLabels
+   */
+  private function getUnsubscribeReasonLabel(?string $reason, array $reasonLabels): ?string {
+    if ($reason === null) {
+      return null;
+    }
+    if ($reason === '' || $reason === StatisticsUnsubscribeEntity::REASON_UNSPECIFIED) {
+      return __('No reason provided', 'mailpoet');
+    }
+    return $reasonLabels[$reason] ?? $reason;
+  }
+
   private function buildCustomFields(SubscriberEntity $subscriberEntity, array $data): array {
-    $customFields = $this->customFieldsRepository->findAll();
+    $customFields = $this->customFieldsRepository->findAllActive();
 
     foreach ($customFields as $customField) {
       $subscriberCustomField = $this->subscriberCustomFieldRepository->findOneBy(

@@ -10,8 +10,10 @@ namespace WooCommerce\PayPalCommerce\Button\Endpoint;
 
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use Throwable;
+use WooCommerce\PayPalCommerce\Button\Exception\NonceValidationException;
 use WooCommerce\PayPalCommerce\Button\Exception\ValidationException;
 use WooCommerce\PayPalCommerce\Button\Validation\CheckoutFormValidator;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\RequestData;
 /**
  * Class ValidateCheckoutEndpoint.
  */
@@ -43,7 +45,7 @@ class ValidateCheckoutEndpoint implements \WooCommerce\PayPalCommerce\Button\End
      * @param CheckoutFormValidator $checkout_form_validator    The CheckoutFormValidator.
      * @param LoggerInterface       $logger The logger.
      */
-    public function __construct(\WooCommerce\PayPalCommerce\Button\Endpoint\RequestData $request_data, CheckoutFormValidator $checkout_form_validator, LoggerInterface $logger)
+    public function __construct(RequestData $request_data, CheckoutFormValidator $checkout_form_validator, LoggerInterface $logger)
     {
         $this->request_data = $request_data;
         $this->checkout_form_validator = $checkout_form_validator;
@@ -60,26 +62,23 @@ class ValidateCheckoutEndpoint implements \WooCommerce\PayPalCommerce\Button\End
     }
     /**
      * Handles the request.
-     *
-     * @return bool
      */
-    public function handle_request(): bool
+    public function handle_request(): void
     {
         try {
             $data = $this->request_data->read_request($this->nonce());
             $form_fields = $data['form'];
             $this->checkout_form_validator->validate($form_fields);
             wp_send_json_success();
-            return \true;
+        } catch (NonceValidationException $error) {
+            wp_send_json_error(array('message' => $error->getMessage()), 400);
         } catch (ValidationException $exception) {
             $response = array('message' => $exception->getMessage(), 'errors' => $exception->errors(), 'refresh' => isset(WC()->session->refresh_totals));
             unset(WC()->session->refresh_totals);
             wp_send_json_error($response);
-            return \false;
         } catch (Throwable $error) {
             $this->logger->error("Form validation execution failed. {$error->getMessage()} {$error->getFile()}:{$error->getLine()}");
             wp_send_json_error(array('message' => $error->getMessage()));
-            return \false;
         }
     }
 }

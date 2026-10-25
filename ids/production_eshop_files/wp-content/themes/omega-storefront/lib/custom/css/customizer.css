@@ -239,6 +239,8 @@ body .control-section-upsell .accordion-section-title .button {
     -ms-box-shadow: none;
     -o-box-shadow: none;
     color: #fff;
+    line-height: 2.2;
+    min-height: auto;
 }
 .theme-info-icon {
     margin-top: 30px;

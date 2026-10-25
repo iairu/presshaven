@@ -48,6 +48,7 @@ const ToggleField = ( {
 	disabled,
 	isPro = false,
 	proUpgradeMessage = '',
+	size,
 } ) => {
 	const [ state, dispatch ] = useStateValue();
 	const { shouldBlockProFeatures } = useProAccess();
@@ -86,6 +87,8 @@ const ToggleField = ( {
 
 		// If handleChange is provided and autoSave is false, use form mode
 		if ( handleChange && ! autoSave ) {
+			// Hand the form a real boolean: field conditions compare against `true`,
+			// and a form that persists the value converts it when it saves.
 			handleChange( name, newState );
 			return;
 		}
@@ -118,16 +121,18 @@ const ToggleField = ( {
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ toggleId }
 			tooltip={ tooltip }
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
+			{ ...( size !== undefined && { size } ) }
 		>
 			<div>
 				<Switch
 					id={ toggleId }
-					aria-label={ `${ title } - ${
-						enable ? 'Enabled' : 'Disabled'
-					}` }
+					{ ...( description && {
+						'aria-describedby': `${ toggleId }-description`,
+					} ) }
 					aria-checked={ enable }
 					value={ enable }
 					name={ name }
@@ -141,7 +146,7 @@ const ToggleField = ( {
 							handleOnChange( enable );
 						}
 					} }
-					size="md"
+					size={ size === 'sm' ? 'sm' : 'md' }
 					className="border-none moderncart-toggle-field"
 					role="switch"
 					disabled={ ( isPro && isFeatureBlocked ) || disabled }

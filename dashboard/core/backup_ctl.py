@@ -166,7 +166,7 @@ def list_backups(
     """(db_dumps, wp_archives), newest first."""
     target = Target(project="edge", remote=remote)
     # busybox `stat -c` (alpine's own, not GNU coreutils) supports the
-    # %n/%s/%Y directives used here -- confirmed against alpine:latest's
+    # %n/%s/%Y directives used here -- confirmed against alpine:3.24.3's
     # base image, the same one backup_service itself runs.
     #
     # Trailing `; true` matters: when a glob matches nothing, the shell

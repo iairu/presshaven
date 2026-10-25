@@ -1,11 +1,11 @@
 === FOX - Currency Switcher Professional for WooCommerce ===
 Contributors: RealMag777
-Donate link: https://pluginus.net/affiliate/woocommerce-currency-switcher
-Tags: woocommerce, currency, switcher, currency switcher, converter
+Donate link: https://currency-switcher.com/downloads
+Tags: woocommerce, currency, multi currency, currency switcher, currency converter
 Requires at least: 4.9.0
-Tested up to: 6.8
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.3.1
+Stable tag: 1.5.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -72,7 +72,7 @@ Also the plugin has ajaxed shortcode/widget of [currency converter](https://demo
 
 🌍&nbsp;**Individual GeoIP rules for each product**:   super feature which allows for different countries show different prices in different currencies! This functionality allows to realize [WooCommerce Price Based on Country](https://currency-switcher.com/woocommerce-price-based-on-country/) functionality
 
-📈&nbsp;**Individual fixed prices rules for each product**: feature which allows for each product set fixed price for each currency, in this case for the product will not be applied conversion by rate, [watch video](https://currency-switcher.com/video-tutorials#video_PZugTH80-Eo)
+📈&nbsp;**Individual fixed prices rules for each product**: feature which allows for each product set fixed price for each currency, in this case for the product will not be applied conversion by rate, [watch video](https://currency-switcher.com/video#video_PZugTH80-Eo)
 
 🗺&nbsp;**GEO IP rules for visitors local currency detection**: this feature is more targeted and allows to set currency of prices for the site visitors in their native currency when they visited the shop for the first time. Currency changes automatically according to the visitor IP, and even more - if to enable option '**Checkout by GeoIP rules**' your customers always will buy products in their local currency!
 
@@ -118,6 +118,8 @@ Also the plugin has ajaxed shortcode/widget of [currency converter](https://demo
 
 🤖&nbsp;**FOX is chatGPT friendly plugin** you can ask help to chat gpt about the plugin features using the plugin former name WOOCS, example: "How to use [woocs] shortcode?"
 
+🔌&nbsp;[REST API](https://currency-switcher.com/function/rest-api/)
+
 🌐&nbsp;Compatible with [WPML](https://wpml.org/plugin/woocommerce-currency-switcher/)
 
 🔎&nbsp;Compatible with [WooCommerce Products Filter](https://products-filter.com/)
@@ -142,14 +144,14 @@ Also the plugin has ajaxed shortcode/widget of [currency converter](https://demo
 * Unlimited count of currencies (in the free version 2 currencies available)
 
 
-**Get Premium version of the plugin**: [on Codecanyon](https://pluginus.net/affiliate/woocommerce-currency-switcher)
+**Get Premium version of the plugin**: [on the plugin site](https://currency-switcher.com/downloads)
 
 
 ### Make your site more profitable with next powerful scripts:
 
 &#9989;&nbsp;[HUSKY - Products Filter for WooCommerce](https://wordpress.org/plugins/woocommerce-products-filter/): is an extendable, flexible and robust plugin for WooCommerce that allows your site customers filter products by products categories, attributes, tags, custom taxonomies and price. Supports latest version of the WooCommerce plugin. A must have plugin for your WooCommerce powered online store! Maximum flexibility!
 
-&#9989;&nbsp;[BEAR - Bulk Editor for WooCommerce](https://wordpress.org/plugins/woo-bulk-editor/): WordPress plugin for managing and bulk edit WooCommerce Products data in robust and flexible way! Be professionals with managing data of your woocommerce e-shop!
+&#9989;&nbsp;[BEAR - Bulk Editor for WooCommerce (MCP Server)](https://wordpress.org/plugins/woo-bulk-editor/): WordPress plugin for managing and bulk edit WooCommerce Products data in robust and flexible way! Be professionals with managing data of your woocommerce e-shop!
 
 &#9989;&nbsp;[WooCommerce Active Products Tables](https://wordpress.org/plugins/profit-products-tables-for-woocommerce/): is WooCommerce plugin for displaying shop products in table format. Tables makes focus for your buyers on the things they want to get, nothing superfluous, just what the client wants, and full attention to what is offered!
 
@@ -183,6 +185,9 @@ R: [Video Tutorials](https://currency-switcher.com/video/)
 Q: More FAQ answers?
 R: [FAQ](https://currency-switcher.com/faq/)
 
+Q: Premium version?
+R: FOX Professional is available [on the plugin site](https://currency-switcher.com/downloads) — use coupon code FOXWP30 for 30% off. The discount applies to every renewal, not just the first payment, so your rate stays the same for as long as your license is active.
+
 Q: Where can I send security bug report about the plugin?
 R: You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team help validate, triage and handle any security vulnerabilities. [Report a security vulnerability.](https://patchstack.com/database/vdp/woocommerce-currency-switcher)
 
@@ -192,6 +197,100 @@ R: You can report security bugs through the Patchstack Vulnerability Disclosure 
 
 
 == Changelog ==
+
+= 1.5.6 - 24 October, 2026 =
+* Fix: WooCommerce REST API responses (wc/v1, wc/v2, wc/v3) now always use the shop base currency, on nginx servers and with ?rest_route= links too. Before, on nginx the API could return prices converted to the currency of another visitor, which broke syncing with POS and ERP systems
+* Fix: WooCommerce webhook payloads (product.updated and others) are now always built in the shop base currency, for both background and immediate delivery. Before, a webhook could carry prices in the currency selected by a visitor who was on the site at that moment
+* Fix: with "I am using cache plugin on my site" and the prices preloader on, prices that appear on the page after it loads (Composite Products options, quick views, AJAX fragments) no longer keep the loading spinner forever and are shown in the visitor currency
+* Fix: Composite Products on a cached page now shows component prices and the composite total in the visitor currency, the same amount as in the cart
+* Fix: prices in WooCommerce AJAX and REST responses no longer get the loading spinner
+* Fix: prices of published products hidden from the catalog (typical Composite Products and Product Bundles options) are now converted on cached pages too
+* New: the currency code from the FOX price format (__CODE__) is now shown in Composite Products drop-down option labels and in the composite total
+
+= 1.5.5 - 09 October, 2026 =
+* Security fix. Thanks to Je22y for the responsible disclosure and to Patchstack for coordinating it
+* Accessibility: the ddslick drop-down no longer renders an empty image when flags are turned off, and flag images get an empty alt attribute because the currency text is shown next to them
+* Accessibility: the ddslick drop-down uses span elements instead of labels without a form control for the currency text
+* Accessibility: every currency switcher on the page gets its own unique id (before, all ddslick switchers had the same id "undefined"), and the currency select gets an aria-label
+* Fix: the wSelect drop-down no longer shows an empty icon when flags are turned off
+* New: filter woocs_skip_conversion for developers, returning true leaves a price as it is without currency conversion
+* New: Pulse Verity rate aggregator for crypto currencies, works with USD as the store base currency and requires a free API key, fiat currency rates are left unchanged
+
+= 1.5.4 - 18 September, 2026 =
+* Fixed: fatal error "Call to undefined function wc_get_page_screen_id()" in background 
+cron tasks on sites where a third party plugin makes is_admin() return true inside wp-cron, 
+while the WooCommerce admin functions are not loaded. The screen id helper now returns 
+an empty string instead of calling admin only functions
+
+= 1.5.3 - 04 September, 2026 =
+* Fixed: automatic rate updates never ran on shops with regular REST API
+  traffic. The rate update scheduler was hooked to rest_api_init without
+  limiting the number of accepted arguments, so WordPress passed the
+  WP_REST_Server instance into the method's $reset parameter. Every REST
+  request therefore restarted the schedule from the current time and cleared
+  the last run marker, which pushed the next run permanently into the future.
+  Rates stayed frozen at the values stored before the upgrade. Sites with
+  block based cart and checkout, the Store API, page builders or headless
+  front ends were affected the most, sites with little or no REST traffic were
+  not affected. Reported by Performize.it. 
+
+= 1.5.2 - 03 September, 2026 =
+* Fixed: currency switching was unreliable when "Currency storage" was set to
+  Transient and the option "I am using cache plugin on my site" was enabled.
+  In that combination the selected currency could be applied to the prices but
+  not to the cart, the checkout totals or the currency switcher itself, so
+  different parts of one page could show different currencies.
+* Fixed: the selected currency is now applied to requests made by WooCommerce
+  Blocks and the Store API, so the block based mini cart, cart and checkout
+  render in the visitor's currency.
+* Fixed: prices were shown in the shop base currency inside content loaded by
+  page builders through the REST API, for example the Bricks side cart and
+  Bricks popups.
+* Fixed: fee lines (for example custom regional tax or surcharge fees) were not converted 
+  when an order was recalculated into another currency in wp-admin — the currency label 
+  changed while the fee amount stayed as it was.
+* Added: order recalculation on manual currency change can now be customized. 
+If a function named woocs_order_recalculated_custom exists on the site, 
+the plugin calls it right after an order has been recalculated to another currency 
+and before the order is saved, passing the order object, the new currency, 
+the previous currency and the exchange rate the order was stored with. 
+This makes it possible to override amounts of individual order items, 
+for example flat fees that must keep a fixed value in each currency instead 
+of being converted by rate. Works with both HPOS and legacy order storage. 
+If the function is not declared, behaviour is unchanged.
+
+= 1.5.1 - 27 July, 2026 =
+* Fixed: fatal error (infinite loop / memory exhaustion) on the order-received
+  and view-order pages when HPOS is disabled
+
+= 1.5.0 - 24 July, 2026 =
+* Fixed logic of working: cache site + transient, added localstorage for selection personalization
+* Fixed class cron: is_attached() returns false not only when the hook is missing, but also when the stored recurrence differs from the currently configured one. So as soon as those two values disagreed for any reason, every single page request re-attached the event and pushed next a full interval into the future.
+* Fixed: order totals could be inflated when saving/editing an order in a currency that uses a comma as the decimal separator (wp-admin order editor)
+* Fixed: base currency symbol shown instead of the order currency after saving order items on HPOS
+
+= 1.4.9 - 12 June, 2026 =
+* 1 security issue fixed thanks to Nguyen Ba Khanh and Patchstack
+
+= 1.4.8 =
+* [https://pluginus.net/support/topic/unable-to-refund-order-invalid-refund-amount](fix about orders refund)
+
+= 1.4.7 =
+* Improvement: Codebase aligned with WordPress Coding Standards (WPCS) and PluginCheck recommendations.
+* 1 security issue fixed thanks to Long Lagon and Wordfence
+
+= 1.4.6 =
+* some small fixes
+* 2 security issues fixed thanks to Que Thanh Tuan, timomangcut and bounty program of Patchstack
+* 1 security issue fixed thanks to Ren Voza and bounty program of Wordfence
+
+= 1.4.5 =
+* added hook woocs_sheduler_rates_updated
+
+= 1.4.4 =
+* set of small fixes
+* hook [https://currency-switcher.com/hook/woocs_price_html/](woocs_price_html)
+* [https://currency-switcher.com/function/rest-api/](REST API)
 
 = 1.4.3.1 =
 * some small fixes
@@ -505,5 +604,4 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 
 
 == Upgrade Notice ==
-[Look here for ADVANCED version of the plugin](https://pluginus.net/affiliate/woocommerce-currency-switcher)
 

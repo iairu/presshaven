@@ -130,6 +130,9 @@ class Shipment implements \WooCommerce\PayPalCommerce\OrderTracking\Shipment\Shi
         }
         $wc_order_items = $wc_order->get_items();
         $tracking_meta = $wc_order->get_meta(OrderTrackingModule::PPCP_TRACKING_INFO_META_NAME);
+        if (!is_array($tracking_meta)) {
+            $tracking_meta = array();
+        }
         $saved_line_items = $tracking_meta[$this->tracking_number()] ?? array();
         $line_items = $this->line_items ?: $saved_line_items;
         $tracking_items = array();
@@ -139,7 +142,7 @@ class Shipment implements \WooCommerce\PayPalCommerce\OrderTracking\Shipment\Shi
                 continue;
             }
             $product = $item->get_product();
-            if (!is_a($product, WC_Product::class)) {
+            if (!$product instanceof WC_Product) {
                 continue;
             }
             $currency = $wc_order->get_currency();

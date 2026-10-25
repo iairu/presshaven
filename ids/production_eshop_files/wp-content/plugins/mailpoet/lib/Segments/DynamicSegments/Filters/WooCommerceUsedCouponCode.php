@@ -9,7 +9,6 @@ use MailPoet\Entities\DynamicSegmentFilterData;
 use MailPoet\Entities\DynamicSegmentFilterEntity;
 use MailPoet\Segments\DynamicSegments\Exceptions\InvalidFilterException;
 use MailPoet\WooCommerce\Helper;
-use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
 use MailPoetVendor\Doctrine\DBAL\Query\QueryBuilder;
 
@@ -63,19 +62,10 @@ class WooCommerceUsedCouponCode implements Filter {
 
   private function applyForAnyOperator(QueryBuilder $queryBuilder, DynamicSegmentFilterEntity $filter): void {
     $filterData = $filter->getFilterData();
-    $couponIds = (array)$filterData->getParam(self::COUPON_CODE_IDS_KEY);
-    $isAllTime = $filterData->getParam('timeframe') === DynamicSegmentFilterData::TIMEFRAME_ALL_TIME;
+    $couponIds = $this->getNormalizedCouponIds($filterData);
 
     $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
-
-    if (!$isAllTime) {
-      /** @var int $days */
-      $days = $filterData->getParam('days');
-      $date = Carbon::now()->subDays($days);
-      $dateParam = $this->filterHelper->getUniqueParameterName('date');
-      $queryBuilder->andWhere("$orderStatsAlias.date_created >= :$dateParam")
-        ->setParameter($dateParam, $date->toDateTimeString());
-    }
+    $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData);
 
     $queryBuilder->innerJoin(
       $orderStatsAlias,
@@ -92,10 +82,18 @@ class WooCommerceUsedCouponCode implements Filter {
   private function applyForAllOperator(QueryBuilder $queryBuilder, DynamicSegmentFilterEntity $filter): void {
     $this->applyForAnyOperator($queryBuilder, $filter);
 
-    $filterData = $filter->getFilterData();
-    $couponIds = (array)$filterData->getParam(self::COUPON_CODE_IDS_KEY);
+    $couponIds = $this->getNormalizedCouponIds($filter->getFilterData());
     $queryBuilder->groupBy('inner_subscriber_id')
       ->having("COUNT(DISTINCT couponLookup.coupon_id) = " . count(array_unique($couponIds)));
+  }
+
+  /**
+   * @return int[]
+   */
+  private function getNormalizedCouponIds(DynamicSegmentFilterData $filterData): array {
+    return array_values(
+      array_map('intval', array_filter((array)$filterData->getParam(self::COUPON_CODE_IDS_KEY), 'is_scalar'))
+    );
   }
 
   public function validateFilterData(array $data): void {

@@ -9,10 +9,11 @@ use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Newsletter\Scheduler\WelcomeScheduler;
 use MailPoet\Segments\SegmentsRepository;
 use MailPoet\Settings\SettingsController;
+use MailPoet\Subscribers\ConfirmationEmailResolver;
 use MailPoet\Util\Helpers;
+use MailPoetVendor\Carbon\Carbon;
 
 class SubscriberActions {
-
   /** @var SettingsController */
   private $settings;
 
@@ -37,6 +38,9 @@ class SubscriberActions {
   /** @var SegmentsRepository */
   private $segmentsRepository;
 
+  /** @var ConfirmationEmailResolver */
+  private $confirmationEmailResolver;
+
   public function __construct(
     SettingsController $settings,
     NewSubscriberNotificationMailer $newSubscriberNotificationMailer,
@@ -45,7 +49,8 @@ class SubscriberActions {
     SegmentsRepository $segmentsRepository,
     SubscriberSaveController $subscriberSaveController,
     SubscribersRepository $subscribersRepository,
-    SubscriberSegmentRepository $subscriberSegmentRepository
+    SubscriberSegmentRepository $subscriberSegmentRepository,
+    ConfirmationEmailResolver $confirmationEmailResolver
   ) {
     $this->settings = $settings;
     $this->newSubscriberNotificationMailer = $newSubscriberNotificationMailer;
@@ -55,11 +60,14 @@ class SubscriberActions {
     $this->subscribersRepository = $subscribersRepository;
     $this->subscriberSegmentRepository = $subscriberSegmentRepository;
     $this->segmentsRepository = $segmentsRepository;
+    $this->confirmationEmailResolver = $confirmationEmailResolver;
   }
 
   /**
    * Returns SubscriberEntity and associative array with some metadata related to the subscription (e.g. ['confirmationEmailResult' => $exception])
-   * @return array{0: SubscriberEntity, 1: array{confirmationEmailResult: bool|\Exception}}
+   * @param array $subscriberData Subscriber data (email, first_name, last_name, etc.)
+   * @param array $segmentIds IDs of segments to subscribe to
+   * @return array{0: SubscriberEntity, 1: array{confirmationEmailResult: bool|\Exception, error?: string}}
    */
   public function subscribe($subscriberData = [], $segmentIds = []): array {
     // filter out keys from the subscriber_data array
@@ -73,6 +81,12 @@ class SubscriberActions {
     $subscriberData['subscribed_ip'] = Helpers::getIP();
 
     $subscriber = $this->subscribersRepository->findOneBy(['email' => $subscriberData['email']]);
+    $previousStatus = $subscriber instanceof SubscriberEntity ? $subscriber->getStatus() : null;
+    $wasAlreadySubscribed = $previousStatus === SubscriberEntity::STATUS_SUBSCRIBED;
+    $isUnconfirmedResubscription = (
+      $subscriber instanceof SubscriberEntity
+      && $subscriber->getStatus() === SubscriberEntity::STATUS_UNCONFIRMED
+    );
     if (!$subscriber && !isset($subscriberData['source'])) {
       $subscriberData['source'] = Source::FORM;
     }
@@ -82,6 +96,8 @@ class SubscriberActions {
       $subscriber = $this->subscriberSaveController->createOrUpdate($subscriberData, $subscriber);
       // custom fields should use the same approach as the subscriber main data that means to wait on confirmation
       $this->subscriberSaveController->updateCustomFields($subscriberData, $subscriber);
+    } else if ($wasAlreadySubscribed) {
+      $subscriber->setUnconfirmedData(null);
     } else {
       // store subscriber data to be updated after confirmation
       $unconfirmedData = $this->subscriberSaveController->filterOutReservedColumns($subscriberData);
@@ -98,6 +114,11 @@ class SubscriberActions {
     if ($subscriber->getStatus() !== SubscriberEntity::STATUS_SUBSCRIBED) {
       if ($signupConfirmationEnabled === true) {
         $subscriber->setStatus(SubscriberEntity::STATUS_UNCONFIRMED);
+        if ($previousStatus !== SubscriberEntity::STATUS_UNCONFIRMED) {
+          $subscriber->setConfirmationsCount(0);
+          $subscriber->setLastConfirmationEmailSentAt(null);
+          $subscriber->setLastSubscribedAt(Carbon::now()->millisecond(0));
+        }
       } else {
         $subscriber->setStatus(SubscriberEntity::STATUS_SUBSCRIBED);
       }
@@ -107,18 +128,29 @@ class SubscriberActions {
 
     $metaData = ['confirmationEmailResult' => false];
     // link subscriber to segments
-    $segments = $this->segmentsRepository->findBy(['id' => $segmentIds]);
+    $segments = $this->segmentsRepository->findByIds($segmentIds);
     $this->subscriberSegmentRepository->subscribeToSegments($subscriber, $segments);
 
+    // resolve confirmation settings from segment-level overrides
+    [$confirmationEmailId, $confirmationPageId] = $this->confirmationEmailResolver->resolveFromSegments($segments);
+
     try {
-      $metaData['confirmationEmailResult'] = $this->confirmationEmailMailer->sendConfirmationEmailOnce($subscriber);
+      if (
+        $signupConfirmationEnabled
+        && $isUnconfirmedResubscription
+        && $subscriber->getConfirmationsCount() >= ConfirmationEmailMailer::MAX_CONFIRMATION_EMAILS
+      ) {
+        $metaData['error'] = $this->getMaxConfirmationEmailsReachedError();
+      } else if (!$wasAlreadySubscribed) {
+        $metaData['confirmationEmailResult'] = $this->confirmationEmailMailer->sendConfirmationEmailOnce($subscriber, $confirmationEmailId, $confirmationPageId, true);
+      }
     } catch (\Exception $e) {
       $metaData['confirmationEmailResult'] = $e;
     }
 
     // We want to send the notification on subscribe only when signupConfirmation is disabled
     if ($signupConfirmationEnabled === false && $subscriber->getStatus() === SubscriberEntity::STATUS_SUBSCRIBED) {
-      $this->newSubscriberNotificationMailer->send($subscriber, $this->segmentsRepository->findBy(['id' => $segmentIds]));
+      $this->newSubscriberNotificationMailer->send($subscriber, $this->segmentsRepository->findByIds($segmentIds));
 
       $this->welcomeScheduler->scheduleSubscriberWelcomeNotification(
         $subscriber->getId(),
@@ -127,5 +159,9 @@ class SubscriberActions {
     }
 
     return [$subscriber, $metaData];
+  }
+
+  private function getMaxConfirmationEmailsReachedError(): string {
+    return __('We\'ve already sent you a confirmation email. Please check your inbox or spam folder.', 'mailpoet');
   }
 }

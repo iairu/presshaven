@@ -18,21 +18,23 @@ use \WC_Shipping_Zone;
  * By extending WC_Shipping_Zone we are able to add functionality necessary for Pinterest shipping column generation.
  * This allows us to operate on familiar interface which will be useful when we will continue to expand the functionality.
  *
- * @since 1.0.5
+ * @class   PinterestShippingZone
+ * @since   1.0.5
+ * @version 1.6.0
  */
 class PinterestShippingZone extends WC_Shipping_Zone {
 
 	/**
 	 * Caching for internal structure of locations.
 	 *
-	 * @var $zone_countries_with_states
+	 * @var array|null
 	 */
 	private $zone_countries_with_states = null;
 
 	/**
 	 * Caching for supported shipping methods.
 	 *
-	 * @var $zone_countries_with_states
+	 * @var array|null
 	 */
 	private $supported_shipping_methods = null;
 
@@ -159,7 +161,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	 *
 	 * @since 1.0.5
 	 *
-	 * @return array Array with locations and allowed shipping methods.
+	 * @return array|null Array with locations and allowed shipping methods, or null if either is empty.
 	 */
 	public function get_locations_with_shipping() {
 		$countries_with_states = $this->get_countries_with_states();
@@ -203,7 +205,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	 *
 	 * @since 1.0.5
 	 *
-	 * @param WC_Shipping_Method $shipping_method Shipping rate to verify.
+	 * @param \WC_Shipping_Method $shipping_method Shipping rate to verify.
 	 * @return boolean
 	 */
 	private function is_shipping_method_supported( $shipping_method ) {
@@ -221,7 +223,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	/**
 	 * Location type detection.
 	 *
-	 * @param  object $location Location to check.
+	 * @param  \stdClass $location Location to check.
 	 * @return boolean
 	 */
 	private function location_is_continent( $location ) {
@@ -231,7 +233,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	/**
 	 * Location type detection.
 	 *
-	 * @param  object $location Location to check.
+	 * @param  \stdClass $location Location to check.
 	 * @return boolean
 	 */
 	private function location_is_country( $location ) {
@@ -241,7 +243,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	/**
 	 * Location type detection.
 	 *
-	 * @param  object $location Location to check.
+	 * @param  \stdClass $location Location to check.
 	 * @return boolean
 	 */
 	private function location_is_state( $location ) {
@@ -251,7 +253,7 @@ class PinterestShippingZone extends WC_Shipping_Zone {
 	/**
 	 * Location type detection.
 	 *
-	 * @param  object $location Location to check.
+	 * @param  \stdClass $location Location to check.
 	 * @return boolean
 	 */
 	private function location_is_postcode( $location ) {

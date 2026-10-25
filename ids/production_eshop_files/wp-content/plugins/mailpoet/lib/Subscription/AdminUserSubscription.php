@@ -113,7 +113,7 @@ class AdminUserSubscription {
     }
 
     // Check if our field was submitted
-    if (!isset($_POST['mailpoet_subscriber_status'])) {
+    if (!isset($_POST['mailpoet_subscriber_status']) || !is_string($_POST['mailpoet_subscriber_status'])) {
       return $data;
     }
 
@@ -163,7 +163,8 @@ class AdminUserSubscription {
       return;
     }
 
-    // Send confirmation email
+    // Send confirmation email. Per-list confirmation settings are not resolved
+    // here because admin-created users are subscribed via the WP Users segment.
     try {
       $this->confirmationEmailMailer->sendConfirmationEmailOnce($subscriber);
     } catch (\Exception $e) {

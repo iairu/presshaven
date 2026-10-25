@@ -5,11 +5,12 @@ msgstr ""
 "Last-Translator: gpt-po v1.2.3\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: 2025-08-13T10:11:47+00:00\n"
 "PO-Revision-Date: 2025-08-13T10:11:47+00:00\n"
-"Language: \n"
+"Language: nl_NL\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. Plugin URI of the plugin
 #: woo-cart-abandonment-recovery.php
@@ -121,9 +122,7 @@ msgid "Failed to clone template"
 msgstr "Klonen van template is mislukt"
 
 #: admin/ajax/email-templates.php:582
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template cloned successfully"
 msgstr "Template succesvol gekloond"
 
@@ -132,18 +131,19 @@ msgid "Default email templates restored successfully."
 msgstr "Standaard e-mailtemplates succesvol hersteld."
 
 #: admin/ajax/email-templates.php:843
+#: admin/build/settings.js:14
 msgid "Test email sent successfully!"
 msgstr "Test-e-mail succesvol verzonden!"
 
 #: admin/ajax/email-templates.php:845
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Failed to send test email"
 msgstr "Verzenden van test-e-mail is mislukt"
 
 #: admin/api/dashboard.php:78
 #: admin/api/detailed-report.php:69
 #: admin/api/follow-up-emails.php:77
-#: admin/api/follow-up.php:69
+#: admin/api/follow-up.php:133
 msgid "Sorry, you don't have the access to perform this action."
 msgstr "Sorry, u heeft geen toegang om deze actie uit te voeren."
 
@@ -152,262 +152,260 @@ msgid "General"
 msgstr "Algemeen"
 
 #: admin/inc/meta-options.php:90
-#: admin/inc/meta-options.php:890
+#: admin/inc/meta-options.php:973
 #: classes/class-cartflows-ca-settings.php:62
 msgid "Enable Tracking"
 msgstr "Tracking inschakelen"
 
 #: admin/inc/meta-options.php:93
-#: admin/inc/meta-options.php:893
+#: admin/inc/meta-options.php:976
 msgid "Cart will be considered abandoned if order is not completed in cut-off time."
 msgstr "Winkelwagentje wordt als verlaten beschouwd als de bestelling niet binnen de afgesproken tijd is voltooid."
 
 #: admin/inc/meta-options.php:98
-#: admin/inc/meta-options.php:898
+#: admin/inc/meta-options.php:981
 #: classes/class-cartflows-ca-settings.php:76
 msgid "Cart abandoned cut-off time"
 msgstr "Afkap tijd voor verlaten winkelwagentje"
 
-#: admin/inc/meta-options.php:101
-#: admin/inc/meta-options.php:404
-#: admin/inc/meta-options.php:901
+#: admin/inc/meta-options.php:432
 msgid "Consider cart abandoned after above entered minutes of item being added to cart and order not placed."
 msgstr "Beschouw winkelwagentje als verlaten na het hierboven ingevoerde aantal minuten dat het item aan het winkelwagentje is toegevoegd en de bestelling niet is geplaatst."
 
 #: admin/inc/meta-options.php:102
-#: admin/inc/meta-options.php:902
+#: admin/inc/meta-options.php:985
 msgid "minutes"
 msgstr "minuten"
 
-#: admin/inc/meta-options.php:118
-#: admin/inc/meta-options.php:918
+#: admin/inc/meta-options.php:120
+#: admin/inc/meta-options.php:1003
 #: classes/class-cartflows-ca-settings.php:90
 msgid "Disable Tracking For"
 msgstr "Tracking uitschakelen voor"
 
-#: admin/inc/meta-options.php:122
-#: admin/inc/meta-options.php:922
+#: admin/inc/meta-options.php:124
+#: admin/inc/meta-options.php:1007
 msgid "It will ignore selected users from abandonment process when they logged in, and hence they can not receive mail for cart abandoned by themselves."
 msgstr "Het negeert geselecteerde gebruikers van het verlaten proces wanneer ze zijn ingelogd, en daarom kunnen ze geen e-mail ontvangen voor het winkelwagentje dat ze zelf hebben verlaten."
 
-#: admin/inc/meta-options.php:123
-#: admin/inc/meta-options.php:923
+#: admin/inc/meta-options.php:125
+#: admin/inc/meta-options.php:1008
 msgid "Select user roles"
 msgstr "Selecteer gebruikersrollen"
 
-#: admin/inc/meta-options.php:128
+#: admin/inc/meta-options.php:130
 #: classes/class-cartflows-ca-settings.php:104
 msgid "Exclude email sending For"
 msgstr "Uitsluiten van e-mailverzending voor"
 
-#: admin/build/settings.js:9
-msgid "Processing"
-msgstr "Verwerken"
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Failed"
 msgstr "Mislukt"
 
-#: admin/inc/meta-options.php:132
+#: admin/inc/meta-options.php:134
 msgid "It will not send future recovery emails to selected order status and will mark as recovered."
 msgstr "Het zal geen toekomstige herstel-e-mails verzenden naar de geselecteerde bestelstatus en zal als hersteld worden gemarkeerd."
 
-#: admin/inc/meta-options.php:133
+#: admin/inc/meta-options.php:135
 msgid "Select order status"
 msgstr "Selecteer bestelstatus"
 
-#: admin/inc/meta-options.php:138
+#: admin/inc/meta-options.php:140
 #: classes/class-cartflows-ca-settings.php:118
 msgid "Notify recovery to admin"
 msgstr "Herstel aan admin melden"
 
-#: admin/inc/meta-options.php:141
+#: admin/inc/meta-options.php:143
 #: classes/class-cartflows-ca-settings.php:122
 msgid "This option will send an email to admin on new order recovery."
 msgstr "Deze optie zal een e-mail naar de admin sturen bij nieuw orderherstel."
 
-#: admin/inc/meta-options.php:322
+#: admin/inc/meta-options.php:350
 msgid "Webhook"
 msgstr "Webhook"
 
-#: admin/inc/meta-options.php:327
+#: admin/inc/meta-options.php:355
 #: classes/class-cartflows-ca-settings.php:278
 msgid "Enable Webhook"
 msgstr "Webhook inschakelen"
 
-#: admin/inc/meta-options.php:330
+#: admin/inc/meta-options.php:358
 #: classes/class-cartflows-ca-settings.php:282
 msgid "Allows you to trigger webhook automatically upon cart abandonment and recovery."
 msgstr "Stelt u in staat om webhook automatisch te activeren bij het verlaten van het winkelwagentje en herstel."
 
-#: admin/inc/meta-options.php:335
+#: admin/inc/meta-options.php:363
 #: classes/class-cartflows-ca-settings.php:287
 msgid "Webhook URL"
 msgstr "Webhook-URL"
 
-#: admin/inc/meta-options.php:338
+#: admin/inc/meta-options.php:366
 msgid "Add the Webhook URL below."
 msgstr "Voeg de Webhook-URL hieronder toe."
 
-#: admin/inc/meta-options.php:352
-#: admin/inc/meta-options.php:705
+#: admin/inc/meta-options.php:380
+#: admin/inc/meta-options.php:788
 #: classes/class-cartflows-ca-settings.php:314
 msgid "Create Coupon Code"
 msgstr "Maak kortingscode aan"
 
-#: admin/inc/meta-options.php:355
+#: admin/inc/meta-options.php:383
 #: classes/class-cartflows-ca-settings.php:318
 msgid "Auto-create the special coupon for the abandoned cart to send over the emails."
 msgstr "Automatisch de speciale kortingscode voor het verlaten winkelwagentje aanmaken om via e-mail te verzenden."
 
-#: admin/inc/meta-options.php:369
-#: admin/inc/meta-options.php:714
+#: admin/inc/meta-options.php:397
+#: admin/inc/meta-options.php:797
 #: classes/class-cartflows-ca-settings.php:323
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:583
 msgid "Discount Type"
 msgstr "Kortings type"
 
-#: admin/inc/meta-options.php:372
-#: admin/inc/meta-options.php:716
+#: admin/inc/meta-options.php:400
+#: admin/inc/meta-options.php:799
 msgid "Select the Discount Type."
 msgstr "Selecteer het kortings type."
 
-#: admin/inc/meta-options.php:376
-#: admin/inc/meta-options.php:720
+#: admin/inc/meta-options.php:404
+#: admin/inc/meta-options.php:803
 msgid "Percentage Discount"
 msgstr "Percentage korting"
 
-#: admin/inc/meta-options.php:380
-#: admin/inc/meta-options.php:724
+#: admin/inc/meta-options.php:408
+#: admin/inc/meta-options.php:807
 msgid "Fixed Cart Discount"
 msgstr "Vaste winkelwagentkorting"
 
-#: admin/inc/meta-options.php:401
-#: admin/inc/meta-options.php:741
+#: admin/inc/meta-options.php:429
+#: admin/inc/meta-options.php:824
 #: classes/class-cartflows-ca-settings.php:332
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:615
 msgid "Coupon Amount"
 msgstr "Couponbedrag"
 
-#: admin/inc/meta-options.php:423
-#: admin/inc/meta-options.php:758
+#: admin/inc/meta-options.php:451
+#: admin/inc/meta-options.php:841
 #: classes/class-cartflows-ca-settings.php:341
 msgid "Coupon Expires After"
 msgstr "Coupon verloopt na"
 
-#: admin/inc/meta-options.php:443
-#: admin/inc/meta-options.php:574
-#: admin/inc/meta-options.php:774
+#: admin/inc/meta-options.php:471
+#: admin/inc/meta-options.php:602
+#: admin/inc/meta-options.php:857
 #: classes/class-cartflows-ca-settings.php:652
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:653
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:750
 msgid "Hour(s)"
 msgstr "Uur(s)"
 
-#: admin/inc/meta-options.php:452
+#: admin/inc/meta-options.php:480
 msgid "Set the expiry time for the coupon."
 msgstr "Stel de vervaltijd voor de coupon in."
 
-#: admin/inc/meta-options.php:148
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/inc/meta-options.php:168
+#: admin/build/settings.js:31
 msgid "Coupon"
 msgstr "Coupon"
 
-#: admin/inc/meta-options.php:153
+#: admin/inc/meta-options.php:173
 #: classes/class-cartflows-ca-settings.php:157
 msgid "Delete Coupons Automatically"
 msgstr "Verwijder coupons automatisch"
 
-#: admin/inc/meta-options.php:156
+#: admin/inc/meta-options.php:176
 msgid "This option will set a weekly cron to delete all expired and used coupons automatically in the background."
 msgstr "Deze optie stelt een wekelijkse cron in om alle verlopen en gebruikte coupons automatisch op de achtergrond te verwijderen."
 
-#: admin/inc/meta-options.php:161
+#: admin/inc/meta-options.php:181
 #: classes/class-cartflows-ca-settings.php:171
 msgid "Delete Coupons Manually"
 msgstr "Verwijder coupons handmatig"
 
-#: admin/inc/meta-options.php:163
+#: admin/inc/meta-options.php:183
 #: classes/class-cartflows-ca-settings.php:870
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:90
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:128
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:118
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:193
-#: admin/build/settings.js:6
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:27
+#: admin/build/settings.js:28
+#: admin/build/settings.js:29
+#: admin/build/settings.js:31
+#: admin/build/settings.js:34
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Delete"
 msgstr "Verwijderen"
 
-#: admin/inc/meta-options.php:164
+#: admin/inc/meta-options.php:184
 msgid "This will delete all expired and used coupons that were created by Woo Cart Abandonment Recovery."
 msgstr "Dit verwijdert alle verlopen en gebruikte coupons die zijn aangemaakt door Woo Cart Abandonment Recovery."
 
-#: admin/inc/meta-options.php:171
+#: admin/inc/meta-options.php:191
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:297
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "Email"
 msgstr "E-mail"
 
-#: admin/inc/meta-options.php:176
+#: admin/inc/meta-options.php:196
 #: classes/class-cartflows-ca-settings.php:195
 msgid "\"From\" Name"
 msgstr "\"Van\" naam"
 
-#: admin/inc/meta-options.php:179
+#: admin/inc/meta-options.php:199
 #: classes/class-cartflows-ca-settings.php:199
 msgid "Name will appear in email sent."
 msgstr "Naam verschijnt in de verzonden e-mail."
 
-#: admin/inc/meta-options.php:184
+#: admin/inc/meta-options.php:204
 #: classes/class-cartflows-ca-settings.php:204
 msgid "\"From\" Address"
 msgstr "\"Van\" adres"
 
-#: admin/inc/meta-options.php:187
+#: admin/inc/meta-options.php:207
 #: classes/class-cartflows-ca-settings.php:208
 msgid "Email which send from."
 msgstr "E-mail waaruit wordt verzonden."
 
-#: admin/inc/meta-options.php:192
+#: admin/inc/meta-options.php:212
 #: classes/class-cartflows-ca-settings.php:213
 msgid "\"Reply To\" Address"
 msgstr "\"Antwoord aan\" adres"
 
-#: admin/inc/meta-options.php:195
+#: admin/inc/meta-options.php:215
 #: classes/class-cartflows-ca-settings.php:217
 msgid "When a user clicks reply, which email address should that reply be sent to?"
 msgstr "Wanneer een gebruiker antwoordt, naar welk e-mailadres moet dat antwoord dan worden gestuurd?"
 
-#: admin/inc/meta-options.php:202
+#: admin/inc/meta-options.php:222
 msgid "Recovery Report"
 msgstr "Herstelrapport"
 
-#: admin/inc/meta-options.php:207
+#: admin/inc/meta-options.php:227
 #: classes/class-cartflows-ca-settings.php:248
 msgid "Send recovery report emails"
 msgstr "Verzend herstelrapport e-mails"
 
-#: admin/inc/meta-options.php:210
+#: admin/inc/meta-options.php:230
 #: classes/class-cartflows-ca-settings.php:252
-#: admin/build/settings.js:16
 msgid "Enable sending recovery report emails."
 msgstr "Schakel het verzenden van herstelrapport e-mails in."
 
-#: admin/inc/meta-options.php:215
+#: admin/inc/meta-options.php:235
 msgid "Email Address"
 msgstr "E-mailadres"
 
-#: admin/inc/meta-options.php:218
+#: admin/inc/meta-options.php:238
 #: classes/class-cartflows-ca-settings.php:261
 msgid "Email address to send recovery report emails. For multiple emails, add each email address per line."
 msgstr "E-mailadres om herstelrapport e-mails naar te verzenden. Voor meerdere e-mails, voeg elk e-mailadres per regel toe."
 
-#: admin/inc/meta-options.php:234
+#: admin/inc/meta-options.php:262
 msgid "GDPR"
 msgstr "GDPR"
 
@@ -415,7 +413,7 @@ msgstr "GDPR"
 msgid "Enable GDPR Integration"
 msgstr "Schakel GDPR-integratie in"
 
-#: admin/inc/meta-options.php:242
+#: admin/inc/meta-options.php:270
 msgid "By enabling this, it will show up confirmation text below the email id on checkout page."
 msgstr "Door dit in te schakelen, wordt er bevestigingstekst onder het e-mailadres op de afrekenpagina weergegeven."
 
@@ -423,277 +421,275 @@ msgstr "Door dit in te schakelen, wordt er bevestigingstekst onder het e-mailadr
 msgid "GDPR Message"
 msgstr "GDPR-bericht"
 
-#: admin/inc/meta-options.php:266
+#: admin/inc/meta-options.php:294
 msgid "Advanced"
 msgstr "Geavanceerd"
 
-#: admin/inc/meta-options.php:271
+#: admin/inc/meta-options.php:299
 #: classes/class-cartflows-ca-settings.php:132
 msgid "UTM parameters"
 msgstr "UTM-parameters"
 
-#: admin/inc/meta-options.php:274
+#: admin/inc/meta-options.php:302
 msgid "The UTM parameters will be appended to the checkout page links which is available in the recovery emails. For multiple parameters, add each parameter per line."
 msgstr "De UTM-parameters worden toegevoegd aan de links op de afrekenpagina die beschikbaar zijn in de herstel-e-mails. Voor meerdere parameters, voeg elke parameter per regel toe."
 
-#: admin/inc/meta-options.php:287
+#: admin/inc/meta-options.php:315
 #: classes/class-cartflows-ca-settings.php:435
 msgid "Delete Plugin Data"
 msgstr "Verwijder plugingegevens"
 
-#: admin/inc/meta-options.php:290
+#: admin/inc/meta-options.php:318
 #: classes/class-cartflows-ca-settings.php:439
 msgid "Enabling this option will delete the plugin data while deleting the Plugin."
 msgstr "Door deze optie in te schakelen, worden de plugingegevens verwijderd bij het verwijderen van de plugin."
 
-#: admin/inc/meta-options.php:295
+#: admin/inc/meta-options.php:323
 msgid "Help Improve Cart Abandonment"
 msgstr "Help de winkelwagentjes te verbeteren"
 
 #. translators: %1$s: Start Link Node and $2%s End Link Node.
-#: admin/inc/meta-options.php:300
+#: admin/inc/meta-options.php:328
 #, php-format
 msgid "Collect non-sensitive information from your website, such as the PHP version and features used, to help us fix bugs faster, make smarter decisions, and build features that actually matter to you. %1$sLearn more%2$s"
 msgstr "Verzamel niet-gevoelige informatie van uw website, zoals de PHP-versie en gebruikte functies, om ons te helpen bugs sneller op te lossen, slimmer beslissingen te nemen en functies te bouwen die er echt toe doen voor u. %1$sLeer meer%2$s"
 
-#: admin/inc/meta-options.php:473
-#: admin/inc/wcar-admin.php:352
+#: admin/inc/meta-options.php:501
+#: admin/inc/wcar-admin.php:391
 msgid "OttoKit"
 msgstr "OttoKit"
 
-#: admin/inc/meta-options.php:494
+#: admin/inc/meta-options.php:522
 msgid "Activate Template Now?"
 msgstr "Template nu activeren?"
 
-#: admin/inc/meta-options.php:502
+#: admin/inc/meta-options.php:530
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:200
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Template Name"
 msgstr "Template naam"
 
-#: admin/inc/meta-options.php:510
+#: admin/inc/meta-options.php:538
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:201
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:96
-#: admin/build/settings.js:11
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
 msgid "Email Subject"
 msgstr "E-mail onderwerp"
 
-#: admin/inc/meta-options.php:512
+#: admin/inc/meta-options.php:540
 msgid "Enter the email subject."
 msgstr "Voer het onderwerp van de e-mail in."
 
-#: admin/inc/meta-options.php:545
+#: admin/inc/meta-options.php:573
 msgid "Email Body"
 msgstr "E-mailbody"
 
-#: admin/inc/meta-options.php:547
+#: admin/inc/meta-options.php:575
 msgid "Enter the email body."
 msgstr "Voer de e-mailbody in."
 
-#: admin/inc/meta-options.php:553
+#: admin/inc/meta-options.php:581
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:731
 msgid "Send This Email"
 msgstr "Verzend deze e-mail"
 
-#: admin/inc/meta-options.php:570
+#: admin/inc/meta-options.php:598
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:749
 msgid "Minute(s)"
 msgstr "Minuut(en)"
 
-#: admin/inc/meta-options.php:447
-#: admin/inc/meta-options.php:578
-#: admin/inc/meta-options.php:778
+#: admin/inc/meta-options.php:475
+#: admin/inc/meta-options.php:606
+#: admin/inc/meta-options.php:861
 #: classes/class-cartflows-ca-settings.php:653
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:654
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:751
 msgid "Day(s)"
 msgstr "Dag(en)"
 
-#: admin/inc/meta-options.php:583
+#: admin/inc/meta-options.php:611
 msgid "Time after cart is abandoned to send this email."
 msgstr "Tijd na het verlaten van het winkelwagentje om deze e-mail te verzenden."
 
-#: admin/inc/meta-options.php:589
+#: admin/inc/meta-options.php:617
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:542
 msgid "Use WooCommerce email style"
 msgstr "Gebruik WooCommerce e-mailstijl"
 
-#: admin/inc/meta-options.php:591
+#: admin/inc/meta-options.php:619
 msgid "Email will be sent in WooCommerce email format."
 msgstr "E-mail wordt verzonden in WooCommerce e-mailformaat."
 
-#: admin/inc/meta-options.php:697
+#: admin/inc/meta-options.php:725
 msgid "Send Test Email To"
 msgstr "Verzend test-e-mail naar"
 
-#: admin/inc/meta-options.php:707
+#: admin/inc/meta-options.php:790
 msgid "Auto-create a special coupon for the abandoned cart."
 msgstr "Auto-creëer een speciale coupon voor het verlaten winkelwagentje."
 
-#: admin/inc/meta-options.php:743
+#: admin/inc/meta-options.php:826
 msgid "Amount for the coupon."
 msgstr "Bedrag voor de coupon."
 
-#: admin/inc/meta-options.php:798
+#: admin/inc/meta-options.php:881
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:670
 msgid "Free Shipping"
 msgstr "Gratis verzending"
 
-#: admin/inc/meta-options.php:800
+#: admin/inc/meta-options.php:883
 msgid "Grant free shipping with this coupon."
 msgstr "Verleen gratis verzending met deze coupon."
 
-#: admin/inc/meta-options.php:815
+#: admin/inc/meta-options.php:898
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:690
 msgid "Individual use only"
 msgstr "Alleen individueel gebruik"
 
-#: admin/inc/meta-options.php:817
+#: admin/inc/meta-options.php:900
 msgid "Coupon cannot be used in conjunction with other coupons."
 msgstr "Coupon kan niet in combinatie met andere coupons worden gebruikt."
 
-#: admin/inc/meta-options.php:833
+#: admin/inc/meta-options.php:916
 msgid "Auto apply coupon"
 msgstr "Automatisch toepassen van coupon"
 
-#: admin/inc/meta-options.php:835
+#: admin/inc/meta-options.php:918
 msgid "Automatically apply coupon at checkout."
 msgstr "Coupon automatisch toepassen bij het afrekenen."
 
-#: admin/inc/wcar-admin.php:139
+#: admin/inc/wcar-admin.php:151
 msgid "Create new automation"
 msgstr "Maak nieuwe automatisering aan"
 
-#: admin/inc/wcar-admin.php:207
-#: admin/inc/wcar-admin.php:417
+#: admin/inc/wcar-admin.php:228
+#: admin/inc/wcar-admin.php:456
+#: admin/inc/wcar-admin.php:525
 msgid "Nonce verification failed."
 msgstr "Nonce-verificatie mislukt."
 
-#: admin/inc/wcar-admin.php:336
+#: admin/inc/wcar-admin.php:375
 #: classes/class-cartflows-ca-tabs.php:215
 msgid "CartFlows"
 msgstr "CartFlows"
 
-#: admin/inc/wcar-admin.php:337
+#: admin/inc/wcar-admin.php:376
 msgid "CartFlows helps users boost sales by creating optimized checkout flows and sales funnels."
 msgstr "CartFlows helpt gebruikers de verkoop te verhogen door geoptimaliseerde afrekenstromen en verkoopfunnels te creëren."
 
-#: admin/inc/wcar-admin.php:353
+#: admin/inc/wcar-admin.php:392
 msgid "OttoKit automates work by integrating apps and plugins to share data and perform tasks automatically."
 msgstr "OttoKit automatiseert werk door apps en plugins te integreren om gegevens te delen en taken automatisch uit te voeren."
 
-#: classes/class-cartflows-ca-admin-notices.php:98
-msgid "Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the CartFlows cart abandonment plugin."
-msgstr "Zou je ons een GROTE gunst kunnen doen en het een 5-sterren beoordeling op WordPress geven? Dit zou onze motivatie verhogen en andere gebruikers helpen een comfortabele beslissing te nemen bij het kiezen van de CartFlows-plugin voor het herstellen van verlaten winkelwagentjes."
-
-#: classes/class-cartflows-ca-admin-notices.php:100
+#: classes/class-cartflows-ca-admin-notices.php:109
 msgid "Ok, you deserve it"
 msgstr "Ok, je verdient het"
 
-#: classes/class-cartflows-ca-admin-notices.php:102
+#: classes/class-cartflows-ca-admin-notices.php:111
 msgid "Nope, maybe later"
 msgstr "Nee, misschien later"
 
-#: classes/class-cartflows-ca-admin-notices.php:103
+#: classes/class-cartflows-ca-admin-notices.php:112
 msgid "I already did"
 msgstr "Ik heb het al gedaan"
 
-#: classes/class-cartflows-ca-admin-notices.php:132
+#: classes/class-cartflows-ca-admin-notices.php:141
 msgid "How likely are you to recommend #pluginname to your friends or colleagues?"
 msgstr "Hoe waarschijnlijk is het dat je #pluginname aan je vrienden of collega's aanbeveelt?"
 
-#: classes/class-cartflows-ca-admin-notices.php:139
+#: classes/class-cartflows-ca-admin-notices.php:148
 msgid "Thank you for your feedback"
 msgstr "Bedankt voor je feedback"
 
-#: classes/class-cartflows-ca-admin-notices.php:140
+#: classes/class-cartflows-ca-admin-notices.php:149
 msgid "We value your input. How can we improve your experience?"
 msgstr "We waarderen je input. Hoe kunnen we je ervaring verbeteren?"
 
-#: classes/class-cartflows-ca-admin-notices.php:285
+#: classes/class-cartflows-ca-admin-notices.php:294
 msgid "Insufficient permissions"
 msgstr "Onvoldoende machtigingen"
 
-#: classes/class-cartflows-ca-admin-notices.php:290
+#: classes/class-cartflows-ca-admin-notices.php:299
 msgid "No post data found"
 msgstr "Geen postgegevens gevonden"
 
-#: classes/class-cartflows-ca-admin-notices.php:296
+#: classes/class-cartflows-ca-admin-notices.php:305
 msgid "Invalid Nonce."
 msgstr "Ongeldige Nonce."
 
-#: classes/class-cartflows-ca-admin-notices.php:305
+#: classes/class-cartflows-ca-admin-notices.php:314
 msgid "Button action not found."
 msgstr "Knopactie niet gevonden."
 
-#: classes/class-cartflows-ca-admin-notices.php:314
+#: classes/class-cartflows-ca-admin-notices.php:323
 msgid "Switched to new UI"
 msgstr "Overgeschakeld naar nieuwe UI"
 
-#: classes/class-cartflows-ca-admin-notices.php:323
+#: classes/class-cartflows-ca-admin-notices.php:332
 msgid "Notice dismissed"
 msgstr "Kennisgeving afgewezen"
 
-#: classes/class-cartflows-ca-admin-notices.php:329
+#: classes/class-cartflows-ca-admin-notices.php:338
 msgid "Invalid action"
 msgstr "Ongeldige actie"
 
-#: classes/class-cartflows-ca-default-meta.php:119
+#: classes/class-cartflows-ca-default-meta.php:122
 msgid "Sample Email Template 1"
 msgstr "Voorbeeld e-mailtemplate 1"
 
-#: classes/class-cartflows-ca-default-meta.php:120
+#: classes/class-cartflows-ca-default-meta.php:123
 msgid "Purchase issue?"
 msgstr "Aankoopprobleem?"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:124
+#: classes/class-cartflows-ca-default-meta.php:127
 msgid "<p>Hi {{customer.firstname}}!</p><p>We're having trouble processing your recent purchase. Would you mind completing it?</p><p>Here's a link to continue where you left off:</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Continue Your Purchase Now </a></p><p>Kindly,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Hallo {{customer.firstname}}!</p><p>We hebben problemen met het verwerken van je recente aankoop. Zou je het kunnen afronden?</p><p>Hier is een link om verder te gaan waar je was gebleven:</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Voltooi je aankoop nu </a></p><p>Met vriendelijke groet,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:134
+#: classes/class-cartflows-ca-default-meta.php:137
 msgid "Sample Email Template 2"
 msgstr "Voorbeeld e-mailtemplate 2"
 
-#: classes/class-cartflows-ca-default-meta.php:135
+#: classes/class-cartflows-ca-default-meta.php:138
 msgid "Need help?"
 msgstr "Hulp nodig?"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:139
+#: classes/class-cartflows-ca-default-meta.php:142
 msgid "<p>Hi {{customer.firstname}}!</p><p>I'm {{admin.firstname}}, and I help handle customer issues at {{admin.company}}.</p><p>I just noticed that you tried to make a purchase, but unfortunately, there was some trouble. Is there anything I can do to help?</p><p>You should be able to complete your checkout in less than a minute:<br /><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Click here to continue your purchase </a><p><p>Thanks!<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Hallo {{customer.firstname}}!</p><p>Ik ben {{admin.firstname}}, en ik help bij het afhandelen van klantproblemen bij {{admin.company}}.</p><p>Ik merkte net dat je een aankoop probeerde te doen, maar helaas was er wat problemen. Is er iets dat ik kan doen om te helpen?</p><p>Je zou je checkout in minder dan een minuut moeten kunnen afronden:<br /><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Klik hier om je aankoop voort te zetten </a><p><p>Bedankt!<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:149
+#: classes/class-cartflows-ca-default-meta.php:152
 msgid "Sample Email Template 3"
 msgstr "Voorbeeld e-mailtemplate 3"
 
-#: classes/class-cartflows-ca-default-meta.php:150
+#: classes/class-cartflows-ca-default-meta.php:153
 msgid "Exclusive discount for you. Let's get things started!"
 msgstr "Exclusieve korting voor jou. Laten we beginnen!"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:154
+#: classes/class-cartflows-ca-default-meta.php:157
 msgid "<p>Few days back you left {{cart.product.names}} in your cart.</p><p>To help make up your mind, we have added an exclusive 10%% discount coupon {{cart.coupon_code}} to your cart.</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'>Complete Your Purchase Now &gt;&gt;</a></p><p>Hurry! This is a onetime offer and will expire in 24 Hours.</p><p>In case you couldn't finish your order due to technical difficulties or because you need some help, just reply to this email we will be happy to help.</p><p>Kind Regards,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Een paar dagen geleden heb je {{cart.product.names}} in je winkelwagentje achtergelaten.</p><p>Om je te helpen een beslissing te nemen, hebben we een exclusieve korting van 10%% coupon {{cart.coupon_code}} aan je winkelwagentje toegevoegd.</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'>Voltooi je aankoop nu &gt;&gt;</a></p><p>Haast je! Dit is een eenmalig aanbod en verloopt over 24 uur.</p><p>Als je je bestelling niet kon afronden vanwege technische problemen of omdat je hulp nodig hebt, reageer dan gewoon op deze e-mail, we helpen je graag.</p><p>Met vriendelijke groet,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:273
+#: classes/class-cartflows-ca-default-meta.php:284
 msgid "Your email & cart are saved so we can send email reminders about this order."
 msgstr "Je e-mail en winkelwagentje zijn opgeslagen, zodat we e-mailherinneringen over deze bestelling kunnen sturen."
 
-#: classes/class-cartflows-ca-default-meta.php:623
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:175
+#: classes/class-cartflows-ca-default-meta.php:657
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:196
 msgid "Admin"
 msgstr "Beheerder"
 
-#: classes/class-cartflows-ca-loader.php:191
+#: classes/class-cartflows-ca-loader.php:193
 msgid "Activate WooCommerce"
 msgstr "Activeer WooCommerce"
 
-#: classes/class-cartflows-ca-loader.php:199
+#: classes/class-cartflows-ca-loader.php:201
 msgid "Install WooCommerce"
 msgstr "Installeer WooCommerce"
 
@@ -847,32 +843,34 @@ msgid "Product Custom Data: "
 msgstr "Product Aangepaste Gegevens: "
 
 #: classes/class-cartflows-ca-tabs.php:506
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:451
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:503
 msgid "Item"
 msgstr "Item"
 
-#: admin/inc/meta-options.php:667
+#: admin/inc/meta-options.php:695
 #: classes/class-cartflows-ca-tabs.php:507
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:454
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:506
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:296
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:187
 msgid "Name"
 msgstr "Naam"
 
-#: admin/inc/meta-options.php:671
+#: admin/inc/meta-options.php:699
 #: classes/class-cartflows-ca-tabs.php:508
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:457
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:509
+#: admin/build/settings.js:31
 msgid "Quantity"
 msgstr "Aantal"
 
-#: admin/inc/meta-options.php:675
+#: admin/inc/meta-options.php:703
 #: classes/class-cartflows-ca-tabs.php:509
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:460
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:512
+#: admin/build/settings.js:31
 msgid "Price"
 msgstr "Prijs"
 
 #: classes/class-cartflows-ca-tabs.php:510
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:463
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:515
 msgid "Line Subtotal"
 msgstr "Subtotaal regel"
 
@@ -890,8 +888,9 @@ msgstr "Verzending"
 
 #: classes/class-cartflows-ca-tabs.php:529
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:298
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Cart Total"
 msgstr "Totaal winkelwagentje"
 
@@ -900,10 +899,6 @@ msgstr "Totaal winkelwagentje"
 #, php-format
 msgid "Looks like abandonment tracking is disabled! Please enable it from %1$s settings %2$s."
 msgstr "Het lijkt erop dat het volgen van verlaten winkelwagentjes is uitgeschakeld! Schakel het in vanuit %1$s instellingen %2$s."
-
-#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:61
-msgid "Every Fifteen Minutes"
-msgstr "Elke vijftien minuten"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:47
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:161
@@ -920,22 +915,22 @@ msgstr "E-mail is succesvol verzonden!"
 msgid "Mail sending failed!"
 msgstr "Verzenden van e-mail is mislukt!"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:107
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:128
 msgid "there"
 msgstr "daar"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:155
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:176
 msgid "Don't remind me again."
 msgstr "Herinner me niet meer."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:444
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:496
 msgid "Cart Total ( Cart Total + Shipping + Tax )"
 msgstr "Totaal winkelwagentje ( Totaal winkelwagentje + Verzending + Belasting )"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:78
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:34
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Edit"
 msgstr "Bewerken"
 
@@ -944,9 +939,10 @@ msgid "Clone"
 msgstr "Klonen"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:202
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Trigger After"
 msgstr "Triggeren na"
 
@@ -1027,6 +1023,7 @@ msgid "Something went wrong"
 msgstr "Er is iets misgegaan"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:179
+#: admin/build/settings.js:4
 msgid "Activated"
 msgstr "Geactiveerd"
 
@@ -1125,6 +1122,7 @@ msgid "Send a test email"
 msgstr "Stuur een test-e-mail"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:791
+#: admin/build/settings.js:31
 msgid "Save Changes"
 msgstr "Wijzigingen opslaan"
 
@@ -1133,9 +1131,9 @@ msgid "Update Changes"
 msgstr "Wijzigingen bijwerken"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1121
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Create New Template"
 msgstr "Nieuwe template aanmaken"
 
@@ -1144,20 +1142,22 @@ msgid " Restore Default Templates"
 msgstr "Standaardtemplates herstellen"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:104
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
+#: admin/build/settings.js:29
 msgid "View"
 msgstr "Bekijk"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:136
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:197
 #: modules/weekly-email-report/templates/email-footer.php:55
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Unsubscribe"
 msgstr "Afmelden"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:299
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Order Status"
 msgstr "Bestelstatus"
 
@@ -1182,41 +1182,44 @@ msgstr "Deze coupon is voor e-mailtemplates voor verlaten winkelwagentjes."
 msgid "New Customer Order - Recovered Order ID: %d"
 msgstr "Nieuwe klantbestelling - Herstelde bestel-ID: %d"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:212
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:927
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:223
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:987
 msgid "This order was abandoned & subsequently recovered."
 msgstr "Deze bestelling is verlaten en vervolgens hersteld."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:252
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:267
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:291
 msgid "You have successfully unsubscribed from our email list."
 msgstr "Je bent succesvol afgemeld van onze e-maillijst."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:255
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:270
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:294
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:178
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:182
-#: admin/build/settings.js:9
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Unsubscribed"
 msgstr "Afgemeld"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:413
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:463
 msgid "No Thanks"
 msgstr "Nee bedankt"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:414
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:464
 msgid "You won't receive further emails from us, thank you!"
 msgstr "Je ontvangt geen verdere e-mails van ons, bedankt!"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1115
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1377
 msgid "Do you really want to delete the used and expired coupons created by Cart Abandonment Plugin?"
 msgstr "Wil je echt de gebruikte en verlopen coupons die zijn aangemaakt door de Cart Abandonment Plugin verwijderen?"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1116
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1378
 msgid "Do you really want to export orders?"
 msgstr "Wil je echt bestellingen exporteren?"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1120
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1382
 msgid "No such order is found."
 msgstr "Er is geen dergelijke bestelling gevonden."
 
@@ -1260,7 +1263,7 @@ msgstr "Conversie Geoptimaliseerde Sjablonen"
 msgid "Quickly build sales funnels, product pages, and checkout flows using ready-made, high-converting templates."
 msgstr "Bouw snel verkoopfunnels, productpagina's en afrekenstromen met kant-en-klare, hoog-converterende sjablonen."
 
-#: classes/class-cartflows-ca-admin-notices.php:131
+#: classes/class-cartflows-ca-admin-notices.php:140
 #: inc/abilities/class-wcar-abilities-register.php:77
 #: modules/cart-abandonment/includes/cartflows-ca-cf-promotion-page.php:51
 msgid "Cart Abandonment Recovery"
@@ -1367,6 +1370,7 @@ msgid "Install Now"
 msgstr "Installeer Nu"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:31
+#: admin/build/settings.js:31
 msgid "Back to Reports"
 msgstr "Terug naar Rapporten"
 
@@ -1395,7 +1399,7 @@ msgid "Do you really want to reschedule emails?"
 msgstr "Wil je echt de e-mails opnieuw inplannen?"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:72
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Reschedule Emails"
 msgstr "E-mails Herschikken"
 
@@ -1416,9 +1420,7 @@ msgid "Email Sent"
 msgstr "E-mail Verzonden"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:99
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Scheduled At"
 msgstr "Gepland Op"
 
@@ -1461,13 +1463,13 @@ msgid "Address 2:"
 msgstr "Adres 2:"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:206
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Country, City:"
 msgstr "Land, Stad:"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:209
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:229
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "State:"
 msgstr "Staat:"
 
@@ -1518,7 +1520,7 @@ msgstr "Aangepaste Filter"
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:50
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:116
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "Recoverable Orders"
 msgstr "Herstelbare Bestellingen"
 
@@ -1528,8 +1530,8 @@ msgstr "Totaal Herstelbare Bestellingen."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:59
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:119
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Recovered Orders"
 msgstr "Herstelde Bestellingen"
 
@@ -1539,8 +1541,8 @@ msgstr "Totaal Herstelde Bestellingen."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:66
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:122
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Lost Orders"
 msgstr "Verloren Bestellingen"
 
@@ -1549,8 +1551,7 @@ msgid "Total Lost Orders."
 msgstr "Totaal Verloren Bestellingen."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:78
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recoverable Revenue"
 msgstr "Herstelbare Omzet"
 
@@ -1561,8 +1562,7 @@ msgstr "Totaal Herstelbare Omzet."
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:91
 #: modules/weekly-email-report/templates/email-recovery-stat.php:119
 #: modules/weekly-email-report/templates/email-recovery-stat.php:479
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recovered Revenue"
 msgstr "Herstelde Omzet"
 
@@ -1572,7 +1572,7 @@ msgstr "Totaal Herstelde Omzet."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:103
 #: modules/weekly-email-report/templates/email-recovery-stat.php:310
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "Recovery Rate"
 msgstr "Herstelpercentage"
 
@@ -1641,8 +1641,6 @@ msgid "We aim to answer all priority support requests within 2-3 hours."
 msgstr "We streven ernaar om alle prioritaire ondersteuningsverzoeken binnen 2-3 uur te beantwoorden."
 
 #: admin/build/settings.js:1
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
 msgid "Request Support"
 msgstr "Vraag ondersteuning aan"
 
@@ -1675,6 +1673,7 @@ msgid "Dashboard"
 msgstr "Dashboard"
 
 #: admin/build/settings.js:1
+#: admin/build/settings.js:44
 msgid "Reports"
 msgstr "Rapporten"
 
@@ -1682,1665 +1681,2908 @@ msgstr "Rapporten"
 msgid "Integrations"
 msgstr "Integraties"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Overview"
 msgstr "Overzicht"
 
-#: admin/build/settings.js:2
-msgid "View All"
-msgstr "Bekijk alles"
-
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "User Name"
 msgstr "Gebruikersnaam"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Date & Time"
 msgstr "Datum & Tijd"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Not Available"
 msgstr "Niet beschikbaar"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:25
 msgid "No Follow-Up Reports Yet"
 msgstr "Nog geen follow-up rapporten"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:25
 msgid "Reports will show up here once customers start abandoning their carts."
 msgstr "Rapporten verschijnen hier zodra klanten hun winkelwagentjes beginnen te verlaten."
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade to Pro for advanced features"
 msgstr "Upgrade naar Pro voor geavanceerde functies"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Activate your license to unlock pro features"
 msgstr "Activeer je licentie om pro-functies te ontgrendelen"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade Now"
 msgstr "Upgrade nu"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:1
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Activate License"
 msgstr "Activeer licentie"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade to Pro"
 msgstr "Upgrade naar Pro"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:3
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Unlock Pro Features"
 msgstr "Ontgrendel Pro-functies"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Product Name"
 msgstr "Productnaam"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "No. of time Abandoned"
 msgstr "Aantal keer verlaten"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "No. of time Recovered"
 msgstr "Aantal keer hersteld"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
 msgid "No Product Data Yet"
 msgstr "Nog geen productgegevens"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
 msgid "You'll see product abandonment stats here once customers start adding items to their carts."
 msgstr "Je ziet hier productverlatingsstatistieken zodra klanten items aan hun winkelwagentjes beginnen toe te voegen."
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Failed to activate plugin"
 msgstr "Activeren van de plugin is mislukt"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Extend Your Website"
 msgstr "Breid je website uit"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Failed to install plugin"
 msgstr "Installeren van de plugin is mislukt"
 
 #: admin/build/settings.js:3
-#: admin/build/settings.js:16
-msgid "Installed"
-msgstr "Geïnstalleerd"
-
-#: admin/build/settings.js:2
-#: admin/build/settings.js:3
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
 msgid "Activate"
 msgstr "Activeren"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
 msgid "Install & Activate"
 msgstr "Installeer & Activeer"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:6
+#: admin/build/settings.js:10
+#: admin/build/settings.js:18
 msgid "Select an option"
 msgstr "Selecteer een optie"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Coupons deleted"
 msgstr "Coupons verwijderd"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:9
 #: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:25
+#: admin/build/settings.js:27
+#: admin/build/settings.js:36
 msgid "Delete failed"
 msgstr "Verwijderen mislukt"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Enter Webhook URL"
 msgstr "Voer Webhook-URL in"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Webhook trigger successful"
 msgstr "Webhook-trigger succesvol"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
+#: admin/build/settings.js:13
 msgid "Webhook trigger failed"
 msgstr "Webhook-trigger mislukt"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "AND"
 msgstr "EN"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select condition"
 msgstr "Selecteer voorwaarde"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select operator"
 msgstr "Selecteer operator"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select value"
 msgstr "Selecteer waarde"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Search products…"
 msgstr "Zoek producten…"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Enter value"
 msgstr "Voer waarde in"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "OR"
 msgstr "OF"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Add Rule"
 msgstr "Regel toevoegen"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:104
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:129
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1126
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:42
 msgid "Export"
 msgstr "Exporteren"
 
-#: admin/build/settings.js:6
-msgid "Confirm Delete"
-msgstr "Bevestig verwijderen"
-
-#: admin/build/settings.js:6
-msgid "Are you sure you want to delete this item? This action cannot be undone."
-msgstr "Weet u zeker dat u dit item wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1173
-#: admin/build/settings.js:6
+#: admin/build/settings.js:10
 msgid "Cancel"
 msgstr "Annuleren"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Unsubscribed Successfully"
 msgstr "Succesvol afgemeld"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Unsubscribe failed"
 msgstr "Afmelden mislukt"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "No matching data available"
 msgstr "Geen overeenkomende gegevens beschikbaar"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:25
+#: admin/build/settings.js:29
 msgid "Record(s) deleted"
 msgstr "Record(s) verwijderd"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:25
+#: admin/build/settings.js:29
 msgid "Record deleted"
 msgstr "Record verwijderd"
 
-#: admin/build/settings.js:9
-msgid "Delete Selected Records"
-msgstr "Geselecteerde records verwijderen"
-
-#: admin/build/settings.js:9
-msgid "Delete Record"
-msgstr "Record verwijderen"
-
-#. translators: %s: number of selected records
-#: admin/build/settings.js:10
-#, js-format
-msgid "Are you sure you want to delete %s selected record(s)? This action cannot be undone."
-msgstr "Weet u zeker dat u %s geselecteerde record(s) wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
-#: admin/build/settings.js:10
-msgid "Are you sure you want to delete this record? This action cannot be undone."
-msgstr "Weet u zeker dat u dit record wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:3
+#: admin/build/settings.js:4
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Product Reports"
 msgstr "Productrapporten"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "SMS + WhatsApp Followups"
 msgstr "SMS + WhatsApp Follow-ups"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Smart Rules"
 msgstr "Slimme regels"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Advanced Automations"
 msgstr "Geavanceerde automatiseringen"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "And More…"
 msgstr "En meer…"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:29
 msgid "Delete Selected Products"
 msgstr "Geselecteerde producten verwijderen"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:29
 msgid "Delete Product"
 msgstr "Product verwijderen"
 
-#. translators: %s: number of selected products
-#: admin/build/settings.js:11
-#, js-format
-msgid "Are you sure you want to delete %s selected product(s)? This action cannot be undone."
-msgstr "Weet u zeker dat u %s geselecteerde product(en) wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
-#: admin/build/settings.js:11
-msgid "Are you sure you want to delete this product? This action cannot be undone."
-msgstr "Weet u zeker dat u dit product wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "No data available"
 msgstr "Geen gegevens beschikbaar"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email Scheduled Successfully"
 msgstr "E-mail succesvol gepland"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Template saved successfully"
 msgstr "Sjabloon succesvol opgeslagen"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Failed to save template"
 msgstr "Opslaan van sjabloon mislukt"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-msgid "Selected"
-msgstr "Geselecteerd"
-
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:17
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Search…"
 msgstr "Zoeken…"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Search"
 msgstr "Zoeken"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
 msgid "Default templates restored"
 msgstr "Standaard sjablonen hersteld"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
 msgid "Restore failed"
 msgstr "Herstellen mislukt"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Sent"
 msgstr "Verzonden"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:35
+#: admin/build/settings.js:36
 msgid "PRO"
 msgstr "PRO"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:38
 msgid "Open Rate"
 msgstr "Openingspercentage"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Click Rate"
 msgstr "Klikpercentage"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
+#: admin/build/settings.js:43
 msgid "Status"
 msgstr "Status"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template status updated successfully"
 msgstr "Sjabloonstatus succesvol bijgewerkt"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Failed to update status"
 msgstr "Bijwerken van status mislukt"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:34
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Duplicate"
 msgstr "Duplicaat"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Clone failed"
 msgstr "Klonen mislukt"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template(s) deleted"
 msgstr "Sjabloon(s) verwijderd"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template deleted"
 msgstr "Sjabloon verwijderd"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:37
+#: admin/build/settings.js:39
+#: admin/build/settings.js:41
 msgid "Delete Selected Templates"
 msgstr "Geselecteerde sjablonen verwijderen"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Delete Template"
 msgstr "Sjabloon verwijderen"
 
-#. translators: %s: number of selected templates
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-#: admin/build/settings.js:16
-#, js-format
-msgid "Are you sure you want to delete %s selected template(s)? This action cannot be undone."
-msgstr "Weet u zeker dat u %s geselecteerde sjabloon(en) wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
-
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-#: admin/build/settings.js:16
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Are you sure you want to delete this template? This action cannot be undone."
 msgstr "Weet u zeker dat u deze sjabloon wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
+#: admin/build/settings.js:43
 msgid "Installing…"
 msgstr "Installeren…"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:24
+#: admin/build/settings.js:42
 msgid "Activating…"
 msgstr "Activeren…"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Reloading"
 msgstr "Herladen"
 
 #. Plugin Name of the plugin
 #: woo-cart-abandonment-recovery.php
 msgid "Cart Abandonment Recovery for WooCommerce"
-msgstr ""
+msgstr "Cart Abandonment Recovery for WooCommerce"
 
 #: admin/ajax/email-templates.php:723
 #: admin/ajax/email-templates.php:729
 msgid "Out of stock"
-msgstr ""
+msgstr "Niet op voorraad"
 
 #. translators: %d: Number of items in stock.
 #: admin/ajax/email-templates.php:733
 #, php-format
 msgid "%d in stock"
-msgstr ""
+msgstr "%d op voorraad"
 
 #: admin/ajax/email-templates.php:738
 msgid "In stock"
-msgstr ""
+msgstr "Op voorraad"
 
-#: admin/inc/meta-options.php:108
-#: admin/inc/meta-options.php:908
+#: admin/inc/meta-options.php:109
+#: admin/inc/meta-options.php:992
 msgid "Abandoned cart lost time"
-msgstr ""
+msgstr "Tijd tot verlaten winkelwagentje verloren is"
 
-#: admin/inc/meta-options.php:111
-#: admin/inc/meta-options.php:911
-msgid "Consider cart lost after above entered days of item being added to cart and order not placed."
-msgstr ""
-
-#: admin/inc/meta-options.php:112
-#: admin/inc/meta-options.php:912
+#: admin/inc/meta-options.php:113
+#: admin/inc/meta-options.php:996
 msgid "days"
-msgstr ""
+msgstr "dagen"
 
-#: admin/inc/meta-options.php:239
+#: admin/inc/meta-options.php:267
 msgid "Enable Email GDPR Integration"
-msgstr ""
+msgstr "GDPR-integratie voor e-mail inschakelen"
 
-#: admin/inc/meta-options.php:247
+#: admin/inc/meta-options.php:275
 msgid "Email GDPR Message"
-msgstr ""
+msgstr "GDPR-bericht voor e-mail"
 
-#: admin/inc/meta-options.php:279
-#: admin/inc/wcar-admin.php:566
-#: admin/inc/wcar-admin.php:597
-#: admin/build/settings.js:6
+#: admin/inc/meta-options.php:307
+#: admin/inc/wcar-admin.php:562
+#: admin/inc/wcar-admin.php:593
+#: admin/build/settings.js:18
 msgid "Rollback to Previous Version"
-msgstr ""
+msgstr "Terugzetten naar vorige versie"
 
-#: admin/inc/meta-options.php:281
+#: admin/inc/meta-options.php:309
 msgid "Experiencing an issue with the current version of Cart Abandonment Recovery? Roll back to a previous version to help troubleshoot the problem."
-msgstr ""
+msgstr "Problemen met de huidige versie van Cart Abandonment Recovery? Zet terug naar een vorige versie om het probleem op te sporen."
 
-#: admin/inc/meta-options.php:876
+#: admin/inc/meta-options.php:959
 msgid "Email Follow Ups (Default)"
-msgstr ""
+msgstr "E-mail follow-ups (standaard)"
 
-#: admin/inc/meta-options.php:879
+#: admin/inc/meta-options.php:962
 msgid "Allows you to send emails upon cart abandonment."
-msgstr ""
+msgstr "Hiermee kun je e-mails verzenden wanneer een winkelwagentje wordt verlaten."
 
-#: admin/inc/meta-options.php:934
-#: admin/inc/meta-options.php:1013
+#: admin/inc/meta-options.php:1019
+#: admin/inc/meta-options.php:1098
 msgid "Enable SMS Follow-ups"
-msgstr ""
+msgstr "SMS follow-ups inschakelen"
 
-#: admin/inc/meta-options.php:937
-#: admin/inc/meta-options.php:1017
+#: admin/inc/meta-options.php:1022
+#: admin/inc/meta-options.php:1102
 msgid "Automatically send SMS reminders to customers when they abandon their cart."
-msgstr ""
+msgstr "Stuur klanten automatisch SMS-herinneringen wanneer ze hun winkelwagentje verlaten."
 
-#: admin/inc/meta-options.php:944
 #: admin/inc/meta-options.php:1029
+#: admin/inc/meta-options.php:1114
 msgid "Enable WhatsApp Follow-ups"
-msgstr ""
+msgstr "WhatsApp follow-ups inschakelen"
 
-#: admin/inc/meta-options.php:947
-#: admin/inc/meta-options.php:1033
+#: admin/inc/meta-options.php:1032
+#: admin/inc/meta-options.php:1118
 msgid "Automatically send WhatsApp reminders to customers when they abandon their cart."
-msgstr ""
+msgstr "Stuur klanten automatisch WhatsApp-herinneringen wanneer ze hun winkelwagentje verlaten."
 
-#: admin/inc/meta-options.php:968
+#: admin/inc/meta-options.php:1053
 msgid "Exclude Products"
-msgstr ""
+msgstr "Producten uitsluiten"
 
-#: admin/inc/meta-options.php:970
+#: admin/inc/meta-options.php:1055
 msgid "Select products for which the coupon should not be created."
-msgstr ""
+msgstr "Selecteer producten waarvoor de coupon niet moet worden aangemaakt."
 
-#: admin/inc/meta-options.php:971
+#: admin/inc/meta-options.php:1056
 msgid "Type to search a product"
-msgstr ""
+msgstr "Typ om een product te zoeken"
 
-#: admin/inc/meta-options.php:987
-#: admin/build/settings.js:3
-#: admin/build/settings.js:6
+#: admin/inc/meta-options.php:1072
+#: admin/build/settings.js:14
+#: admin/build/settings.js:17
 msgid "Dynamic Conditions"
-msgstr ""
+msgstr "Dynamische voorwaarden"
 
-#: admin/inc/meta-options.php:989
+#: admin/inc/meta-options.php:1074
 msgid "Set conditions to automatically control when this email is sent."
-msgstr ""
+msgstr "Stel voorwaarden in om automatisch te bepalen wanneer deze e-mail wordt verzonden."
 
-#: admin/inc/meta-options.php:1008
+#: admin/inc/meta-options.php:1093
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "SMS"
-msgstr ""
+msgstr "SMS"
 
-#: admin/inc/meta-options.php:1024
+#: admin/inc/meta-options.php:1109
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "WhatsApp"
-msgstr ""
+msgstr "WhatsApp"
 
-#: admin/inc/meta-options.php:1058
+#: admin/inc/meta-options.php:1143
 msgid "Enable Phone GDPR Integration"
-msgstr ""
+msgstr "GDPR-integratie voor telefoon inschakelen"
 
-#: admin/inc/meta-options.php:1062
+#: admin/inc/meta-options.php:1147
 msgid "Show a GDPR consent message below the phone number field on the checkout page."
-msgstr ""
+msgstr "Toon een GDPR-toestemmingsbericht onder het telefoonnummerveld op de afrekenpagina."
 
-#: admin/inc/meta-options.php:1066
+#: admin/inc/meta-options.php:1151
+#: admin/build/settings.js:24
 msgid "Blacklist"
-msgstr ""
+msgstr "Blacklist"
 
-#: admin/inc/meta-options.php:1071
+#: admin/inc/meta-options.php:1156
 msgid "Enable Blacklist"
-msgstr ""
+msgstr "Blacklist inschakelen"
 
-#: admin/inc/meta-options.php:1075
+#: admin/inc/meta-options.php:1160
 msgid "Prevent recovery emails from being sent to specific email addresses or domains."
-msgstr ""
+msgstr "Voorkom dat herstel-e-mails worden verzonden naar specifieke e-mailadressen of domeinen."
 
-#: admin/inc/wcar-admin.php:344
+#: admin/inc/wcar-admin.php:383
 msgid "Modern Cart"
-msgstr ""
+msgstr "Modern Cart"
 
-#: admin/inc/wcar-admin.php:345
+#: admin/inc/wcar-admin.php:384
 msgid "Modern Cart helps shop owner improve their user experience, increase conversions & maximize profits."
-msgstr ""
+msgstr "Modern Cart helpt winkeleigenaren hun gebruikerservaring te verbeteren, conversies te verhogen en winst te maximaliseren."
 
-#: admin/inc/wcar-admin.php:360
+#: admin/inc/wcar-admin.php:399
 msgid "Power Coupons"
-msgstr ""
+msgstr "Power Coupons"
 
-#: admin/inc/wcar-admin.php:361
+#: admin/inc/wcar-admin.php:400
 msgid "Power Coupons helps shop owners create smart discounts and auto-apply coupons to reduce friction and boost conversions."
-msgstr ""
+msgstr "Power Coupons helpt winkeleigenaren slimme kortingen te maken en coupons automatisch toe te passen om drempels te verlagen en conversies te verhogen."
 
-#: admin/inc/wcar-admin.php:421
+#: admin/inc/wcar-admin.php:462
+#: admin/inc/wcar-admin.php:529
 msgid "You do not have sufficient permissions to access this page."
-msgstr ""
+msgstr "Je hebt onvoldoende rechten om deze pagina te bekijken."
 
-#: admin/inc/wcar-admin.php:565
+#: admin/inc/wcar-admin.php:561
 msgid "You do not have permission to access this page."
-msgstr ""
+msgstr "Je hebt geen toestemming om deze pagina te bekijken."
 
-#: admin/inc/wcar-admin.php:579
+#: admin/inc/wcar-admin.php:575
 msgid "Error occurred, The version selected is invalid. Try selecting different version."
-msgstr ""
+msgstr "Er is een fout opgetreden: de geselecteerde versie is ongeldig. Probeer een andere versie te selecteren."
 
-#: classes/class-cartflows-ca-admin-notices.php:97
-msgid "Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts. &mdash; Thanks a ton!"
-msgstr ""
-
-#: classes/class-cartflows-ca-admin-notices.php:135
+#: classes/class-cartflows-ca-admin-notices.php:144
 msgid "Could you please do us a favor and give us a 5-star rating on WordPress? It would help others choose Cart Abandonment Recovery for WooCommerce with confidence. Thank you!"
-msgstr ""
+msgstr "Wil je ons een plezier doen en ons een 5-sterrenbeoordeling geven op WordPress? Zo kunnen anderen met vertrouwen voor Cart Abandonment Recovery for WooCommerce kiezen. Bedankt!"
 
 #. translators: %1$s Software Title, %2$s Plugin, %3$s Anchor opening tag, %4$s Anchor closing tag, %5$s Software Title.
-#: classes/class-cartflows-ca-admin-notices.php:167
+#: classes/class-cartflows-ca-admin-notices.php:176
 #, php-format
 msgid "%1$sCart Abandonment Recovery for WooCommerce:%2$s We just introduced an awesome new feature, weekly order recovery reports via email. Now you can see how many orders we are recovering for your store each week, without having to log into your website. You can set the email address for these email from %3$shere.%4$s"
-msgstr ""
+msgstr "%1$sCart Abandonment Recovery for WooCommerce:%2$s We hebben zojuist een geweldige nieuwe functie geïntroduceerd: wekelijkse rapporten over herstelde bestellingen per e-mail. Nu zie je elke week hoeveel bestellingen we voor je winkel herstellen, zonder in te loggen op je website. Je kunt het e-mailadres voor deze e-mails %3$shier%4$s instellen."
 
-#: classes/class-cartflows-ca-admin-notices.php:264
+#: classes/class-cartflows-ca-admin-notices.php:273
 msgid "Legacy UI Deprecation"
-msgstr ""
+msgstr "Uitfasering van de oude interface"
 
-#: classes/class-cartflows-ca-admin-notices.php:267
+#: classes/class-cartflows-ca-admin-notices.php:276
 msgid "Switch to New UI"
-msgstr ""
+msgstr "Overschakelen naar nieuwe interface"
 
 #. translators: %s: html tags
-#: classes/class-cartflows-ca-loader.php:160
+#: classes/class-cartflows-ca-loader.php:162
 #, php-format
 msgid "Required database tables are not created for %1$sCart Abandonment Recovery for WooCommerce%2$s plugin. Please make sure that the database user has the REFERENCES privilege to create tables."
-msgstr ""
+msgstr "De vereiste databasetabellen zijn niet aangemaakt voor de plugin %1$sCart Abandonment Recovery for WooCommerce%2$s. Zorg ervoor dat de databasegebruiker het REFERENCES-recht heeft om tabellen aan te maken."
 
 #. translators: %s: html tags
-#: classes/class-cartflows-ca-loader.php:182
+#: classes/class-cartflows-ca-loader.php:184
 #, php-format
 msgid "The %1$sCart Abandonment Recovery for WooCommerce%2$s plugin requires %1$sWooCommerce%2$s plugin installed & activated."
-msgstr ""
+msgstr "De plugin %1$sCart Abandonment Recovery for WooCommerce%2$s vereist dat de plugin %1$sWooCommerce%2$s is geïnstalleerd en geactiveerd."
 
 #: classes/class-cartflows-ca-rollback.php:167
 msgid "Cart Abandonment Recovery <p>Rollback to Previous Version</p>"
-msgstr ""
+msgstr "Cart Abandonment Recovery <p>Terugzetten naar vorige versie</p>"
 
 #: classes/class-cartflows-ca-settings.php:450
 msgid "Use New Interface"
-msgstr ""
+msgstr "Nieuwe interface gebruiken"
 
 #: classes/class-cartflows-ca-settings.php:454
 msgid "Experience the new design with updated layout and features."
-msgstr ""
+msgstr "Ervaar het nieuwe ontwerp met een vernieuwde lay-out en functies."
 
 #: classes/class-cartflows-ca-settings.php:540
 msgid "New UI Enabled"
-msgstr ""
+msgstr "Nieuwe interface ingeschakeld"
 
 #: classes/class-cartflows-ca-settings.php:540
 msgid "Switch UI"
-msgstr ""
+msgstr "Interface wisselen"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:298
 msgid "Email Templates imported successfully."
-msgstr ""
+msgstr "E-mailsjablonen succesvol geïmporteerd."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1129
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1176
 msgid "Import"
-msgstr ""
+msgstr "Importeren"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1134
 msgid "Import Templates"
-msgstr ""
+msgstr "Sjablonen importeren"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1136
 msgid "Select a Cart Abandonment Recovery export file to import templates."
-msgstr ""
+msgstr "Selecteer een exportbestand van Cart Abandonment Recovery om sjablonen te importeren."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1143
 msgid "Upload a file or drag and drop"
-msgstr ""
+msgstr "Upload een bestand of sleep het hierheen"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1145
 msgid "JSON file up to 5MB"
-msgstr ""
+msgstr "JSON-bestand tot 5 MB"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1159
 msgid "File Selected:"
-msgstr ""
+msgstr "Geselecteerd bestand:"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1164
 msgid "Dismiss"
-msgstr ""
+msgstr "Sluiten"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:196
 msgid "Security check failed."
-msgstr ""
+msgstr "Beveiligingscontrole mislukt."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:200
 msgid "Required data missing."
-msgstr ""
+msgstr "Vereiste gegevens ontbreken."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:206
 msgid "Invalid value provided."
-msgstr ""
+msgstr "Ongeldige waarde opgegeven."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:213
 msgid "Setting saved successfully."
-msgstr ""
+msgstr "Instelling succesvol opgeslagen."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:215
 msgid "Failed to save setting."
-msgstr ""
+msgstr "Opslaan van instelling mislukt."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:358
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:408
 msgid "This checkout page was generated by the Cart Abandonment Recovery for WooCommerce plugin for testing."
-msgstr ""
+msgstr "Deze afrekenpagina is voor testdoeleinden gegenereerd door de plugin Cart Abandonment Recovery for WooCommerce."
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:142
 msgid "Email not sent - Rule conditions not satisfied."
-msgstr ""
+msgstr "E-mail niet verzonden - niet aan de regelvoorwaarden voldaan."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-tabs.php:14
 msgid "Cart Abandonment Recovery for WooCommerce  "
-msgstr ""
+msgstr "Cart Abandonment Recovery for WooCommerce  "
 
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:106
 msgid "Your weekly Cart Abandonment Recovery report"
-msgstr ""
+msgstr "Je wekelijkse Cart Abandonment Recovery-rapport"
 
 #. translators: %s: recovered revenue amount
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:112
 #, php-format
 msgid "Your weekly Cart Abandonment Recovery report - %s recovered"
-msgstr ""
+msgstr "Je wekelijkse Cart Abandonment Recovery-rapport - %s hersteld"
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:65
 msgid "CartFlows can you generate more revenue."
-msgstr ""
+msgstr "CartFlows kan je helpen meer omzet te genereren."
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:85
 msgid "Explore our other products designed to help you boost sales and convert more visitors into customers."
-msgstr ""
+msgstr "Ontdek onze andere producten die je helpen de verkoop te verhogen en meer bezoekers in klanten om te zetten."
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:107
 msgid "Discover More Products"
-msgstr ""
+msgstr "Ontdek meer producten"
 
 #: modules/weekly-email-report/templates/email-content-section.php:86
 msgid "Top Wins &amp; Highlights:"
-msgstr ""
+msgstr "Topresultaten &amp; hoogtepunten:"
 
 #: modules/weekly-email-report/templates/email-content-section.php:91
 msgid "Top recovered product:"
-msgstr ""
+msgstr "Meest herstelde product:"
 
 #. translators: %1$s: product name, %2$s: total frequency  %3$s: total amount
 #: modules/weekly-email-report/templates/email-content-section.php:95
 #, php-format
 msgid "\"%1$s\" - %2$s recovered orders → %3$s recovered"
-msgstr ""
+msgstr "\"%1$s\" - %2$s herstelde bestellingen → %3$s hersteld"
 
 #: modules/weekly-email-report/templates/email-content-section.php:109
 msgid "Best campaign: "
-msgstr ""
+msgstr "Beste campagne: "
 
 #. translators: %1$s: template name, %2$s: recovery rate  %3$s: sent count
 #: modules/weekly-email-report/templates/email-content-section.php:113
 #, php-format
 msgid "\"%1$s\" - recovery rate %2$s (sent to %3$s carts)"
-msgstr ""
+msgstr "\"%1$s\" - herstelpercentage %2$s (verzonden naar %3$s winkelwagentjes)"
 
 #. translators: %s: The user name.
 #: modules/weekly-email-report/templates/email-content-welcome-section.php:66
 #, php-format
 msgid "Hi %s, here's a quick report on how your recovery flows performed."
-msgstr ""
+msgstr "Hallo %s, hier is een kort rapport over de prestaties van je herstelflows."
 
 #: modules/weekly-email-report/templates/email-footer.php:55
 msgid "This email was auto-generated and sent from "
-msgstr ""
+msgstr "Deze e-mail is automatisch gegenereerd en verzonden vanaf "
 
 #. translators: %s: Total revenue.
 #: modules/weekly-email-report/templates/email-header.php:30
 #, php-format
 msgid "Your Weekly Cart Abandonment Recovery Report - %s Recovered"
-msgstr ""
+msgstr "Je wekelijkse Cart Abandonment Recovery-rapport - %s hersteld"
 
 #. translators: %1$s: Report Start Date, %2$s: Report End Date.
 #: modules/weekly-email-report/templates/email-recovery-stat.php:31
 #, php-format
 msgid "Last 7 Days (%1$s - %2$s):"
-msgstr ""
+msgstr "Afgelopen 7 dagen (%1$s - %2$s):"
 
 #: modules/weekly-email-report/templates/email-recovery-stat.php:344
 msgid "Avg. Recovered Value"
-msgstr ""
+msgstr "Gem. herstelde waarde"
 
 #: admin/build/settings.js:1
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Follow Up Templates"
-msgstr ""
+msgstr "Follow-up sjablonen"
 
 #: admin/build/settings.js:1
 msgid "Follow Up"
-msgstr ""
+msgstr "Follow-up"
 
 #: admin/build/settings.js:1
 msgid "Product"
-msgstr ""
+msgstr "Product"
 
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Follow Up Reports"
-msgstr ""
+msgstr "Follow-up rapporten"
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The revenue that has been recovered."
-msgstr ""
+msgstr "De omzet die is hersteld."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that have been recovered."
-msgstr ""
+msgstr "Het aantal bestellingen dat is hersteld."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The revenue that can be recovered."
-msgstr ""
+msgstr "De omzet die kan worden hersteld."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that can be recovered."
-msgstr ""
+msgstr "Het aantal bestellingen dat kan worden hersteld."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that have been lost."
-msgstr ""
+msgstr "Het aantal bestellingen dat verloren is gegaan."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The percentage of orders that have been recovered."
-msgstr ""
+msgstr "Het percentage bestellingen dat is hersteld."
 
 #. translators: 1: recovery rate change percentage, 2: 'increase' or 'decrease'.
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 #, js-format
 msgid "%1$s%% %2$s from previous period"
-msgstr ""
+msgstr "%1$s%% %2$s ten opzichte van vorige periode"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "increase"
-msgstr ""
+msgstr "stijging"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "decrease"
-msgstr ""
+msgstr "daling"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Clear Filter"
-msgstr ""
+msgstr "Filter wissen"
 
-#: admin/build/settings.js:2
-msgid "recoverable"
-msgstr ""
-
-#: admin/build/settings.js:2
-msgid "recovered"
-msgstr ""
-
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recent Follow Up Reports"
-msgstr ""
+msgstr "Recente follow-up rapporten"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Pro plugin installed but license not activated"
-msgstr ""
+msgstr "Pro-plugin geïnstalleerd maar licentie niet geactiveerd"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Pro plugin not installed"
-msgstr ""
+msgstr "Pro-plugin niet geïnstalleerd"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Go Pro"
-msgstr ""
+msgstr "Upgrade naar Pro"
 
 #. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Product Report shows you which items bring the most recoveries and sales."
-msgstr ""
+msgstr "Het productrapport laat zien welke artikelen de meeste herstellingen en verkopen opleveren."
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Quick Access"
-msgstr ""
+msgstr "Snelle toegang"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Help Center"
-msgstr ""
+msgstr "Helpcentrum"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Join the Community"
-msgstr ""
+msgstr "Word lid van de community"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Rate Us"
-msgstr ""
+msgstr "Beoordeel ons"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Open Support Ticket"
-msgstr ""
+msgstr "Supportticket openen"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Add Condition"
-msgstr ""
+msgstr "Voorwaarde toevoegen"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Country Code"
-msgstr ""
+msgstr "Landcode"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Enter Phone no."
-msgstr ""
+msgstr "Voer telefoonnummer in"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter SMS body"
-msgstr ""
+msgstr "Voer de SMS-tekst in"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please select a WhatsApp template"
-msgstr ""
+msgstr "Selecteer een WhatsApp-sjabloon"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter a valid phone number"
-msgstr ""
+msgstr "Voer een geldig telefoonnummer in"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter a phone number"
-msgstr ""
+msgstr "Voer een telefoonnummer in"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please select a country code"
-msgstr ""
+msgstr "Selecteer een landcode"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Success"
-msgstr ""
+msgstr "Gelukt"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
+#: admin/build/settings.js:18
 msgid "Error"
-msgstr ""
+msgstr "Fout"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Send Message"
-msgstr ""
+msgstr "Bericht verzenden"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Character limit exceeded"
-msgstr ""
+msgstr "Tekenlimiet overschreden"
 
-#: admin/build/settings.js:6
-msgid "Open Dropdown"
-msgstr ""
-
-#: admin/build/settings.js:6
+#: admin/build/settings.js:18
 msgid "Rollback"
-msgstr ""
+msgstr "Terugzetten"
 
 #. translators: %1$s is the selected product of CartFlows, %2$s is the selected version of CartFlows.
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 #, js-format
 msgid "Are you sure you want to rollback to %1$s v%2$s?"
-msgstr ""
+msgstr "Weet je zeker dat je wilt terugzetten naar %1$s v%2$s?"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Confirm"
-msgstr ""
+msgstr "Bevestigen"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Deactivate License"
-msgstr ""
+msgstr "Licentie deactiveren"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Please enter a valid license key!"
-msgstr ""
+msgstr "Voer een geldige licentiesleutel in!"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Unknown error occurred while activating the license."
-msgstr ""
+msgstr "Onbekende fout opgetreden bij het activeren van de licentie."
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
+#: admin/build/settings.js:24
 msgid "My Account"
-msgstr ""
+msgstr "Mijn account"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "License Key"
-msgstr ""
+msgstr "Licentiesleutel"
 
-#: admin/build/settings.js:9
-msgid "Enter your valid license key below to activate Cart Abandonment Recovery Pro. If you don't have a license key yet, you can get it from your account."
-msgstr ""
-
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
-msgid "Need Support?"
-msgstr ""
-
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
-msgid "We're happy to help!"
-msgstr ""
-
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "All"
-msgstr ""
+msgstr "Alle"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Abandoned Orders"
-msgstr ""
+msgstr "Verlaten bestellingen"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Blacklisted"
-msgstr ""
+msgstr "Op blacklist"
 
-#: admin/build/settings.js:9
+#. translators: %d: number of selected products
+#. translators: %d: number of selected templates
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
 #, js-format
 msgid "%d Selected"
-msgstr ""
+msgstr "%d geselecteerd"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
+#: admin/build/settings.js:43
 msgid "Clear Filters"
-msgstr ""
+msgstr "Filters wissen"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Email To"
-msgstr ""
+msgstr "E-mail aan"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Actions"
-msgstr ""
+msgstr "Acties"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Cart blacklisted successfully"
-msgstr ""
+msgstr "Winkelwagentje succesvol op de blacklist gezet"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Cart whitelisted successfully"
-msgstr ""
+msgstr "Winkelwagentje succesvol op de whitelist gezet"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Blacklist failed"
-msgstr ""
+msgstr "Op blacklist zetten mislukt"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Whitelist failed"
-msgstr ""
+msgstr "Op whitelist zetten mislukt"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
 msgid "Items per page:"
-msgstr ""
+msgstr "Items per pagina:"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Cart Abandonment Recovery Pro is Here 🔥"
-msgstr ""
+msgstr "Cart Abandonment Recovery Pro is er 🔥"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "You've seen how emails bring shoppers back. With Pro, you'll unlock advanced tools that recover more carts, boost profits, and grow your store faster."
-msgstr ""
+msgstr "Je hebt gezien hoe e-mails shoppers terugbrengen. Met Pro ontgrendel je geavanceerde tools die meer winkelwagentjes herstellen, de winst verhogen en je winkel sneller laten groeien."
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Times Abandoned"
-msgstr ""
+msgstr "Aantal keer verlaten"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Times Recovered"
-msgstr ""
+msgstr "Aantal keer hersteld"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Email Details"
-msgstr ""
+msgstr "E-mailgegevens"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Scheduled Templates"
-msgstr ""
+msgstr "Geplande sjablonen"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Not Sent"
-msgstr ""
+msgstr "Niet verzonden"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
+#: admin/build/settings.js:42
 msgid "Scheduled"
-msgstr ""
+msgstr "Gepland"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-msgid "Rule Condition Failed"
-msgstr ""
-
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "User Address Details"
-msgstr ""
+msgstr "Adresgegevens gebruiker"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Billing Address:"
-msgstr ""
+msgstr "Factuuradres:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Full Name:"
-msgstr ""
+msgstr "Volledige naam:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Contact Email:"
-msgstr ""
+msgstr "Contact-e-mail:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Contact Number:"
-msgstr ""
+msgstr "Contactnummer:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Street Address 1:"
-msgstr ""
+msgstr "Adresregel 1:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Street Address 2:"
-msgstr ""
+msgstr "Adresregel 2:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Zip Code:"
-msgstr ""
+msgstr "Postcode:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Shipping Address:"
-msgstr ""
+msgstr "Verzendadres:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Checkout Page:"
-msgstr ""
+msgstr "Afrekenpagina:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Link to Checkout Page"
-msgstr ""
+msgstr "Link naar afrekenpagina"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "SMS Details"
-msgstr ""
+msgstr "SMS-gegevens"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "Reschedule SMS"
-msgstr ""
+msgstr "SMS opnieuw plannen"
 
-#. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "View all scheduled SMS follow-ups in SMS details."
-msgstr ""
+msgstr "Bekijk alle geplande SMS follow-ups in de SMS-gegevens."
 
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "SMS Body"
-msgstr ""
+msgstr "SMS-tekst"
 
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "WhatsApp Details"
-msgstr ""
+msgstr "WhatsApp-gegevens"
 
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Reschedule Messages"
-msgstr ""
+msgstr "Berichten opnieuw plannen"
 
-#. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "View all scheduled WhatsApp follow-ups in WhatsApp details."
-msgstr ""
+msgstr "Bekijk alle geplande WhatsApp follow-ups in de WhatsApp-gegevens."
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "WhatsApp Template"
-msgstr ""
+msgstr "WhatsApp-sjabloon"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email Scheduling failed"
-msgstr ""
+msgstr "Plannen van e-mail mislukt"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "SMS Scheduled Successfully"
-msgstr ""
+msgstr "SMS succesvol gepland"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "SMS Scheduling failed"
-msgstr ""
+msgstr "Plannen van SMS mislukt"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Messages Scheduled Successfully"
-msgstr ""
+msgstr "Berichten succesvol gepland"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Message Scheduling failed"
-msgstr ""
+msgstr "Plannen van bericht mislukt"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Template name is required"
-msgstr ""
+msgstr "Sjabloonnaam is verplicht"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email subject is required"
-msgstr ""
+msgstr "E-mailonderwerp is verplicht"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email body is required"
-msgstr ""
+msgstr "E-mailtekst is verplicht"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Time should be minimum 1 min."
-msgstr ""
+msgstr "Tijd moet minimaal 1 min. zijn."
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
 msgid "Invalid JSON in rule engine"
-msgstr ""
+msgstr "Ongeldige JSON in regelengine"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
 msgid "Missing fields in rule: condition, operator, or value."
-msgstr ""
+msgstr "Ontbrekende velden in regel: voorwaarde, operator of waarde."
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Restore Default Templates"
-msgstr ""
+msgstr "Standaardsjablonen herstellen"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-msgid "No Templates available"
-msgstr ""
-
-#: admin/build/settings.js:13
-msgid "Follow Up Email Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Conversion Rate"
-msgstr ""
+msgstr "Conversiepercentage"
 
-#: admin/build/settings.js:14
+#: admin/build/settings.js:38
 msgid "SMS body is required"
-msgstr ""
+msgstr "SMS-tekst is verplicht"
 
-#: admin/build/settings.js:14
-msgid "SMS body should be less than 160 characters."
-msgstr ""
-
-#: admin/build/settings.js:14
-msgid "Follow Up SMS Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:15
+#: admin/build/settings.js:40
 msgid "WhatsApp template is required"
-msgstr ""
+msgstr "WhatsApp-sjabloon is verplicht"
 
-#: admin/build/settings.js:15
-msgid "Follow Up WhatsApp Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:43
 msgid "Back"
-msgstr ""
+msgstr "Terug"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:43
 msgid "Next"
-msgstr ""
+msgstr "Volgende"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Finish Setup"
-msgstr ""
+msgstr "Installatie voltooien"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Recover lost revenue automatically and effortlessly"
-msgstr ""
+msgstr "Herstel verloren omzet automatisch en moeiteloos"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Quick and easy setup, no technical skills needed"
-msgstr ""
+msgstr "Snelle en eenvoudige installatie, geen technische kennis nodig"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Track, log, and resend emails with ease"
-msgstr ""
+msgstr "Volg, registreer en verstuur e-mails opnieuw met gemak"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Fully customizable to your store"
-msgstr ""
+msgstr "Volledig aan te passen aan je winkel"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Dynamic coupon generation with expiry control"
-msgstr ""
+msgstr "Dynamische coupons genereren met vervaldatumbeheer"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Welcome to Cart Abandonment Recovery"
-msgstr ""
+msgstr "Welkom bij Cart Abandonment Recovery"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Track abandoned carts in real time & recover lost revenue automatically."
-msgstr ""
+msgstr "Volg verlaten winkelwagentjes in realtime en herstel verloren omzet automatisch."
 
-#: admin/build/settings.js:16
-msgid "Get Started with Onboarding"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Configure Recovery Settings"
-msgstr ""
+msgstr "Herstelinstellingen configureren"
 
-#: admin/build/settings.js:16
-msgid "Personalize the look and feel of your cart to create a seamless shopping experience."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Select Your Follow Up Sequence Channels"
-msgstr ""
+msgstr "Selecteer de kanalen voor je follow-up reeks"
 
-#: admin/build/settings.js:16
-msgid "Set up cart settings to match your store’s needs in just a few clicks."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Setup Recovery Report Emails"
-msgstr ""
+msgstr "E-mails met herstelrapporten instellen"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "First Name"
-msgstr ""
+msgstr "Voornaam"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Last Name"
-msgstr ""
+msgstr "Achternaam"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Your Email"
-msgstr ""
+msgstr "Je e-mailadres"
 
-#: admin/build/settings.js:16
-msgid "Allow Cart Abandonment Recovery and our other products to track non-sensitive usage tracking data. "
-msgstr ""
-
-#: admin/build/settings.js:16
-msgid "Learn More"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Add More Power to Your Website"
-msgstr ""
+msgstr "Geef je website meer kracht"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "These tools can help you build your website faster and easier. Try them out and see how they can help your website grow."
-msgstr ""
+msgstr "Met deze tools bouw je je website sneller en eenvoudiger. Probeer ze uit en ontdek hoe ze je website laten groeien."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "You're Good to Go! 🚀"
-msgstr ""
+msgstr "Je bent klaar om te beginnen! 🚀"
 
-#: admin/build/settings.js:16
-msgid "Great job! 🎉 With Cart Abandonment Recovery active, your store is ready to start recovering the lost revenue automatically."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Here’s What Cart Abandonment Recovery Will Do for You Now:"
-msgstr ""
+msgstr "Dit doet Cart Abandonment Recovery nu voor je:"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Recover lost sales automatically"
-msgstr ""
+msgstr "Herstel verloren verkopen automatisch"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "by reminding shoppers to complete their purchase."
-msgstr ""
+msgstr "door shoppers eraan te herinneren hun aankoop af te ronden."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Increase conversions"
-msgstr ""
+msgstr "Verhoog conversies"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "with timely follow-ups via Emails."
-msgstr ""
+msgstr "met tijdige follow-ups via e-mail."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Turn abandoned carts into revenue"
-msgstr ""
+msgstr "Zet verlaten winkelwagentjes om in omzet"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "without any manual effort."
-msgstr ""
+msgstr "zonder handmatige inspanning."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:1
+#: admin/build/settings.js:48
 msgid "Go To Dashboard"
-msgstr ""
+msgstr "Naar dashboard"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Documentation"
-msgstr ""
+msgstr "Documentatie"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Exit Guided Setup"
-msgstr ""
+msgstr "Begeleide installatie afsluiten"
 
-#: admin/inc/meta-options.php:598
+#: admin/inc/meta-options.php:626
 msgid "Modify Product Table"
-msgstr ""
+msgstr "Producttabel aanpassen"
 
-#: admin/inc/meta-options.php:600
+#: admin/inc/meta-options.php:628
 msgid "Customize how the abandoned products table renders in this email."
-msgstr ""
+msgstr "Pas aan hoe de tabel met verlaten producten in deze e-mail wordt weergegeven."
 
-#: admin/inc/meta-options.php:607
+#: admin/inc/meta-options.php:635
 msgid "Product Image Size"
-msgstr ""
+msgstr "Grootte productafbeelding"
 
-#: admin/inc/meta-options.php:609
+#: admin/inc/meta-options.php:637
 msgid "Image size in the abandoned products table."
-msgstr ""
-
-#: admin/inc/meta-options.php:613
-msgid "Small (32px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:617
-msgid "Medium (48px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:621
-msgid "Large (64px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:639
-msgid "Show Prices With Tax"
-msgstr ""
+msgstr "Afbeeldingsgrootte in de tabel met verlaten producten."
 
 #: admin/inc/meta-options.php:641
+msgid "Small (32px)"
+msgstr "Klein (32px)"
+
+#: admin/inc/meta-options.php:645
+msgid "Medium (48px)"
+msgstr "Middel (48px)"
+
+#: admin/inc/meta-options.php:649
+msgid "Large (64px)"
+msgstr "Groot (64px)"
+
+#: admin/inc/meta-options.php:667
+msgid "Show Prices With Tax"
+msgstr "Prijzen inclusief btw tonen"
+
+#: admin/inc/meta-options.php:669
 msgid "Include tax in prices shown in the abandoned products table."
-msgstr ""
+msgstr "Btw opnemen in de prijzen in de tabel met verlaten producten."
 
-#: admin/inc/meta-options.php:657
+#: admin/inc/meta-options.php:685
 msgid "Visible Columns"
-msgstr ""
+msgstr "Zichtbare kolommen"
 
-#: admin/inc/meta-options.php:659
+#: admin/inc/meta-options.php:687
 msgid "Choose which columns appear in the products table."
-msgstr ""
+msgstr "Kies welke kolommen in de producttabel worden weergegeven."
 
-#: admin/inc/meta-options.php:663
+#: admin/inc/meta-options.php:691
 msgid "Image"
-msgstr ""
+msgstr "Afbeelding"
 
-#: admin/inc/meta-options.php:679
+#: admin/inc/meta-options.php:707
+#: admin/build/settings.js:31
 msgid "Subtotal"
-msgstr ""
+msgstr "Subtotaal"
 
-#: classes/class-cartflows-ca-admin-notices.php:265
+#: classes/class-cartflows-ca-admin-notices.php:274
 msgid "The Legacy UI will no longer be available in a future release of Cart Abandonment Recovery. To ensure uninterrupted cart recovery and access to upcoming features, please switch to the new UI."
-msgstr ""
+msgstr "De oude interface is in een toekomstige versie van Cart Abandonment Recovery niet meer beschikbaar. Schakel over naar de nieuwe interface om ononderbroken winkelwagentjes te blijven herstellen en toegang te krijgen tot nieuwe functies."
 
 #: inc/abilities/class-wcar-abilities-register.php:78
 msgid "Abilities for managing Cart Abandonment Recovery settings and statistics."
-msgstr ""
+msgstr "Mogelijkheden voor het beheren van instellingen en statistieken van Cart Abandonment Recovery."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:29
 msgid "Get Dashboard Stats"
-msgstr ""
+msgstr "Dashboardstatistieken ophalen"
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:30
 msgid "Returns aggregated cart abandonment metrics — recoverable, recovered, and lost order counts and revenue, plus recovery rate — for a given date range. Defaults to last 7 days."
-msgstr ""
+msgstr "Geeft samengevoegde statistieken over verlaten winkelwagentjes terug — aantallen en omzet van herstelbare, herstelde en verloren bestellingen, plus het herstelpercentage — voor een bepaalde periode. Standaard de afgelopen 7 dagen."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:39
 msgid "Use to answer questions about overall cart abandonment performance, revenue at risk, or recovery success. Defaults to last 7 days. When the user specifies a time period, translate it to start_date and end_date in YYYY-MM-DD format. The recovery_rate is the percentage of tracked orders that were recovered."
-msgstr ""
+msgstr "Gebruik dit om vragen te beantwoorden over de algemene prestaties rond verlaten winkelwagentjes, omzet die risico loopt of het succes van herstel. Standaard de afgelopen 7 dagen. Als de gebruiker een periode opgeeft, zet die om naar start_date en end_date in de notatie YYYY-MM-DD. De recovery_rate is het percentage gevolgde bestellingen dat is hersteld."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:53
 #: inc/abilities/class-wcar-ability-get-product-stats.php:53
 msgid "Start date in YYYY-MM-DD format (defaults to 7 days ago)."
-msgstr ""
+msgstr "Startdatum in de notatie YYYY-MM-DD (standaard 7 dagen geleden)."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:57
 #: inc/abilities/class-wcar-ability-get-product-stats.php:57
 msgid "End date in YYYY-MM-DD format (defaults to today)."
-msgstr ""
+msgstr "Einddatum in de notatie YYYY-MM-DD (standaard vandaag)."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:29
 msgid "Get Product Stats"
-msgstr ""
+msgstr "Productstatistieken ophalen"
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:30
 msgid "Returns the top N abandoned products ranked by abandonment frequency, with total abandoned cart value per product. Defaults to last 7 days, top 10 products."
-msgstr ""
+msgstr "Geeft de top N verlaten producten terug, gerangschikt op hoe vaak ze zijn verlaten, met de totale waarde van verlaten winkelwagentjes per product. Standaard de afgelopen 7 dagen, top 10 producten."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:39
 msgid "Use when the user asks which products are most abandoned or wants to prioritize recovery campaigns. Results are sorted by times_abandoned descending. Use the limit parameter to control how many products are returned. Combine with wcar/get-dashboard-stats for a full performance picture."
-msgstr ""
+msgstr "Gebruik dit wanneer de gebruiker vraagt welke producten het vaakst worden verlaten of herstelcampagnes wil prioriteren. Resultaten worden aflopend gesorteerd op times_abandoned. Gebruik de parameter limit om te bepalen hoeveel producten worden teruggegeven. Combineer met wcar/get-dashboard-stats voor een volledig prestatiebeeld."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:61
 msgid "Maximum number of products to return (default 10)."
-msgstr ""
+msgstr "Maximaal aantal producten om terug te geven (standaard 10)."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:29
 msgid "Get Setting"
-msgstr ""
+msgstr "Instelling ophalen"
 
 #: inc/abilities/class-wcar-ability-get-setting.php:30
 msgid "Returns the current value and metadata for one specific setting, looked up by option key or human-readable label. Use before updating to confirm a setting exists."
-msgstr ""
+msgstr "Geeft de huidige waarde en metadata terug van één specifieke instelling, opgezocht op optiesleutel of leesbaar label. Gebruik dit vóór het bijwerken om te controleren of een instelling bestaat."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:39
 msgid "Use when you need the current value of one specific setting. If you do not know the exact key or label, call wcar/get-settings first to discover available options. Always call this before wcar/update-setting to confirm the setting exists and record the current value."
-msgstr ""
+msgstr "Gebruik dit wanneer je de huidige waarde van één specifieke instelling nodig hebt. Als je de exacte sleutel of het label niet weet, roep dan eerst wcar/get-settings aan om de beschikbare opties te vinden. Roep dit altijd aan vóór wcar/update-setting om te controleren of de instelling bestaat en de huidige waarde vast te leggen."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:53
 msgid "Option key to look up (e.g. \"wcf_ca_status\")."
-msgstr ""
+msgstr "Op te zoeken optiesleutel (bijv. \"wcf_ca_status\")."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:57
 msgid "Human-readable label to search for (case-insensitive, e.g. \"Enable Tracking\")."
-msgstr ""
+msgstr "Leesbaar label om op te zoeken (niet hoofdlettergevoelig, bijv. \"Enable Tracking\")."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:96
 #: inc/abilities/class-wcar-ability-update-setting.php:99
 msgid "Please provide either a \"key\" or a \"name\" parameter."
-msgstr ""
+msgstr "Geef een parameter \"key\" of \"name\" op."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:104
 #: inc/abilities/class-wcar-ability-update-setting.php:113
 msgid "Setting not found. Please check the key or name and try again."
-msgstr ""
+msgstr "Instelling niet gevonden. Controleer de sleutel of naam en probeer het opnieuw."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:29
 msgid "Get All Settings"
-msgstr ""
+msgstr "Alle instellingen ophalen"
 
 #: inc/abilities/class-wcar-ability-get-settings.php:30
 msgid "Returns all plugin settings grouped by tab with current values. Use for a full configuration overview or to discover option keys before making targeted changes."
-msgstr ""
+msgstr "Geeft alle plugin-instellingen terug, gegroepeerd per tabblad, met de huidige waarden. Gebruik dit voor een volledig overzicht van de configuratie of om optiesleutels te vinden voordat je gerichte wijzigingen aanbrengt."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:39
 msgid "Call when the user asks about current plugin configuration or wants to see all settings. Use the tab parameter to narrow results when you know the relevant section (e.g. \"general-settings\", \"email-settings\", \"webhook-integration\"). Call this before wcar/get-setting if you do not know the exact option key."
-msgstr ""
+msgstr "Roep dit aan wanneer de gebruiker vraagt naar de huidige plugin-configuratie of alle instellingen wil zien. Gebruik de parameter tab om de resultaten te beperken als je de relevante sectie kent (bijv. \"general-settings\", \"email-settings\", \"webhook-integration\"). Roep dit aan vóór wcar/get-setting als je de exacte optiesleutel niet weet."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:53
 msgid "Optional tab slug to filter results (e.g. \"general-settings\", \"email-settings\", \"webhook-integration\")."
-msgstr ""
+msgstr "Optionele tabblad-slug om resultaten te filteren (bijv. \"general-settings\", \"email-settings\", \"webhook-integration\")."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:29
 msgid "Update Setting"
-msgstr ""
+msgstr "Instelling bijwerken"
 
 #: inc/abilities/class-wcar-ability-update-setting.php:30
 msgid "Writes a new value for one setting identified by key or label. Returns old and new values. Destructive and non-idempotent — the change persists immediately."
-msgstr ""
+msgstr "Schrijft een nieuwe waarde voor één instelling, aangeduid met sleutel of label. Geeft de oude en nieuwe waarde terug. Destructief en niet-idempotent — de wijziging wordt direct doorgevoerd."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:42
 msgid "Use only after confirming intent with the user — this change is immediate and irreversible. Always read the current value with wcar/get-setting first. Provide either key or name and the new value. The response includes old_value and new_value so the change can be verified."
-msgstr ""
+msgstr "Gebruik dit alleen nadat de gebruiker de bedoeling heeft bevestigd — deze wijziging is direct en onomkeerbaar. Lees altijd eerst de huidige waarde met wcar/get-setting. Geef een sleutel of naam en de nieuwe waarde op. Het antwoord bevat old_value en new_value zodat de wijziging kan worden gecontroleerd."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:57
 msgid "Option key to update (e.g. \"wcf_ca_status\")."
-msgstr ""
+msgstr "Bij te werken optiesleutel (bijv. \"wcf_ca_status\")."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:61
 msgid "Human-readable label of the setting to update (case-insensitive)."
-msgstr ""
+msgstr "Leesbaar label van de bij te werken instelling (niet hoofdlettergevoelig)."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:64
 msgid "The new value for the setting."
-msgstr ""
+msgstr "De nieuwe waarde voor de instelling."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:105
 msgid "A \"value\" parameter is required."
-msgstr ""
+msgstr "Een parameter \"value\" is verplicht."
 
 #. translators: %s: option key
 #: inc/abilities/class-wcar-ability-update-setting.php:124
 #, php-format
 msgid "The setting \"%s\" is not a writable plugin option."
-msgstr ""
+msgstr "De instelling \"%s\" is geen beschrijfbare plugin-optie."
 
 #. translators: %s: option key
 #: inc/abilities/class-wcar-ability-update-setting.php:137
 #, php-format
 msgid "Failed to save the setting \"%s\"."
-msgstr ""
+msgstr "Opslaan van de instelling \"%s\" is mislukt."
 
 #: inc/abilities/class-wcar-abstract-ability.php:168
 msgid "You do not have permission to perform this action."
-msgstr ""
+msgstr "Je hebt geen toestemming om deze actie uit te voeren."
 
 #: inc/abilities/class-wcar-abstract-ability.php:176
 msgid "Dry run — no changes made."
-msgstr ""
+msgstr "Proefrun — er zijn geen wijzigingen aangebracht."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:369
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:418
 msgid "(incl. tax)"
-msgstr ""
+msgstr "(incl. btw)"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:370
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:419
 msgid "(excl. tax)"
-msgstr ""
+msgstr "(excl. btw)"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
+#: admin/build/settings.js:48
 msgid "Done"
-msgstr ""
+msgstr "Klaar"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "No conditions configured."
-msgstr ""
+msgstr "Geen voorwaarden ingesteld."
 
 #. translators: %d: number of conditions
-#: admin/build/settings.js:4
+#: admin/build/settings.js:15
 #, js-format
 msgid "%d condition"
 msgid_plural "%d conditions"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%d voorwaarde"
+msgstr[1] "%d voorwaarden"
 
 #. translators: %d: number of groups
-#: admin/build/settings.js:5
+#: admin/build/settings.js:16
 #, js-format
 msgid "%d group"
 msgid_plural "%d groups"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%d groep"
+msgstr[1] "%d groepen"
 
 #. translators: 1: conditions count phrase, 2: groups count phrase
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 #, js-format
 msgid "%1$s across %2$s"
-msgstr ""
+msgstr "%1$s verdeeld over %2$s"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Conditions"
-msgstr ""
+msgstr "Voorwaarden"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Edit Conditions"
-msgstr ""
+msgstr "Voorwaarden bewerken"
+
+#: admin/inc/meta-options.php:101
+#: admin/inc/meta-options.php:984
+msgid "Consider cart abandoned after above entered minutes of item being added to cart and order not placed. Minimum value: 10 minutes."
+msgstr "Beschouw een winkelwagentje als verlaten als er het hierboven opgegeven aantal minuten is verstreken sinds een artikel aan de winkelwagen is toegevoegd en er geen bestelling is geplaatst. Minimumwaarde: 10 minuten."
+
+#: admin/inc/meta-options.php:112
+#: admin/inc/meta-options.php:995
+msgid "Consider cart lost after above entered days of item being added to cart and order not placed. Minimum value: 10 days."
+msgstr "Beschouw een winkelwagentje als verloren als er het hierboven opgegeven aantal dagen is verstreken sinds een artikel aan de winkelwagen is toegevoegd en er geen bestelling is geplaatst. Minimumwaarde: 10 dagen."
+
+#: admin/inc/meta-options.php:148
+msgid "Background task scheduler"
+msgstr "Planner voor achtergrondtaken"
+
+#: admin/inc/meta-options.php:151
+msgid "WP-Cron is used by default. When WP-Cron is disabled on the site (DISABLE_WP_CRON), recovery jobs automatically run via Action Scheduler so emails stay on time. Choose Action Scheduler to always use it for reliable, observable scheduling."
+msgstr "Standaard wordt WP-Cron gebruikt. Als WP-Cron op de site is uitgeschakeld (DISABLE_WP_CRON), worden hersteltaken automatisch via Action Scheduler uitgevoerd, zodat e-mails op tijd blijven. Kies Action Scheduler om het altijd te gebruiken voor betrouwbare en inzichtelijke planning."
+
+#: admin/inc/meta-options.php:155
+msgid "Action Scheduler (recommended)"
+msgstr "Action Scheduler (aanbevolen)"
+
+#: admin/inc/meta-options.php:159
+msgid "WP-Cron (legacy)"
+msgstr "WP-Cron (verouderd)"
+
+#: admin/inc/meta-options.php:252
+msgid "Notify when abandoned cart products go out of stock"
+msgstr "Melden wanneer producten in verlaten winkelwagentjes niet meer op voorraad zijn"
+
+#: admin/inc/meta-options.php:255
+msgid "Email the store admin when products in abandoned carts go out of stock, so recovery emails are not sent for unavailable products. Uses the email address(es) above."
+msgstr "Stuur de winkelbeheerder een e-mail wanneer producten in verlaten winkelwagentjes niet meer op voorraad zijn, zodat er geen herstel-e-mails worden verzonden voor onbeschikbare producten. Gebruikt de bovenstaande e-mailadres(sen)."
+
+#: admin/inc/meta-options.php:733
+msgid "Send a Copy to Admin"
+msgstr "Kopie naar beheerder sturen"
+
+#: admin/inc/meta-options.php:735
+msgid "Send the admin a copy of each recovery email from this template. Test emails are excluded."
+msgstr "Stuur de beheerder een kopie van elke herstel-e-mail van dit sjabloon. Test-e-mails worden uitgesloten."
+
+#: admin/inc/meta-options.php:742
+msgid "Copy Type"
+msgstr "Type kopie"
+
+#: admin/inc/meta-options.php:744
+msgid "BCC keeps the admin address hidden from the customer."
+msgstr "Met BCC blijft het beheerdersadres verborgen voor de klant."
+
+#: admin/inc/meta-options.php:748
+msgid "BCC (hidden)"
+msgstr "BCC (verborgen)"
+
+#: admin/inc/meta-options.php:752
+msgid "CC (visible)"
+msgstr "CC (zichtbaar)"
+
+#: admin/inc/meta-options.php:770
+msgid "Copy To Email Address"
+msgstr "Kopie naar e-mailadres"
+
+#: admin/inc/meta-options.php:772
+msgid "Separate multiple email addresses with commas. Defaults to the site admin email when left empty."
+msgstr "Scheid meerdere e-mailadressen met komma's. Standaard wordt het e-mailadres van de sitebeheerder gebruikt als dit leeg blijft."
+
+#: admin/inc/meta-options.php:1167
+msgid "On-site Banner"
+msgstr "Banner op de site"
+
+#: admin/inc/meta-options.php:1172
+msgid "Enable On-site Reminder Banner"
+msgstr "Herinneringsbanner op de site inschakelen"
+
+#: admin/inc/meta-options.php:1176
+msgid "Display a reminder banner to returning shoppers about the items they left in their cart."
+msgstr "Toon terugkerende shoppers een herinneringsbanner over de artikelen die ze in hun winkelwagentje hebben achtergelaten."
+
+#: admin/inc/meta-options.php:1183
+msgid "Capture Popup"
+msgstr "Popup voor vastleggen"
+
+#: admin/inc/meta-options.php:1188
+msgid "Enable Email Capture Popup"
+msgstr "Popup voor e-mail vastleggen inschakelen"
+
+#: admin/inc/meta-options.php:1192
+msgid "Ask visitors for their email before checkout, so abandoned carts can still be recovered."
+msgstr "Vraag bezoekers vóór het afrekenen om hun e-mailadres, zodat verlaten winkelwagentjes toch kunnen worden hersteld."
+
+#: admin/inc/wcar-admin.php:469
+msgid "Missing onboarding data."
+msgstr "Onboardinggegevens ontbreken."
+
+#: classes/class-cartflows-ca-admin-notices.php:106
+msgid "Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts &mdash; Thanks a ton!"
+msgstr "Hallo! Je gebruikt de plugin Cart Abandonment Recovery for WooCommerce om verlaten winkelwagentjes te herstellen &mdash; heel erg bedankt!"
+
+#: classes/class-cartflows-ca-admin-notices.php:107
+msgid "Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the Cart Abandonment Recovery for WooCommerce!"
+msgstr "Wil je ons een GROOT plezier doen en de plugin een 5-sterrenbeoordeling geven op WordPress? Dat geeft ons een flinke motivatieboost en helpt andere gebruikers een weloverwogen keuze te maken voor Cart Abandonment Recovery for WooCommerce!"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:207
+msgid "Cart Abandonment Recovery order-status interval"
+msgstr "Interval bestelstatus Cart Abandonment Recovery"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:243
+msgid "Cart Abandonment Recovery relies on WP-Cron, but WP-Cron is disabled on this site (DISABLE_WP_CRON) and Action Scheduler is unavailable. Recovery emails may be delayed until a background scheduler is available."
+msgstr "Cart Abandonment Recovery is afhankelijk van WP-Cron, maar WP-Cron is op deze site uitgeschakeld (DISABLE_WP_CRON) en Action Scheduler is niet beschikbaar. Herstel-e-mails kunnen vertraging oplopen totdat er een achtergrondplanner beschikbaar is."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:252
+msgid "WP-Cron is disabled on this site (DISABLE_WP_CRON), so Cart Abandonment Recovery is automatically using Action Scheduler to keep recovery emails on time. You can change this under the \"Background task scheduler\" setting."
+msgstr "WP-Cron is op deze site uitgeschakeld (DISABLE_WP_CRON), dus Cart Abandonment Recovery gebruikt automatisch Action Scheduler om herstel-e-mails op tijd te verzenden. Je kunt dit wijzigen bij de instelling \"Planner voor achtergrondtaken\"."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:128
+msgid "Cart Abandonment Recovery database update required."
+msgstr "Database-update voor Cart Abandonment Recovery vereist."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:131
+msgid "We need to update your database to maintain compatibility with the latest features. Please back up your database before running this update."
+msgstr "We moeten je database bijwerken om compatibel te blijven met de nieuwste functies. Maak een back-up van je database voordat je deze update uitvoert."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:135
+msgid "Update Database"
+msgstr "Database bijwerken"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:167
+msgid "Database updated successfully!"
+msgstr "Database succesvol bijgewerkt!"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:168
+msgid "Update failed. Please try again."
+msgstr "Update mislukt. Probeer het opnieuw."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:183
+msgid "You don't have permission to perform this action."
+msgstr "Je hebt geen toestemming om deze actie uit te voeren."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:187
+msgid "Database update could not complete. Please try again, and contact support if the problem persists."
+msgstr "De database-update kon niet worden voltooid. Probeer het opnieuw en neem contact op met support als het probleem aanhoudt."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:87
+msgid "Out-of-stock product in cart"
+msgstr "Product in winkelwagen niet op voorraad"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:101
+msgid "Already purchased"
+msgstr "Al gekocht"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:300
+msgid "This unsubscribe link is no longer valid. If you still receive cart reminder emails, please use the unsubscribe link in the most recent one."
+msgstr "Deze afmeldlink is niet meer geldig. Als je nog steeds herinneringsmails over je winkelwagen ontvangt, gebruik dan de afmeldlink in de meest recente e-mail."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:303
+msgid "Link expired"
+msgstr "Link verlopen"
+
+#: modules/oos-warning/class-cartflows-ca-oos-warning.php:582
+msgid "(Guest User)"
+msgstr "(Gastgebruiker)"
+
+#: modules/oos-warning/class-cartflows-ca-oos-warning.php:615
+msgid "Out-of-stock alert: products in abandoned carts need attention"
+msgstr "Voorraadmelding: producten in verlaten winkelwagentjes vereisen aandacht"
+
+#. translators: %s: number of out-of-stock products.
+#: modules/oos-warning/templates/email-body.php:53
+#, php-format
+msgid "%s out-of-stock product"
+msgid_plural "%s out-of-stock products"
+msgstr[0] "%s product niet op voorraad"
+msgstr[1] "%s producten niet op voorraad"
+
+#. translators: %s: number of abandoned carts.
+#: modules/oos-warning/templates/email-body.php:59
+#, php-format
+msgid "%s abandoned cart"
+msgid_plural "%s abandoned carts"
+msgstr[0] "%s verlaten winkelwagentje"
+msgstr[1] "%s verlaten winkelwagentjes"
+
+#: modules/oos-warning/templates/email-body.php:68
+msgid "Out-of-stock alert"
+msgstr "Voorraadmelding"
+
+#: modules/oos-warning/templates/email-body.php:78
+msgid "Out-of-stock products in abandoned carts"
+msgstr "Producten in verlaten winkelwagentjes die niet op voorraad zijn"
+
+#. translators: %s: linked store name.
+#: modules/oos-warning/templates/email-body.php:89
+#, php-format
+msgid "Some abandoned carts on %s contain products that are now out of stock. Recovery emails for these carts may point customers to items they can no longer purchase."
+msgstr "Sommige verlaten winkelwagentjes op %s bevatten producten die nu niet op voorraad zijn. Herstel-e-mails voor deze winkelwagentjes kunnen klanten verwijzen naar artikelen die ze niet meer kunnen kopen."
+
+#. translators: 1: count of out-of-stock products, 2: count of abandoned carts.
+#: modules/oos-warning/templates/email-body.php:101
+#, php-format
+msgid "%1$s across %2$s."
+msgstr "%1$s verdeeld over %2$s."
+
+#: modules/oos-warning/templates/email-body.php:111
+msgid "Customer"
+msgstr "Klant"
+
+#: modules/oos-warning/templates/email-body.php:112
+msgid "Abandoned"
+msgstr "Verlaten"
+
+#: modules/oos-warning/templates/email-body.php:113
+msgid "Out-of-stock products"
+msgstr "Producten niet op voorraad"
+
+#. translators: %s: number of additional abandoned carts not listed.
+#: modules/oos-warning/templates/email-body.php:148
+#, php-format
+msgid "and %s more abandoned cart with out-of-stock products."
+msgid_plural "and %s more abandoned carts with out-of-stock products."
+msgstr[0] "en nog %s verlaten winkelwagentje met producten die niet op voorraad zijn."
+msgstr[1] "en nog %s verlaten winkelwagentjes met producten die niet op voorraad zijn."
+
+#: modules/oos-warning/templates/email-body.php:165
+msgid "Review abandoned carts"
+msgstr "Verlaten winkelwagentjes bekijken"
+
+#. translators: %s: linked store name.
+#: modules/oos-warning/templates/email-body.php:176
+#, php-format
+msgid "You are receiving this because out-of-stock notifications are enabled for %s."
+msgstr "Je ontvangt dit omdat meldingen over niet-voorradige producten zijn ingeschakeld voor %s."
+
+#: admin/build/settings.js:1
+msgid "Core"
+msgstr "Core"
+
+#: admin/build/settings.js:1
+msgid "Pro"
+msgstr "Pro"
+
+#: admin/build/settings.js:1
+msgid "Not saved"
+msgstr "Niet opgeslagen"
+
+#: admin/build/settings.js:1
+msgid "The setting could not be saved. Reload the page and try again."
+msgstr "De instelling kon niet worden opgeslagen. Herlaad de pagina en probeer het opnieuw."
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:31
+msgid "Saved"
+msgstr "Opgeslagen"
+
+#: admin/build/settings.js:1
+msgid "Your change has been saved."
+msgstr "Je wijziging is opgeslagen."
+
+#: admin/build/settings.js:1
+msgid "Request failed"
+msgstr "Verzoek mislukt"
+
+#: admin/build/settings.js:1
+msgid "Something went wrong. Check your connection and try again."
+msgstr "Er is iets misgegaan. Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:43
+msgid "Activity Log"
+msgstr "Activiteitenlog"
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:43
+msgid "Scheduled Jobs"
+msgstr "Geplande taken"
+
+#: admin/build/settings.js:1
+msgid "Main"
+msgstr "Algemeen"
+
+#: admin/build/settings.js:1
+msgid "Valid License"
+msgstr "Geldige licentie"
+
+#: admin/build/settings.js:1
+msgid "Activate your license"
+msgstr "Activeer je licentie"
+
+#: admin/build/settings.js:1
+msgid "This screen hit a problem"
+msgstr "Er is een probleem opgetreden op dit scherm"
+
+#: admin/build/settings.js:1
+msgid "Nothing has been changed on your store. Reload to try again, or go back to the dashboard."
+msgstr "Er is niets gewijzigd in je winkel. Herlaad om het opnieuw te proberen, of ga terug naar het dashboard."
+
+#: admin/build/settings.js:1
+msgid "Reload"
+msgstr "Herladen"
+
+#. translators: %s: the selected date range, e.g. "09/23/2026 - 09/29/2026".
+#: admin/build/settings.js:2
+#, js-format
+msgid "Date range: %s"
+msgstr "Periode: %s"
+
+#: admin/build/settings.js:2
+msgid "Select date range"
+msgstr "Selecteer periode"
+
+#: admin/build/settings.js:3
+msgid "Loading…"
+msgstr "Laden…"
+
+#: admin/build/settings.js:3
+msgid "Revenue by day"
+msgstr "Omzet per dag"
+
+#: admin/build/settings.js:3
+msgid "Day"
+msgstr "Dag"
+
+#: admin/build/settings.js:3
+msgid "View all follow-up reports"
+msgstr "Alle follow-up rapporten bekijken"
+
+#: admin/build/settings.js:3
+msgid "View all"
+msgstr "Alles bekijken"
+
+#: admin/build/settings.js:3
+msgid "View all product reports"
+msgstr "Alle productrapporten bekijken"
+
+#: admin/build/settings.js:4
+msgid "Build high-converting checkout funnels."
+msgstr "Bouw checkout-funnels die goed converteren."
+
+#: admin/build/settings.js:4
+msgid "Fast and customizable cart for your website."
+msgstr "Snelle en aanpasbare winkelwagen voor je website."
+
+#: admin/build/settings.js:4
+msgid "Automate tasks between your apps."
+msgstr "Automatiseer taken tussen je apps."
+
+#: admin/build/settings.js:4
+msgid "Convert more with automated coupons."
+msgstr "Converteer meer met geautomatiseerde coupons."
+
+#: admin/build/settings.js:4
+msgid "Resume Setup"
+msgstr "Installatie hervatten"
+
+#: admin/build/settings.js:4
+msgid "Launch Setup"
+msgstr "Installatie starten"
+
+#: admin/build/settings.js:4
+msgid "(opens in a new tab)"
+msgstr "(opent in een nieuw tabblad)"
+
+#. translators: 1: lowest allowed number, 2: highest allowed number.
+#: admin/build/settings.js:7
+#, js-format
+msgid "Enter a whole number from %1$s to %2$s."
+msgstr "Voer een geheel getal in van %1$s tot %2$s."
+
+#. translators: %s: lowest allowed number.
+#: admin/build/settings.js:10
+#, js-format
+msgid "Enter a whole number of %s or more."
+msgstr "Voer een geheel getal in van %s of meer."
+
+#: admin/build/settings.js:10
+msgid "Close dialog"
+msgstr "Dialoogvenster sluiten"
+
+#: admin/build/settings.js:10
+msgid "Delete coupons"
+msgstr "Coupons verwijderen"
+
+#: admin/build/settings.js:10
+msgid "Delete used and expired coupons?"
+msgstr "Gebruikte en verlopen coupons verwijderen?"
+
+#: admin/build/settings.js:10
+msgid "Coupons this plugin created that were fully used or have expired will be deleted. This cannot be undone."
+msgstr "Coupons die door deze plugin zijn aangemaakt en volledig gebruikt of verlopen zijn, worden verwijderd. Dit kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:10
+msgid "This page is out of date. Reload it and try again."
+msgstr "Deze pagina is verouderd. Herlaad de pagina en probeer het opnieuw."
+
+#: admin/build/settings.js:10
+msgid "Enter the Webhook URL"
+msgstr "Voer de webhook-URL in"
+
+#. translators: %d: HTTP status code returned by the webhook URL.
+#: admin/build/settings.js:13
+#, js-format
+msgid "The webhook URL answered with status %d."
+msgstr "De webhook-URL antwoordde met status %d."
+
+#: admin/build/settings.js:13
+msgid "The URL could not be reached, or it does not accept requests from this page."
+msgstr "De URL kon niet worden bereikt, of accepteert geen verzoeken vanaf deze pagina."
+
+#: admin/build/settings.js:13
+msgid "Trigger Sample"
+msgstr "Voorbeeld triggeren"
+
+#. translators: 1: field title, 2: the part of the value this control sets (amount or unit)
+#: admin/build/settings.js:14
+#, js-format
+msgid "%1$s: %2$s"
+msgstr "%1$s: %2$s"
+
+#: admin/build/settings.js:14
+msgid "amount"
+msgstr "bedrag"
+
+#: admin/build/settings.js:14
+msgid "unit"
+msgstr "eenheid"
+
+#: admin/build/settings.js:14
+msgid "Type at least 3 letters to search"
+msgstr "Typ minimaal 3 letters om te zoeken"
+
+#: admin/build/settings.js:14
+msgid "No products found"
+msgstr "Geen producten gevonden"
+
+#: admin/build/settings.js:14
+msgid "Visual"
+msgstr "Visueel"
+
+#: admin/build/settings.js:14
+msgid "HTML"
+msgstr "HTML"
+
+#: admin/build/settings.js:14
+msgid "Select Media"
+msgstr "Media selecteren"
+
+#: admin/build/settings.js:14
+msgid "Insert Media"
+msgstr "Media invoegen"
+
+#: admin/build/settings.js:14
+msgid "Add Media"
+msgstr "Media toevoegen"
+
+#: admin/build/settings.js:14
+msgid "Enter Email"
+msgstr "Voer e-mailadres in"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email body"
+msgstr "Voer een e-mailtekst in"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email subject"
+msgstr "Voer een e-mailonderwerp in"
+
+#: admin/build/settings.js:14
+msgid "Please enter a valid email address"
+msgstr "Voer een geldig e-mailadres in"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email address"
+msgstr "Voer een e-mailadres in"
+
+#: admin/build/settings.js:14
+msgid "Send a Test Email"
+msgstr "Stuur een test-e-mail"
+
+#: admin/build/settings.js:14
+#: admin/build/settings.js:17
+msgid "Insert placeholder"
+msgstr "Placeholder invoegen"
+
+#: admin/build/settings.js:17
+msgid "Enter a valid email address, like name@example.com."
+msgstr "Voer een geldig e-mailadres in, zoals name@example.com."
+
+#: admin/build/settings.js:17
+msgid "Country code"
+msgstr "Landcode"
+
+#: admin/build/settings.js:17
+msgid "Phone number"
+msgstr "Telefoonnummer"
+
+#: admin/build/settings.js:17
+msgid "Search options…"
+msgstr "Opties zoeken…"
+
+#: admin/build/settings.js:17
+msgid "Search options"
+msgstr "Opties zoeken"
+
+#. translators: %d: number of matching options
+#: admin/build/settings.js:18
+#, js-format
+msgid "%d option found"
+msgid_plural "%d options found"
+msgstr[0] "%d optie gevonden"
+msgstr[1] "%d opties gevonden"
+
+#: admin/build/settings.js:18
+msgid "No options available"
+msgstr "Geen opties beschikbaar"
+
+#: admin/build/settings.js:18
+msgid "Refresh Options"
+msgstr "Opties vernieuwen"
+
+#: admin/build/settings.js:18
+msgid "Version to roll back to"
+msgstr "Versie om naar terug te zetten"
+
+#: admin/build/settings.js:21
+msgid "Previous versions could not be loaded. Reload the page to try again."
+msgstr "Eerdere versies konden niet worden geladen. Herlaad de pagina om het opnieuw te proberen."
+
+#: admin/build/settings.js:21
+msgid "A network error occurred. Please try again."
+msgstr "Er is een netwerkfout opgetreden. Probeer het opnieuw."
+
+#: admin/build/settings.js:21
+msgid "Your license is active on this site. Professional support and automatic updates for Cart Abandonment Recovery Pro are enabled."
+msgstr "Je licentie is actief op deze site. Professionele support en automatische updates voor Cart Abandonment Recovery Pro zijn ingeschakeld."
+
+#. translators: %1$s: link html start, %2$s: link html end
+#: admin/build/settings.js:24
+#, js-format
+msgid "Enter your valid license key below to activate Cart Abandonment Recovery Pro. If you don't have a license key yet, you can get it from %1$shere%2$s."
+msgstr "Voer hieronder je geldige licentiesleutel in om Cart Abandonment Recovery Pro te activeren. Heb je nog geen licentiesleutel, dan kun je die %1$shier%2$s krijgen."
+
+#: admin/build/settings.js:24
+msgid "Your license key is activated"
+msgstr "Je licentiesleutel is geactiveerd"
+
+#: admin/build/settings.js:24
+msgid "License key status"
+msgstr "Status licentiesleutel"
+
+#: admin/build/settings.js:24
+msgid "Paste your license key here"
+msgstr "Plak hier je licentiesleutel"
+
+#: admin/build/settings.js:24
+msgid "License key input"
+msgstr "Invoer licentiesleutel"
+
+#: admin/build/settings.js:24
+msgid "Deactivating…"
+msgstr "Deactiveren…"
+
+#: admin/build/settings.js:24
+msgid "Deactivate this license?"
+msgstr "Deze licentie deactiveren?"
+
+#: admin/build/settings.js:24
+msgid "This site will stop receiving automatic updates and support for Cart Abandonment Recovery Pro until a license is activated again."
+msgstr "Deze site ontvangt geen automatische updates en support meer voor Cart Abandonment Recovery Pro totdat er opnieuw een licentie wordt geactiveerd."
+
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+#: admin/build/settings.js:48
+msgid "Check your connection and try again."
+msgstr "Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+msgid "Try Again"
+msgstr "Opnieuw proberen"
+
+#: admin/build/settings.js:24
+msgid "Loading reports…"
+msgstr "Rapporten laden…"
+
+#: admin/build/settings.js:24
+msgid "Whitelist"
+msgstr "Whitelist"
+
+#: admin/build/settings.js:24
+msgid "Items per page"
+msgstr "Items per pagina"
+
+#: admin/build/settings.js:24
+msgid "Pagination"
+msgstr "Paginering"
+
+#: admin/build/settings.js:24
+msgid "Nothing to export"
+msgstr "Niets om te exporteren"
+
+#: admin/build/settings.js:24
+msgid "Export failed"
+msgstr "Exporteren mislukt"
+
+#: admin/build/settings.js:24
+msgid "Report ID"
+msgstr "Rapport-ID"
+
+#: admin/build/settings.js:24
+msgid "Country"
+msgstr "Land"
+
+#: admin/build/settings.js:24
+msgid "Yes"
+msgstr "Ja"
+
+#: admin/build/settings.js:24
+msgid "No"
+msgstr "Nee"
+
+#: admin/build/settings.js:24
+msgid "Cart(s) blacklisted"
+msgstr "Winkelwagentje(s) op blacklist gezet"
+
+#: admin/build/settings.js:24
+msgid "Cart(s) whitelisted"
+msgstr "Winkelwagentje(s) op whitelist gezet"
+
+#: admin/build/settings.js:24
+msgid "Bulk Actions"
+msgstr "Bulkacties"
+
+#: admin/build/settings.js:24
+msgid "Record(s) unsubscribed"
+msgstr "Record(s) afgemeld"
+
+#: admin/build/settings.js:24
+msgid "Apply"
+msgstr "Toepassen"
+
+#. translators: %d: number of reports that match the search and filters
+#: admin/build/settings.js:25
+#, js-format
+msgid "%d report found"
+msgid_plural "%d reports found"
+msgstr[0] "%d rapport gevonden"
+msgstr[1] "%d rapporten gevonden"
+
+#: admin/build/settings.js:25
+msgid "Could not load the reports"
+msgstr "De rapporten konden niet worden geladen"
+
+#: admin/build/settings.js:25
+msgid "No reports match these filters"
+msgstr "Geen rapporten die aan deze filters voldoen"
+
+#: admin/build/settings.js:25
+msgid "No follow-up reports match the current search, status or dates. Try changing them."
+msgstr "Geen follow-up rapporten die overeenkomen met de huidige zoekopdracht, status of datums. Probeer deze te wijzigen."
+
+#: admin/build/settings.js:25
+msgid "Delete Selected Reports"
+msgstr "Geselecteerde rapporten verwijderen"
+
+#: admin/build/settings.js:25
+msgid "Delete Report"
+msgstr "Rapport verwijderen"
+
+#. translators: %d: number of selected reports
+#: admin/build/settings.js:26
+#, js-format
+msgid "Are you sure you want to delete the %d selected report? Its cart and follow-up history will be removed. This action cannot be undone."
+msgid_plural "Are you sure you want to delete the %d selected reports? Their carts and follow-up history will be removed. This action cannot be undone."
+msgstr[0] "Weet je zeker dat je het %d geselecteerde rapport wilt verwijderen? Het winkelwagentje en de follow-up geschiedenis worden verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+msgstr[1] "Weet je zeker dat je de %d geselecteerde rapporten wilt verwijderen? De winkelwagentjes en de follow-up geschiedenis worden verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+
+#. translators: %s: customer name
+#: admin/build/settings.js:27
+#, js-format
+msgid "Are you sure you want to delete the report for “%s”? The cart and its follow-up history will be removed. This action cannot be undone."
+msgstr "Weet je zeker dat je het rapport voor “%s” wilt verwijderen? Het winkelwagentje en de follow-up geschiedenis worden verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:27
+msgid "Are you sure you want to delete this report? The cart and its follow-up history will be removed. This action cannot be undone."
+msgstr "Weet je zeker dat je dit rapport wilt verwijderen? Het winkelwagentje en de follow-up geschiedenis worden verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:27
+msgid "Loading products…"
+msgstr "Producten laden…"
+
+#: admin/build/settings.js:27
+msgid "Product ID"
+msgstr "Product-ID"
+
+#: admin/build/settings.js:27
+msgid "Product Link"
+msgstr "Productlink"
+
+#: admin/build/settings.js:27
+#: admin/build/settings.js:35
+msgid "Clear selection"
+msgstr "Selectie wissen"
+
+#. translators: %d: number of products that match the search and dates
+#: admin/build/settings.js:29
+#, js-format
+msgid "%d product found"
+msgid_plural "%d products found"
+msgstr[0] "%d product gevonden"
+msgstr[1] "%d producten gevonden"
+
+#: admin/build/settings.js:29
+msgid "Could not load the product reports"
+msgstr "De productrapporten konden niet worden geladen"
+
+#: admin/build/settings.js:29
+msgid "No product data for these dates"
+msgstr "Geen productgegevens voor deze datums"
+
+#: admin/build/settings.js:29
+msgid "No products were abandoned or recovered in the selected date range. Try a wider date range."
+msgstr "Er zijn geen producten verlaten of hersteld in de geselecteerde periode. Probeer een ruimere periode."
+
+#: admin/build/settings.js:29
+msgid "No matching products"
+msgstr "Geen overeenkomende producten"
+
+#: admin/build/settings.js:29
+msgid "Try a different search term."
+msgstr "Probeer een andere zoekterm."
+
+#: admin/build/settings.js:29
+msgid "Total times the product was abandoned and the associated abandoned amount"
+msgstr "Totaal aantal keer dat het product is verlaten en het bijbehorende verlaten bedrag"
+
+#: admin/build/settings.js:29
+msgid "Total times the product was recovered and the associated recovered amount"
+msgstr "Totaal aantal keer dat het product is hersteld en het bijbehorende herstelde bedrag"
+
+#. translators: %d: number of selected products
+#: admin/build/settings.js:30
+#, js-format
+msgid "Are you sure you want to delete the %d selected product? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgid_plural "Are you sure you want to delete the %d selected products? The carts that contain them and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr[0] "Weet je zeker dat je het %d geselecteerde product wilt verwijderen? De winkelwagentjes die het bevatten en hun follow-up geschiedenis worden verwijderd, en andere producten in die winkelwagentjes verliezen ook die tellingen. Deze actie kan niet ongedaan worden gemaakt."
+msgstr[1] "Weet je zeker dat je de %d geselecteerde producten wilt verwijderen? De winkelwagentjes die ze bevatten en hun follow-up geschiedenis worden verwijderd, en andere producten in die winkelwagentjes verliezen ook die tellingen. Deze actie kan niet ongedaan worden gemaakt."
+
+#. translators: %s: product name and ID, e.g. "Blue Hoodie (#123)"
+#: admin/build/settings.js:31
+#, js-format
+msgid "Are you sure you want to delete the product “%s”? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr "Weet je zeker dat je het product “%s” wilt verwijderen? De winkelwagentjes die het bevatten en hun follow-up geschiedenis worden verwijderd, en andere producten in die winkelwagentjes verliezen ook die tellingen. Deze actie kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:31
+msgid "Are you sure you want to delete this product? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr "Weet je zeker dat je dit product wilt verwijderen? De winkelwagentjes die het bevatten en hun follow-up geschiedenis worden verwijderd, en andere producten in die winkelwagentjes verliezen ook die tellingen. Deze actie kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:31
+msgid "Rule condition failed or product excluded"
+msgstr "Niet aan regelvoorwaarde voldaan of product uitgesloten"
+
+#: admin/build/settings.js:31
+msgid "Recipient is blacklisted"
+msgstr "Ontvanger staat op de blacklist"
+
+#: admin/build/settings.js:31
+msgid "Recipient unsubscribed"
+msgstr "Ontvanger heeft zich afgemeld"
+
+#: admin/build/settings.js:31
+msgid "This cart is blacklisted, so no follow-ups can be scheduled for it."
+msgstr "Dit winkelwagentje staat op de blacklist, dus er kunnen geen follow-ups voor worden gepland."
+
+#: admin/build/settings.js:31
+msgid "No follow-up emails are scheduled for this cart. Use Reschedule Emails to schedule them."
+msgstr "Er zijn geen follow-up e-mails gepland voor dit winkelwagentje. Gebruik E-mails opnieuw plannen om ze te plannen."
+
+#: admin/build/settings.js:31
+msgid "Discount:"
+msgstr "Korting:"
+
+#: admin/build/settings.js:31
+msgid "Others:"
+msgstr "Overig:"
+
+#: admin/build/settings.js:31
+msgid "Shipping:"
+msgstr "Verzending:"
+
+#: admin/build/settings.js:31
+msgid "Cart Total:"
+msgstr "Totaal winkelwagen:"
+
+#: admin/build/settings.js:31
+msgid "User Order Details"
+msgstr "Bestelgegevens gebruiker"
+
+#: admin/build/settings.js:31
+msgid "Items in the cart"
+msgstr "Artikelen in de winkelwagen"
+
+#: admin/build/settings.js:31
+msgid "Items"
+msgstr "Artikelen"
+
+#: admin/build/settings.js:31
+msgid "No follow-up SMS are scheduled for this cart. Use Reschedule SMS to schedule them."
+msgstr "Er zijn geen follow-up SMS-berichten gepland voor dit winkelwagentje. Gebruik SMS opnieuw plannen om ze te plannen."
+
+#: admin/build/settings.js:31
+msgid "No follow-up WhatsApp messages are scheduled for this cart. Use Reschedule Messages to schedule them."
+msgstr "Er zijn geen follow-up WhatsApp-berichten gepland voor dit winkelwagentje. Gebruik Berichten opnieuw plannen om ze te plannen."
+
+#: admin/build/settings.js:31
+msgid "Could not load this report"
+msgstr "Dit rapport kon niet worden geladen"
+
+#: admin/build/settings.js:31
+msgid "Report not found"
+msgstr "Rapport niet gevonden"
+
+#: admin/build/settings.js:31
+msgid "It may have been deleted. Go back to the reports list to pick another one."
+msgstr "Het is mogelijk verwijderd. Ga terug naar de lijst met rapporten om een ander te kiezen."
+
+#: admin/build/settings.js:31
+msgid "Report details"
+msgstr "Rapportgegevens"
+
+#: admin/build/settings.js:31
+msgid "How long the coupon stays valid after it is created."
+msgstr "Hoe lang de coupon geldig blijft nadat deze is aangemaakt."
+
+#: admin/build/settings.js:31
+msgid "Enter the email subject"
+msgstr "Voer het e-mailonderwerp in"
+
+#: admin/build/settings.js:31
+msgid "Enter the email address"
+msgstr "Voer het e-mailadres in"
+
+#: admin/build/settings.js:31
+msgid "Enter the template name"
+msgstr "Voer de sjabloonnaam in"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+msgid "Saving…"
+msgstr "Opslaan…"
+
+#: admin/build/settings.js:31
+msgid "Discard your changes? They have not been saved."
+msgstr "Je wijzigingen negeren? Ze zijn nog niet opgeslagen."
+
+#: admin/build/settings.js:31
+msgid "Keep editing"
+msgstr "Doorgaan met bewerken"
+
+#: admin/build/settings.js:31
+msgid "Discard changes"
+msgstr "Wijzigingen negeren"
+
+#: admin/build/settings.js:31
+msgid "New Email Template"
+msgstr "Nieuw e-mailsjabloon"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Error!"
+msgstr "Fout!"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Success!"
+msgstr "Gelukt!"
+
+#. translators: %d: number of minutes
+#: admin/build/settings.js:32
+#, js-format
+msgid "%d Minute"
+msgid_plural "%d Minutes"
+msgstr[0] "%d minuut"
+msgstr[1] "%d minuten"
+
+#. translators: %d: number of hours
+#: admin/build/settings.js:33
+#, js-format
+msgid "%d Hour"
+msgid_plural "%d Hours"
+msgstr[0] "%d uur"
+msgstr[1] "%d uur"
+
+#. translators: %d: number of days
+#: admin/build/settings.js:34
+#, js-format
+msgid "%d Day"
+msgid_plural "%d Days"
+msgstr[0] "%d dag"
+msgstr[1] "%d dagen"
+
+#. translators: %s: template name
+#: admin/build/settings.js:35
+#, js-format
+msgid "Activate %s"
+msgstr "%s activeren"
+
+#: admin/build/settings.js:35
+msgid "Loading templates…"
+msgstr "Sjablonen laden…"
+
+#: admin/build/settings.js:36
+msgid "Couldn't load templates"
+msgstr "Sjablonen konden niet worden geladen"
+
+#: admin/build/settings.js:36
+#: admin/build/settings.js:42
+msgid "Try again"
+msgstr "Opnieuw proberen"
+
+#: admin/build/settings.js:36
+msgid "Available in Pro"
+msgstr "Beschikbaar in Pro"
+
+#. translators: %s: template name
+#: admin/build/settings.js:37
+#: admin/build/settings.js:39
+#: admin/build/settings.js:41
+#, js-format
+msgid "Are you sure you want to delete “%s”? This action cannot be undone."
+msgstr "Weet je zeker dat je “%s” wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+
+#. translators: %d: number of selected templates
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
+#, js-format
+msgid "Are you sure you want to delete %d selected template(s)? This action cannot be undone."
+msgstr "Weet je zeker dat je %d geselecteerde sjabloon/sjablonen wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+
+#: admin/build/settings.js:38
+msgid "Something went wrong while loading your email templates. Check your connection and try again."
+msgstr "Er is iets misgegaan bij het laden van je e-mailsjablonen. Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:38
+msgid "No email templates yet"
+msgstr "Nog geen e-mailsjablonen"
+
+#: admin/build/settings.js:38
+msgid "Create a template to email shoppers who leave items in their cart, or restore the defaults."
+msgstr "Maak een sjabloon om shoppers te mailen die artikelen in hun winkelwagentje achterlaten, of herstel de standaardsjablonen."
+
+#: admin/build/settings.js:38
+msgid "The default email templates go back to their original content. Any edits you made to them are lost."
+msgstr "De standaard e-mailsjablonen krijgen hun oorspronkelijke inhoud terug. Alle wijzigingen die je eraan hebt aangebracht gaan verloren."
+
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Restore"
+msgstr "Herstellen"
+
+#: admin/build/settings.js:38
+msgid "New SMS Template"
+msgstr "Nieuw SMS-sjabloon"
+
+#: admin/build/settings.js:38
+msgid "SMS body can’t be longer than 160 characters."
+msgstr "SMS-tekst mag niet langer zijn dan 160 tekens."
+
+#: admin/build/settings.js:40
+msgid "Something went wrong while loading your SMS templates. Check your connection and try again."
+msgstr "Er is iets misgegaan bij het laden van je SMS-sjablonen. Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:40
+msgid "No SMS templates yet"
+msgstr "Nog geen SMS-sjablonen"
+
+#: admin/build/settings.js:40
+msgid "Create a template to text shoppers who leave items in their cart, or restore the defaults."
+msgstr "Maak een sjabloon om shoppers een SMS te sturen die artikelen in hun winkelwagentje achterlaten, of herstel de standaardsjablonen."
+
+#: admin/build/settings.js:40
+msgid "The default SMS templates go back to their original content. Any edits you made to them are lost."
+msgstr "De standaard SMS-sjablonen krijgen hun oorspronkelijke inhoud terug. Alle wijzigingen die je eraan hebt aangebracht gaan verloren."
+
+#: admin/build/settings.js:40
+msgid "New WhatsApp Template"
+msgstr "Nieuw WhatsApp-sjabloon"
+
+#: admin/build/settings.js:42
+msgid "Something went wrong while loading your WhatsApp templates. Check your connection and try again."
+msgstr "Er is iets misgegaan bij het laden van je WhatsApp-sjablonen. Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:42
+msgid "No WhatsApp templates yet"
+msgstr "Nog geen WhatsApp-sjablonen"
+
+#: admin/build/settings.js:42
+msgid "Create a template to message shoppers on WhatsApp when they leave items in their cart."
+msgstr "Maak een sjabloon om shoppers via WhatsApp een bericht te sturen wanneer ze artikelen in hun winkelwagentje achterlaten."
+
+#: admin/build/settings.js:42
+msgid "OttoKit could not be loaded"
+msgstr "OttoKit kon niet worden geladen"
+
+#: admin/build/settings.js:42
+msgid "Automate Cart Recovery with OttoKit"
+msgstr "Automatiseer het herstel van winkelwagentjes met OttoKit"
+
+#: admin/build/settings.js:42
+msgid "Supercharge your recovery process by connecting WooCommerce Cart Abandonment Recovery with OttoKit. Get real-time alerts, automate actions, and keep your team in the loop instantly."
+msgstr "Geef je herstelproces een boost door WooCommerce Cart Abandonment Recovery te koppelen aan OttoKit. Ontvang realtime meldingen, automatiseer acties en houd je team direct op de hoogte."
+
+#: admin/build/settings.js:42
+msgid "Connect with tools you already use like Slack, Telegram, WhatsApp, Google Sheets, and more."
+msgstr "Koppel met tools die je al gebruikt, zoals Slack, Telegram, WhatsApp, Google Sheets en meer."
+
+#: admin/build/settings.js:42
+msgid "Engage customers on channels they use like SMS, WhatsApp, or Facebook Messenger."
+msgstr "Bereik klanten via kanalen die ze gebruiken, zoals SMS, WhatsApp of Facebook Messenger."
+
+#: admin/build/settings.js:42
+msgid "Automatically resend failed emails or trigger alerts to your team."
+msgstr "Verstuur mislukte e-mails automatisch opnieuw of stuur meldingen naar je team."
+
+#: admin/build/settings.js:42
+msgid "OttoKit could not be set up. Check your connection and try again."
+msgstr "OttoKit kon niet worden ingesteld. Controleer je verbinding en probeer het opnieuw."
+
+#: admin/build/settings.js:42
+msgid "All Channels"
+msgstr "Alle kanalen"
+
+#: admin/build/settings.js:42
+msgid "All Statuses"
+msgstr "Alle statussen"
+
+#: admin/build/settings.js:42
+msgid "Skipped"
+msgstr "Overgeslagen"
+
+#: admin/build/settings.js:42
+msgid "Pending"
+msgstr "In afwachting"
+
+#: admin/build/settings.js:42
+msgid "Search recipient…"
+msgstr "Ontvanger zoeken…"
+
+#: admin/build/settings.js:42
+msgid "Search recipient"
+msgstr "Ontvanger zoeken"
+
+#: admin/build/settings.js:42
+msgid "Filter by channel"
+msgstr "Filteren op kanaal"
+
+#: admin/build/settings.js:42
+msgid "Filter by status"
+msgstr "Filteren op status"
+
+#. translators: %d: number of rows that match the search and filters
+#: admin/build/settings.js:43
+#, js-format
+msgid "%d result found"
+msgid_plural "%d results found"
+msgstr[0] "%d resultaat gevonden"
+msgstr[1] "%d resultaten gevonden"
+
+#: admin/build/settings.js:43
+msgid "Activity Log & Scheduled Jobs"
+msgstr "Activiteitenlog en geplande taken"
+
+#: admin/build/settings.js:43
+msgid "Nothing matches these filters"
+msgstr "Niets komt overeen met deze filters"
+
+#: admin/build/settings.js:43
+msgid "Try a different search, channel, status or date range."
+msgstr "Probeer een andere zoekopdracht, kanaal, status of periode."
+
+#: admin/build/settings.js:43
+msgid "Channel"
+msgstr "Kanaal"
+
+#: admin/build/settings.js:43
+msgid "Event"
+msgstr "Gebeurtenis"
+
+#: admin/build/settings.js:43
+msgid "Recipient"
+msgstr "Ontvanger"
+
+#: admin/build/settings.js:43
+msgid "Template"
+msgstr "Sjabloon"
+
+#: admin/build/settings.js:43
+msgid "Timestamp"
+msgstr "Tijdstempel"
+
+#: admin/build/settings.js:43
+msgid "Detail"
+msgstr "Details"
+
+#: admin/build/settings.js:43
+msgid "Loading activity…"
+msgstr "Activiteit laden…"
+
+#: admin/build/settings.js:43
+msgid "Could not load the activity log"
+msgstr "Het activiteitenlog kon niet worden geladen"
+
+#: admin/build/settings.js:43
+msgid "No activity yet"
+msgstr "Nog geen activiteit"
+
+#: admin/build/settings.js:43
+msgid "Sent, failed, and skipped recovery messages will show up here."
+msgstr "Verzonden, mislukte en overgeslagen herstelberichten worden hier weergegeven."
+
+#: admin/build/settings.js:43
+msgid "Track every email, SMS, and WhatsApp event with Pro."
+msgstr "Volg elke e-mail-, SMS- en WhatsApp-gebeurtenis met Pro."
+
+#: admin/build/settings.js:43
+msgid "Execution Time"
+msgstr "Uitvoeringstijd"
+
+#: admin/build/settings.js:43
+msgid "Loading scheduled jobs…"
+msgstr "Geplande taken laden…"
+
+#: admin/build/settings.js:43
+msgid "Could not load the scheduled jobs"
+msgstr "De geplande taken konden niet worden geladen"
+
+#: admin/build/settings.js:43
+msgid "No upcoming jobs"
+msgstr "Geen aankomende taken"
+
+#: admin/build/settings.js:43
+msgid "Recovery messages queued to send will appear here."
+msgstr "Herstelberichten die in de wachtrij staan om te worden verzonden, worden hier weergegeven."
+
+#: admin/build/settings.js:43
+msgid "Monitor upcoming email, SMS, and WhatsApp follow-ups with Pro."
+msgstr "Houd aankomende e-mail-, SMS- en WhatsApp-follow-ups in de gaten met Pro."
+
+#: admin/build/settings.js:43
+msgid "Skip"
+msgstr "Overslaan"
+
+#: admin/build/settings.js:43
+msgid "Not installed"
+msgstr "Niet geïnstalleerd"
+
+#: admin/build/settings.js:43
+msgid "Not activated"
+msgstr "Niet geactiveerd"
+
+#: admin/build/settings.js:43
+msgid "Install failed"
+msgstr "Installatie mislukt"
+
+#: admin/build/settings.js:43
+msgid "Activation failed"
+msgstr "Activering mislukt"
+
+#: admin/build/settings.js:43
+msgid "Active"
+msgstr "Actief"
+
+#. translators: %s: plugin name.
+#: admin/build/settings.js:44
+#, js-format
+msgid "Install %s"
+msgstr "%s installeren"
+
+#: admin/build/settings.js:44
+msgid "Customize your follow-up email templates"
+msgstr "Pas je follow-up e-mailsjablonen aan"
+
+#: admin/build/settings.js:44
+msgid "Review your recovery settings"
+msgstr "Controleer je herstelinstellingen"
+
+#: admin/build/settings.js:44
+msgid "See how your follow-ups are performing"
+msgstr "Bekijk hoe je follow-ups presteren"
+
+#: admin/build/settings.js:44
+msgid "Enter your first name."
+msgstr "Voer je voornaam in."
+
+#: admin/build/settings.js:44
+msgid "Enter your last name."
+msgstr "Voer je achternaam in."
+
+#: admin/build/settings.js:44
+msgid "That doesn't look like a valid email address."
+msgstr "Dat lijkt geen geldig e-mailadres te zijn."
+
+#: admin/build/settings.js:44
+msgid "Enter an email address."
+msgstr "Voer een e-mailadres in."
+
+#: admin/build/settings.js:44
+msgid "We don't collect any personal information, just basic details like your PHP version, admin language, and which features you use. <a>Learn more about what we collect and why.</a>"
+msgstr "We verzamelen geen persoonlijke gegevens, alleen basisinformatie zoals je PHP-versie, beheertaal en welke functies je gebruikt. <a>Lees meer over wat we verzamelen en waarom.</a>"
+
+#: admin/build/settings.js:44
+msgid "≈ 3 min setup"
+msgstr "≈ 3 min. installatie"
+
+#: admin/build/settings.js:44
+msgid "Cart Abandonment Recovery walkthrough"
+msgstr "Rondleiding Cart Abandonment Recovery"
+
+#: admin/build/settings.js:44
+msgid "Set Up My Cart Recovery"
+msgstr "Mijn winkelwagenherstel instellen"
+
+#: admin/build/settings.js:44
+msgid "Welcome"
+msgstr "Welkom"
+
+#: admin/build/settings.js:44
+msgid "Decide when a cart counts as abandoned, when it’s lost for good, and which user roles to leave out of tracking."
+msgstr "Bepaal wanneer een winkelwagentje als verlaten geldt, wanneer het definitief verloren is en welke gebruikersrollen niet worden gevolgd."
+
+#: admin/build/settings.js:44
+msgid "Could not save your changes"
+msgstr "Je wijzigingen konden niet worden opgeslagen"
+
+#: admin/build/settings.js:44
+msgid "Recovery"
+msgstr "Herstel"
+
+#: admin/build/settings.js:44
+msgid "Choose how you reach shoppers who leave items in their cart."
+msgstr "Kies hoe je shoppers bereikt die artikelen in hun winkelwagentje achterlaten."
+
+#: admin/build/settings.js:44
+msgid "Channels"
+msgstr "Kanalen"
+
+#: admin/build/settings.js:44
+msgid "Get a quick weekly recap of your cart recovery performance, right in your inbox."
+msgstr "Ontvang een kort wekelijks overzicht van je herstelprestaties, direct in je inbox."
+
+#: admin/build/settings.js:44
+msgid "Jane"
+msgstr "Jan"
+
+#: admin/build/settings.js:44
+msgid "Doe"
+msgstr "Jansen"
+
+#: admin/build/settings.js:44
+msgid "you@yourstore.com"
+msgstr "you@yourstore.com"
+
+#: admin/build/settings.js:44
+msgid "Help improve Cart Abandonment Recovery by sharing non-sensitive usage data."
+msgstr "Help Cart Abandonment Recovery te verbeteren door niet-gevoelige gebruiksgegevens te delen."
+
+#: admin/build/settings.js:44
+msgid "Continue"
+msgstr "Doorgaan"
+
+#: admin/build/settings.js:44
+msgid "Almost There"
+msgstr "Bijna klaar"
+
+#: admin/build/settings.js:44
+msgid "Every recommended plugin is already active, so there was nothing to install. Saving your answers is all that is left."
+msgstr "Alle aanbevolen plugins zijn al actief, dus er hoefde niets te worden geïnstalleerd. Alleen je antwoorden opslaan rest nog."
+
+#: admin/build/settings.js:44
+#: admin/build/settings.js:45
+msgid "Could not finish setup"
+msgstr "De installatie kon niet worden voltooid"
+
+#: admin/build/settings.js:44
+msgid "Finishing setup…"
+msgstr "Installatie voltooien…"
+
+#: admin/build/settings.js:44
+msgid "Some plugins could not be set up"
+msgstr "Sommige plugins konden niet worden ingesteld"
+
+#. translators: %s: comma-separated plugin names.
+#: admin/build/settings.js:45
+#, js-format
+msgid "%s. Tick a plugin to try it again, or select Finish Setup to continue without it."
+msgstr "%s. Vink een plugin aan om het opnieuw te proberen, of selecteer Installatie voltooien om zonder door te gaan."
+
+#. translators: 1: plugin being installed, 2: total to install.
+#: admin/build/settings.js:46
+#, js-format
+msgid "Installing plugin %1$d of %2$d."
+msgstr "Plugin %1$d van %2$d installeren."
+
+#. translators: 1: plugin being installed, 2: total to install.
+#: admin/build/settings.js:47
+#, js-format
+msgid "Installing %1$d of %2$d…"
+msgstr "%1$d van %2$d installeren…"
+
+#: admin/build/settings.js:47
+msgid "Setting things up…"
+msgstr "Alles instellen…"
+
+#. translators: %d: number of selected plugins.
+#: admin/build/settings.js:48
+#, js-format
+msgid "Install %d & Finish"
+msgstr "%d installeren en voltooien"
+
+#: admin/build/settings.js:48
+msgid "Plugins"
+msgstr "Plugins"
+
+#: admin/build/settings.js:48
+msgid "Recommended Next Step:"
+msgstr "Aanbevolen volgende stap:"
+
+#: admin/build/settings.js:48
+msgid "Recommended Next Steps:"
+msgstr "Aanbevolen volgende stappen:"
+
+#: admin/build/settings.js:48
+msgid "Great job! With Cart Abandonment Recovery active, your store is ready to start recovering the lost revenue automatically."
+msgstr "Goed gedaan! Met Cart Abandonment Recovery actief is je winkel klaar om verloren omzet automatisch te herstellen."
+
+#: admin/build/settings.js:48
+msgid "The setup wizard hit a problem"
+msgstr "Er is een probleem opgetreden in de installatiewizard"
+
+#: admin/build/settings.js:48
+msgid "Nothing has been changed on your store. You can configure everything from the settings screen instead, or reload to try the wizard again."
+msgstr "Er is niets gewijzigd in je winkel. Je kunt alles ook via het instellingenscherm configureren, of herladen om de wizard opnieuw te proberen."
+
+#: admin/build/settings.js:48
+msgid "Reload And Retry"
+msgstr "Herladen en opnieuw proberen"
+
+#: admin/build/settings.js:48
+msgid "Exit the setup?"
+msgstr "Installatie afsluiten?"
+
+#: admin/build/settings.js:48
+msgid "Answers from steps you already moved past are saved. You can pick up where you left off any time from Dashboard → Quick Access → Resume Setup."
+msgstr "Antwoorden van stappen die je al hebt doorlopen, zijn opgeslagen. Je kunt op elk moment verdergaan waar je was gebleven via Dashboard → Snelle toegang → Installatie hervatten."
+
+#: admin/build/settings.js:48
+msgid "Continue Setup"
+msgstr "Installatie voortzetten"
+
+#: admin/build/settings.js:48
+msgid "Exit Setup"
+msgstr "Installatie afsluiten"
+
+#. translators: 1: current step number, 2: total steps.
+#: admin/build/settings.js:49
+#, js-format
+msgid "Step %1$d of %2$d"
+msgstr "Stap %1$d van %2$d"
+
+#. translators: 1: current step number, 2: total steps, 3: step name.
+#: admin/build/settings.js:50
+#, js-format
+msgid "Step %1$d of %2$d: %3$s"
+msgstr "Stap %1$d van %2$d: %3$s"

@@ -69,13 +69,13 @@ class __TwigTemplate_8a6f0398fffc82506ba46e70538b728a453c02bea83ac685560c22b44c4
   </div>
 
   <script type=\"text/javascript\">
-    var mailpoet_listing_per_page = ";
-        // line 17
-        yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["items_per_page"] ?? null), "html", null, true);
-        yield ";
     var mailpoet_segments = ";
+        // line 17
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["segments"] ?? null));
+        yield ";
+    var mailpoet_forms_api = ";
         // line 18
-        yield json_encode(($context["segments"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["api"] ?? null));
         yield ";
     var mailpoet_form_template_selection_url =
       \"";
@@ -90,7 +90,7 @@ class __TwigTemplate_8a6f0398fffc82506ba46e70538b728a453c02bea83ac685560c22b44c4
 
     var mailpoet_display_nps_poll = ";
         // line 24
-        yield json_encode(($context["display_nps_survey"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["display_nps_survey"] ?? null));
         yield ";
 
     ";
@@ -100,7 +100,7 @@ class __TwigTemplate_8a6f0398fffc82506ba46e70538b728a453c02bea83ac685560c22b44c4
             yield "      var mailpoet_display_nps_form = true;
       var mailpoet_current_wp_user = ";
             // line 28
-            yield json_encode(($context["current_wp_user"] ?? null));
+            yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["current_wp_user"] ?? null));
             yield ";
       var mailpoet_current_wp_user_firstname = '";
             // line 29

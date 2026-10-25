@@ -5,13 +5,14 @@ namespace MailPoet\Form;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Captcha\FormRenderStamp;
 use MailPoet\Config\Renderer as TemplateRenderer;
 use MailPoet\Entities\FormEntity;
 use MailPoet\WP\Functions as WPFunctions;
 
 class PreviewPage {
   const PREVIEW_DATA_TRANSIENT_PREFIX = 'mailpoet_form_preview_';
-  const PREVIEW_DATA_EXPIRATION = 84600; // 1 DAY
+  const PREVIEW_DATA_EXPIRATION = DAY_IN_SECONDS;
 
   /** @var WPFunctions  */
   private $wp;
@@ -28,18 +29,23 @@ class PreviewPage {
   /** @var AssetsController */
   private $assetsController;
 
+  /** @var FormRenderStamp */
+  private $formRenderStamp;
+
   public function __construct(
     WPFunctions $wp,
     Renderer $formRenderer,
     TemplateRenderer $templateRenderer,
     FormsRepository $formRepository,
-    AssetsController $assetsController
+    AssetsController $assetsController,
+    FormRenderStamp $formRenderStamp
   ) {
     $this->wp = $wp;
     $this->formRenderer = $formRenderer;
     $this->templateRenderer = $templateRenderer;
     $this->formRepository = $formRepository;
     $this->assetsController = $assetsController;
+    $this->formRenderStamp = $formRenderStamp;
   }
 
   public function renderPage(int $formId, string $formType, string $editorUrl): string {
@@ -68,12 +74,13 @@ class PreviewPage {
   private function fetchFormData(int $id): ?FormEntity {
     $formData = $this->wp->getTransient(self::PREVIEW_DATA_TRANSIENT_PREFIX . $id);
     if (is_array($formData)) {
-      $form = new FormEntity($formData['name']);
-      $form->setId($formData['id'] ?? 0);
-      $form->setBody($formData['body']);
-      $form->setSettings($formData['settings']);
-      $form->setStyles($formData['styles']);
-      $form->setStatus($formData['status']);
+      $name = is_string($formData['name'] ?? null) ? $formData['name'] : '';
+      $form = new FormEntity($name);
+      $form->setId(is_int($formData['id'] ?? null) ? $formData['id'] : 0);
+      $form->setBody(is_array($formData['body'] ?? null) ? $formData['body'] : null);
+      $form->setSettings(is_array($formData['settings'] ?? null) ? $formData['settings'] : null);
+      $form->setStyles(is_string($formData['styles'] ?? null) ? $formData['styles'] : null);
+      $form->setStatus(is_string($formData['status'] ?? null) ? $formData['status'] : FormEntity::STATUS_ENABLED);
       return $form;
     }
     return $this->formRepository->findOneById($id);
@@ -97,7 +104,10 @@ class PreviewPage {
       'delay' => 1,
       'position' => $settings['form_placement'][$formDisplayType]['position'] ?? '',
       'animation' => $settings['form_placement'][$formDisplayType]['animation'] ?? '',
+      'triggerMode' => $settings['form_placement'][$formDisplayType]['trigger_mode'] ?? 'auto',
+      'clickTriggerSelector' => $settings['form_placement'][$formDisplayType]['click_trigger_selector'] ?? '',
       'fontFamily' => $settings['font_family'] ?? '',
+      'form_stamp' => $this->formRenderStamp->issue(),
     ];
     $formPosition = $settings['form_placement'][$formDisplayType]['position'] ?? '';
     if (!$formPosition && $formDisplayType === FormEntity::DISPLAY_TYPE_FIXED_BAR) {

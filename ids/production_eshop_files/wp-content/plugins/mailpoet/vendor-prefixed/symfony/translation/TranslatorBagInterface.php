@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Symfony\Component\Translation\Exception\InvalidArgumentException;
 interface TranslatorBagInterface
 {
- public function getCatalogue(?string $locale = null);
+public function getCatalogue(?string $locale = null);
 }

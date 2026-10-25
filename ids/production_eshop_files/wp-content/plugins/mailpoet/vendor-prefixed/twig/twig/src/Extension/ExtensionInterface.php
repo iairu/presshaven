@@ -10,10 +10,10 @@ use MailPoetVendor\Twig\TwigFunction;
 use MailPoetVendor\Twig\TwigTest;
 interface ExtensionInterface
 {
- public function getTokenParsers();
- public function getNodeVisitors();
- public function getFilters();
- public function getTests();
- public function getFunctions();
- public function getOperators();
+public function getTokenParsers();
+public function getNodeVisitors();
+public function getFilters();
+public function getTests();
+public function getFunctions();
+public function getOperators();
 }

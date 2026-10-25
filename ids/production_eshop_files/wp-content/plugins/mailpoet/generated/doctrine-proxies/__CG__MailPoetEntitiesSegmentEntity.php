@@ -16,21 +16,21 @@ class SegmentEntity extends \MailPoet\Entities\SegmentEntity implements \MailPoe
      *      three parameters, being respectively the proxy object to be initialized, the method that triggered the
      *      initialization process and an array of ordered parameters that were passed to that method.
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__setInitializer
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__setInitializer
      */
     public $__initializer__;
 
     /**
      * @var \Closure the callback responsible of loading properties that need to be copied in the cloned object
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__setCloner
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__setCloner
      */
     public $__cloner__;
 
     /**
      * @var boolean flag indicating if this object was already initialized
      *
-     * @see \Doctrine\Persistence\Proxy::__isInitialized
+     * @see \MailPoetVendor\Doctrine\Persistence\Proxy::__isInitialized
      */
     public $__isInitialized__ = false;
 
@@ -43,7 +43,7 @@ class SegmentEntity extends \MailPoet\Entities\SegmentEntity implements \MailPoe
     /**
      * @var array<string, mixed> default values of properties to be lazy loaded, with keys being the property names
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__getLazyProperties
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__getLazyProperties
      */
     public static $lazyPropertiesDefaults = array (
 );
@@ -70,10 +70,10 @@ class SegmentEntity extends \MailPoet\Entities\SegmentEntity implements \MailPoe
     public function __sleep()
     {
         if ($this->__isInitialized__) {
-            return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'name', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'type', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'description', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'dynamicFilters', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScore', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScoreUpdatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'displayInManageSubscriptionPage', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'createdAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'updatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'deletedAt'];
+            return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'name', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'type', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'description', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'publicDescription', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'dynamicFilters', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScore', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScoreUpdatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'displayInManageSubscriptionPage', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'confirmationEmailId', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'confirmationPageId', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'createdAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'updatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'deletedAt'];
         }
 
-        return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'name', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'type', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'description', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'dynamicFilters', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScore', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScoreUpdatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'displayInManageSubscriptionPage', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'createdAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'updatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'deletedAt'];
+        return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'name', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'type', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'description', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'publicDescription', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'dynamicFilters', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScore', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'averageEngagementScoreUpdatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'displayInManageSubscriptionPage', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'confirmationEmailId', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'confirmationPageId', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'createdAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'updatedAt', '' . "\0" . 'MailPoet\\Entities\\SegmentEntity' . "\0" . 'deletedAt'];
     }
 
     /**
@@ -251,6 +251,28 @@ class SegmentEntity extends \MailPoet\Entities\SegmentEntity implements \MailPoe
     /**
      * {@inheritDoc}
      */
+    public function getPublicDescription(): string
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getPublicDescription', []);
+
+        return parent::getPublicDescription();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setPublicDescription(string $publicDescription): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setPublicDescription', [$publicDescription]);
+
+        parent::setPublicDescription($publicDescription);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public function getDynamicFilters()
     {
 
@@ -350,12 +372,67 @@ class SegmentEntity extends \MailPoet\Entities\SegmentEntity implements \MailPoe
     /**
      * {@inheritDoc}
      */
+    public function getConfirmationEmailId(): ?int
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getConfirmationEmailId', []);
+
+        return parent::getConfirmationEmailId();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setConfirmationEmailId(?int $confirmationEmailId): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setConfirmationEmailId', [$confirmationEmailId]);
+
+        parent::setConfirmationEmailId($confirmationEmailId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getConfirmationPageId(): ?int
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getConfirmationPageId', []);
+
+        return parent::getConfirmationPageId();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setConfirmationPageId(?int $confirmationPageId): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setConfirmationPageId', [$confirmationPageId]);
+
+        parent::setConfirmationPageId($confirmationPageId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public function getFiltersConnectOperator(): string
     {
 
         $this->__initializer__ && $this->__initializer__->__invoke($this, 'getFiltersConnectOperator', []);
 
         return parent::getFiltersConnectOperator();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getFilterGroups(): array
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getFilterGroups', []);
+
+        return parent::getFilterGroups();
     }
 
     /**

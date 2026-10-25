@@ -1,79 +1,134 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Property;
 if (!defined('ABSPATH')) exit;
-class Selector
+use MailPoetVendor\Sabberworm\CSS\Comment\Comment;
+use MailPoetVendor\Sabberworm\CSS\OutputFormat;
+use MailPoetVendor\Sabberworm\CSS\Parsing\ParserState;
+use MailPoetVendor\Sabberworm\CSS\Parsing\UnexpectedTokenException;
+use MailPoetVendor\Sabberworm\CSS\Property\Selector\Combinator;
+use MailPoetVendor\Sabberworm\CSS\Property\Selector\Component;
+use MailPoetVendor\Sabberworm\CSS\Property\Selector\CompoundSelector;
+use MailPoetVendor\Sabberworm\CSS\Renderable;
+use MailPoetVendor\Sabberworm\CSS\Settings;
+use MailPoetVendor\Sabberworm\CSS\ShortClassNameProvider;
+class Selector implements Renderable
 {
- const NON_ID_ATTRIBUTES_AND_PSEUDO_CLASSES_RX = '/
- (\\.[\\w]+) # classes
- |
- \\[(\\w+) # attributes
- |
- (\\:( # pseudo classes
- link|visited|active
- |hover|focus
- |lang
- |target
- |enabled|disabled|checked|indeterminate
- |root
- |nth-child|nth-last-child|nth-of-type|nth-last-of-type
- |first-child|last-child|first-of-type|last-of-type
- |only-child|only-of-type
- |empty|contains
- ))
- /ix';
- const ELEMENTS_AND_PSEUDO_ELEMENTS_RX = '/
- ((^|[\\s\\+\\>\\~]+)[\\w]+ # elements
- |
- \\:{1,2}( # pseudo-elements
- after|before|first-letter|first-line|selection
- ))
- /ix';
- const SELECTOR_VALIDATION_RX = '/
- ^(
- (?:
- [a-zA-Z0-9\\x{00A0}-\\x{FFFF}_^$|*="\'~\\[\\]()\\-\\s\\.:#+>]* # any sequence of valid unescaped characters
- (?:\\\\.)? # a single escaped character
- (?:([\'"]).*?(?<!\\\\)\\2)? # a quoted text like [id="example"]
- )*
- )$
- /ux';
- private $sSelector;
- private $iSpecificity;
- public static function isValid($sSelector)
- {
- return \preg_match(static::SELECTOR_VALIDATION_RX, $sSelector);
- }
- public function __construct($sSelector, $bCalculateSpecificity = \false)
- {
- $this->setSelector($sSelector);
- if ($bCalculateSpecificity) {
- $this->getSpecificity();
- }
- }
- public function getSelector()
- {
- return $this->sSelector;
- }
- public function setSelector($sSelector)
- {
- $this->sSelector = \trim($sSelector);
- $this->iSpecificity = null;
- }
- public function __toString()
- {
- return $this->getSelector();
- }
- public function getSpecificity()
- {
- if ($this->iSpecificity === null) {
- $a = 0;
- /// @todo should exclude \# as well as "#"
- $aMatches = null;
- $b = \substr_count($this->sSelector, '#');
- $c = \preg_match_all(self::NON_ID_ATTRIBUTES_AND_PSEUDO_CLASSES_RX, $this->sSelector, $aMatches);
- $d = \preg_match_all(self::ELEMENTS_AND_PSEUDO_ELEMENTS_RX, $this->sSelector, $aMatches);
- $this->iSpecificity = $a * 1000 + $b * 100 + $c * 10 + $d;
- }
- return $this->iSpecificity;
- }
+use ShortClassNameProvider;
+public const SELECTOR_VALIDATION_RX = '/
+        ^(
+            # not whitespace only
+            (?!\s*+$)
+            (?:
+                # any sequence of valid unescaped characters, except quotes
+                [a-zA-Z0-9\x{00A0}-\x{FFFF}_^$|*=~\[\]()\-\s\.:#+>,]++
+                |
+                # one or more escaped characters
+                (?:\\\\.)++
+                |
+                # quoted text, like in `[id="example"]`
+                (?:
+                    # opening quote
+                    ([\'"])
+                    (?:
+                        # sequence of characters except closing quote or backslash
+                        (?:(?!\g{-1}|\\\\).)++
+                        |
+                        # one or more escaped characters
+                        (?:\\\\.)++
+                    )*+ # zero or more times
+                    # closing quote or end (unmatched quote is currently allowed)
+                    (?:\g{-1}|$)
+                )
+            )*+ # zero or more times
+        )$
+        /ux';
+private $components;
+public static function isValid(string $selector): bool
+{
+$numberOfMatches = \preg_match(static::SELECTOR_VALIDATION_RX, $selector);
+if (!\is_int($numberOfMatches)) {
+throw new \RuntimeException('The selector is not valid UTF-8.', 1787284398);
+}
+return $numberOfMatches === 1;
+}
+final public function __construct($selector)
+{
+if (\is_string($selector)) {
+$this->setSelector($selector);
+} else {
+$this->setComponents($selector);
+}
+}
+private static function parseComponents(ParserState $parserState, array &$comments = []): array
+{
+$parserState->consumeWhiteSpace($comments);
+$selectorParts = [];
+while (\true) {
+try {
+$selectorParts[] = CompoundSelector::parse($parserState, $comments);
+} catch (UnexpectedTokenException $e) {
+if ($selectorParts !== [] && \end($selectorParts)->getValue() === ' ') {
+\array_pop($selectorParts);
+break;
+} else {
+throw $e;
+}
+}
+try {
+$selectorParts[] = Combinator::parse($parserState, $comments);
+} catch (UnexpectedTokenException $e) {
+break;
+}
+}
+return $selectorParts;
+}
+public static function parse(ParserState $parserState, array &$comments = []): self
+{
+$selectorParts = self::parseComponents($parserState, $comments);
+if (!\in_array($parserState->peek(), ['{', '}', ',', ''], \true)) {
+throw new UnexpectedTokenException('`,`, `{`, `}` or EOF', $parserState->peek(5), 'literal', $parserState->currentLine());
+}
+return new static($selectorParts);
+}
+public function getComponents(): array
+{
+return $this->components;
+}
+public function setComponents(array $components): self
+{
+$this->components = $components;
+return $this;
+}
+public function getSelector(): string
+{
+return $this->render(new OutputFormat());
+}
+public function setSelector(string $selector): void
+{
+$parserState = new ParserState($selector, Settings::create());
+$components = self::parseComponents($parserState);
+if (!$parserState->isEnd()) {
+throw new UnexpectedTokenException('EOF', $parserState->peek(5), 'literal');
+}
+$this->components = $components;
+}
+public function getSpecificity(): int
+{
+return \array_sum(\array_map(static function (Component $component): int {
+return $component->getSpecificity();
+}, $this->components));
+}
+public function render(OutputFormat $outputFormat): string
+{
+return \implode('', \array_map(static function (Component $component) use ($outputFormat): string {
+return $component->render($outputFormat);
+}, $this->components));
+}
+public function getArrayRepresentation(): array
+{
+return ['class' => $this->getShortClassName(), 'components' => \array_map(static function (Component $component): array {
+return $component->getArrayRepresentation();
+}, $this->components)];
+}
 }

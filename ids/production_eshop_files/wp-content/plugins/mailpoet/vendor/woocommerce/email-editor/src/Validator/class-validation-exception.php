@@ -5,14 +5,14 @@ if (!defined('ABSPATH')) exit;
 use Automattic\WooCommerce\EmailEditor\UnexpectedValueException;
 use WP_Error;
 class Validation_Exception extends UnexpectedValueException {
- protected $wp_error;
- public static function create_from_wp_error( WP_Error $wp_error ): self {
- $exception = self::create()
- ->withMessage( $wp_error->get_error_message() );
- $exception->wp_error = $wp_error;
- return $exception;
- }
- public function get_wp_error(): WP_Error {
- return $this->wp_error;
- }
+protected $wp_error;
+public static function create_from_wp_error( WP_Error $wp_error ): self {
+$exception = self::create()
+->withMessage( $wp_error->get_error_message() );
+$exception->wp_error = $wp_error;
+return $exception;
+}
+public function get_wp_error(): WP_Error {
+return $this->wp_error;
+}
 }

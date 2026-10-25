@@ -1,12 +1,14 @@
 === Pinterest for WooCommerce ===
 Contributors: automattic, pinterest, woocommerce
 Tags: pinterest, woocommerce, marketing, product catalog feed, pixel
-Requires at least: 5.6
-Tested up to: 6.8
-Requires PHP: 7.3
-Stable tag: 1.4.21
-License: GPLv3
-License URI: https://www.gnu.org/licenses/gpl-3.0.html
+Requires at least: 7.0
+Tested up to: 7.1
+Requires PHP: 7.4
+WC requires at least: 11.1
+WC tested up to: 11.2
+Stable tag: 1.6.0
+License: GNU General Public License v3.0
+License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
 Get your products in front of Pinterest users searching for ideas and things to buy. Connect your WooCommerce store to make your catalog browsable.
 
@@ -62,9 +64,9 @@ Pinterest is a visual discovery engine people use to find inspiration for their 
 
 = Minimum Requirements =
 
-* WordPress 5.6 or greater
-* WooCommerce 5.3 or greater
-* PHP version 7.3 or greater (PHP 7.4 or greater is recommended)
+* WordPress 7.0 or greater
+* WooCommerce 11.1 or greater
+* PHP version 7.4 or greater
 * MySQL version 5.6 or greater
 
 Visit the [WooCommerce server requirements documentation](https://woocommerce.com/document/server-requirements/) for a detailed list of server requirements.
@@ -91,9 +93,155 @@ Release and roadmap notes available on the [WooCommerce Developers Blog](https:/
 
 == Changelog ==
 
+= 1.6.0 - 2026-10-21 =
+* Add - Record the IDs of the Pinterest feeds the plugin creates and add the `wp wc pinterest feed list` and `wp wc pinterest feed delete` WP-CLI commands to inspect the connected ad account's feeds and delete one by ID.
+* Fix - Skip feeds Pinterest reports as deleted and read every feed page when matching the registered feed, so registration no longer re-attaches to a dead feed or creates a duplicate of one beyond the first page.
+* Fix - Removed permanently deleted products and variations from the catalog feed without waiting for the daily regeneration.
+* Fix - Fixed feed registration retries after a previous successful registration.
+* Fix - Clear saved feed status when deregistering or disconnecting Pinterest.
+* Fix - Retry Pinterest commerce setup and avoid creating a conversion tag when Pinterest returns an empty response.
+* Fix - Kept a billing rejection or disconnect that happens during ad-credit redemption from being overwritten.
+* Fix - Displayed errors and retry actions for failed catalog reports and kept newer report pages from being replaced by late responses.
+* Fix - Showed a failure notice instead of a success notice when the settings sync with Pinterest Ads Manager fails.
+* Fix - Stopped settings sync error notices from stacking on every retry, and kept the sync success notice visible until the next sync.
+* Fix - Showed catalog onboarding before the Conversions API prompt and kept a closed Conversions API prompt hidden for the rest of the visit.
+* Fix - Waited for settings and saved dismissals before opening catalog prompts, avoiding duplicate analytics and ineligible ad-credit notices.
+* Fix - Preserve the store connection when refreshing Pinterest account data fails temporarily.
+* Fix - Keep product grid block items visible when the Save to Pinterest button cannot be added to them.
+* Fix - Send the Pinterest click ID with Conversions API add-to-cart events when the visitor adds to cart from the page they landed on.
+* Fix - Marked a registered feed whose Pinterest processing result has no status as pending in the catalog overview.
+* Fix - Prevented PHP warnings when Pinterest connection data, feed processing results or shutdown errors lack an optional field.
+* Fix - Show Pinterest in the Channels card on Marketing > Overview again, instead of under Installed extensions.
+* Fix - Showed the remote sync status in the catalog overview when Pinterest reports the feed processing time with a timezone suffix, instead of a fatal error.
+* Tweak - Update the onboarding and landing page illustrations to the current Woo branding.
+* Dev - Added regression coverage for critical merchant flows.
+* Dev - Raised the PHPStan analysis level to 3.
+* Dev - Raised the PHPStan analysis level to 4.
+* Dev - Raised the PHPStan analysis level to 5.
+* Dev - Raised the PHPStan analysis level to 6.
+* Dev - Raised the PHPStan analysis level to 7.
+* Dev - Fixed PHPStan level 7 findings that needed behavior changes.
+
+= 1.5.4 - 2026-10-14 =
+* Fix - Stopped loading the Pinterest Tag script when no Tag is active.
+* Fix - Sent the automatic token exchange to the Pinterest V3 API with the V3 token for stores upgrading from a version before 1.4.0.
+* Fix - Prevented a fatal error on the order received page when a purchased product was deleted.
+* Fix - Prevented a PHP warning when uninstalling from a store that never saved its settings.
+* Fix - Kept the full product name, product link and image in the Save to Pinterest button when the name contains "&" or the store uses plain permalinks.
+* Tweak - Raised minimum requirements to WordPress 7.0 and WooCommerce 11.1.
+* Tweak - Warned developers when the deprecated feed status check is used.
+* Tweak - Routed Pinterest tracking output through WordPress script helpers.
+* Dev - Used the WordPress compose runtime in Pinterest admin screens.
+* Dev - Updated @wordpress/scripts to 36.1.
+* Dev - Updated the development and test dependencies to React 18.
+* Dev - Migrated the JavaScript unit tests from Jest to Vitest.
+* Dev - Updated development dependencies to address security advisories.
+* Dev - Simplified JavaScript imports with a source root alias.
+
+= 1.5.3 - 2026-10-09 =
+* Fix - Position the onboarding wizard header correctly instead of rendering it inset and below an empty band on WooCommerce 11.2, whose admin header is no longer fixed.
+* Fix - Stop wp-admin timing out when Pinterest rejects the stored token: a 401 no longer triggers an unbounded disconnect loop, and the connection is cleared locally without further API calls.
+
+= 1.5.2 - 2026-10-07 =
+* Fix - Updated dependencies with compatible security patches.
+* Fix - Updated number formatting, RTL styling, UUID and fetch dependencies to address security advisories.
+* Fix - Preserve saved Pinterest settings while loading and allow failed initial requests to be retried.
+* Fix - Verify TLS certificates for Pinterest API and token-renewal requests.
+* Fix - Restrict Pinterest product attribute form updates to authorized product editor saves.
+* Fix - Sanitize catalog feed diagnostics while preserving feed and settings links.
+* Fix - Preserve server-owned Pinterest account settings and render credit notices as text.
+* Fix - Omit customer and order data from conversion diagnostics.
+* Fix - Omit credentials and raw HTTP contents from shared API diagnostics.
+* Fix - Exclude password-protected products and their variations from catalog feeds.
+* Fix - Regenerate existing product feeds once after the security update without resetting scheduled retries.
+* Fix - Omit token-renewal response bodies, headers and cookies from debug logs.
+* Fix - Preserve stored credentials when token renewal returns no usable token data.
+* Fix - Respect product password access when generating Rich Pins metadata.
+* Fix - Render product attribute forms with custom value options and preserve saved values outside those options.
+* Tweak - Declared compatibility with WooCommerce 11.2.
+* Dev - Removed unused JavaScript build dependencies.
+* Dev - Updated the Node, build, test and lint toolchain.
+* Dev - Updated Gulp build, release packaging and BrowserSync dependencies.
+* Dev - Updated local testing, documentation and Git tooling dependencies.
+* Dev - Update dependencies to resolve security advisories.
+* Dev - Build the production ZIP on pull requests.
+* Dev - Managed changelog entries with the Jetpack Changelogger, so pull requests add a change file instead of writing the entry in the pull request description.
+* Dev - Corrected hook docblocks and other PHPStan findings that do not change behavior.
+* Dev - Updated development dependencies to address security advisories.
+
+= 1.5.1 - 2026-09-17 =
+* Fix - Consume the feed dirty flag when a generation cycle starts, so a product change no longer triggers a redundant second cycle and a deferred restart is not lost.
+* Fix - Detect and bypass conversion events triggered by Pinterest's documented crawler user agents.
+* Fix - Ignore Pinterest click IDs longer than 512 bytes instead of storing and forwarding them to the Conversions API.
+* Fix - Send PageVisit Conversions API events for stores without an active Pinterest Tag.
+* Fix - Stop sending AddToCart events for add-to-cart runs that do not change the customer's cart, such as express checkout price simulations and retried requests.
+* Tweak - Raised minimum requirements to WordPress 6.9 and WooCommerce 10.9.
+
+= 1.5.0 - 2026-09-09 =
+* Add - Include external and Pinterest click identifiers in Tag and Conversions API events to improve event matching and attribution.
+* Fix - Accessibility: Added `aria-haspopup="dialog"` attribute to the Pinterest image button to properly announce to screen reader users that activating the button opens a modal window.
+* Fix - Add accessible screen reader label to the Save to Pinterest button.
+* Fix - Do not let pending actions from a superseded feed generation cycle block a new cycle from starting.
+* Fix - Fix PageVisit tracking on full-page cache hits.
+* Fix - Fixed AEM configuration for auto-created tags.
+* Fix - Fixed scheduled sale pricing in product feeds.
+* Fix - Make the Pinterest Save button keyboard-accessible on products with no featured image.
+* Fix - Make the Pinterest Save button reachable and usable with keyboard navigation by removing `visibility: hidden` from the image wrapper on shop and product page.
+* Fix - Prevent overlapping feed generation runs from corrupting the product feed.
+* Fix - Save button does not render after pagination or filtering.
+* Fix - Send failed Pinterest OAuth callbacks back to the settings page instead of showing a raw REST error.
+* Fix - Stale feed cleanup no longer deletes manually configured Pinterest catalog data sources hosted on the store domain.
+* Tweak - Tidy up the Pinterest OAuth callback state handling.
+* Tweak - WP 7.1 compatibility.
+
+= 1.4.28 - 2026-08-14 =
+* Tweak - WC 11.1 compatibility.
+
+= 1.4.27 - 2026-06-01 =
+* Add - WooCommerce product_brand to Pinterest feed as `g:brand`.
+* Fix - Align Pinterest checkout value with discounted merchandise line totals.
+* Fix - Correct checkout tracking item prices and preserve customer IP and user agent when sending hashed email.
+* Fix - Feed generator robustness at scale.
+* Fix - Feed location URL matching.
+* Fix - Log feed ingestion failure context to WooCommerce logs.
+* Fix - Restore class_exists guard on record_event.
+* Fix - Retry Pinterest feed ingestion sooner when Pinterest reports a FETCH_ERROR.
+* Fix - Scope failed feed ingestion logging deduplication and feed URL resolution by feed.
+* Fix - Skip Pinterest CAPI events for crawler requests to prevent CAPI vs Tag divergence.
+* Fix - Use deterministic Checkout tracking event IDs so refreshed thank-you pages can deduplicate purchases.
+* Fix - Variation feed description now falls back to the parent product's short/long description instead of the variation attribute summary.
+* Tweak - WC 10.8 compatibility.
+* Update - Treat additional Pinterest redeem error codes as terminal.
+
+= 1.4.26 - 2026-04-20 =
+* Add - Settings link to plugin action links.
+* Fix - Exclude orphaned variations from Pinterest feed.
+* Fix - Resolve console error in Pinterest Save button script.
+* Tweak - WC 10.7 compatibility.
+* Tweak - WP 7.0 compatibility.
+
+= 1.4.25 - 2026-03-06 =
+* Tweak - WC 10.6 compatibility.
+* Update - Minimum required WooCommerce version bumped to 7.0.
+
+= 1.4.24 - 2026-01-27 =
+* Tweak - PHP 8.5 compatibility.
+* Tweak - WC 10.5 compatibility.
+
+= 1.4.23 - 2025-11-24 =
+* Fix - Remove feed file on deactivation.
+* Tweak - WC 10.4 compatibility.
+* Tweak - WP 6.9 compatibility.
+
+= 1.4.22 - 2025-10-28 =
+* Fix - Issue where `product_type` include more then 5 categories if a product included more.
+* Tweak - Update use of `wp_json_encode` to avoid potential browser parsing issues.
+* Tweak - WC 10.3 compatibility.
+* Tweak - WP 6.8 compatibility.
+
 = 1.4.21 - 2025-06-16 =
 * Update WP Consent API to affect all tracking with improved architecture.
-* [dev] Pin Github actions to immutable references of commits instead of tags.
+* [dev] Pin GitHub actions to immutable references of commits instead of tags.
 
 = 1.4.20 - 2025-06-03 =
 * Tweak - Reenable WP Consent API tracking integration.
@@ -104,7 +252,6 @@ Release and roadmap notes available on the [WooCommerce Developers Blog](https:/
 
 = 1.4.18 - 2025-05-20 =
 * Tweak - WC 9.9 compatibility.
-* Tweak - WP 6.8 compatibility.
 
 = 1.4.17 - 2025-03-18 =
 * Add - PHP 8.4 compatibility.
@@ -136,7 +283,7 @@ Release and roadmap notes available on the [WooCommerce Developers Blog](https:/
 * Add - API method to get commerce integration.
 * Add - Commerce Integration `partner_metadata` weekly sync.
 * Add - Failed Create Commerce Integration API call retries procedure.
-* Add - Weakly heartbeat action.
+* Add - Weekly heartbeat action.
 * Update - Make `integration_data` optional for the extension.
 
 = 1.4.10 - 2024-09-24 =

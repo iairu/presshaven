@@ -9,14 +9,18 @@ use MailPoet\Doctrine\Repository;
 use MailPoet\Entities\LogEntity;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\InvalidStateException;
+use MailPoet\Listing\ListingDateRangeFilterTrait;
 use MailPoet\Util\Helpers;
 use MailPoetVendor\Carbon\Carbon;
+use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
 use MailPoetVendor\Doctrine\DBAL\ParameterType;
 
 /**
  * @extends Repository<LogEntity>
  */
 class LogRepository extends Repository {
+  use ListingDateRangeFilterTrait;
+
   public function saveLog(LogEntity $log): void {
     // Save log entity using DBAL to avoid calling "flush()" on the entity manager.
     // Calling "flush()" can have unintended side effects, such as saving unwanted
@@ -93,6 +97,30 @@ class LogRepository extends Repository {
     return $query->getQuery()->getResult();
   }
 
+  /**
+   * Distinct log names (sources), used to populate the listing's name filter.
+   *
+   * @return string[]
+   */
+  public function getDistinctNames(): array {
+    $rows = $this->entityManager->createQueryBuilder()
+      ->select('DISTINCT l.name')
+      ->from(LogEntity::class, 'l')
+      ->where('l.name IS NOT NULL')
+      ->andWhere("l.name != ''")
+      ->orderBy('l.name', 'asc')
+      ->getQuery()
+      ->getSingleColumnResult();
+
+    $names = [];
+    foreach ($rows as $row) {
+      if (is_string($row)) {
+        $names[] = $row;
+      }
+    }
+    return $names;
+  }
+
   public function purgeOldLogs(int $daysToKeepLogs, int $limit = 1000): int {
     $logsTable = $this->entityManager->getClassMetadata(LogEntity::class)->getTableName();
     $result = $this->entityManager->getConnection()->executeStatement(
@@ -115,17 +143,158 @@ class LogRepository extends Repository {
     return (int)$result;
   }
 
-  public function getRawMessagesForNewsletter(NewsletterEntity $newsletter, string $topic): array {
-    return $this->entityManager->createQueryBuilder()
-      ->select('DISTINCT logs.rawMessage message')
+  /**
+   * Delete logs matching the listing's filter shape (`from`/`to`/`name`/`level`)
+   * and free-text search, so a deletion removes exactly what the filtered
+   * listing shows. Deletes in batches to keep each statement bounded on large
+   * log tables, mirroring purgeOldLogs().
+   *
+   * @param array{from?: string, to?: string, name?: string[], level?: int[]} $filter
+   */
+  public function deleteLogs(array $filter, ?string $search = null, int $batchSize = 1000): int {
+    $logsTable = $this->entityManager->getClassMetadata(LogEntity::class)->getTableName();
+    [$where, $parameters, $types] = $this->buildFilterSql($filter, $search);
+    $parameters['batch_limit'] = $batchSize;
+    $types['batch_limit'] = ParameterType::INTEGER;
+
+    $sql = "DELETE FROM `{$logsTable}`{$where} ORDER BY `created_at` ASC, `id` ASC LIMIT :batch_limit";
+    $connection = $this->entityManager->getConnection();
+
+    $deleted = 0;
+    do {
+      $affected = (int)$connection->executeStatement($sql, $parameters, $types);
+      $deleted += $affected;
+    } while ($affected === $batchSize);
+
+    return $deleted;
+  }
+
+  /**
+   * Fetch logs matching the listing's filter shape (`from`/`to`/`name`/`level`)
+   * and free-text search for export, so a download contains exactly the rows the
+   * filtered listing shows. Mirrors deleteLogs()'s WHERE clause and is capped by
+   * $limit.
+   *
+   * Yields rows in batches via keyset pagination on (`created_at`, `id`) rather
+   * than one big result set. MailPoet's WPDB-backed Doctrine driver buffers an
+   * entire result in memory (see Doctrine\WPDB\Result), so a single
+   * `LIMIT 50000` query would load every row at once and can exhaust PHP's
+   * memory on large installs. Paging keeps peak memory at one batch.
+   *
+   * @param array{from?: string, to?: string, name?: string[], level?: int[]} $filter
+   * @return iterable<int, array{created_at: string, name: string|null, message: string|null}>
+   */
+  public function getLogsForExport(array $filter, ?string $search = null, int $limit = 50000, int $batchSize = 1000): iterable {
+    $logsTable = $this->entityManager->getClassMetadata(LogEntity::class)->getTableName();
+    [$where, $baseParameters, $baseTypes] = $this->buildFilterSql($filter, $search);
+
+    $batchSize = $batchSize > 0 ? $batchSize : 1000;
+    $remaining = $limit;
+    $lastCreatedAt = null;
+    $lastId = null;
+
+    while ($remaining > 0) {
+      $batch = (int)min($batchSize, $remaining);
+      $parameters = $baseParameters;
+      $types = $baseTypes;
+      $conditions = $where;
+
+      if ($lastCreatedAt !== null) {
+        // Keyset cursor: continue strictly after the last row in the same
+        // (`created_at` DESC, `id` DESC) order. Stable even while new rows are
+        // inserted at the top of the table during the export.
+        $keyset = '(`created_at` < :ks_created_at OR (`created_at` = :ks_created_at AND `id` < :ks_id))';
+        $conditions = $conditions === '' ? ' WHERE ' . $keyset : $conditions . ' AND ' . $keyset;
+        $parameters['ks_created_at'] = $lastCreatedAt;
+        $parameters['ks_id'] = $lastId;
+        $types['ks_created_at'] = ParameterType::STRING;
+        $types['ks_id'] = ParameterType::INTEGER;
+      }
+
+      $parameters['batch_limit'] = $batch;
+      $types['batch_limit'] = ParameterType::INTEGER;
+
+      $sql = "SELECT `id`, `created_at`, `name`, `message` FROM `{$logsTable}`{$conditions} ORDER BY `created_at` DESC, `id` DESC LIMIT :batch_limit";
+
+      $rows = $this->entityManager->getConnection()
+        ->executeQuery($sql, $parameters, $types)
+        ->fetchAllAssociative();
+
+      if ($rows === []) {
+        break;
+      }
+
+      foreach ($rows as $row) {
+        $lastCreatedAt = $this->castToNullableString($row['created_at']);
+        $lastId = (int)$this->castToNullableString($row['id']);
+        yield [
+          'created_at' => $this->castToNullableString($row['created_at']) ?? '',
+          'name' => $this->castToNullableString($row['name']),
+          'message' => $this->castToNullableString($row['message']),
+        ];
+        $remaining--;
+      }
+
+      // A short page means the table is exhausted; stop before an empty query.
+      if (count($rows) < $batch) {
+        break;
+      }
+    }
+  }
+
+  /**
+   * @param mixed $value
+   */
+  private function castToNullableString($value): ?string {
+    return is_scalar($value) ? (string)$value : null;
+  }
+
+  /**
+   * Returns distinct raw messages logged under $topic for the given newsletters, keyed by
+   * newsletter ID and ordered by first occurrence. Newsletters without messages are not present
+   * in the result. A single query serves the whole listing page instead of one query per row.
+   *
+   * @param NewsletterEntity[] $newsletters
+   * @return array<int, string[]>
+   */
+  public function getRawMessagesForNewsletters(array $newsletters, string $topic): array {
+    $newsletterIdsByContext = [];
+    foreach ($newsletters as $newsletter) {
+      $newsletterIdsByContext[json_encode(['newsletter_id' => $newsletter->getId()])] = (int)$newsletter->getId();
+    }
+    if (!$newsletterIdsByContext) {
+      return [];
+    }
+
+    $rows = $this->entityManager->createQueryBuilder()
+      ->select('logs.context context, logs.rawMessage message')
+      ->addSelect('MIN(logs.createdAt) AS HIDDEN firstCreatedAt, MIN(logs.id) AS HIDDEN firstId')
       ->from(LogEntity::class, 'logs')
       ->where('logs.name = :topic')
-      ->andWhere('logs.context LIKE :context')
-      ->orderBy('logs.createdAt')
-      ->setParameter('context', json_encode(['newsletter_id' => $newsletter->getId()]))
+      ->andWhere('logs.context IN (:contexts)')
+      ->groupBy('logs.context')
+      ->addGroupBy('logs.rawMessage')
+      ->orderBy('firstCreatedAt')
+      ->addOrderBy('firstId')
       ->setParameter('topic', $topic)
+      ->setParameter('contexts', array_keys($newsletterIdsByContext))
       ->getQuery()
-      ->getSingleColumnResult();
+      ->getArrayResult();
+
+    $messages = [];
+    foreach ($rows as $row) {
+      $context = is_array($row) ? ($row['context'] ?? null) : null;
+      $message = is_array($row) ? ($row['message'] ?? null) : null;
+      if (!is_string($context) || !is_string($message)) {
+        continue;
+      }
+      $newsletterId = $newsletterIdsByContext[$context] ?? null;
+      if ($newsletterId === null) {
+        continue;
+      }
+      $messages[$newsletterId][] = $message;
+    }
+    return $messages;
   }
 
   public function persist($entity): void {
@@ -138,5 +307,64 @@ class LogRepository extends Repository {
 
   protected function getEntityClassName() {
     return LogEntity::class;
+  }
+
+  /**
+   * Build the WHERE clause shared by log deletion. The `from`/`to`
+   * days are site-local days converted to UTC, and the literal LOCATE() search match
+   * LogListingRepository so deleting honours the same rows the listing shows.
+   *
+   * @param array{from?: string, to?: string, name?: string[], level?: int[]} $filter
+   * @return array{0: string, 1: array<string, mixed>, 2: array<string, int>}
+   */
+  private function buildFilterSql(array $filter, ?string $search): array {
+    $conditions = [];
+    $parameters = [];
+    $types = [];
+
+    // An unparsable day matches nothing, so it can never widen a delete.
+    $from = $filter['from'] ?? '';
+    if ($from !== '') {
+      $dateFrom = $this->getSiteDayStartInUtc($from);
+      if ($dateFrom === null) {
+        $conditions[] = '1 = 0';
+      } else {
+        $conditions[] = '`created_at` >= :date_from';
+        $parameters['date_from'] = $dateFrom;
+        $types['date_from'] = ParameterType::STRING;
+      }
+    }
+    $to = $filter['to'] ?? '';
+    if ($to !== '') {
+      $dateTo = $this->getSiteDayStartInUtc($to, 1);
+      if ($dateTo === null) {
+        $conditions[] = '1 = 0';
+      } else {
+        $conditions[] = '`created_at` < :date_to';
+        $parameters['date_to'] = $dateTo;
+        $types['date_to'] = ParameterType::STRING;
+      }
+    }
+    if (!empty($filter['name'])) {
+      $conditions[] = '`name` IN (:names)';
+      $parameters['names'] = array_values($filter['name']);
+      $types['names'] = ArrayParameterType::STRING;
+    }
+    if (!empty($filter['level'])) {
+      $conditions[] = '`level` IN (:levels)';
+      $parameters['levels'] = array_values($filter['level']);
+      $types['levels'] = ArrayParameterType::INTEGER;
+    }
+    if ($search !== null && trim($search) !== '') {
+      $conditions[] = '(LOCATE(:search, `name`) > 0 OR LOCATE(:search, `message`) > 0)';
+      $parameters['search'] = trim($search);
+      $types['search'] = ParameterType::STRING;
+    }
+
+    return [
+      $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions),
+      $parameters,
+      $types,
+    ];
   }
 }

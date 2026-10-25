@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\Mailer\Mailer;
+use MailPoet\Mailer\MailerLog;
 use MailPoet\Services\Bridge\API;
 use MailPoet\Settings\SettingsController;
 use MailPoet\WP\Functions as WPFunctions;
@@ -233,7 +234,22 @@ class Bridge {
   }
 
   public function storeMSSKeyAndState($key, $state) {
-    return $this->storeKeyAndState(API::KEY_CHECK_TYPE_MSS, $key, $state);
+    $storedState = $this->storeKeyAndState(API::KEY_CHECK_TYPE_MSS, $key, $state);
+    if ($storedState === null) {
+      return null;
+    }
+    if (!self::isMPSendingServiceEnabled() || !self::isPendingApprovalKeyState($storedState)) {
+      MailerLog::resumeSendingIfPausedForPendingApproval();
+    }
+    return $storedState;
+  }
+
+  public static function isPendingApprovalKeyState(?array $state): bool {
+    if (!in_array($state['state'] ?? null, [self::KEY_VALID, self::KEY_EXPIRING], true)) {
+      return false;
+    }
+    $isApproved = $state['data']['is_approved'] ?? null;
+    return $isApproved === false || $isApproved === 'false';
   }
 
   public function checkPremiumKey($key) {
@@ -290,7 +306,7 @@ class Bridge {
     return $this->storeKeyAndState(API::KEY_CHECK_TYPE_PREMIUM, $key, $state);
   }
 
-  private function storeKeyAndState(string $keyType, ?string $key, ?array $state) {
+  private function storeKeyAndState(string $keyType, ?string $key, ?array $state): ?array {
     if ($keyType === API::KEY_CHECK_TYPE_PREMIUM) {
       $keySettingName = self::PREMIUM_KEY_SETTING_NAME;
       $keyStateSettingName = self::PREMIUM_KEY_STATE_SETTING_NAME;
@@ -303,10 +319,11 @@ class Bridge {
       empty($state['state'])
       || $state['state'] === self::KEY_CHECK_ERROR
     ) {
-      return false;
+      return null;
     }
 
     $previousKey = $this->settings->get($keySettingName);
+    $previousState = null;
     // If the key remain the same and the new state is not valid we want to preserve the data from the previous state.
     // The data contain information about state limits. We need those to display the correct information to users.
     if (empty($state['data']) && $previousKey === $key) {
@@ -324,16 +341,26 @@ class Bridge {
       );
     }
 
-    // store the key state
-    $this->settings->set(
-      $keyStateSettingName,
-      $state
-    );
-
-    // store the subscription type
-    if (!empty($state['data']) && !empty($state['data']['subscription_type'])) {
-      $this->storeSubscriptionType($state['data']['subscription_type']);
+    // store the key state only if changed
+    if ($previousState === null) {
+      $previousState = $this->settings->get($keyStateSettingName);
     }
+    if ($state !== $previousState) {
+      $this->settings->set(
+        $keyStateSettingName,
+        $state
+      );
+    }
+
+    // store the subscription type only if changed
+    if (!empty($state['data']['subscription_type'])) {
+      $currentType = $this->settings->get(self::SUBSCRIPTION_TYPE_SETTING_NAME);
+      if ($state['data']['subscription_type'] !== $currentType) {
+        $this->storeSubscriptionType($state['data']['subscription_type']);
+      }
+    }
+
+    return $state;
   }
 
   private function buildKeyState($keyState, $result, ?string $accessRestriction): array {
@@ -351,7 +378,7 @@ class Bridge {
 
   public function invalidateMssKey() {
     $key = $this->settings->get(self::API_KEY_SETTING_NAME);
-    $this->storeMSSKeyAndState($key, $this->buildKeyState(
+    $this->storeKeyAndState(API::KEY_CHECK_TYPE_MSS, $key, $this->buildKeyState(
       self::KEY_INVALID,
       ['code' => API::RESPONSE_CODE_KEY_INVALID],
       null

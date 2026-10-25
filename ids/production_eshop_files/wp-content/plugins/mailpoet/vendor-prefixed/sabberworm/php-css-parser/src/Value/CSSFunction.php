@@ -1,49 +1,61 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS\Value;
 if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Sabberworm\CSS\OutputFormat;
 use MailPoetVendor\Sabberworm\CSS\Parsing\ParserState;
+use MailPoetVendor\Sabberworm\CSS\Parsing\SourceException;
+use MailPoetVendor\Sabberworm\CSS\Parsing\UnexpectedEOFException;
+use MailPoetVendor\Sabberworm\CSS\Parsing\UnexpectedTokenException;
 class CSSFunction extends ValueList
 {
- protected $sName;
- public function __construct($sName, $aArguments, $sSeparator = ',', $iLineNo = 0)
- {
- if ($aArguments instanceof RuleValueList) {
- $sSeparator = $aArguments->getListSeparator();
- $aArguments = $aArguments->getListComponents();
- }
- $this->sName = $sName;
- $this->iLineNo = $iLineNo;
- parent::__construct($aArguments, $sSeparator, $iLineNo);
- }
- public static function parse(ParserState $oParserState, $bIgnoreCase = \false)
- {
- $mResult = $oParserState->parseIdentifier($bIgnoreCase);
- $oParserState->consume('(');
- $aArguments = Value::parseValue($oParserState, ['=', ' ', ',']);
- $mResult = new CSSFunction($mResult, $aArguments, ',', $oParserState->currentLine());
- $oParserState->consume(')');
- return $mResult;
- }
- public function getName()
- {
- return $this->sName;
- }
- public function setName($sName)
- {
- $this->sName = $sName;
- }
- public function getArguments()
- {
- return $this->aComponents;
- }
- public function __toString()
- {
- return $this->render(new OutputFormat());
- }
- public function render(OutputFormat $oOutputFormat)
- {
- $aArguments = parent::render($oOutputFormat);
- return "{$this->sName}({$aArguments})";
- }
+protected $name;
+public function __construct(string $name, $arguments, string $separator = ',', ?int $lineNumber = null)
+{
+if ($arguments instanceof RuleValueList) {
+$separator = $arguments->getListSeparator();
+$arguments = $arguments->getListComponents();
+}
+$this->name = $name;
+$this->setPosition($lineNumber);
+parent::__construct($arguments, $separator, $lineNumber);
+}
+public static function parse(ParserState $parserState, bool $ignoreCase = \false): CSSFunction
+{
+$name = self::parseName($parserState, $ignoreCase);
+$parserState->consume('(');
+$arguments = self::parseArguments($parserState);
+$result = new CSSFunction($name, $arguments, ',', $parserState->currentLine());
+$parserState->consume(')');
+return $result;
+}
+private static function parseName(ParserState $parserState, bool $ignoreCase = \false): string
+{
+return $parserState->parseIdentifier($ignoreCase);
+}
+private static function parseArguments(ParserState $parserState)
+{
+return Value::parseValue($parserState, ['=', ' ', ',']);
+}
+public function getName(): string
+{
+return $this->name;
+}
+public function setName(string $name): void
+{
+$this->name = $name;
+}
+public function getArguments(): array
+{
+return $this->components;
+}
+public function render(OutputFormat $outputFormat): string
+{
+$arguments = parent::render($outputFormat);
+return "{$this->name}({$arguments})";
+}
+public function getArrayRepresentation(): array
+{
+return \array_merge(['class' => 'placeholder', 'name' => $this->name], parent::getArrayRepresentation());
+}
 }

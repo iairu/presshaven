@@ -41,7 +41,7 @@ class Security {
     $string = base_convert(
       bin2hex(
         random_bytes( // phpcs:ignore
-          (int)ceil(3 * $length / 4)
+          max(1, (int)ceil(3 * $length / 4))
         )
       ),
       16,
@@ -63,11 +63,12 @@ class Security {
     if (defined('AUTH_KEY')) {
       $authKey = AUTH_KEY;
     }
-    return substr(
-      hash_hmac('sha512', self::generateRandomString(64), $authKey),
+    $hash = substr(
+      hash_hmac('sha512', self::generateRandomString(64), (string)$authKey),
       0,
       $length
     );
+    return is_string($hash) ? $hash : '';
   }
 
   static public function generateUnsubscribeToken($model) {

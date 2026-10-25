@@ -31,7 +31,7 @@ namespace WpifyWooDeps;
  *
  * @package ActionScheduler
  */
-if (!\function_exists('WpifyWooDeps\action_scheduler_register_3_dot_9_dot_3') && \function_exists('add_action')) {
+if (!\function_exists('action_scheduler_register_3_dot_9_dot_3') && !\function_exists('WpifyWooDeps\action_scheduler_register_3_dot_9_dot_3') && \function_exists('add_action')) {
     // WRCS: DEFINED_VERSION.
     if (!\class_exists('ActionScheduler_Versions', \false)) {
         require_once __DIR__ . '/classes/ActionScheduler_Versions.php';
@@ -67,7 +67,7 @@ if (!\function_exists('WpifyWooDeps\action_scheduler_register_3_dot_9_dot_3') &&
     }
     // Support usage in themes - load this version if no plugin has loaded a version yet.
     if (\did_action('plugins_loaded') && !\doing_action('plugins_loaded') && !\class_exists('ActionScheduler', \false)) {
-        action_scheduler_initialize_3_dot_9_dot_3();
+        \action_scheduler_initialize_3_dot_9_dot_3();
         // WRCS: DEFINED_VERSION.
         \do_action('action_scheduler_pre_theme_init');
         \ActionScheduler_Versions::initialize_latest_version();

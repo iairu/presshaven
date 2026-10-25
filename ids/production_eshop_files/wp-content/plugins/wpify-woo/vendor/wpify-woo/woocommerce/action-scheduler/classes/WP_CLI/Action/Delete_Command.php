@@ -40,7 +40,7 @@ class Delete_Command extends \ActionScheduler_WPCLI_Command
     public function execute()
     {
         $store = \ActionScheduler::store();
-        $progress_bar = \WP_CLI\Utils\make_progress_bar(sprintf(
+        $progress_bar = \WpifyWooDeps\WP_CLI\Utils\make_progress_bar(sprintf(
             /* translators: %d: number of actions to be deleted */
             _n('Deleting %d action', 'Deleting %d actions', $this->action_counts['total'], 'action-scheduler'),
             number_format_i18n($this->action_counts['total'])
@@ -50,7 +50,7 @@ class Delete_Command extends \ActionScheduler_WPCLI_Command
                 $store->delete_action($action_id);
             } catch (\Exception $e) {
                 $this->action_counts['failed']++;
-                \WP_CLI::warning($e->getMessage());
+                \WpifyWooDeps\WP_CLI::warning($e->getMessage());
             }
             $progress_bar->tick();
         }
@@ -59,7 +59,7 @@ class Delete_Command extends \ActionScheduler_WPCLI_Command
         $format = _n('Deleted %1$d action', 'Deleted %1$d actions', $this->action_counts['deleted'], 'action-scheduler') . ', ';
         /* translators: %2$d: number of actions deletions failed */
         $format .= _n('%2$d failure.', '%2$d failures.', $this->action_counts['failed'], 'action-scheduler');
-        \WP_CLI::success(sprintf($format, number_format_i18n($this->action_counts['deleted']), number_format_i18n($this->action_counts['failed'])));
+        \WpifyWooDeps\WP_CLI::success(sprintf($format, number_format_i18n($this->action_counts['deleted']), number_format_i18n($this->action_counts['failed'])));
     }
     /**
      * Action: action_scheduler_deleted_action
@@ -77,6 +77,6 @@ class Delete_Command extends \ActionScheduler_WPCLI_Command
             return;
         }
         $this->action_counts['deleted']++;
-        \WP_CLI::debug(sprintf('Action %d was deleted.', $action_id));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('Action %d was deleted.', $action_id));
     }
 }

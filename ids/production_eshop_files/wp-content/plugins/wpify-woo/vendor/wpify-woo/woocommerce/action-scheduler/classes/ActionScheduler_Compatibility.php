@@ -26,11 +26,11 @@ class ActionScheduler_Compatibility
         $value = \strtolower(\trim($value));
         $bytes = (int) $value;
         if (\false !== \strpos($value, 'g')) {
-            $bytes *= \WpifyWooDeps\GB_IN_BYTES;
+            $bytes *= \GB_IN_BYTES;
         } elseif (\false !== \strpos($value, 'm')) {
-            $bytes *= \WpifyWooDeps\MB_IN_BYTES;
+            $bytes *= \MB_IN_BYTES;
         } elseif (\false !== \strpos($value, 'k')) {
-            $bytes *= \WpifyWooDeps\KB_IN_BYTES;
+            $bytes *= \KB_IN_BYTES;
         }
         // Deal with large (float) values which run into the maximum integer size.
         return \min($bytes, \PHP_INT_MAX);

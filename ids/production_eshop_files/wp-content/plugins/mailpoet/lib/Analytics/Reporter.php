@@ -178,12 +178,12 @@ class Reporter {
       'Sending Method' => $mta['method'] ?? null,
       "Send all site's emails with" => $this->settings->get('send_transactional_emails') ? 'current sending method' : 'default WordPress sending method',
       'Date of plugin installation' => $this->settings->get('installed_at'),
-      'Subscribe in comments' => (boolean)$this->settings->get('subscribe.on_comment.enabled', false),
-      'Subscribe in registration form' => (boolean)$this->settings->get('subscribe.on_register.enabled', false),
-      'Manage Subscription page > MailPoet page' => (boolean)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.manage'))),
-      'Unsubscribe page > MailPoet page' => (boolean)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.unsubscribe'))),
-      'Sign-up confirmation' => (boolean)$this->settings->get('signup_confirmation.enabled', false),
-      'Sign-up confirmation: Confirmation page > MailPoet page' => (boolean)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.confirmation'))),
+      'Subscribe in comments' => (bool)$this->settings->get('subscribe.on_comment.enabled', false),
+      'Subscribe in registration form' => (bool)$this->settings->get('subscribe.on_register.enabled', false),
+      'Manage Subscription page > MailPoet page' => (bool)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.manage'))),
+      'Unsubscribe page > MailPoet page' => (bool)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.unsubscribe'))),
+      'Sign-up confirmation' => (bool)$this->settings->get('signup_confirmation.enabled', false),
+      'Sign-up confirmation: Confirmation page > MailPoet page' => (bool)Pages::isMailpoetPage(intval($this->settings->get('subscription.pages.confirmation'))),
       'Bounce email address' => !empty($bounceAddress),
       'Newsletter task scheduler (cron)' => $isCronTriggerMethodWP ? 'visitors' : 'script',
       'Open and click tracking' => $this->trackingConfig->isEmailTrackingEnabled(),
@@ -279,7 +279,7 @@ class Reporter {
       'Number of segments with multiple conditions' => $this->segmentsRepository->getSegmentCountWithMultipleFilters(),
       'Support tier' => $this->subscribersFeature->hasPremiumSupport() ? 'premium' : 'free',
       'Unauthorized email notice shown' => !empty($this->settings->get(AuthorizedEmailsController::AUTHORIZED_EMAIL_ADDRESSES_ERROR_SETTING)),
-      'Sign-up confirmation: Confirmation Template > using html email editor template' => (boolean)$this->settings->get(ConfirmationEmailCustomizer::SETTING_ENABLE_EMAIL_CUSTOMIZER, false),
+      'Sign-up confirmation: Confirmation Template > using html email editor template' => (bool)$this->settings->get(ConfirmationEmailCustomizer::SETTING_ENABLE_EMAIL_CUSTOMIZER, false),
       'Is WordPress.com' => $this->dotcomHelperFunctions->isDotcom() ? 'yes' : 'no',
       'WordPress.com plan' => $this->dotcomHelperFunctions->getDotcomPlan(),
       'Forms > Number of active forms' => $activeFormCounts['all'],
@@ -392,7 +392,7 @@ class Reporter {
       },
       $automationsWithCustomTrigger
     )));
-    $customActionHooks = array_unique(array_values(array_map(
+    $customActionHooksPerAutomation = array_map(
       function(Automation $automation): array {
         $customActionSteps = array_filter(
           $automation->getSteps(),
@@ -413,8 +413,8 @@ class Reporter {
 
       },
       $activeAutomations
-    )));
-    $customActionHooks = array_values(array_filter(array_merge(...$customActionHooks)));
+    );
+    $customActionHooks = array_values(array_unique(array_filter(array_merge(...$customActionHooksPerAutomation))));
     return [
       'Automation > Number of active automations' => $activeAutomationCount,
       'Automation > Number of draft automations' => count($draftAutomations),

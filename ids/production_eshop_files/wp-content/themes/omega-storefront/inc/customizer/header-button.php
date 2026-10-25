@@ -103,6 +103,41 @@ $wp_customize->add_control( 'omega_storefront_menu_text_transform',
     )
 );
 
+$wp_customize->add_setting('omega_storefront_header_menus_color', array(
+    'default'           => '',
+    'sanitize_callback' => 'sanitize_hex_color',
+));
+$wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'omega_storefront_header_menus_color', array(
+    'label'    => __('Main Menu Color', 'omega-storefront'),
+    'section'  => 'omega_storefront_button_header_setting',
+)));
+
+$wp_customize->add_setting('omega_storefront_header_menus_hover_color', array(
+    'default'           => '',
+    'sanitize_callback' => 'sanitize_hex_color',
+));
+$wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'omega_storefront_header_menus_hover_color', array(
+    'label'    => __('Main Menu Hover Color', 'omega-storefront'),
+    'section'  => 'omega_storefront_button_header_setting',
+)));
+
+$wp_customize->add_setting('omega_storefront_header_submenus_color', array(
+    'default'           => '',
+    'sanitize_callback' => 'sanitize_hex_color',
+));
+$wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'omega_storefront_header_submenus_color', array(
+    'label'    => __('Submenu Color', 'omega-storefront'),
+    'section'  => 'omega_storefront_button_header_setting',
+)));
+
+$wp_customize->add_setting('omega_storefront_header_submenus_hover_color', array(
+    'default'           => '',
+    'sanitize_callback' => 'sanitize_hex_color',
+));
+$wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'omega_storefront_header_submenus_hover_color', array(
+    'label'    => __('Submenu Hover Color', 'omega-storefront'),
+    'section'  => 'omega_storefront_button_header_setting',
+)));
 
 $wp_customize->add_setting('omega_storefront_sticky',
     array(

@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Symfony\Component\Validator\Constraints\GroupSequence;
 interface GroupSequenceProviderInterface
 {
- public function getGroupSequence();
+public function getGroupSequence();
 }

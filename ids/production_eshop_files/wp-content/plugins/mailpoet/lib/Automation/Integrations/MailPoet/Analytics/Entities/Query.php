@@ -36,6 +36,9 @@ class Query {
   /** @var string | null */
   private $search;
 
+  /** @var int | null */
+  private $versionId;
+
   public function __construct(
     \DateTimeImmutable $primaryAfter,
     \DateTimeImmutable $primaryBefore,
@@ -44,7 +47,8 @@ class Query {
     string $orderDirection = 'asc',
     int $page = 1,
     array $filter = [],
-    ?string $search = null
+    ?string $search = null,
+    ?int $versionId = null
   ) {
     $this->primaryAfter = $primaryAfter;
     $this->primaryBefore = $primaryBefore;
@@ -54,6 +58,7 @@ class Query {
     $this->page = $page;
     $this->filter = $filter;
     $this->search = $search;
+    $this->versionId = $versionId;
   }
 
   public function getAfter(): \DateTimeImmutable {
@@ -88,6 +93,10 @@ class Query {
     return $this->search;
   }
 
+  public function getVersionId(): ?int {
+    return $this->versionId;
+  }
+
   /**
    * @param Request $request
    * @return Query
@@ -111,12 +120,14 @@ class Query {
       throw new UnexpectedValueException('Invalid query parameters');
     }
 
-    $limit = $query['limit'] ?? 25;
-    $orderBy = $query['order_by'] ?? '';
-    $orderDirection = isset($query['order']) && strtolower($query['order']) === 'asc' ? 'asc' : 'desc';
-    $page = $query['page'] ?? 1;
-    $filter = $query['filter'] ?? [];
-    $search = $query['search'] ?? null;
+    $limit = is_int($query['limit'] ?? null) ? $query['limit'] : 25;
+    $orderBy = is_string($query['order_by'] ?? null) ? $query['order_by'] : '';
+    $order = $query['order'] ?? null;
+    $orderDirection = is_string($order) && strtolower($order) === 'asc' ? 'asc' : 'desc';
+    $page = is_int($query['page'] ?? null) ? $query['page'] : 1;
+    $filter = is_array($query['filter'] ?? null) ? $query['filter'] : [];
+    $search = isset($query['search']) && is_string($query['search']) ? $query['search'] : null;
+    $versionId = is_int($query['version_id'] ?? null) ? $query['version_id'] : null;
 
     return new self(
       new \DateTimeImmutable($primaryAfter),
@@ -126,7 +137,8 @@ class Query {
       $orderDirection,
       $page,
       $filter,
-      $search
+      $search,
+      $versionId
     );
   }
 
@@ -145,6 +157,7 @@ class Query {
         'page' => Builder::integer()->minimum(1),
         'filter' => Builder::object([]),
         'search' => Builder::string()->nullable(),
+        'version_id' => Builder::integer()->minimum(1)->nullable(),
       ]
     );
   }

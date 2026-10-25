@@ -554,7 +554,17 @@ class WithdrawalClaimsModule extends AbstractModule {
 			? $created
 			: \DateTimeImmutable::createFromInterface( $created );
 
-		$cutoff = ( new \DateTimeImmutable( 'now' ) )->modify( '-' . $amount . ' ' . $unit );
+		// Staleness cutoff must not be tighter than the longest period this
+		// order could legitimately be under (global settings or a per-product
+		// override, e.g. via $amount) — otherwise a normal late status change
+		// (item shipped later than the period length) gets misread as an
+		// old/stale order and wrongly clamped to date_created.
+		$days_w      = max( 1, (int) $this->get_setting( 'withdrawal_period_days' ) );
+		$months_c    = max( 1, (int) $this->get_setting( 'claim_warranty_months' ) );
+		$amount_days = 'months' === $unit ? $amount * 31 : $amount;
+		$max_days    = max( $days_w, $months_c * 31, $amount_days );
+
+		$cutoff = ( new \DateTimeImmutable( 'now' ) )->modify( '-' . $max_days . ' days' );
 
 		if ( $created_i < $cutoff && $start_i > $created_i ) {
 			return $created_i;
@@ -870,6 +880,9 @@ class WithdrawalClaimsModule extends AbstractModule {
 	}
 
 	public function verify_time_trap( string $value, int $min_seconds = 1 ): bool {
+		// Page-wide typography filters can inject &nbsp; into hidden field values.
+		$value = (string) preg_replace( '/[\s\x{00A0}]+/u', '', $value );
+
 		if ( strpos( $value, '|' ) === false ) {
 			return false;
 		}
@@ -2040,25 +2053,51 @@ class WithdrawalClaimsModule extends AbstractModule {
 			return ob_get_clean();
 		}
 
+		// Per-item period ends. Products may override the period (see
+		// META_PERIOD_OVR / META_WARRANTY_OVR), so the order-level value alone
+		// would contradict what gets stored with the request.
+		$item_ends = array();
+		foreach ( $eligible['items'] as $row ) {
+			if ( ! $row['eligible'] ) {
+				continue;
+			}
+			$item_ends[ (int) $row['line_item_id'] ] = $type === 'withdrawal'
+				? $this->withdrawal_period_end_for( $order, (int) $row['line_item_id'] )
+				: $this->claim_period_end_for( $order, (int) $row['line_item_id'] );
+		}
+
+		$formatted_ends = array();
+		foreach ( $item_ends as $line_item_id => $item_end ) {
+			$formatted_ends[ $line_item_id ] = wp_date( wc_date_format(), $item_end->getTimestamp() );
+		}
+		$ends_differ = count( array_unique( $formatted_ends ) ) > 1;
+		$latest_end  = $item_ends ? max( $item_ends ) : null;
+
 		if ( $type === 'withdrawal' ) {
-			$end = $this->withdrawal_period_end_for( $order );
-			if ( $end >= $now ) {
+			if ( $latest_end && $latest_end >= $now ) {
 				?>
 				<p>
 					<?php
-					/* translators: %s: date */
-					printf( esc_html__( 'Withdrawal period ends on %s.', 'wpify-woo' ), esc_html( wp_date( wc_date_format(), $end->getTimestamp() ) ) );
+					if ( $ends_differ ) {
+						esc_html_e( 'The withdrawal period differs between items — see the dates in the table below.', 'wpify-woo' );
+					} else {
+						/* translators: %s: date */
+						printf( esc_html__( 'Withdrawal period ends on %s.', 'wpify-woo' ), esc_html( reset( $formatted_ends ) ) );
+					}
 					?>
 				</p>
 				<?php
 			}
-		} else {
-			$end = $this->claim_period_end_for( $order );
+		} elseif ( $latest_end ) {
 			?>
 			<p>
 				<?php
-				/* translators: %s: date */
-				printf( esc_html__( 'Warranty valid until %s.', 'wpify-woo' ), esc_html( wp_date( wc_date_format(), $end->getTimestamp() ) ) );
+				if ( $ends_differ ) {
+					esc_html_e( 'The warranty period differs between items — see the dates in the table below.', 'wpify-woo' );
+				} else {
+					/* translators: %s: date */
+					printf( esc_html__( 'Warranty valid until %s.', 'wpify-woo' ), esc_html( reset( $formatted_ends ) ) );
+				}
 				?>
 			</p>
 			<?php
@@ -2116,6 +2155,15 @@ class WithdrawalClaimsModule extends AbstractModule {
 					<th></th>
 					<th><?php esc_html_e( 'Item', 'wpify-woo' ); ?></th>
 					<th><?php esc_html_e( 'Quantity', 'wpify-woo' ); ?></th>
+					<?php if ( $ends_differ ) : ?>
+						<th>
+							<?php
+							echo $type === 'withdrawal'
+								? esc_html__( 'Period ends', 'wpify-woo' )
+								: esc_html__( 'Warranty until', 'wpify-woo' );
+							?>
+						</th>
+					<?php endif; ?>
 				</tr>
 				</thead>
 				<tbody>
@@ -2166,6 +2214,9 @@ class WithdrawalClaimsModule extends AbstractModule {
 							}
 							?>
 						</td>
+						<?php if ( $ends_differ ) : ?>
+							<td><?php echo esc_html( $formatted_ends[ $lid ] ?? '—' ); ?></td>
+						<?php endif; ?>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>

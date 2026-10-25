@@ -137,6 +137,11 @@ class Settings extends APIEndpoint {
         ]
       );
     } else {
+      $validationError = $this->validateSettingsBeforeSave($settings);
+      if ($validationError) {
+        return $this->badRequest([APIError::BAD_REQUEST => $validationError]);
+      }
+
       $oldSettings = $this->settings->getAll();
       $meta = [];
       $signupConfirmation = $this->settings->get('signup_confirmation.enabled');
@@ -145,6 +150,11 @@ class Settings extends APIEndpoint {
       }
 
       $this->onSettingsChange($oldSettings, $this->settings->getAll());
+
+      if (($oldSettings['mta']['mailpoet_api_key'] ?? null) !== $this->settings->get('mta.mailpoet_api_key')) {
+        $this->senderDomainController->clearCache();
+        $this->authorizedEmailsController->clearCache();
+      }
 
       // when pending approval, leave this to cron / Key Activation tab logic
       if (!$this->servicesChecker->isMailPoetAPIKeyPendingApproval()) {
@@ -375,6 +385,12 @@ class Settings extends APIEndpoint {
       $this->settingsChangeHandler->onInactiveSubscribersIntervalChange();
     }
 
+    $oldUnconfirmedCleanup = $oldSettings['delete_unconfirmed_subscribers_after_days'];
+    $newUnconfirmedCleanup = $newSettings['delete_unconfirmed_subscribers_after_days'];
+    if ($oldUnconfirmedCleanup !== $newUnconfirmedCleanup && $newUnconfirmedCleanup === '30') {
+      $this->settingsChangeHandler->onUnconfirmedSubscribersCleanupEnable();
+    }
+
     $oldSendingMethod = $oldSettings['mta_group'];
     $newSendingMethod = $newSettings['mta_group'];
     if (($oldSendingMethod !== $newSendingMethod) && ($newSendingMethod === 'mailpoet')) {
@@ -412,6 +428,19 @@ class Settings extends APIEndpoint {
     if (!empty($newSettings['signup_confirmation']['use_mailpoet_editor'])) {
       $this->confirmationEmailCustomizer->init();
     }
+  }
+
+  private function validateSettingsBeforeSave(array $settings): ?string {
+    foreach ($settings as $name => $value) {
+      if (explode('.', (string)$name)[0] !== 'delete_unconfirmed_subscribers_after_days') {
+        continue;
+      }
+
+      if (!in_array($value, SettingsController::ALLOWED_DELETE_UNCONFIRMED_SUBSCRIBERS_AFTER_DAYS, true)) {
+        return __('Invalid value for deleting unconfirmed subscribers.', 'mailpoet');
+      }
+    }
+    return null;
   }
 
   public function recalculateSubscribersCountsCache() {

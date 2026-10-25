@@ -44,7 +44,6 @@ class PSRCacheItem implements CacheItemInterface {
    * @inheritDoc
    */
   public function isHit(): bool {
-    // TODO: Implement isHit() method.
     return $this->isHit;
   }
 

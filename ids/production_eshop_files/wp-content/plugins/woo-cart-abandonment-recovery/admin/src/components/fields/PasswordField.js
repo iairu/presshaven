@@ -3,6 +3,8 @@ import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import { Input } from '@bsf/force-ui';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { cn } from '@Utils/helper';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const PasswordField = ( {
@@ -61,21 +63,26 @@ const PasswordField = ( {
 		}
 	}
 
+	const a11y = useFieldA11y( { description, error } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
 		>
 			<div>
 				<Input
-					className={ `${
-						badge ? 'w-24 ' : 'w-full'
-					} focus:[&>input]:ring-focus ${
-						error ? 'border-red-500' : ''
-					}` }
+					className={ cn(
+						badge ? 'w-24' : 'w-full',
+						'focus:[&>input]:ring-focus',
+						error && 'border-support-error'
+					) }
+					{ ...a11y.controlProps }
+					autoComplete="new-password"
 					type="password"
 					size="md"
 					name={ name }
@@ -83,9 +90,7 @@ const PasswordField = ( {
 					onChange={ handleOnChange }
 					disabled={ isPro && isFeatureBlocked }
 				/>
-				{ error && (
-					<p className="text-red-500 text-sm mt-1">{ error }</p>
-				) }
+				<FieldError id={ a11y.errorId }>{ error }</FieldError>
 			</div>
 		</FieldWrapper>
 	);

@@ -5,8 +5,10 @@ namespace MailPoet\Config;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Cron\ActionScheduler\Actions\DaemonTrigger;
 use MailPoet\Cron\ActionScheduler\ActionScheduler as CronActionScheduler;
 use MailPoet\Cron\CronTrigger;
+use MailPoet\Cron\DaemonActionSchedulerRunner;
 use MailPoet\InvalidStateException;
 use MailPoet\Migrator\Migrator;
 use MailPoet\Settings\SettingsController;
@@ -36,13 +38,17 @@ class Activator {
   /** @var CronActionScheduler */
   private $cronActionSchedulerRunner;
 
+  /** @var DaemonActionSchedulerRunner */
+  private $daemonActionSchedulerRunner;
+
   public function __construct(
     Connection $connection,
     SettingsController $settings,
     Populator $populator,
     WPFunctions $wp,
     Migrator $migrator,
-    CronActionScheduler $cronActionSchedulerRunner
+    CronActionScheduler $cronActionSchedulerRunner,
+    DaemonActionSchedulerRunner $daemonActionSchedulerRunner
   ) {
     $this->connection = $connection;
     $this->settings = $settings;
@@ -50,6 +56,7 @@ class Activator {
     $this->wp = $wp;
     $this->migrator = $migrator;
     $this->cronActionSchedulerRunner = $cronActionSchedulerRunner;
+    $this->daemonActionSchedulerRunner = $daemonActionSchedulerRunner;
   }
 
   public function activate() {
@@ -76,7 +83,7 @@ class Activator {
 
   private function processActivate(): void {
     $this->migrator->run();
-    $this->deactivateCronActions();
+    $this->refreshCronActions();
     $this->populator->up();
     $this->updateDbVersion();
 
@@ -87,6 +94,25 @@ class Activator {
     $localizer->forceInstallLanguagePacks($this->wp);
 
     $this->checkForDisabledMailFunction();
+  }
+
+  /**
+   * Public because it can be deferred until Action Scheduler is initialized.
+   */
+  public function refreshCronActions(): void {
+    $currentMethod = $this->settings->get(CronTrigger::SETTING_NAME . '.method');
+    if ($currentMethod !== CronTrigger::METHOD_ACTION_SCHEDULER) {
+      $this->daemonActionSchedulerRunner->clearDeactivationFlag();
+      return;
+    }
+
+    if (!$this->cronActionSchedulerRunner->isInitialized()) {
+      $this->cronActionSchedulerRunner->runAfterInitialized([$this, 'refreshCronActions']);
+      return;
+    }
+
+    $this->deactivateCronActions();
+    $this->reactivateCronActions();
   }
 
   public function deactivate() {
@@ -111,6 +137,21 @@ class Activator {
       return;
     }
     $this->cronActionSchedulerRunner->unscheduleAllCronActions();
+  }
+
+  private function reactivateCronActions(): void {
+    $this->daemonActionSchedulerRunner->clearDeactivationFlag();
+    $currentMethod = $this->settings->get(CronTrigger::SETTING_NAME . '.method');
+    if ($currentMethod !== CronTrigger::METHOD_ACTION_SCHEDULER) {
+      return;
+    }
+    if (!$this->cronActionSchedulerRunner->hasScheduledAction(DaemonTrigger::NAME)) {
+      $this->cronActionSchedulerRunner->scheduleRecurringAction(
+        $this->wp->currentTime('timestamp', true),
+        DaemonTrigger::TRIGGER_RUN_INTERVAL,
+        DaemonTrigger::NAME
+      );
+    }
   }
 
   public function updateDbVersion() {

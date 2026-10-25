@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Symfony\Component\CssSelector\Node\SelectorNode;
 interface ParserInterface
 {
- public function parse(string $source) : array;
+public function parse(string $source): array;
 }

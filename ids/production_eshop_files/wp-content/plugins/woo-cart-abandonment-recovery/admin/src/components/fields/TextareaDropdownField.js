@@ -1,11 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId, useCallback } from 'react';
 import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
-import { TextArea, Button, DropdownMenu, SearchBox } from '@bsf/force-ui';
-import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
-import { __ } from '@wordpress/i18n';
+import { TextArea, Button, DropdownMenu, Input } from '@bsf/force-ui';
+import {
+	EllipsisVerticalIcon,
+	MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline';
+import { __, _n, sprintf } from '@wordpress/i18n';
 
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y, FieldError } from '@Components/common/fieldA11y';
+
+// The blacklist dictionary has thousands of entries; rendering them all at once makes the menu slow.
+const OPTIONS_PER_PAGE = 50;
 
 const TextareaDropdownField = ( {
 	title,
@@ -31,6 +38,8 @@ const TextareaDropdownField = ( {
 			: settingsValues[ name ] ?? value ?? '';
 	const [ textValue, setTextValue ] = useState( currentValue );
 	const [ searchText, setSearchText ] = useState( '' );
+	const [ visibleCount, setVisibleCount ] = useState( OPTIONS_PER_PAGE );
+	const listRef = useRef( null );
 
 	const debouncedUpdate = useDebounceDispatch(
 		dispatch,
@@ -40,6 +49,7 @@ const TextareaDropdownField = ( {
 		true
 	);
 	const inputRef = useRef( null );
+	const optionsListId = useId();
 
 	useEffect( () => {
 		const newValue =
@@ -92,8 +102,27 @@ const TextareaDropdownField = ( {
 		}
 	};
 
+	// The menu mounts on open, so focusing here puts the cursor in the search box each time.
+	const focusSearchOnOpen = useCallback( ( node ) => {
+		node?.querySelector( 'input' )?.focus( { preventScroll: true } );
+		setVisibleCount( OPTIONS_PER_PAGE );
+	}, [] );
+
 	const handleSearch = ( val ) => {
 		setSearchText( val );
+		setVisibleCount( OPTIONS_PER_PAGE );
+		if ( listRef.current ) {
+			listRef.current.scrollTop = 0;
+		}
+	};
+
+	const showMoreOnScroll = ( event ) => {
+		const list = event.currentTarget;
+		const nearBottom =
+			list.scrollTop + list.clientHeight >= list.scrollHeight - 48;
+		if ( nearBottom && visibleCount < filteredOptions.length ) {
+			setVisibleCount( ( count ) => count + OPTIONS_PER_PAGE );
+		}
 	};
 
 	// Filter options based on search text
@@ -103,15 +132,40 @@ const TextareaDropdownField = ( {
 		)
 		: options;
 
+	const a11y = useFieldA11y( { description, error } );
+	const isOverLimit = countLimit !== null && textValue.length > countLimit;
+	const counterId = `${ a11y.id }-count`;
+	let counterColor = 'text-gray-500';
+	if ( isOverLimit ) {
+		counterColor = 'text-support-error';
+	} else if ( countLimit !== null && textValue.length > countLimit * 0.9 ) {
+		counterColor = 'text-badge-color-yellow';
+	}
+
 	return (
-		<FieldWrapper title={ title } description={ description } type="block">
+		<FieldWrapper
+			title={ title }
+			description={ description }
+			fieldId={ a11y.id }
+			type="block"
+		>
 			<div className="flex gap-2">
 				<div className="grow">
 					<TextArea
+						{ ...a11y.controlProps }
+						aria-describedby={
+							[
+								a11y.controlProps[ 'aria-describedby' ],
+								countLimit !== null ? counterId : null,
+							]
+								.filter( Boolean )
+								.join( ' ' ) || undefined
+						}
+						aria-invalid={ isOverLimit || !! error || undefined }
 						className={ `w-full h-40 focus:[&>input]:ring-focus ${
-							countLimit !== null &&
-							textValue.length > countLimit &&
-							'border-red-500 focus:border-red-500 hover:border-red-500'
+							isOverLimit
+								? 'border-support-error focus:border-support-error hover:border-support-error'
+								: ''
 						}` }
 						type="text"
 						size="md"
@@ -123,13 +177,14 @@ const TextareaDropdownField = ( {
 					{ countLimit !== null && (
 						<div
 							className={ `flex ${
-								textValue.length > countLimit
-									? 'justify-between'
-									: 'justify-end'
+								isOverLimit ? 'justify-between' : 'justify-end'
 							} mt-1` }
 						>
-							{ textValue.length > countLimit && (
-								<span className="text-red-500 text-sm">
+							{ isOverLimit && (
+								<span
+									role="alert"
+									className="text-support-error text-sm"
+								>
 									{ __(
 										'Character limit exceeded',
 										'woo-cart-abandonment-recovery'
@@ -137,33 +192,24 @@ const TextareaDropdownField = ( {
 								</span>
 							) }
 							<span
-								className={ `text-sm ${
-									textValue.length > countLimit
-										? 'text-red-500'
-										: textValue.length > countLimit * 0.9
-											? 'text-yellow-500'
-											: 'text-gray-500'
-								}` }
+								id={ counterId }
+								className={ `text-sm ${ counterColor }` }
 							>
 								{ textValue.length } / { countLimit }
 							</span>
 						</div>
 					) }
 
-					{ error && (
-						<p className="text-red-500 text-sm mt-1">{ error }</p>
-					) }
+					<FieldError id={ a11y.errorId }>{ error }</FieldError>
 				</div>
 				{ options.length > 0 && (
 					<DropdownMenu placement="bottom-end">
 						<DropdownMenu.Trigger>
-							<span className="sr-only">
-								{ __(
-									'Open Dropdown',
+							<Button
+								aria-label={ __(
+									'Insert placeholder',
 									'woo-cart-abandonment-recovery'
 								) }
-							</span>
-							<Button
 								size="md"
 								type="button"
 								variant="outline"
@@ -173,41 +219,80 @@ const TextareaDropdownField = ( {
 								iconPosition="left"
 							/>
 						</DropdownMenu.Trigger>
-						<DropdownMenu.ContentWrapper className="z-50 max-h-72 overflow-y-auto">
+						<DropdownMenu.ContentWrapper className="z-50">
 							<DropdownMenu.Content className="w-72">
 								{ search && (
-									<SearchBox size="sm">
-										<SearchBox.Input
-											ref={ {
-												current: '[Circular]',
-											} }
-											className="mb-2 box-border"
+									<div
+										className="pb-2"
+										role="search"
+										ref={ focusSearchOnOpen }
+									>
+										<Input
+											type="search"
+											size="sm"
+											value={ searchText }
 											onChange={ handleSearch }
+											placeholder={ __(
+												'Search options…',
+												'woo-cart-abandonment-recovery'
+											) }
+											prefix={
+												<MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
+											}
+											aria-label={ __(
+												'Search options',
+												'woo-cart-abandonment-recovery'
+											) }
+											aria-controls={ optionsListId }
+											autoComplete="off"
+											className="w-full [&_input]:min-h-0"
 										/>
-									</SearchBox>
+										<p className="sr-only" role="status">
+											{ searchText &&
+												sprintf(
+													/* translators: %d: number of matching options */
+													_n(
+														'%d option found',
+														'%d options found',
+														filteredOptions.length,
+														'woo-cart-abandonment-recovery'
+													),
+													filteredOptions.length
+												) }
+										</p>
+									</div>
 								) }
-								<DropdownMenu.List>
-									{ filteredOptions.length > 0 ? (
-										filteredOptions.map(
-											( option, index ) => (
-												<DropdownMenu.Item
-													key={ index }
-													onClick={ () =>
-														handleDropdownClick(
-															option.value
-														)
-													}
-												>
-													{ option.text }
-												</DropdownMenu.Item>
-											)
-										)
-									) : (
-										<div className="text-center">
-											No options available
-										</div>
-									) }
-								</DropdownMenu.List>
+								<div
+									id={ optionsListId }
+									ref={ listRef }
+									onScroll={ showMoreOnScroll }
+									className="max-h-60 overflow-y-auto overflow-x-hidden"
+								>
+									<DropdownMenu.List>
+										{ filteredOptions.length > 0 ? (
+											filteredOptions
+												.slice( 0, visibleCount )
+												.map( ( option, index ) => (
+													<DropdownMenu.Item
+														key={ index }
+														className="[overflow-wrap:anywhere]"
+														onClick={ () =>
+															handleDropdownClick( option.value )
+														}
+													>
+														{ option.text }
+													</DropdownMenu.Item>
+												) )
+										) : (
+											<div className="text-center">
+												{ __(
+													'No options available',
+													'woo-cart-abandonment-recovery'
+												) }
+											</div>
+										) }
+									</DropdownMenu.List>
+								</div>
 							</DropdownMenu.Content>
 						</DropdownMenu.ContentWrapper>
 					</DropdownMenu>

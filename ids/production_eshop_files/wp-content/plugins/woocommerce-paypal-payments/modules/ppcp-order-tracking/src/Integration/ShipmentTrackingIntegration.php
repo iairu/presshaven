@@ -60,6 +60,11 @@ class ShipmentTrackingIntegration implements Integration
      */
     public function integrate(): void
     {
+        /*
+         * Priority 5: WooCommerce Shipment Tracking answers this action too and ends
+         * in die(), so at the shared default this never ran. The tracking is read
+         * from the request, so running first costs nothing.
+         */
         add_action('wp_ajax_wc_shipment_tracking_save_form', function () {
             try {
                 check_ajax_referer('create-tracking-item', 'security', \true);
@@ -68,7 +73,7 @@ class ShipmentTrackingIntegration implements Integration
                 }
                 $order_id = (int) wc_clean(wp_unslash($_POST['order_id'] ?? ''));
                 $wc_order = wc_get_order($order_id);
-                if (!is_a($wc_order, WC_Order::class)) {
+                if (!$wc_order instanceof WC_Order) {
                     return;
                 }
                 $paypal_order = ppcp_get_paypal_order($wc_order);
@@ -84,7 +89,7 @@ class ShipmentTrackingIntegration implements Integration
             } catch (Exception $exception) {
                 return;
             }
-        });
+        }, 5);
         /**
          * Support the case when tracking is added via REST.
          */
@@ -99,7 +104,7 @@ class ShipmentTrackingIntegration implements Integration
                 }
                 $order_id = $tracking_item['order_id'] ?? 0;
                 $wc_order = wc_get_order($order_id);
-                if (!is_a($wc_order, WC_Order::class)) {
+                if (!$wc_order instanceof WC_Order) {
                     return $response;
                 }
                 $paypal_order = ppcp_get_paypal_order($wc_order);

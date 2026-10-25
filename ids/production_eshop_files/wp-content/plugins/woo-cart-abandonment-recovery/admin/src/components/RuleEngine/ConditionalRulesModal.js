@@ -45,7 +45,7 @@ const ConditionalRulesModal = ( {
 				<Dialog.Footer className="p-5 border-0 border-t border-solid border-gray-200">
 					<Button
 						variant="primary"
-						size="sm"
+						size="md"
 						onClick={ () => onOpenChange( false ) }
 					>
 						{ __( 'Done', 'woo-cart-abandonment-recovery' ) }

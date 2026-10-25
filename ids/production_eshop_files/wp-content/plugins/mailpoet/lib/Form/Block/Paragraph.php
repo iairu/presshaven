@@ -5,6 +5,7 @@ namespace MailPoet\Form\Block;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Form\Util\Styles;
 use MailPoet\WP\Functions as WPFunctions;
 
 class Paragraph {
@@ -61,9 +62,6 @@ class Paragraph {
     if (!empty($block['params']['font_size'])) {
       $classes[] = 'mailpoet-has-font-size';
     }
-    if (empty($classes)) {
-      return null;
-    }
     return 'class="'
     . $this->wp->escAttr(join(' ', $classes))
     . '"';
@@ -71,30 +69,36 @@ class Paragraph {
 
   private function renderStyle(array $block) {
     $styles = [];
-    if (!empty($block['params']['background_color'])) {
+    if (!empty($block['params']['background_color']) && Styles::isColorValue($block['params']['background_color'])) {
       $styles[] = 'background-color: ' . $block['params']['background_color'];
     }
-    if (!empty($block['params']['gradient'])) {
+    if (!empty($block['params']['gradient']) && Styles::isColorValue($block['params']['gradient'])) {
       $styles[] = "background: {$block['params']['gradient']};";
     }
-    if (!empty($block['params']['align'])) {
+    if (!empty($block['params']['align']) && in_array($block['params']['align'], ['left', 'center', 'right', 'justify'], true)) {
       $styles[] = 'text-align: ' . $block['params']['align'];
     }
-    if (!empty($block['params']['text_color'])) {
+    if (!empty($block['params']['text_color']) && Styles::isColorValue($block['params']['text_color'])) {
       $styles[] = 'color: ' . $block['params']['text_color'];
     }
-    if (!empty($block['params']['font_size'])) {
+    if (!empty($block['params']['font_size']) && Styles::isSizeValue($block['params']['font_size'])) {
       $styles[] = 'font-size: ' . $block['params']['font_size'] . (is_numeric($block['params']['font_size']) ? 'px' : '');
     }
-    if (!empty($block['params']['line_height'])) {
+    if (!empty($block['params']['line_height']) && Styles::isSizeValue($block['params']['line_height'])) {
       $styles[] = 'line-height: ' . $block['params']['line_height'];
     }
-    if (!empty($block['params']['padding']) && is_array($block['params']['padding'])) {
-      $top = $block['params']['padding']['top'] ?? 0;
-      $right = $block['params']['padding']['right'] ?? 0;
-      $bottom = $block['params']['padding']['bottom'] ?? 0;
-      $left = $block['params']['padding']['left'] ?? 0;
-      $styles[] = "padding:{$top} {$right} {$bottom} {$left};";
+    $padding = $block['params']['padding'] ?? null;
+    if (is_array($padding) && !empty($padding)) {
+      $top = $this->normalizePaddingValue($padding['top'] ?? '0');
+      $right = $this->normalizePaddingValue($padding['right'] ?? '0');
+      $bottom = $this->normalizePaddingValue($padding['bottom'] ?? '0');
+      $left = $this->normalizePaddingValue($padding['left'] ?? '0');
+      $paddingValue = "{$top} {$right} {$bottom} {$left}";
+      if (Styles::isSizeValue($paddingValue)) {
+        $styles[] = "padding:{$paddingValue};";
+      }
+    } elseif (is_scalar($padding) && trim((string)$padding) !== '' && Styles::isSizeValue($this->normalizePaddingValue($padding))) {
+      $styles[] = 'padding:' . $this->normalizePaddingValue($padding) . ';';
     }
     if (empty($styles)) {
       return null;
@@ -102,5 +106,17 @@ class Paragraph {
     return 'style="'
       . $this->wp->escAttr(join('; ', $styles))
       . '"';
+  }
+
+  private function normalizePaddingValue($value): string {
+    if (!is_scalar($value)) {
+      return '0';
+    }
+
+    $cssValue = trim((string)$value);
+    if ($cssValue !== '' && is_numeric($cssValue) && (float)$cssValue !== 0.0) {
+      return $cssValue . 'px';
+    }
+    return $cssValue;
   }
 }

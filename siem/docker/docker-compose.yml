@@ -64,7 +64,7 @@ services:
 
   # Service used to reset kibana_system password after elasticsearch startup
   init-password:
-    image: curlimages/curl:7.85.0  # Use a lightweight image
+    image: curlimages/curl:8.23.0  # Use a lightweight image
     depends_on:
       es01:
         condition: service_healthy
@@ -197,7 +197,7 @@ services:
   # `docker compose ps -a` / the dashboard's Services page instead of looking
   # like a clean run.
   kibana_dashboards_setup:
-    image: curlimages/curl:7.85.0
+    image: curlimages/curl:8.23.0
     depends_on:
       kibana:
         condition: service_healthy

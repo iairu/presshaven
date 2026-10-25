@@ -45,6 +45,7 @@ class Context
         });
         // Activate is_cart() on woocommerce/classic-shortcode cart blocks.
         if (!is_cart() && is_callable('wc_maybe_define_constant')) {
+            // @phpstan-ignore function.alreadyNarrowedType
             if (has_block('woocommerce/classic-shortcode')) {
                 $classic_block = $this->find_classic_shortcode_block();
                 $type = $classic_block['attrs']['shortcode'] ?? '';
@@ -63,11 +64,11 @@ class Context
      */
     protected function find_classic_shortcode_block(): ?array
     {
-        $post = get_the_content();
-        if (!$post) {
+        $post = get_post();
+        if (!$post || empty($post->post_content)) {
             return null;
         }
-        $blocks = parse_blocks($post);
+        $blocks = parse_blocks($post->post_content);
         foreach ($blocks as $block) {
             if ($block['blockName'] === 'woocommerce/classic-shortcode') {
                 return $block;
@@ -292,6 +293,23 @@ class Context
         }
         $screen = get_current_screen();
         return $screen && $screen->is_block_editor();
+    }
+    /**
+     * Checks whether the current request is the Site Editor (editing a block-based
+     * template or template part), as opposed to the post/page editor or the front end.
+     *
+     * Stateless on purpose: it depends only on the current admin screen, so callers can
+     * use it without a Context instance. The block-based templates the Site Editor
+     * produces are exactly where classic `woocommerce_*` hooks do not fire, so surfaces
+     * that rely on those hooks need this to branch to a block-aware path.
+     */
+    public static function is_site_editor(): bool
+    {
+        if (!function_exists('get_current_screen')) {
+            return \false;
+        }
+        $screen = get_current_screen();
+        return $screen instanceof \WP_Screen && 'site-editor' === $screen->base;
     }
     /**
      * Checks if is WooCommerce Settings Payments tab screen (/wp-admin/admin.php?page=wc-settings&tab=checkout).

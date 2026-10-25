@@ -1,4 +1,5 @@
 import apiFetch from '@wordpress/api-fetch';
+import { __ } from '@wordpress/i18n';
 import { toast } from '@bsf/force-ui';
 
 /**
@@ -46,9 +47,30 @@ export async function doApiFetch(
 					onSuccess( response );
 				}
 				if ( showToast ) {
-					toast.success( 'Success!', {
-						description: `Setting is saved successfully`,
-					} );
+					// WordPress answers a refused request with HTTP 200 and success:false.
+					if ( response?.success === false ) {
+						toast.error(
+							__( 'Not saved', 'woo-cart-abandonment-recovery' ),
+							{
+								description:
+									response.data?.message ||
+									__(
+										'The setting could not be saved. Reload the page and try again.',
+										'woo-cart-abandonment-recovery'
+									),
+							}
+						);
+						return;
+					}
+					toast.success(
+						__( 'Saved', 'woo-cart-abandonment-recovery' ),
+						{
+							description: __(
+								'Your change has been saved.',
+								'woo-cart-abandonment-recovery'
+							),
+						}
+					);
 				}
 			}
 		);
@@ -57,8 +79,11 @@ export async function doApiFetch(
 	} catch ( error ) {
 		console.error( 'API Error:', error );
 		if ( showToast ) {
-			toast.error( 'Error!', {
-				description: 'Something wrong! ' + error,
+			toast.error( __( 'Request failed', 'woo-cart-abandonment-recovery' ), {
+				description: __(
+					'Something went wrong. Check your connection and try again.',
+					'woo-cart-abandonment-recovery'
+				),
 			} );
 		}
 		if ( onError ) {

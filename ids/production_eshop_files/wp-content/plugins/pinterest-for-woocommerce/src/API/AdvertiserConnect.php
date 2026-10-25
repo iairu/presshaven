@@ -24,6 +24,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Endpoint handing Pinterest advertiser.
+ *
+ * @class   AdvertiserConnect
+ * @version 1.6.0
  */
 class AdvertiserConnect extends VendorAPI {
 
@@ -59,7 +62,7 @@ class AdvertiserConnect extends VendorAPI {
 			}
 
 			$integration_data = Pinterest_For_Woocommerce::get_data( 'integration_data' );
-			if ( $advertiser_id === $integration_data['connected_advertiser_id'] ?? '' ) {
+			if ( ( $integration_data['connected_advertiser_id'] ?? '' ) === $advertiser_id ) {
 				return array(
 					'connected'   => $advertiser_id,
 					'reconnected' => false,
@@ -147,6 +150,7 @@ class AdvertiserConnect extends VendorAPI {
 	 *
 	 * @param string $connected_advertiser The ID of the connected advertiser.
 	 * @param string $connected_tag        The ID of the connected tag.
+	 * @return void
 	 *
 	 * @throws \Exception PHP Exception.
 	 */
@@ -178,6 +182,7 @@ class AdvertiserConnect extends VendorAPI {
 	 * Enable AEM during the onboarding process.
 	 *
 	 * @param string $tag_id The tracking tag identifier.
+	 * @return void
 	 */
 	protected static function enable_aem_tag( $tag_id ) {
 		Base::update_tag(

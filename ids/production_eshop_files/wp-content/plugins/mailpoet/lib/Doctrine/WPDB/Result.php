@@ -50,7 +50,7 @@ class Result implements ResultInterface {
   }
 
   public function fetchAllAssociative(): array {
-    return $this->result;
+    return array_values($this->result);
   }
 
   public function fetchFirstColumn(): array {

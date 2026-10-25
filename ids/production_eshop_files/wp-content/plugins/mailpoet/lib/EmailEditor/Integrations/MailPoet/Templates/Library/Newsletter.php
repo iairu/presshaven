@@ -5,15 +5,15 @@ namespace MailPoet\EmailEditor\Integrations\MailPoet\Templates\Library;
 if (!defined('ABSPATH')) exit;
 
 
-use MailPoet\Util\CdnAssetUrl;
+use MailPoet\WP\Functions as WPFunctions;
 
 class Newsletter {
-  private CdnAssetUrl $cdnAssetUrl;
+  private WPFunctions $wp;
 
   public function __construct(
-    CdnAssetUrl $cdnAssetUrl
+    WPFunctions $wp
   ) {
-    $this->cdnAssetUrl = $cdnAssetUrl;
+    $this->wp = $wp;
   }
 
   public function getSlug(): string {
@@ -31,38 +31,31 @@ class Newsletter {
   public function getContent(): string {
     // translators: This is a text used in a footer on an email <!--[mailpoet/site-title]--> will be replaced with the site title.
     $footerText = __('You received this email because you are subscribed to the <!--[mailpoet/site-title]-->', 'mailpoet');
+    $siteIdentityBlock = $this->getSiteIdentityBlock();
     return '<!-- wp:group {"backgroundColor":"white","layout":{"type":"constrained"},"lock":{"move":false,"remove":true}} -->
       <div class="wp-block-group has-white-background-color has-background">
-        <!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|30","bottom":"var:preset|spacing|10","left":"var:preset|spacing|20","right":"var:preset|spacing|20"}}}} -->
+        <!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|30","bottom":"var:preset|spacing|10","left":"var:preset|spacing|40","right":"var:preset|spacing|20"}}}} -->
         <div
           class="wp-block-group"
           style="
             padding-top: var(--wp--preset--spacing--30);
             padding-right: var(--wp--preset--spacing--20);
             padding-bottom: var(--wp--preset--spacing--10);
-            padding-left: var(--wp--preset--spacing--20);
+            padding-left: var(--wp--preset--spacing--40);
           "
             >
-          <!-- wp:image {"width":"130px","sizeSlug":"large"} -->
-          <figure class="wp-block-image size-large is-resized">
-            <img
-              src="' . esc_url($this->cdnAssetUrl->generateCdnUrl('email-editor/your-logo-placeholder.png')) . '"
-              alt="' . __('Your Logo', 'mailpoet') . '"
-              style="width: 130px"
-                />
-          </figure>
-          <!-- /wp:image -->
+          ' . $siteIdentityBlock . '
         </div>
         <!-- /wp:group -->
         <!-- wp:post-content {"lock":{"move":false,"remove":true},"layout":{"type":"default"}} /-->
-        <!-- wp:group {"style":{"spacing":{"padding":{"right":"var:preset|spacing|20","left":"var:preset|spacing|20","top":"var:preset|spacing|10","bottom":"var:preset|spacing|10"}}}} -->
+        <!-- wp:group {"style":{"spacing":{"padding":{"right":"var:preset|spacing|40","left":"var:preset|spacing|40","top":"var:preset|spacing|10","bottom":"var:preset|spacing|10"}}}} -->
         <div
           class="wp-block-group"
           style="
             padding-top: var(--wp--preset--spacing--10);
-            padding-right: var(--wp--preset--spacing--20);
+            padding-right: var(--wp--preset--spacing--40);
             padding-bottom: var(--wp--preset--spacing--10);
-            padding-left: var(--wp--preset--spacing--20);
+            padding-left: var(--wp--preset--spacing--40);
           "
             >
           <!-- wp:paragraph {"align":"center","fontSize":"small","style":{"border":{"top":{"color":"var:preset|color|cyan-bluish-gray","width":"1px","style":"solid"},"right":{},"bottom":{},"left":{}},"spacing":{"padding":{"top":"var:preset|spacing|20","bottom":"var:preset|spacing|20"}},"color":{"text":"#787c82"},"elements":{"link":{"color":{"text":"#787c82"}}}}} -->
@@ -76,7 +69,7 @@ class Newsletter {
               padding-top: var(--wp--preset--spacing--20);
               padding-bottom: var(--wp--preset--spacing--20);
             "
-              >' . $footerText . '<br /><a data-link-href="[mailpoet/subscription-unsubscribe-url]" contenteditable="false" style="text-decoration: underline;" class="mailpoet-email-editor__personalization-tags-link">' . __('Unsubscribe', 'mailpoet') . '</a> | <a data-link-href="[mailpoet/subscription-manage-url]" contenteditable="false" style="text-decoration: underline;" class="mailpoet-email-editor__personalization-tags-link">' . __('Manage subscription', 'mailpoet') . '</a>
+              >' . $footerText . '<br /><a data-link-href="[mailpoet/subscription-unsubscribe-url]" contenteditable="false" class="mailpoet-email-editor__personalization-tags-link">' . __('Unsubscribe', 'mailpoet') . '</a> | <a data-link-href="[mailpoet/subscription-manage-url]" contenteditable="false" class="mailpoet-email-editor__personalization-tags-link">' . __('Manage subscription', 'mailpoet') . '</a>
           </p>
           <!-- /wp:paragraph -->
         </div>
@@ -84,5 +77,13 @@ class Newsletter {
         <!-- wp:mailpoet/powered-by-mailpoet {"lock":{"move":true,"remove":true}} /-->
       </div>
       <!-- /wp:group -->';
+  }
+
+  private function getSiteIdentityBlock(): string {
+    if ($this->wp->hasCustomLogo()) {
+      return '<!-- wp:site-logo {"width":130,"isLink":false,"align":"center"} /-->';
+    }
+
+    return '<!-- wp:site-title {"level":2,"textAlign":"center","style":{"spacing":{"padding":{"top":"var:preset|spacing|10","bottom":"var:preset|spacing|10"}}}} /-->';
   }
 }

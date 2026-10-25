@@ -4,5 +4,5 @@
 # sat on the critical path of each start (and made a start fail outright
 # whenever the Alpine mirror was unreachable). Rebuild to pick up package
 # updates: `docker compose build --pull init_setup`.
-FROM alpine:latest
+FROM alpine:3.24.3
 RUN apk add --no-cache rsync openssl

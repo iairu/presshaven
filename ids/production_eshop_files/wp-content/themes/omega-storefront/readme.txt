@@ -1,15 +1,15 @@
 == Omega Storefront ==
 Contributors: omegathemes
 Requires at least: 5.3
-Tested up to: 6.8
+Tested up to: 7.1
 Requires PHP: 7.2
-Stable tag: 1.1.8
+Stable tag: 1.3.7
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 == Description ==
 
-Omega Storefront is a versatile and powerful WordPress theme designed to elevate any ecommerce venture. Tailored for both new and established online stores, this premium theme is crafted to create an exceptional digital storefront that enhances the user experience and drives sales. It’s ideal for a range of ecommerce businesses, like online retail shops, complex B2B platforms, retail storefront, online storefront, e-commerce storefront, storefront design, storefront solutions, digital storefront, storefront setup, storefront management, storefront marketing, storefront optimization, storefront customization, storefront branding, storefront software, storefront layout, storefront features, One of the standout benefits of the Omega Storefront WordPress Theme is its seamless integration with major ecommerce platforms, enabling businesses to manage their products, transactions, and customer interactions efficiently. Its clean, minimalistic design ensures a visually appealing and professional appearance, while its responsive layout guarantees that your store looks stunning on all devices, from desktops to mobile phones. With customizable banners, sleek product displays, and intuitive navigation, Omega Storefront helps create a streamlined shopping experience that encourages conversions. Additionally, its modern aesthetic is complemented by elegant typography and a well-organised layout, making it easy for users to browse and purchase products. The theme also supports various ecommerce functionalities, such as inventory management, payment gateways, and shipping options, ensuring a smooth operational flow. Enhanced with ecommerce analytics, Omega Storefront provides insights into sales performance and customer behaviour, enabling data-driven decisions to maximise revenue and growth.
+Omega Storefront is a versatile and powerful WordPress theme designed to elevate any ecommerce venture. Tailored for both new and established online shops, this premium theme creates an exceptional digital storefront that enhances user experience and drives sales. It’s perfect for various ecommerce businesses, including retail shops, B2B marketplaces, and digital storefront solutions, focusing on design, customization, branding, optimization, and marketing. One standout benefit of the Omega Storefront WordPress Theme is its seamless integration with major ecommerce platforms, allowing businesses to efficiently manage products, transactions, and customer interactions. Its clean, minimalistic design ensures a visually appealing and professional appearance, while the responsive, retina-ready layout guarantees that your ecommerce website looks stunning on all devices, from desktops to mobile phones. With customizable banners, sleek product displays, and intuitive navigation powered by AJAX features, Omega Storefront helps create a streamlined shopping experience that encourages conversions. Additionally, its modern aesthetic is complemented by elegant typography and a well-organized layout, making it easy for users to browse and purchase products. The theme also supports various functionalities, such as inventory management, payment gateways, and shipping options, and works smoothly with WooCommerce for store operations, Contact Form 7 for customer inquiries, and YITH WooCommerce Wishlist for improved shopping engagement. Enhanced with ecommerce analytics, Omega Storefront provides insights into sales performance and customer behavior, enabling data-driven decisions to maximize revenue and growth.
 
 == Copyright ==
 
@@ -55,14 +55,14 @@ Source: https://github.com/TGMPA/TGM-Plugin-Activation/blob/develop/LICENSE.md
 License: GNU General Public License v2.0
 
 == Code from Twenty Nineteen ==
-Copyright (c) 2018-2019 WordPress.org
+Copyright (c) 2018-2019 wordpress.org
 License: GPLv2
 Source: https://wordpress.org/themes/twentyninteen/
 Included as part of the following classes and functions:
 - Omega_Storefront_SVG_Icons
 
 == Code from Multi Blog ==
-Copyright (c) 2020-2021 WordPress.org
+Copyright (c) 2020-2021 wordpress.org
 License: GPLv2
 Source: https://wordpress.org/themes/multi-blog/
 Included as part of the following customizer code and functions
@@ -91,11 +91,161 @@ Source: https://pxhere.com/en/photo/1076117
 
 == Changelog ==
 
-= 1.0.0 =
-* Initial release.
+= 1.3.7 =
+* Updated pricing.
+* Updated Woocommerce CSS.
+* Resolved theme check errors.
 
-= 1.0.1 =
-* Updated colors.
+= 1.3.6 =
+* Compatibility and Security Updates.
+
+= 1.3.5 =
+* Enhanced Mobile Layout.
+
+= 1.3.4 =
+* Updated Core Components.
+
+= 1.3.3 =
+* Enhanced Mobile Layout.
+
+= 1.3.2 =
+* General Maintenance Release.
+
+= 1.3.1 =
+* Updated description.
+* Changed some CSS.
+
+= 1.2.9 =
+* Enhanced Theme Features.
+
+= 1.2.8 = 
+* Version Updated.
+
+= 1.2.7 = 
+* Fixed minor error.
+
+= 1.2.6 = 
+* Fixed minor error.
+
+= 1.2.5 =
+* Added css for sidebar.
+* Added blog page css.
+* Updated rtl CSS.
+* Updated pot File.
+
+= 1.2.4 =
+* Changes Done.
+
+= 1.2.3 =
+* Added Main Menu Color Setting.
+* Added Main Menu Hover Color Setting.
+* Added Submenu Color Setting.
+* Added Submenu Hover Color Setting.
+
+= 1.2.2 =
+* Description Updated.
+
+= 1.2.1 =
+* Resolved Issue.
+
+= 1.2.0 =
+* Bug Fixes.
+
+= 1.1.9 =
+* Added Nothing Found Page Settings.
+* Done Prefixing.
+* Updated POT File.
+
+= 1.1.8 =
+* Minor Changes Done.
+
+= 1.1.7 =
+* New Tags Added.
+
+= 1.1.6 =
+* Added Enable / Disable Site Logo Setting.
+* Added Enable / Disable Site Title Setting.
+* Updated template-tags.php File Function.
+* Done Checkout Page CSS.
+* Updated Breadcrumb Font Size Setting.
+
+= 1.1.5 =
+* Minor Issues Resolved.
+
+= 1.1.4 =
+* Updated Blog Posts Per Column Setting.
+* Added Table CSS.
+* Rearrange Customizer Setting.
+* Prefix Logo Width Setting.
+* Updated Responsive CSS.
+* Updated POT file.
+
+= 1.1.3 =
+* Updated functions.php file.
+* Added Default sidebar.
+* Updated WordPress version.
+* Added Copyright Alignment Setting.
+* Updated Sidebar Layout Settings.
+
+= 1.1.2 =
+* Added Blog Posts Per Column Setting.
+* Added Blog Posts Image Size Setting.
+* Added WooCommerce Related Products Per Page Setting.
+* Added WooCommerce Related Products Per Row Setting.
+
+= 1.1.1 =
+* Added 404 Page Settings.
+* Updated checkout page CSS.
+* Added remove_action in Single Product Template.
+* Added 4 different post formats.
+* Added SVG icons for 4 diffrent post formats.
+
+= 1.1.0 =
+* Added Homepage Setup.
+
+= 1.0.9 =
+* Relocated Customizer Settings.
+* Fixed Issues.
+* Done Escapping.
+* Done prefixing in breadcrumbs.php.
+
+= 1.0.8 =
+* Added Sticky Sidebar Setting.
+* Added Default Footer Columns.
+* Updated Responsive CSS.
+* Added Bundle Button In customizer.
+* Added Bundle Info in Omega Options Page.
+
+= 1.0.7 =
+* Resolved error
+
+= 1.0.6 =
+Added Enable Posts Format Icon
+Added Enable Single Posts Image
+Updated My account page CSS
+Updated sidebar settings
+Updated WooCommerce Template
+
+= 1.0.5 =
+* Updated Customizer CSS & Checkout Page CSS.
+* Updated Breadcrumb Alignment Setting.
+* Added Single Post Content Alignment Setting.
+* Added Breadcrumb Enable/Disable Setting.
+* Added Sidebar Position Settings.
+* Added Preloader Settings.
+
+= 1.0.4 =
+* Added Pagination Enable/Disable Setting.
+* Added Pagination Style Setting.
+* Added Default Image on Blog Posts.
+* Done Prefixing.
+* Updated Second Section for RTL language support.
+
+= 1.0.3 =
+* Added Typography Settings.
+* Added Settings for To The Top.
+* Updated To The Top Function and CSS.
+* Added Setting for Email Adderess.
 
 = 1.0.2 =
 * Added POT file.
@@ -108,93 +258,9 @@ Source: https://pxhere.com/en/photo/1076117
 * Added Footer Widget Title Alignment setting.
 * Added Enable Related Products setting.
 
-= 1.0.3 =
-* Added Typography Settings.
-* Added Settings for To The Top.
-* Updated To The Top Function and CSS.
-* Added Setting for Email Adderess.
+= 1.0.1 =
+* Updated colors.
 
-= 1.0.4 =
-* Added Pagination Enable/Disable Setting.
-* Added Pagination Style Setting.
-* Added Default Image on Blog Posts.
-* Done Prefixing.
-* Updated Second Section for RTL language support.
+= 1.0.0 =
+* Initial release.
 
-= 1.0.5 =
-* Updated Customizer CSS & Checkout Page CSS.
-* Updated Breadcrumb Alignment Setting.
-* Added Single Post Content Alignment Setting.
-* Added Breadcrumb Enable/Disable Setting.
-* Added Sidebar Position Settings.
-* Added Preloader Settings.
-
-= 1.0.6 =
-Added Enable Posts Format Icon
-Added Enable Single Posts Image
-Updated My account page CSS
-Updated sidebar settings
-Updated WooCommerce Template
-
-= 1.0.7 =
-* Resolved error
-
-= 1.0.8 =
-* Added Sticky Sidebar Setting.
-* Added Default Footer Columns.
-* Updated Responsive CSS.
-* Added Bundle Button In customizer.
-* Added Bundle Info in Omega Options Page.
-
-= 1.0.9 =
-* Relocated Customizer Settings.
-* Fixed Issues.
-* Done Escapping.
-* Done prefixing in breadcrumbs.php.
-
-= 1.1.0 =
-* Added Homepage Setup.
-
-= 1.1.1 =
-* Added 404 Page Settings.
-* Updated checkout page CSS.
-* Added remove_action in Single Product Template.
-* Added 4 different post formats.
-* Added SVG icons for 4 diffrent post formats.
-
-= 1.1.2 =
-* Added Blog Posts Per Column Setting.
-* Added Blog Posts Image Size Setting.
-* Added WooCommerce Related Products Per Page Setting.
-* Added WooCommerce Related Products Per Row Setting.
-
-= 1.1.3 =
-* Updated functions.php file.
-* Added Default sidebar.
-* Updated WordPress version.
-* Added Copyright Alignment Setting.
-* Updated Sidebar Layout Settings.
-
-= 1.1.4 =
-* Updated Blog Posts Per Column Setting.
-* Added Table CSS.
-* Rearrange Customizer Setting.
-* Prefix Logo Width Setting.
-* Updated Responsive CSS.
-* Updated POT file.
-
-= 1.1.5 =
-* Minor Issues Resolved.
-
-= 1.1.6 =
-* Added Enable / Disable Site Logo Setting.
-* Added Enable / Disable Site Title Setting.
-* Updated template-tags.php File Function.
-* Done Checkout Page CSS.
-* Updated Breadcrumb Font Size Setting.
-
-= 1.1.7 =
-* New Tags Added.
-
-= 1.1.8 =
-* Minor Changes Done.

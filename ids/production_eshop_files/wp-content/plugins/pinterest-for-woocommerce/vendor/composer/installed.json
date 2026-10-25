@@ -25,17 +25,17 @@
             "time": "2023-09-28T18:33:34+00:00",
             "type": "composer-plugin",
             "extra": {
-                "autotagger": true,
                 "class": "Automattic\\Jetpack\\Autoloader\\CustomAutoloaderPlugin",
+                "autotagger": true,
                 "mirror-repo": "Automattic/jetpack-autoloader",
+                "branch-alias": {
+                    "dev-trunk": "2.12.x-dev"
+                },
                 "changelogger": {
                     "link-template": "https://github.com/Automattic/jetpack-autoloader/compare/v${old}...v${new}"
                 },
                 "version-constants": {
                     "::VERSION": "src/AutoloadGenerator.php"
-                },
-                "branch-alias": {
-                    "dev-trunk": "2.12.x-dev"
                 }
             },
             "installation-source": "dist",
@@ -64,6 +64,59 @@
                 "source": "https://github.com/Automattic/jetpack-autoloader/tree/v2.12.0"
             },
             "install-path": "../automattic/jetpack-autoloader"
+        },
+        {
+            "name": "automattic/jetpack-device-detection",
+            "version": "v3.4.6",
+            "version_normalized": "3.4.6.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Automattic/jetpack-device-detection.git",
+                "reference": "771ab993388ea1726c138abeaba8b43912993ae8"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Automattic/jetpack-device-detection/zipball/771ab993388ea1726c138abeaba8b43912993ae8",
+                "reference": "771ab993388ea1726c138abeaba8b43912993ae8",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.2"
+            },
+            "require-dev": {
+                "automattic/phpunit-select-config": "^1.0.9",
+                "yoast/phpunit-polyfills": "^4.0.0"
+            },
+            "suggest": {
+                "automattic/jetpack-autoloader": "Allow for better interoperability with other plugins that use this package."
+            },
+            "time": "2026-08-25T12:14:34+00:00",
+            "type": "jetpack-library",
+            "extra": {
+                "autotagger": true,
+                "mirror-repo": "Automattic/jetpack-device-detection",
+                "branch-alias": {
+                    "dev-trunk": "3.4.x-dev"
+                },
+                "changelogger": {
+                    "link-template": "https://github.com/Automattic/jetpack-device-detection/compare/v${old}...v${new}"
+                }
+            },
+            "installation-source": "dist",
+            "autoload": {
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "description": "A way to detect device types based on User-Agent header.",
+            "support": {
+                "source": "https://github.com/Automattic/jetpack-device-detection/tree/v3.4.6"
+            },
+            "install-path": "../automattic/jetpack-device-detection"
         },
         {
             "name": "defuse/php-encryption",
@@ -239,18 +292,15 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/woocommerce/grow.git",
-                "reference": "cfb01a73eb6207e00ba375fefc707c1e12f8cd4e"
+                "reference": "44d933474841beb8fee8c90a26b29fc23dafaf3b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/woocommerce/grow/zipball/cfb01a73eb6207e00ba375fefc707c1e12f8cd4e",
-                "reference": "cfb01a73eb6207e00ba375fefc707c1e12f8cd4e",
+                "url": "https://api.github.com/repos/woocommerce/grow/zipball/44d933474841beb8fee8c90a26b29fc23dafaf3b",
+                "reference": "44d933474841beb8fee8c90a26b29fc23dafaf3b",
                 "shasum": ""
             },
-            "require-dev": {
-                "woocommerce/woocommerce-sniffs": "^0.1.3"
-            },
-            "time": "2024-06-18T07:01:27+00:00",
+            "time": "2026-10-01T22:08:04+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {

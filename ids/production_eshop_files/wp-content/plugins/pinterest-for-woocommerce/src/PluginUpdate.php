@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Automattic\WooCommerce\Admin\Notes\NotesUnavailableException;
+use Automattic\WooCommerce\ActionSchedulerJobFramework\Proxies\ActionScheduler as ActionSchedulerProxy;
 use Automattic\WooCommerce\Pinterest\API\UserInteraction;
 use Automattic\WooCommerce\Pinterest\API\TokenExchangeV3ToV5;
 use Automattic\WooCommerce\Pinterest\Notes\FeedDeletionFailure;
@@ -26,6 +27,9 @@ use Throwable;
  * 1. Check if the plugin is up to date. If yes return immediately.
  * 2. Perform update procedures.
  * 3. Bump update version string.
+ *
+ * @class   PluginUpdate
+ * @version 1.6.0
  */
 class PluginUpdate {
 
@@ -117,7 +121,7 @@ class PluginUpdate {
 	 * @since 1.0.10
 	 * @since 1.2.7 Updates procedures organized in an array by plugin version.
 	 * @since 1.4.0 Added token_update procedure.
-	 * @return array List of update procedures names.
+	 * @return array<string, string[]> List of update procedures names.
 	 */
 	private function update_procedures() {
 		return array(
@@ -140,7 +144,27 @@ class PluginUpdate {
 			'1.4.19' => array(
 				'disable_capi_for_all_merchants',
 			),
+			'1.5.2'  => array(
+				'invalidate_product_feeds',
+			),
 		);
+	}
+
+	/**
+	 * Regenerate existing feed output with the protected-product exclusions.
+	 *
+	 * @since 1.5.2
+	 *
+	 * @return void
+	 */
+	protected function invalidate_product_feeds(): void {
+		if ( ! ProductSync::is_product_sync_enabled() ) {
+			return;
+		}
+
+		$configurations = LocalFeedConfigs::get_instance();
+		$generator      = new FeedGenerator( new ActionSchedulerProxy(), new FeedFileOperations( $configurations ), $configurations );
+		$generator->mark_feed_dirty();
 	}
 
 	/**
@@ -323,7 +347,7 @@ class PluginUpdate {
 	 *
 	 * @since 1.4.0
 	 *
-	 * @param int $retry_count Parameteres passed via Action Scheduler call. Number of retries left.
+	 * @param int $retry_count Parameters passed via Action Scheduler call. Number of retries left.
 	 *
 	 * @return void
 	 */

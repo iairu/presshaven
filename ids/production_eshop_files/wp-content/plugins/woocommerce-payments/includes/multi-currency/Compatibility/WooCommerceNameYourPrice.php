@@ -78,13 +78,13 @@ class WooCommerceNameYourPrice extends BaseCompatibility {
 	 * This prevevents USD > EUR > USD style conversions and potential rounding problems.
 	 *
 	 * @param array $cart_item Cart item array.
-	 * @param array $values Cart item values e.g. quantity and product_id.
+	 * @param array $_unused_values Cart item values e.g. quantity and product_id.
 	 *
 	 * @return array
 	 */
-	public function convert_cart_currency( $cart_item, $values ) {
+	public function convert_cart_currency( $cart_item, $_unused_values ) {
 
-		if ( isset( $cart_item['nyp_original'] ) && isset( $cart_item['nyp_currency'] ) ) {
+		if ( function_exists( 'WC_Name_Your_Price' ) && isset( $cart_item['nyp_original'] ) && isset( $cart_item['nyp_currency'] ) ) {
 
 			// Store the original currency in $product meta.
 			$cart_item['data']->update_meta_data( self::NYP_CURRENCY, $cart_item['nyp_currency'] );
@@ -102,7 +102,6 @@ class WooCommerceNameYourPrice extends BaseCompatibility {
 				$cart_item['nyp'] = $this->multi_currency->get_raw_conversion( $raw_price, $selected_currency->get_code(), $from_currency );
 			}
 
-			// @phpstan-ignore-next-line.
 			$cart_item = WC_Name_Your_Price()->cart->set_cart_item( $cart_item );
 		}
 
@@ -112,22 +111,22 @@ class WooCommerceNameYourPrice extends BaseCompatibility {
 	/**
 	 * Checks to see if the product's price should be converted.
 	 *
-	 * @param bool   $return  Whether to convert the product's price or not. Default is true.
-	 * @param object $product Product object to test.
+	 * @param bool   $should_convert Whether to convert the product's price or not. Default is true.
+	 * @param object $product        Product object to test.
 	 *
 	 * @return bool True if it should be converted.
 	 */
-	public function should_convert_product_price( bool $return, $product ): bool {
+	public function should_convert_product_price( bool $should_convert, $product ): bool {
 		// If it's already false, return it.
-		if ( ! $return ) {
-			return $return;
+		if ( ! $should_convert ) {
+			return $should_convert;
 		}
 
 		$currency = $this->multi_currency->get_selected_currency();
 
 		// Check for cart items to see if they are in the original currency.
 		if ( $currency->get_code() === $product->get_meta( self::NYP_CURRENCY ) ) {
-			$return = false;
+			$should_convert = false;
 		}
 
 		// Check to see if the product is a NYP product.
@@ -135,18 +134,18 @@ class WooCommerceNameYourPrice extends BaseCompatibility {
 			return false;
 		}
 
-		return $return;
+		return $should_convert;
 	}
 
 	/**
 	 * Add currency to cart edit link.
 	 *
 	 * @param array $args      The cart args.
-	 * @param array $cart_item The current cart item.
+	 * @param array $_unused_cart_item The current cart item.
 	 *
 	 * @return array
 	 */
-	public function edit_in_cart_args( $args, $cart_item ) {
+	public function edit_in_cart_args( $args, $_unused_cart_item ) {
 		$args['nyp_currency'] = $this->multi_currency->get_selected_currency()->get_code();
 		return $args;
 	}

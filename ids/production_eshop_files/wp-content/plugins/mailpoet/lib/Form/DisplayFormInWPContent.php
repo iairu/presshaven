@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\API\JSON\API;
+use MailPoet\Captcha\FormRenderStamp;
 use MailPoet\Config\Renderer as TemplateRenderer;
 use MailPoet\Entities\FormEntity;
 use MailPoet\Subscribers\SubscribersRepository;
@@ -66,6 +67,13 @@ class DisplayFormInWPContent {
 
   private $renderedDisplayTypes = [];
 
+  private $formsEvaluatedInContent = false;
+
+  private $placementPostId = null;
+
+  /** @var FormRenderStamp */
+  private $formRenderStamp;
+
   public function __construct(
     WPFunctions $wp,
     FormsRepository $formsRepository,
@@ -74,7 +82,8 @@ class DisplayFormInWPContent {
     TemplateRenderer $templateRenderer,
     SubscriberSubscribeController $subscriberSubscribeController,
     SubscribersRepository $subscribersRepository,
-    WCHelper $woocommerceHelper
+    WCHelper $woocommerceHelper,
+    FormRenderStamp $formRenderStamp
   ) {
     $this->wp = $wp;
     $this->formsRepository = $formsRepository;
@@ -84,11 +93,12 @@ class DisplayFormInWPContent {
     $this->subscriberSubscribeController = $subscriberSubscribeController;
     $this->subscribersRepository = $subscribersRepository;
     $this->woocommerceHelper = $woocommerceHelper;
+    $this->formRenderStamp = $formRenderStamp;
   }
 
-  private function getFormMarkup(): string {
+  private function getFormMarkup(array $displayTypes): string {
     $formMarkup = '';
-    $forms = $this->getForms();
+    $forms = $this->getForms($displayTypes);
     if (count($forms) === 0) {
       return $formMarkup;
     }
@@ -116,10 +126,12 @@ class DisplayFormInWPContent {
   }
 
   private function getContentWithFormMarkup($content = null) {
+    $this->placementPostId = null;
     if (!is_string($content) || !$this->shouldDisplay()) {
       return $content;
     }
-    $formsMarkup = $this->getFormMarkup();
+    $this->formsEvaluatedInContent = true;
+    $formsMarkup = $this->getFormMarkup(self::TYPES);
     if ($formsMarkup === '') {
       return $content;
     }
@@ -133,15 +145,42 @@ class DisplayFormInWPContent {
    * @return void
    */
   public function maybeRenderFormsInFooter(): void {
+    // A page builder may leave a secondary loop's post in the global scope, so placement is matched against the queried post
+    $this->placementPostId = $this->wp->isSingular() ? $this->wp->getQueriedObjectId() : null;
     if ($this->wp->isArchive() || $this->wp->isFrontPage() || $this->wp->isHome() || $this->isWooProductPageWithoutContent()) {
-      $formMarkup = $this->getFormMarkup();
-      if (!empty($formMarkup)) {
-        $this->assetsController->setupFrontEndDependencies();
-        // We are in control of the template and the data can be considered safe at this point
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-        echo $formMarkup;
-      }
+      $this->renderFormsInFooter(self::TYPES);
+      return;
     }
+    if ($this->shouldRenderOverlayFormsInFooter()) {
+      $this->renderFormsInFooter(self::WITH_COOKIE_TYPES);
+    }
+  }
+
+  /**
+   * Page builders (e.g. Divi Theme Builder) apply the_content outside the main loop, so overlay forms get a second chance here.
+   */
+  private function shouldRenderOverlayFormsInFooter(): bool {
+    if ($this->formsEvaluatedInContent) {
+      return false;
+    }
+    if (!$this->wp->isSingular($this->getSupportedPostTypes()) && !$this->wp->isPage()) {
+      return false;
+    }
+    if (!$this->wp->hasFilter('the_content', [$this, 'contentDisplay'])) {
+      return false;
+    }
+    return !$this->noFormsCached();
+  }
+
+  private function renderFormsInFooter(array $displayTypes): void {
+    $formMarkup = $this->getFormMarkup($displayTypes);
+    if (empty($formMarkup)) {
+      return;
+    }
+    $this->assetsController->setupFrontEndDependencies();
+    // We are in control of the template and the data can be considered safe at this point
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+    echo $formMarkup;
   }
 
   /**
@@ -173,9 +212,12 @@ class DisplayFormInWPContent {
     // Ensure form does not show up multiple times when called from the woocommerce_product_loop_end filter
     if ($this->inWooProductLoop) $result = $this->displayFormInProductListPage();
 
-    $noFormsCache = $this->wp->getTransient(DisplayFormInWPContent::NO_FORM_TRANSIENT_KEY);
-    if ($noFormsCache === '1') $result = false;
-    return $result;
+    if ($this->noFormsCached()) $result = false;
+    return (bool)$result;
+  }
+
+  private function noFormsCached(): bool {
+    return $this->wp->getTransient(DisplayFormInWPContent::NO_FORM_TRANSIENT_KEY) === '1';
   }
 
   private function displayFormInProductListPage(): bool {
@@ -196,9 +238,10 @@ class DisplayFormInWPContent {
   }
 
   /**
+   * @param string[] $displayTypes
    * @return array<string, FormEntity>
    */
-  private function getForms(): array {
+  private function getForms(array $displayTypes): array {
     $forms = $this->formsRepository->findBy([
       'deletedAt' => null,
       'status' => FormEntity::STATUS_ENABLED,
@@ -206,18 +249,19 @@ class DisplayFormInWPContent {
     if (count($forms) === 0) {
       $this->saveNoForms();
     }
-    $forms = $this->filterOneFormInEachDisplayType($forms);
+    $forms = $this->filterOneFormInEachDisplayType($forms, $displayTypes);
     return $forms;
   }
 
   /**
    * @param FormEntity[] $forms
+   * @param string[] $displayTypes
    * @return array<string, FormEntity>
    */
-  private function filterOneFormInEachDisplayType($forms): array {
+  private function filterOneFormInEachDisplayType($forms, array $displayTypes): array {
     $formsFiltered = [];
     foreach ($forms as $form) {
-      foreach (self::TYPES as $displayType) {
+      foreach ($displayTypes as $displayType) {
         if ($this->shouldDisplayFormType($form, $displayType)) {
           $formsFiltered[$displayType] = $form;
         }
@@ -244,19 +288,21 @@ class DisplayFormInWPContent {
 
     // (POST) non ajax success/error variables
     $templateData['success'] = (
-      (isset($_GET['mailpoet_success']))
-      &&
-      ((int)$_GET['mailpoet_success'] === $form->getId())
+      isset($_GET['mailpoet_success'])
+      && is_numeric($_GET['mailpoet_success'])
+      && (int)$_GET['mailpoet_success'] === $form->getId()
     );
     $templateData['error'] = (
-      (isset($_GET['mailpoet_error']))
-      &&
-      ((int)$_GET['mailpoet_error'] === $form->getId())
+      isset($_GET['mailpoet_error'])
+      && is_numeric($_GET['mailpoet_error'])
+      && (int)$_GET['mailpoet_error'] === $form->getId()
     );
 
     $templateData['delay'] = $formSettings['form_placement'][$displayType]['delay'] ?? 0;
     $templateData['position'] = $formSettings['form_placement'][$displayType]['position'] ?? '';
     $templateData['animation'] = $formSettings['form_placement'][$displayType]['animation'] ?? '';
+    $templateData['triggerMode'] = $formSettings['form_placement'][$displayType]['trigger_mode'] ?? 'auto';
+    $templateData['clickTriggerSelector'] = $formSettings['form_placement'][$displayType]['click_trigger_selector'] ?? '';
     $templateData['fontFamily'] = $formSettings['font_family'] ?? '';
     $templateData['enableExitIntent'] = false;
     // Set default value for cookie expiration for backward compatibility with forms without this value
@@ -270,6 +316,7 @@ class DisplayFormInWPContent {
 
     // generate security token
     $templateData['token'] = $this->wp->wpCreateNonce('mailpoet_token');
+    $templateData['form_stamp'] = $this->formRenderStamp->issue();
 
     // add API version
     $templateData['api_version'] = API::CURRENT_VERSION;
@@ -328,7 +375,7 @@ class DisplayFormInWPContent {
       return true;
     }
 
-    if ($this->wp->isSingular($this->wp->applyFilters('mailpoet_display_form_supported_post_types', self::SUPPORTED_POST_TYPES))) {
+    if ($this->wp->isSingular($this->getSupportedPostTypes())) {
       if ($this->shouldDisplayFormOnPost($setup, 'posts')) return true;
       if ($this->shouldDisplayFormOnCategory($setup)) return true;
       if ($this->shouldDisplayFormOnTag($setup)) return true;
@@ -355,6 +402,14 @@ class DisplayFormInWPContent {
     return false;
   }
 
+  /**
+   * @return string|mixed[]
+   */
+  private function getSupportedPostTypes() {
+    $supportedPostTypes = $this->wp->applyFilters('mailpoet_display_form_supported_post_types', self::SUPPORTED_POST_TYPES);
+    return is_array($supportedPostTypes) || is_string($supportedPostTypes) ? $supportedPostTypes : self::SUPPORTED_POST_TYPES;
+  }
+
   private function shouldDisplayFormOnPost(array $setup, string $postsKey, $postId = null): bool {
     if (!isset($setup[$postsKey])) {
       return false;
@@ -362,7 +417,7 @@ class DisplayFormInWPContent {
     if (isset($setup[$postsKey]['all']) && $setup[$postsKey]['all'] === '1') {
       return true;
     }
-    $post = $this->wp->getPost($postId, ARRAY_A);
+    $post = $this->wp->getPost($postId ?? $this->placementPostId, ARRAY_A);
     if (isset($setup[$postsKey]['selected']) && in_array($post['ID'], $setup[$postsKey]['selected'])) {
       return true;
     }
@@ -371,15 +426,15 @@ class DisplayFormInWPContent {
 
   private function shouldDisplayFormOnCategory(array $setup): bool {
     if (!isset($setup['categories'])) return false;
-    if ($this->wp->hasCategory($setup['categories'])) return true;
-    if ($this->wp->hasTerm($setup['categories'], 'product_cat')) return true;
+    if ($this->wp->hasCategory($setup['categories'], $this->placementPostId)) return true;
+    if ($this->wp->hasTerm($setup['categories'], 'product_cat', $this->placementPostId)) return true;
     return false;
   }
 
   private function shouldDisplayFormOnTag(array $setup): bool {
     if (!isset($setup['tags'])) return false;
-    if ($this->wp->hasTag($setup['tags'])) return true;
-    if ($this->wp->hasTerm($setup['tags'], 'product_tag')) return true;
+    if ($this->wp->hasTag($setup['tags'], $this->placementPostId)) return true;
+    if ($this->wp->hasTerm($setup['tags'], 'product_tag', $this->placementPostId)) return true;
     return false;
   }
 

@@ -3,6 +3,7 @@ import { Input, Button, Loader, toast } from '@bsf/force-ui';
 import { __ } from '@wordpress/i18n';
 
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y } from '@Components/common/fieldA11y';
 import { doApiFetch } from '@Store';
 
 const TestEmail = ( { title, description, value } ) => {
@@ -10,19 +11,39 @@ const TestEmail = ( { title, description, value } ) => {
 	const [ isSending, setIsSending ] = useState( false );
 	const validateFields = () => {
 		if ( ! email ) {
-			toast.error( 'Please enter an email address' );
+			toast.error(
+				__(
+					'Please enter an email address',
+					'woo-cart-abandonment-recovery'
+				)
+			);
 			return false;
 		}
 		if ( ! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( email ) ) {
-			toast.error( 'Please enter a valid email address' );
+			toast.error(
+				__(
+					'Please enter a valid email address',
+					'woo-cart-abandonment-recovery'
+				)
+			);
 			return false;
 		}
 		if ( ! value.email_subject ) {
-			toast.error( 'Please enter a email subject' );
+			toast.error(
+				__(
+					'Please enter an email subject',
+					'woo-cart-abandonment-recovery'
+				)
+			);
 			return false;
 		}
 		if ( ! value.email_body ) {
-			toast.error( 'Please enter a email body' );
+			toast.error(
+				__(
+					'Please enter an email body',
+					'woo-cart-abandonment-recovery'
+				)
+			);
 			return false;
 		}
 		return true;
@@ -52,7 +73,12 @@ const TestEmail = ( { title, description, value } ) => {
 			'POST',
 			( response ) => {
 				if ( response.success ) {
-					toast.success( 'Test email sent successfully!' );
+					toast.success(
+						__(
+							'Test email sent successfully!',
+							'woo-cart-abandonment-recovery'
+						)
+					);
 				} else {
 					toast.error(
 						__(
@@ -82,22 +108,29 @@ const TestEmail = ( { title, description, value } ) => {
 		);
 	};
 
+	const a11y = useFieldA11y( { description } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			size="normal"
 		>
-			<div className="flex gap-2 items-center">
-				<div className="flex-1">
+			<div className="flex flex-wrap gap-2 items-center">
+				<div className="flex-1 min-w-48">
 					<Input
 						className="w-full focus:[&>input]:ring-focus"
 						type="email"
 						size="md"
 						value={ email }
 						onChange={ setEmail }
-						placeholder="Enter Email"
+						{ ...a11y.controlProps }
+						placeholder={ __(
+							'Enter Email',
+							'woo-cart-abandonment-recovery'
+						) }
 					/>
 				</div>
 				<Button
@@ -118,7 +151,7 @@ const TestEmail = ( { title, description, value } ) => {
 					onClick={ handleClick }
 					disabled={ isSending }
 				>
-					Send a Test Email
+					{ __( 'Send a Test Email', 'woo-cart-abandonment-recovery' ) }
 				</Button>
 			</div>
 		</FieldWrapper>

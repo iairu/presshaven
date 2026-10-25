@@ -137,7 +137,7 @@ class __TwigTemplate_9b0ddf3688f2dc81e331ee62fce3c53bfc8110f9d6615c3cf10d5c5c68f
     <script type=\"text/javascript\">
       var MailPoetForm = ";
         // line 72
-        yield json_encode(($context["mailpoet_form"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["mailpoet_form"] ?? null));
         yield ";
     </script>
   </body>

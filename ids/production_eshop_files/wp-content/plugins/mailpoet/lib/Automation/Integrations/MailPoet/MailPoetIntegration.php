@@ -5,10 +5,12 @@ namespace MailPoet\Automation\Integrations\MailPoet;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Automation\Engine\Hooks;
 use MailPoet\Automation\Engine\Integration;
 use MailPoet\Automation\Engine\Registry;
 use MailPoet\Automation\Engine\WordPress;
 use MailPoet\Automation\Integrations\MailPoet\Actions\SendEmailAction;
+use MailPoet\Automation\Integrations\MailPoet\Actions\SendLatestNewsletterAction;
 use MailPoet\Automation\Integrations\MailPoet\Analytics\Analytics;
 use MailPoet\Automation\Integrations\MailPoet\Hooks\AutomationEditorLoadingHooks;
 use MailPoet\Automation\Integrations\MailPoet\Hooks\CreateAutomationRunHook;
@@ -22,6 +24,7 @@ use MailPoet\Automation\Integrations\MailPoet\SubjectTransformers\OrderSubjectTo
 use MailPoet\Automation\Integrations\MailPoet\SubjectTransformers\SubscriberSubjectToWordPressUserSubjectTransformer;
 use MailPoet\Automation\Integrations\MailPoet\Templates\TemplatesFactory;
 use MailPoet\Automation\Integrations\MailPoet\Triggers\SomeoneSubscribesTrigger;
+use MailPoet\Automation\Integrations\MailPoet\Triggers\SomeoneUnsubscribesTrigger;
 use MailPoet\Automation\Integrations\MailPoet\Triggers\UserRegistrationTrigger;
 
 class MailPoetIntegration implements Integration {
@@ -40,11 +43,17 @@ class MailPoetIntegration implements Integration {
   /** @var SomeoneSubscribesTrigger */
   private $someoneSubscribesTrigger;
 
+  /** @var SomeoneUnsubscribesTrigger */
+  private $someoneUnsubscribesTrigger;
+
   /** @var UserRegistrationTrigger  */
   private $userRegistrationTrigger;
 
   /** @var SendEmailAction */
   private $sendEmailAction;
+
+  /** @var SendLatestNewsletterAction */
+  private $sendLatestNewsletterAction;
 
   /** @var AutomationEditorLoadingHooks  */
   private $automationEditorLoadingHooks;
@@ -87,8 +96,10 @@ class MailPoetIntegration implements Integration {
     CommentSubjectToSubscriberSubjectTransformer $commentToSubscriberTransformer,
     CustomerSubjectToSubscriberSubjectTransformer $customerToSubscriberTransformer,
     SomeoneSubscribesTrigger $someoneSubscribesTrigger,
+    SomeoneUnsubscribesTrigger $someoneUnsubscribesTrigger,
     UserRegistrationTrigger $userRegistrationTrigger,
     SendEmailAction $sendEmailAction,
+    SendLatestNewsletterAction $sendLatestNewsletterAction,
     AutomationEditorLoadingHooks $automationEditorLoadingHooks,
     CreateAutomationRunHook $createAutomationRunHook,
     TemplatesFactory $templatesFactory,
@@ -105,8 +116,10 @@ class MailPoetIntegration implements Integration {
     $this->commentToSubscriberTransformer = $commentToSubscriberTransformer;
     $this->customerToSubscriberTransformer = $customerToSubscriberTransformer;
     $this->someoneSubscribesTrigger = $someoneSubscribesTrigger;
+    $this->someoneUnsubscribesTrigger = $someoneUnsubscribesTrigger;
     $this->userRegistrationTrigger = $userRegistrationTrigger;
     $this->sendEmailAction = $sendEmailAction;
+    $this->sendLatestNewsletterAction = $sendLatestNewsletterAction;
     $this->automationEditorLoadingHooks = $automationEditorLoadingHooks;
     $this->createAutomationRunHook = $createAutomationRunHook;
     $this->templatesFactory = $templatesFactory;
@@ -123,8 +136,10 @@ class MailPoetIntegration implements Integration {
     $registry->addSubject($this->subscriberSubject);
     $registry->addSubject($this->emailLinkSubject);
     $registry->addTrigger($this->someoneSubscribesTrigger);
+    $registry->addTrigger($this->someoneUnsubscribesTrigger);
     $registry->addTrigger($this->userRegistrationTrigger);
     $registry->addAction($this->sendEmailAction);
+    $registry->addAction($this->sendLatestNewsletterAction);
     $registry->addSubjectTransformer($this->orderToSubscriberTransformer);
     $registry->addSubjectTransformer($this->orderToSegmentTransformer);
     $registry->addSubjectTransformer($this->subscriberToWordPressUserTransformer);
@@ -143,6 +158,9 @@ class MailPoetIntegration implements Integration {
 
     // execute send email step progress when email is sent
     $this->wordPress->addAction('mailpoet_automation_email_sent', [$this->sendEmailAction, 'handleEmailSent']);
+
+    // forbid combining the unsubscribe trigger with a "Send email" action
+    $this->wordPress->addAction(Hooks::AUTOMATION_BEFORE_SAVE, [$this->someoneUnsubscribesTrigger, 'validateAutomation']);
 
     $this->automationEditorLoadingHooks->init();
     $this->createAutomationRunHook->init();

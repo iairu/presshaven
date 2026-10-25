@@ -13,6 +13,8 @@ use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\IdentityToken;
 use WooCommerce\PayPalCommerce\ApiClient\Exception\PayPalApiException;
 use WooCommerce\PayPalCommerce\ApiClient\Exception\RuntimeException;
+use WooCommerce\PayPalCommerce\Button\Exception\NonceValidationException;
+use WooCommerce\PayPalCommerce\OrderEndpoints\Endpoint\RequestData;
 /**
  * Class DataClientIdEndpoint
  */
@@ -44,7 +46,7 @@ class DataClientIdEndpoint implements \WooCommerce\PayPalCommerce\Button\Endpoin
      * @param IdentityToken   $identity_token The Identity Token.
      * @param LoggerInterface $logger The logger.
      */
-    public function __construct(\WooCommerce\PayPalCommerce\Button\Endpoint\RequestData $request_data, IdentityToken $identity_token, LoggerInterface $logger)
+    public function __construct(RequestData $request_data, IdentityToken $identity_token, LoggerInterface $logger)
     {
         $this->request_data = $request_data;
         $this->identity_token = $identity_token;
@@ -61,21 +63,19 @@ class DataClientIdEndpoint implements \WooCommerce\PayPalCommerce\Button\Endpoin
     }
     /**
      * Handles the request.
-     *
-     * @return bool
      */
-    public function handle_request(): bool
+    public function handle_request(): void
     {
         try {
             $this->request_data->read_request($this->nonce());
             $user_id = get_current_user_id();
             $token = $this->identity_token->generate_for_user($user_id);
             wp_send_json(array('token' => $token->token(), 'expiration' => $token->expiration_timestamp(), 'user' => $user_id));
-            return \true;
+        } catch (NonceValidationException $error) {
+            wp_send_json_error(array('message' => $error->getMessage()), 400);
         } catch (Exception $error) {
             $this->logger->error('Client ID retrieval failed: ' . $error->getMessage());
-            wp_send_json_error(array('name' => is_a($error, PayPalApiException::class) ? $error->name() : '', 'message' => $error->getMessage(), 'code' => $error->getCode(), 'details' => is_a($error, PayPalApiException::class) ? $error->details() : array()));
-            return \false;
+            wp_send_json_error(array('name' => $error instanceof PayPalApiException ? $error->name() : '', 'message' => $error->getMessage(), 'code' => $error->getCode(), 'details' => $error instanceof PayPalApiException ? $error->details() : array()));
         }
     }
 }

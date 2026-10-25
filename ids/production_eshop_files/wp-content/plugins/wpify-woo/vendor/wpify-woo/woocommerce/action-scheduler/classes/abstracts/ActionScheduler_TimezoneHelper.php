@@ -93,7 +93,7 @@ abstract class ActionScheduler_TimezoneHelper
             $timezone_object = new \DateTimeZone($timezone);
             return $timezone_object->getOffset(new \DateTime('now'));
         } else {
-            return \floatval(\get_option('gmt_offset', 0)) * \WpifyWooDeps\HOUR_IN_SECONDS;
+            return \floatval(\get_option('gmt_offset', 0)) * \HOUR_IN_SECONDS;
         }
     }
     /**
@@ -115,7 +115,7 @@ abstract class ActionScheduler_TimezoneHelper
                 if (0 === $gmt_offset) {
                     $tzstring = 'UTC';
                 } else {
-                    $gmt_offset *= \WpifyWooDeps\HOUR_IN_SECONDS;
+                    $gmt_offset *= \HOUR_IN_SECONDS;
                     $tzstring = \timezone_name_from_abbr('', $gmt_offset, 1);
                     // If there's no timezone string, try again with no DST.
                     if (\false === $tzstring) {

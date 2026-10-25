@@ -46,7 +46,7 @@ class WC_Tracks {
 				'blog_id'        => class_exists( 'Jetpack_Options' ) ? Jetpack_Options::get_option( 'id' ) : null,
 				'store_id'       => get_option( \WC_Install::STORE_ID_OPTION, null ),
 				'products_count' => self::get_products_count(),
-				'wc_version'     => WC()->version,
+				'wc_version'     => WC()->stable_version(),
 			);
 			set_transient( 'wc_tracks_blog_details', $blog_details, DAY_IN_SECONDS );
 		}
@@ -64,11 +64,11 @@ class WC_Tracks {
 		$data['_via_ua'] = isset( $_SERVER['HTTP_USER_AGENT'] ) ? wc_clean( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '';
 		$data['_via_ip'] = isset( $_SERVER['REMOTE_ADDR'] ) ? wc_clean( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 		$data['_lg']     = isset( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ? wc_clean( wp_unslash( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ) : '';
-		$data['_dr']     = isset( $_SERVER['HTTP_REFERER'] ) ? wc_clean( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) : '';
+		$data['_dr']     = isset( $_SERVER['HTTP_REFERER'] ) && is_string( $_SERVER['HTTP_REFERER'] ) ? \Automattic\TracksSharedUtils\sanitize_url( sanitize_text_field( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) ) : '';
 
-		$uri         = isset( $_SERVER['REQUEST_URI'] ) ? wc_clean( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-		$host        = isset( $_SERVER['HTTP_HOST'] ) ? wc_clean( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
-		$data['_dl'] = isset( $_SERVER['REQUEST_SCHEME'] ) ? wc_clean( wp_unslash( $_SERVER['REQUEST_SCHEME'] ) ) . '://' . $host . $uri : '';
+		$uri         = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+		$host        = isset( $_SERVER['HTTP_HOST'] ) && is_string( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+		$data['_dl'] = isset( $_SERVER['REQUEST_SCHEME'] ) && is_string( $_SERVER['REQUEST_SCHEME'] ) ? \Automattic\TracksSharedUtils\sanitize_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_SCHEME'] ) ) . '://' . $host . $uri ) : '';
 
 		return $data;
 	}
@@ -81,7 +81,7 @@ class WC_Tracks {
 	 */
 	public static function get_role_details( $user ) {
 		return array(
-			'role'                   => ! empty( $user->roles ) ? reset( $user->roles ) : '',
+			'role'                   => ! empty( $user->roles ) ? array_values( $user->roles )[0] : '',
 			'can_install_plugins'    => $user->has_cap( 'install_plugins' ),
 			'can_activate_plugins'   => $user->has_cap( 'activate_plugins' ),
 			'can_manage_woocommerce' => $user->has_cap( 'manage_woocommerce' ),
@@ -91,6 +91,26 @@ class WC_Tracks {
 	/**
 	 * Record an event in Tracks - this is the preferred way to record events from PHP.
 	 * Note: the event request won't be made if $properties has a member called `error`.
+	 *
+	 * Array values in event properties are automatically converted to prevent invalid property names:
+	 * - Indexed arrays (e.g., ['a', 'b', 'c']) become comma-separated strings: 'a,b,c'
+	 * - Associative arrays (e.g., ['key' => 'val']) become JSON strings: '{"key":"val"}'
+	 * - Empty arrays become empty strings
+	 *
+	 * Examples:
+	 *     // Indexed array - becomes comma-separated string
+	 *     WC_Tracks::record_event( 'checkout_viewed', array(
+	 *         'blocks' => array( 'woocommerce/cart-items', 'woocommerce/checkout-totals' )
+	 *     ) );
+	 *     // Results in: blocks=woocommerce%2Fcart-items%2Cwoocommerce%2Fcheckout-totals
+	 *
+	 *     // Associative array - becomes JSON string
+	 *     WC_Tracks::record_event( 'settings_changed', array(
+	 *         'options' => array( 'enabled' => true, 'count' => 5 )
+	 *     ) );
+	 *     // Results in: options=%7B%22enabled%22%3Atrue%2C%22count%22%3A5%7D
+	 *
+	 * For complex structures, consider explicitly JSON-encoding before passing to record_event().
 	 *
 	 * @param string $event_name The name of the event.
 	 * @param array  $event_properties Custom properties to send with the event.

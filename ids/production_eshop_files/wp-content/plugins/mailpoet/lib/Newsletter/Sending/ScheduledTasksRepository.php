@@ -55,6 +55,39 @@ class ScheduledTasksRepository extends Repository {
   }
 
   /**
+   * @return ScheduledTaskEntity[]
+   */
+  public function findPausedForSenderDomain(): array {
+    // Task meta is a LONGTEXT column written by JsonType (unescaped slashes and unicode), so the
+    // stored text contains exactly this fragment of the encoder output.
+    $marker = '%' . trim((string)json_encode(
+      [ScheduledTaskEntity::META_PAUSE_REASON => ScheduledTaskEntity::PAUSE_REASON_SENDER_DOMAIN],
+      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    ), '{}') . '%';
+
+    return $this->doctrineRepository->createQueryBuilder('t')
+      ->select('t')
+      ->join('t.sendingQueue', 'q')
+      ->join('q.newsletter', 'n')
+      ->addSelect('q', 'n')
+      ->where('t.status = :paused')
+      ->andWhere('t.deletedAt IS NULL')
+      ->andWhere('n.deletedAt IS NULL')
+      // Re-engagement emails and "Send latest newsletter" replays have no Resume action, so don't list them.
+      ->andWhere('n.type IN (:campaignTypes)')
+      ->andWhere('q.meta IS NULL OR q.meta NOT LIKE :replayMeta')
+      ->andWhere('t.meta LIKE :marker')
+      ->andWhere('t.meta NOT LIKE :replayMeta')
+      ->setParameter('paused', ScheduledTaskEntity::STATUS_PAUSED)
+      ->setParameter('campaignTypes', array_diff(NewsletterEntity::CAMPAIGN_TYPES, [NewsletterEntity::TYPE_RE_ENGAGEMENT]))
+      ->setParameter('replayMeta', NewsletterReplayMetadata::getMetaLikePattern())
+      ->setParameter('marker', $marker)
+      ->orderBy('t.updatedAt', 'DESC')
+      ->getQuery()
+      ->getResult();
+  }
+
+  /**
    * @param NewsletterEntity $newsletter
    */
   public function findOneByNewsletter(NewsletterEntity $newsletter): ?ScheduledTaskEntity {
@@ -162,6 +195,48 @@ class ScheduledTasksRepository extends Repository {
         ->setParameter('type', $type);
     }
     return $queryBuilder->getQuery()->getOneOrNullResult();
+  }
+
+  public function findSoonestScheduledTaskByType(string $type): ?ScheduledTaskEntity {
+    return $this->doctrineRepository->createQueryBuilder('st')
+      ->select('st')
+      ->where('st.status = :scheduledStatus')
+      ->andWhere('st.type = :type')
+      ->andWhere('st.deletedAt IS NULL')
+      ->setParameter('scheduledStatus', ScheduledTaskEntity::STATUS_SCHEDULED)
+      ->setParameter('type', $type)
+      ->setMaxResults(1)
+      ->orderBy('st.scheduledAt', 'ASC')
+      ->getQuery()
+      ->getOneOrNullResult();
+  }
+
+  /**
+   * Atomically claims a scheduled/paused row for a CLI run by flipping it to STATUS_CLI in a single
+   * guarded UPDATE. Returns false when no row was changed (another process already claimed or ran it),
+   * so concurrent CLI runs never both process the same task.
+   * A claim of a sending task must also clear its pause_reason (sending tasks can't be claimed today).
+   */
+  public function claimAsCli(ScheduledTaskEntity $task): bool {
+    $updated = (int)$this->entityManager->createQuery(
+      'UPDATE ' . ScheduledTaskEntity::class . ' st ' .
+      'SET st.status = :cli ' .
+      'WHERE st.id = :id AND st.status IN (:claimable) AND st.deletedAt IS NULL'
+    )
+      ->setParameter('cli', ScheduledTaskEntity::STATUS_CLI)
+      ->setParameter('id', $task->getId())
+      ->setParameter('claimable', [ScheduledTaskEntity::STATUS_SCHEDULED, ScheduledTaskEntity::STATUS_PAUSED])
+      ->execute();
+
+    if ($updated === 0) {
+      return false;
+    }
+
+    // The DQL UPDATE bypasses the entity manager, so refresh the in-memory entity to the claimed state.
+    // Otherwise its status snapshot stays 'scheduled' and a later hand-back to 'scheduled' is seen as a
+    // no-op change, leaving the row stuck as 'cli'.
+    $this->entityManager->refresh($task);
+    return true;
   }
 
   public function findPreviousTask(ScheduledTaskEntity $task): ?ScheduledTaskEntity {

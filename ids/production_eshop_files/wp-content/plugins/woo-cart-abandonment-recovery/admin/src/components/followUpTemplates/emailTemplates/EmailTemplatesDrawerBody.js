@@ -1,8 +1,13 @@
 import React from 'react';
 import RenderFields from '@Components/RenderFields';
 import ConditionsHelper from '@Utils/conditions';
+import { cn } from '@Utils/helper';
+import {
+	getDrawerFieldData,
+	getFieldCardClass,
+} from '../shared/templateDrawerUtils';
 
-const EmailTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
+const EmailTemplatesDrawerBody = ( { formState, handleChange, errors, editorInitDelay } ) => {
 	const emailFields = cart_abandonment_admin?.settings_fields?.email_fields;
 	const conditions = new ConditionsHelper();
 
@@ -25,10 +30,13 @@ const EmailTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 						return (
 							<div
 								key={ field }
-								className="px-4 rounded-md bg-white shadow-sm"
+								className={ cn(
+									'px-4 rounded-md bg-white shadow-sm',
+									getFieldCardClass( data?.type )
+								) }
 							>
 								<RenderFields
-									data={ data }
+									data={ getDrawerFieldData( field, data ) }
 									value={
 										[ 'time', 'test_email' ].includes(
 											data?.type
@@ -40,6 +48,7 @@ const EmailTemplatesDrawerBody = ( { formState, handleChange, errors } ) => {
 									handleChange={ handleChange }
 									errors={ errors }
 									autoSave={ false }
+									initDelay={ editorInitDelay }
 								/>
 							</div>
 						);

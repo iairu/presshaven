@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) exit;
 class Helpers {
   const DIVIDER = '***MailPoet***';
   const LINK_TAG = 'link';
+  // Fixed width on purpose: a mask that follows the input's length leaks it.
+  const EMAIL_MASK = '***';
 
   public static function isJson($string) {
     if (!is_string($string)) return false;
@@ -101,7 +103,7 @@ class Helpers {
   }
 
   public static function getIP() {
-    return (isset($_SERVER['REMOTE_ADDR']))
+    return (isset($_SERVER['REMOTE_ADDR']) && is_string($_SERVER['REMOTE_ADDR']))
       ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
       : null;
   }
@@ -123,6 +125,38 @@ class Helpers {
     return strtolower(array_pop($arrayOfItems));
   }
 
+  /**
+   * Shortens an email address to its first letter, domain initial and top level domain,
+   * e.g. john.doe@example.com becomes j***@e***.com.
+   */
+  public static function maskEmail(string $email = ''): string {
+    $email = trim($email);
+    if ($email === '') {
+      return '';
+    }
+
+    $atPosition = strrpos($email, '@');
+    if ($atPosition === false || $atPosition === 0) {
+      return self::EMAIL_MASK;
+    }
+
+    $domain = substr($email, $atPosition + 1);
+    if ($domain === '') {
+      return self::EMAIL_MASK;
+    }
+
+    return substr($email, 0, 1) . self::EMAIL_MASK . '@' . self::maskEmailDomain($domain);
+  }
+
+  private static function maskEmailDomain(string $domain): string {
+    $masked = substr($domain, 0, 1) . self::EMAIL_MASK;
+    $dotPosition = strrpos($domain, '.');
+    if ($dotPosition === false || $dotPosition === 0) {
+      return $masked;
+    }
+    return $masked . substr($domain, $dotPosition);
+  }
+
   public static function mySqlGoneAwayExceptionHandler(\Throwable $err): string {
     $errorMessage = $err->getMessage() ? $err->getMessage() : '';
     $mySqlGoneAwayCheck = strpos(strtolower($errorMessage), 'mysql server has gone away') !== false;
@@ -136,7 +170,9 @@ class Helpers {
       );
       // logging to the php log
       if (function_exists('error_log')) {
+        // phpcs:disable QITStandard.PHP.DebugCode.DebugFunctionFound
         error_log($customErrorMessage); // phpcs:ignore Squiz.PHP.DiscouragedFunctions
+        // phpcs:enable QITStandard.PHP.DebugCode.DebugFunctionFound
       }
 
       return $customErrorMessage;

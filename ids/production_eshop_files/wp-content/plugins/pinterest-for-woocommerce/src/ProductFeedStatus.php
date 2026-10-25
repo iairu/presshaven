@@ -14,6 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Helper methods that get/set the various feed state properties.
+ *
+ * @class   ProductFeedStatus
+ * @version 1.6.0
  */
 class ProductFeedStatus {
 
@@ -58,7 +61,7 @@ class ProductFeedStatus {
 
 		foreach ( self::STATE_PROPS as $key => $default_value ) {
 
-			if ( ! isset( self::$state[ $key ] ) || null === self::$state[ $key ] ) {
+			if ( ! isset( self::$state[ $key ] ) ) {
 				self::$state[ $key ] = get_option( self::PINTEREST_FOR_WOOCOMMERCE_FEEDS_DATA_PREFIX . $key, $default_value );
 			}
 
@@ -98,13 +101,14 @@ class ProductFeedStatus {
 	}
 
 	/**
-	 * Removes all transients for the given feed_id.
+	 * Removes saved feed state and any legacy transients.
 	 *
 	 * @return void
 	 */
 	public static function deregister() {
 		foreach ( self::STATE_PROPS as $key => $default_value ) {
 			self::$state[ $key ] = $default_value;
+			delete_option( self::PINTEREST_FOR_WOOCOMMERCE_FEEDS_DATA_PREFIX . $key );
 			delete_transient( self::PINTEREST_FOR_WOOCOMMERCE_FEEDS_DATA_PREFIX . $key );
 		}
 	}

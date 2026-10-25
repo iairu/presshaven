@@ -265,7 +265,30 @@ class CustomFields
         if (is_ssl() && str_starts_with($content_url, 'http://')) {
             $content_url = str_replace('http://', 'https://', $content_url);
         }
-        return str_replace(\WP_CONTENT_DIR, $content_url, $path);
+        return $content_url . '/' . $this->relative_to_content_dir($path);
+    }
+    /**
+     * Returns the path relative to the content directory, with forward slashes.
+     *
+     * Both paths are normalized first, because on Windows WP_CONTENT_DIR usually
+     * mixes separators (C:\htdocs/wp-content) while __DIR__ uses backslashes only.
+     * A path outside the content directory is only normalized and stripped of its leading slash.
+     *
+     * @param string      $path        The absolute path.
+     * @param string|null $content_dir The content directory, defaults to WP_CONTENT_DIR.
+     *
+     * @return string The relative path without leading slash.
+     *
+     * @internal
+     */
+    public function relative_to_content_dir(string $path, ?string $content_dir = null): string
+    {
+        $path = wp_normalize_path($path);
+        $content_dir = untrailingslashit(wp_normalize_path($content_dir ?? \WP_CONTENT_DIR));
+        if (str_starts_with($path, $content_dir . '/')) {
+            $path = substr($path, strlen($content_dir));
+        }
+        return ltrim($path, '/');
     }
     /**
      * Get the path of the build file.
@@ -316,7 +339,6 @@ class CustomFields
      */
     public function get_css_asset(string $item): array|string
     {
-        $build_path = plugin_dir_path(__DIR__) . 'build/';
         $asset_php = $this->get_build_path($item . '.asset.php');
         if (file_exists($asset_php)) {
             $asset = require $asset_php;
@@ -334,9 +356,7 @@ class CustomFields
      */
     public function get_api_basename(): string
     {
-        $content_path = str_replace(\WP_CONTENT_DIR, '', __DIR__);
-        $file_path = basename($content_path);
-        return ltrim(str_replace('/' . $file_path, '', $content_path), '/');
+        return dirname($this->relative_to_content_dir(__DIR__));
     }
     /**
      * Retrieves handle of the current implementation.
@@ -370,6 +390,57 @@ class CustomFields
         return $result;
     }
     /**
+     * Walks an item tree alongside its values and collects, per options_key,
+     * the set of currently-selected values for async fields (those carrying an
+     * options_callback). Recurses into group (object value) and multi_group
+     * (array-of-rows value). Layout wrappers (wrapper, columns) carry no id or
+     * value, so their children are collected in the wrapper's own value scope.
+     * Fields with cache_options=false are included too: the browse list may
+     * depend on dynamic params, but saved values still need labels.
+     *
+     * @param array $items  Normalized (or prepared) items.
+     * @param array $values Values keyed by item id, matching the items' shape.
+     *
+     * @return array<string, array<int, string>> Map of options_key => values.
+     */
+    public function collect_async_values(array $items, array $values): array
+    {
+        $collected = array();
+        foreach ($items as $item) {
+            if (isset($item['items']) && in_array($item['type'] ?? '', array('wrapper', 'columns'), \true)) {
+                foreach ($this->collect_async_values($item['items'], $values) as $key => $vals) {
+                    $collected[$key] = array_merge($collected[$key] ?? array(), $vals);
+                }
+                continue;
+            }
+            $id = $item['id'] ?? null;
+            $value = null !== $id && array_key_exists($id, $values) ? $values[$id] : $item['value'] ?? null;
+            if (isset($item['items']) && 'multi_group' === ($item['type'] ?? '')) {
+                foreach ((array) $value as $row) {
+                    foreach ($this->collect_async_values($item['items'], (array) $row) as $key => $vals) {
+                        $collected[$key] = array_merge($collected[$key] ?? array(), $vals);
+                    }
+                }
+                continue;
+            }
+            if (isset($item['items']) && 'group' === ($item['type'] ?? '')) {
+                foreach ($this->collect_async_values($item['items'], (array) $value) as $key => $vals) {
+                    $collected[$key] = array_merge($collected[$key] ?? array(), $vals);
+                }
+                continue;
+            }
+            if (empty($item['options_callback']) || empty($item['options_key'])) {
+                continue;
+            }
+            $key = $item['options_key'];
+            $vals = array_filter(array_map('strval', (array) $value), static fn($v) => '' !== $v);
+            if (!empty($vals)) {
+                $collected[$key] = array_merge($collected[$key] ?? array(), $vals);
+            }
+        }
+        return $collected;
+    }
+    /**
      * Sanitizes a given item's value based on its type using a closure.
      *
      * @param array $item The item array which contains the type and other relevant information.
@@ -401,7 +472,7 @@ class CustomFields
             } elseif (in_array($item['type'], array('date', 'datetime', 'month', 'password', 'select', 'radio', 'tel', 'text', 'time', 'week'), \true)) {
                 $sanitized_value = sanitize_text_field($value);
             } elseif ('email' === $item['type']) {
-                $sanitized_value = sanitize_email($value);
+                $sanitized_value = is_string($value) ? sanitize_email($value) : '';
             } elseif ('group' === $item['type']) {
                 $value = is_string($value) ? json_decode($value, \true) : (array) $value;
                 $sanitized_value = $value;
@@ -445,13 +516,13 @@ class CustomFields
                     $sanitized_value = array(!empty($value[0]) ? sanitize_text_field($value[0]) : null, !empty($value[1]) ? sanitize_text_field($value[1]) : null);
                 }
             } elseif (in_array($item['type'], array('number', 'range'), \true)) {
-                $sanitized_value = floatval($value);
+                $sanitized_value = is_scalar($value) ? floatval($value) : null;
             } elseif ('textarea' === $item['type']) {
                 $sanitized_value = sanitize_textarea_field($value);
             } elseif ('url' === $item['type']) {
-                $sanitized_value = esc_url($value);
+                $sanitized_value = is_string($value) ? esc_url($value) : '';
             } elseif (in_array($item['type'], array('wysiwyg', 'richtext'), \true)) {
-                $sanitized_value = wp_kses_post($value);
+                $sanitized_value = is_string($value) ? wp_kses_post($value) : '';
             } elseif (in_array($item['type'], array('multi_checkbox', 'multi_toggle'), \true)) {
                 $value = is_string($value) ? json_decode($value, \true) : (array) $value;
                 $sanitized_value = array();

@@ -18,6 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class to handle PinterestSyncSettings.
+ *
+ * @class   PinterestSyncSettings
+ * @version 1.6.0
  */
 class PinterestSyncSettings {
 
@@ -28,7 +31,7 @@ class PinterestSyncSettings {
 	/**
 	 * Get the list of synced settings.
 	 *
-	 * @return array
+	 * @return string[]
 	 */
 	public static function get_synced_settings() {
 
@@ -38,6 +41,8 @@ class PinterestSyncSettings {
 
 	/**
 	 * Sync settings.
+	 *
+	 * @return array{success: true, synced_settings: array<string, mixed>}|array{success: false, message: string}
 	 */
 	public static function sync_settings() {
 

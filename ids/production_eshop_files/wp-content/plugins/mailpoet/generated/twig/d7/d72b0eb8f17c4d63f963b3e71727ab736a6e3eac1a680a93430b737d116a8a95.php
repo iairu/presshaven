@@ -54,7 +54,7 @@ class __TwigTemplate_d3e8bf2dd0b6f553933582b6cf295d5ab8592820b519068b6de84e6d5df
         // line 5
         yield $this->extensions['MailPoet\Twig\I18n']->translate("Disable these emails");
         yield " ";
-        yield $this->env->getRuntime('MailPoetVendor\Twig\Runtime\EscaperRuntime')->escape(($context["linkSettings"] ?? null), "html", null, true);
+        yield ($context["linkSettings"] ?? null);
         yield "
 ";
         return; yield '';

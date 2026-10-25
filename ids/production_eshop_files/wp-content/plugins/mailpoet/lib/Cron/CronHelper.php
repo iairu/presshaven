@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\Router\Endpoints\CronDaemon as CronDaemonEndpoint;
 use MailPoet\Router\Router;
 use MailPoet\Settings\SettingsController;
-use MailPoet\Util\Security;
 use MailPoet\WP\Functions as WPFunctions;
 
 class CronHelper {
@@ -17,6 +16,7 @@ class CronHelper {
   const DAEMON_SETTING = 'cron_daemon';
   const DAEMON_STATUS_ACTIVE = 'active';
   const DAEMON_STATUS_INACTIVE = 'inactive';
+  const DAEMON_TOKEN_BYTES = 16;
 
   // Error codes
   const DAEMON_EXECUTION_LIMIT_REACHED = 1001;
@@ -106,7 +106,7 @@ class CronHelper {
   }
 
   public function createToken() {
-    return Security::generateRandomString();
+    return bin2hex(random_bytes(self::DAEMON_TOKEN_BYTES));
   }
 
   public function pingDaemon() {
@@ -163,16 +163,14 @@ class CronHelper {
   }
 
   public function queryCronUrl($url) {
-    $args = $this->wp->applyFilters(
-      'mailpoet_cron_request_args',
-      [
-        'blocking' => true,
-        'sslverify' => false,
-        'timeout' => self::DAEMON_REQUEST_TIMEOUT,
-        'user-agent' => 'MailPoet Cron',
-      ]
-    );
-    return $this->wp->wpRemotePost($url, $args);
+    $defaultArgs = [
+      'blocking' => true,
+      'sslverify' => $this->wp->applyFilters('https_local_ssl_verify', false, $url),
+      'timeout' => self::DAEMON_REQUEST_TIMEOUT,
+      'user-agent' => 'MailPoet Cron',
+    ];
+    $args = $this->wp->applyFilters('mailpoet_cron_request_args', $defaultArgs);
+    return $this->wp->wpRemotePost($url, is_array($args) ? $args : $defaultArgs);
   }
 
   public function getCronUrl($action, $data = false) {
@@ -181,10 +179,12 @@ class CronHelper {
       $action,
       $data
     );
+    $url = is_string($url) ? $url : '';
     $customCronUrl = $this->wp->applyFilters('mailpoet_cron_request_url', $url);
-    return ($customCronUrl === $url) ?
-      str_replace(home_url(), $this->getSiteUrl(), $url) :
-      $customCronUrl;
+    if ($customCronUrl === $url) {
+      return str_replace(home_url(), $this->getSiteUrl(), $url);
+    }
+    return is_string($customCronUrl) ? $customCronUrl : $url;
   }
 
   public function getSiteUrl($siteUrl = false) {

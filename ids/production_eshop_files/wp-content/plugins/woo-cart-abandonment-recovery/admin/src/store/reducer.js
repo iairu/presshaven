@@ -12,7 +12,6 @@ export const initialState = {
 	dashboardData: '',
 	isDashboardLoading: false,
 	dashboardError: '',
-	followUpData: '',
 	productData: '',
 };
 
@@ -72,11 +71,6 @@ export const reducer = ( state = initialState, action ) => {
 				...state,
 				isDashboardLoading: false,
 				dashboardError: action.payload,
-			};
-		case ActionTypes.FETCH_FOLLOWUP_DATA_SUCCESS:
-			return {
-				...state,
-				followUpData: action.followUpData,
 			};
 		case ActionTypes.FETCH_PRODUCT_DATA_SUCCESS:
 			return {

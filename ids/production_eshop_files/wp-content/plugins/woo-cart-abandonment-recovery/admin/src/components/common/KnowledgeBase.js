@@ -6,8 +6,48 @@ import {
 	ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import { __ } from '@wordpress/i18n';
+import { forwardRef } from 'react';
 
 import AppTooltip from '@Components/common/AppTooltip';
+import { FOCUS_RING_CLASS } from '@Components/common/focusStyles';
+import { cn } from '@Utils/helper';
+
+// Dialog clones its trigger with a ref, onClick and aria-expanded, so the button forwards them.
+const KnowledgeBaseTrigger = forwardRef( ( props, ref ) => {
+	const label = __( 'Knowledge Base', 'woo-cart-abandonment-recovery' );
+
+	return (
+		<AppTooltip content={ label } position="bottom" className="z-50">
+			<button
+				ref={ ref }
+				type="button"
+				aria-label={ label }
+				className={ cn(
+					'flex justify-center items-center m-0 p-0 border-0 bg-transparent rounded cursor-pointer',
+					FOCUS_RING_CLASS
+				) }
+				{ ...props }
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					strokeWidth={ 1.5 }
+					stroke="currentColor"
+					className="h-5 w-5 text-text-secondary"
+					aria-hidden="true"
+					focusable="false"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
+					/>
+				</svg>
+			</button>
+		</AppTooltip>
+	);
+} );
 
 const KnowledgeBase = () => {
 	const data = cart_abandonment_admin.knowledge_base;
@@ -17,45 +57,7 @@ const KnowledgeBase = () => {
 			design="simple"
 			exitOnEsc
 			scrollLock
-			trigger={
-				<div
-					role="button"
-					aria-label={ __(
-						'Knowledge Base',
-						'woo-cart-abandonment-recovery'
-					) }
-					tabIndex="0"
-					className="flex justify-center items-center cursor-pointer focus-visible:outline-auto"
-				>
-					<AppTooltip
-						content={ __(
-							'Knowledge Base',
-							'woo-cart-abandonment-recovery'
-						) }
-						position="bottom"
-						className="z-50"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							strokeWidth={ 1.5 }
-							stroke="currentColor"
-							className="h-5 w-5 cursor text-gray-500"
-							aria-hidden="true"
-							focusable="false"
-							role="button"
-							tabIndex={ 0 }
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
-							/>
-						</svg>
-					</AppTooltip>
-				</div>
-			}
+			trigger={ <KnowledgeBaseTrigger /> }
 		>
 			<Dialog.Backdrop />
 			<Dialog.Panel className="gap-0 m-5 sm:m-0 sm:w-3/5">

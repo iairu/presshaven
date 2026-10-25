@@ -384,14 +384,15 @@ li.step {
     color: #000;
     font-weight: 400;
     margin: 10px 0 0 0;
-    line-height: 18px;
+    line-height: 1.5;
 }
 .homepage-setup-theme-buynow-four a {
     font-size: 18px;
     color: #fff;
-    padding: 10px;
+    padding: 10px 0;
     font-weight: 600;
     text-decoration: none;
+    display: block;
 }
 .homepage-setup-theme-buynow-four {
     background: linear-gradient(180deg, #FF1980 0%, #FF685A 100%);
@@ -555,14 +556,28 @@ li.step {
 }
 .info-link a{
     padding: 3px 27px;
-    font-size: 13px;
+    font-size: 14px;
     background: #2271b1;
     border:1px solid #2271b1;
-    color: #fff;
-    text-decoration: none;
+    color: #fff !important;
+    text-decoration: none !important;
     text-shadow: none;
     display: inline-block;
     line-height: 2.15384615;
     border-radius: 3px;
     cursor: pointer;
+}
+
+/* NOITICE BUNDLE */
+
+.notice-bundle {
+    background: linear-gradient(135deg, #ff7a18, #ffb347) !important;
+    color: #fff !important;
+    padding: 5px 18px !important;
+    margin-left: 10px;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    display: inline-block !important;
+    border: none !important;
+    outline: none !important;
 }

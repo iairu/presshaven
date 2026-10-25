@@ -5,11 +5,12 @@ msgstr ""
 "Last-Translator: gpt-po v1.1.1\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: 2025-08-13T10:11:47+00:00\n"
 "PO-Revision-Date: 2025-08-13T10:11:47+00:00\n"
-"Language: \n"
+"Language: pl_PL\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #. Plugin URI of the plugin
 #: woo-cart-abandonment-recovery.php
@@ -121,9 +122,7 @@ msgid "Failed to clone template"
 msgstr "Nie udało się sklonować szablonu"
 
 #: admin/ajax/email-templates.php:582
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template cloned successfully"
 msgstr "Szablon został pomyślnie sklonowany"
 
@@ -132,18 +131,19 @@ msgid "Default email templates restored successfully."
 msgstr "Domyślne szablony e-mail zostały pomyślnie przywrócone."
 
 #: admin/ajax/email-templates.php:843
+#: admin/build/settings.js:14
 msgid "Test email sent successfully!"
 msgstr "Testowy e-mail został pomyślnie wysłany!"
 
 #: admin/ajax/email-templates.php:845
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Failed to send test email"
 msgstr "Nie udało się wysłać testowego e-maila"
 
 #: admin/api/dashboard.php:78
 #: admin/api/detailed-report.php:69
 #: admin/api/follow-up-emails.php:77
-#: admin/api/follow-up.php:69
+#: admin/api/follow-up.php:133
 msgid "Sorry, you don't have the access to perform this action."
 msgstr "Przepraszam, nie masz dostępu do wykonania tej akcji."
 
@@ -152,262 +152,260 @@ msgid "General"
 msgstr "Ogólne"
 
 #: admin/inc/meta-options.php:90
-#: admin/inc/meta-options.php:890
+#: admin/inc/meta-options.php:973
 #: classes/class-cartflows-ca-settings.php:62
 msgid "Enable Tracking"
 msgstr "Włącz śledzenie"
 
 #: admin/inc/meta-options.php:93
-#: admin/inc/meta-options.php:893
+#: admin/inc/meta-options.php:976
 msgid "Cart will be considered abandoned if order is not completed in cut-off time."
 msgstr "Koszyk zostanie uznany za porzucony, jeśli zamówienie nie zostanie zrealizowane w wyznaczonym czasie."
 
 #: admin/inc/meta-options.php:98
-#: admin/inc/meta-options.php:898
+#: admin/inc/meta-options.php:981
 #: classes/class-cartflows-ca-settings.php:76
 msgid "Cart abandoned cut-off time"
 msgstr "Czas odcięcia porzuconego koszyka"
 
-#: admin/inc/meta-options.php:101
-#: admin/inc/meta-options.php:404
-#: admin/inc/meta-options.php:901
+#: admin/inc/meta-options.php:432
 msgid "Consider cart abandoned after above entered minutes of item being added to cart and order not placed."
 msgstr "Uznaj koszyk za porzucony po upływie powyżej wprowadzonych minut od dodania przedmiotu do koszyka i nie złożenia zamówienia."
 
 #: admin/inc/meta-options.php:102
-#: admin/inc/meta-options.php:902
+#: admin/inc/meta-options.php:985
 msgid "minutes"
 msgstr "minuty"
 
-#: admin/inc/meta-options.php:118
-#: admin/inc/meta-options.php:918
+#: admin/inc/meta-options.php:120
+#: admin/inc/meta-options.php:1003
 #: classes/class-cartflows-ca-settings.php:90
 msgid "Disable Tracking For"
 msgstr "Wyłącz śledzenie dla"
 
-#: admin/inc/meta-options.php:122
-#: admin/inc/meta-options.php:922
+#: admin/inc/meta-options.php:124
+#: admin/inc/meta-options.php:1007
 msgid "It will ignore selected users from abandonment process when they logged in, and hence they can not receive mail for cart abandoned by themselves."
 msgstr "Będzie ignorować wybranych użytkowników w procesie porzucenia, gdy są zalogowani, i dlatego nie mogą oni otrzymywać wiadomości o porzuconym koszyku przez siebie."
 
-#: admin/inc/meta-options.php:123
-#: admin/inc/meta-options.php:923
+#: admin/inc/meta-options.php:125
+#: admin/inc/meta-options.php:1008
 msgid "Select user roles"
 msgstr "Wybierz role użytkowników"
 
-#: admin/inc/meta-options.php:128
+#: admin/inc/meta-options.php:130
 #: classes/class-cartflows-ca-settings.php:104
 msgid "Exclude email sending For"
 msgstr "Wyklucz wysyłanie e-maili dla"
 
-#: admin/build/settings.js:9
-msgid "Processing"
-msgstr "Przetwarzanie"
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Failed"
 msgstr "Nieudane"
 
-#: admin/inc/meta-options.php:132
+#: admin/inc/meta-options.php:134
 msgid "It will not send future recovery emails to selected order status and will mark as recovered."
 msgstr "Nie będzie wysyłać przyszłych e-maili odzyskiwania do wybranego statusu zamówienia i oznaczy jako odzyskane."
 
-#: admin/inc/meta-options.php:133
+#: admin/inc/meta-options.php:135
 msgid "Select order status"
 msgstr "Wybierz status zamówienia"
 
-#: admin/inc/meta-options.php:138
+#: admin/inc/meta-options.php:140
 #: classes/class-cartflows-ca-settings.php:118
 msgid "Notify recovery to admin"
 msgstr "Powiadom administratora o odzyskaniu"
 
-#: admin/inc/meta-options.php:141
+#: admin/inc/meta-options.php:143
 #: classes/class-cartflows-ca-settings.php:122
 msgid "This option will send an email to admin on new order recovery."
 msgstr "Ta opcja wyśle e-mail do administratora przy odzyskiwaniu nowego zamówienia."
 
-#: admin/inc/meta-options.php:322
+#: admin/inc/meta-options.php:350
 msgid "Webhook"
 msgstr "Webhook"
 
-#: admin/inc/meta-options.php:327
+#: admin/inc/meta-options.php:355
 #: classes/class-cartflows-ca-settings.php:278
 msgid "Enable Webhook"
 msgstr "Włącz Webhook"
 
-#: admin/inc/meta-options.php:330
+#: admin/inc/meta-options.php:358
 #: classes/class-cartflows-ca-settings.php:282
 msgid "Allows you to trigger webhook automatically upon cart abandonment and recovery."
 msgstr "Umożliwia automatyczne uruchamianie webhooka po porzuceniu i odzyskaniu koszyka."
 
-#: admin/inc/meta-options.php:335
+#: admin/inc/meta-options.php:363
 #: classes/class-cartflows-ca-settings.php:287
 msgid "Webhook URL"
 msgstr "Adres URL webhooka"
 
-#: admin/inc/meta-options.php:338
+#: admin/inc/meta-options.php:366
 msgid "Add the Webhook URL below."
 msgstr "Dodaj poniżej adres URL webhooka."
 
-#: admin/inc/meta-options.php:352
-#: admin/inc/meta-options.php:705
+#: admin/inc/meta-options.php:380
+#: admin/inc/meta-options.php:788
 #: classes/class-cartflows-ca-settings.php:314
 msgid "Create Coupon Code"
 msgstr "Utwórz kod kuponu"
 
-#: admin/inc/meta-options.php:355
+#: admin/inc/meta-options.php:383
 #: classes/class-cartflows-ca-settings.php:318
 msgid "Auto-create the special coupon for the abandoned cart to send over the emails."
 msgstr "Automatycznie utwórz specjalny kupon dla porzuconego koszyka, aby wysłać go przez e-maile."
 
-#: admin/inc/meta-options.php:369
-#: admin/inc/meta-options.php:714
+#: admin/inc/meta-options.php:397
+#: admin/inc/meta-options.php:797
 #: classes/class-cartflows-ca-settings.php:323
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:583
 msgid "Discount Type"
 msgstr "Typ rabatu"
 
-#: admin/inc/meta-options.php:372
-#: admin/inc/meta-options.php:716
+#: admin/inc/meta-options.php:400
+#: admin/inc/meta-options.php:799
 msgid "Select the Discount Type."
 msgstr "Wybierz rodzaj rabatu."
 
-#: admin/inc/meta-options.php:376
-#: admin/inc/meta-options.php:720
+#: admin/inc/meta-options.php:404
+#: admin/inc/meta-options.php:803
 msgid "Percentage Discount"
 msgstr "Procentowa zniżka"
 
-#: admin/inc/meta-options.php:380
-#: admin/inc/meta-options.php:724
+#: admin/inc/meta-options.php:408
+#: admin/inc/meta-options.php:807
 msgid "Fixed Cart Discount"
 msgstr "Stały rabat na koszyk"
 
-#: admin/inc/meta-options.php:401
-#: admin/inc/meta-options.php:741
+#: admin/inc/meta-options.php:429
+#: admin/inc/meta-options.php:824
 #: classes/class-cartflows-ca-settings.php:332
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:615
 msgid "Coupon Amount"
 msgstr "Kwota kuponu"
 
-#: admin/inc/meta-options.php:423
-#: admin/inc/meta-options.php:758
+#: admin/inc/meta-options.php:451
+#: admin/inc/meta-options.php:841
 #: classes/class-cartflows-ca-settings.php:341
 msgid "Coupon Expires After"
 msgstr "Kupon wygasa po"
 
-#: admin/inc/meta-options.php:443
-#: admin/inc/meta-options.php:574
-#: admin/inc/meta-options.php:774
+#: admin/inc/meta-options.php:471
+#: admin/inc/meta-options.php:602
+#: admin/inc/meta-options.php:857
 #: classes/class-cartflows-ca-settings.php:652
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:653
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:750
 msgid "Hour(s)"
 msgstr "Godzina(y)"
 
-#: admin/inc/meta-options.php:452
+#: admin/inc/meta-options.php:480
 msgid "Set the expiry time for the coupon."
 msgstr "Ustaw czas wygaśnięcia kuponu."
 
-#: admin/inc/meta-options.php:148
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/inc/meta-options.php:168
+#: admin/build/settings.js:31
 msgid "Coupon"
 msgstr "Kupon"
 
-#: admin/inc/meta-options.php:153
+#: admin/inc/meta-options.php:173
 #: classes/class-cartflows-ca-settings.php:157
 msgid "Delete Coupons Automatically"
 msgstr "Usuń kupony automatycznie"
 
-#: admin/inc/meta-options.php:156
+#: admin/inc/meta-options.php:176
 msgid "This option will set a weekly cron to delete all expired and used coupons automatically in the background."
 msgstr "Ta opcja ustawi cotygodniowy cron do automatycznego usuwania wszystkich przeterminowanych i wykorzystanych kuponów w tle."
 
-#: admin/inc/meta-options.php:161
+#: admin/inc/meta-options.php:181
 #: classes/class-cartflows-ca-settings.php:171
 msgid "Delete Coupons Manually"
 msgstr "Usuń kupony ręcznie"
 
-#: admin/inc/meta-options.php:163
+#: admin/inc/meta-options.php:183
 #: classes/class-cartflows-ca-settings.php:870
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:90
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:128
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:118
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:193
-#: admin/build/settings.js:6
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:27
+#: admin/build/settings.js:28
+#: admin/build/settings.js:29
+#: admin/build/settings.js:31
+#: admin/build/settings.js:34
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Delete"
 msgstr "Usuń"
 
-#: admin/inc/meta-options.php:164
+#: admin/inc/meta-options.php:184
 msgid "This will delete all expired and used coupons that were created by Woo Cart Abandonment Recovery."
 msgstr "Spowoduje to usunięcie wszystkich wygasłych i użytych kuponów utworzonych przez Woo Cart Abandonment Recovery."
 
-#: admin/inc/meta-options.php:171
+#: admin/inc/meta-options.php:191
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:297
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "Email"
 msgstr "E-mail"
 
-#: admin/inc/meta-options.php:176
+#: admin/inc/meta-options.php:196
 #: classes/class-cartflows-ca-settings.php:195
 msgid "\"From\" Name"
 msgstr "\"Od\" Nazwa"
 
-#: admin/inc/meta-options.php:179
+#: admin/inc/meta-options.php:199
 #: classes/class-cartflows-ca-settings.php:199
 msgid "Name will appear in email sent."
 msgstr "Nazwa pojawi się w wysłanym e-mailu."
 
-#: admin/inc/meta-options.php:184
+#: admin/inc/meta-options.php:204
 #: classes/class-cartflows-ca-settings.php:204
 msgid "\"From\" Address"
 msgstr "Adres „Od”"
 
-#: admin/inc/meta-options.php:187
+#: admin/inc/meta-options.php:207
 #: classes/class-cartflows-ca-settings.php:208
 msgid "Email which send from."
 msgstr "Email, z którego wysłano."
 
-#: admin/inc/meta-options.php:192
+#: admin/inc/meta-options.php:212
 #: classes/class-cartflows-ca-settings.php:213
 msgid "\"Reply To\" Address"
 msgstr "Adres „Odpowiedz do”"
 
-#: admin/inc/meta-options.php:195
+#: admin/inc/meta-options.php:215
 #: classes/class-cartflows-ca-settings.php:217
 msgid "When a user clicks reply, which email address should that reply be sent to?"
 msgstr "Kiedy użytkownik kliknie odpowiedź, na jaki adres e-mail powinna zostać wysłana ta odpowiedź?"
 
-#: admin/inc/meta-options.php:202
+#: admin/inc/meta-options.php:222
 msgid "Recovery Report"
 msgstr "Raport z odzyskiwania"
 
-#: admin/inc/meta-options.php:207
+#: admin/inc/meta-options.php:227
 #: classes/class-cartflows-ca-settings.php:248
 msgid "Send recovery report emails"
 msgstr "Wyślij e-maile z raportem odzyskiwania"
 
-#: admin/inc/meta-options.php:210
+#: admin/inc/meta-options.php:230
 #: classes/class-cartflows-ca-settings.php:252
-#: admin/build/settings.js:16
 msgid "Enable sending recovery report emails."
 msgstr "Włącz wysyłanie wiadomości e-mail z raportem odzyskiwania."
 
-#: admin/inc/meta-options.php:215
+#: admin/inc/meta-options.php:235
 msgid "Email Address"
 msgstr "Adres e-mail"
 
-#: admin/inc/meta-options.php:218
+#: admin/inc/meta-options.php:238
 #: classes/class-cartflows-ca-settings.php:261
 msgid "Email address to send recovery report emails. For multiple emails, add each email address per line."
 msgstr "Adres e-mail do wysyłania raportów odzyskiwania. W przypadku wielu adresów e-mail, dodaj każdy adres e-mail w osobnej linii."
 
-#: admin/inc/meta-options.php:234
+#: admin/inc/meta-options.php:262
 msgid "GDPR"
 msgstr "RODO"
 
@@ -415,7 +413,7 @@ msgstr "RODO"
 msgid "Enable GDPR Integration"
 msgstr "Włącz integrację z RODO"
 
-#: admin/inc/meta-options.php:242
+#: admin/inc/meta-options.php:270
 msgid "By enabling this, it will show up confirmation text below the email id on checkout page."
 msgstr "Włączając to, poniżej identyfikatora e-mail na stronie realizacji zakupu pojawi się tekst potwierdzenia."
 
@@ -423,277 +421,275 @@ msgstr "Włączając to, poniżej identyfikatora e-mail na stronie realizacji za
 msgid "GDPR Message"
 msgstr "Wiadomość RODO"
 
-#: admin/inc/meta-options.php:266
+#: admin/inc/meta-options.php:294
 msgid "Advanced"
 msgstr "Zaawansowane"
 
-#: admin/inc/meta-options.php:271
+#: admin/inc/meta-options.php:299
 #: classes/class-cartflows-ca-settings.php:132
 msgid "UTM parameters"
 msgstr "Parametry UTM"
 
-#: admin/inc/meta-options.php:274
+#: admin/inc/meta-options.php:302
 msgid "The UTM parameters will be appended to the checkout page links which is available in the recovery emails. For multiple parameters, add each parameter per line."
 msgstr "Parametry UTM zostaną dodane do linków na stronie realizacji zakupu, które są dostępne w e-mailach odzyskiwania. W przypadku wielu parametrów dodaj każdy parametr w osobnej linii."
 
-#: admin/inc/meta-options.php:287
+#: admin/inc/meta-options.php:315
 #: classes/class-cartflows-ca-settings.php:435
 msgid "Delete Plugin Data"
 msgstr "Usuń dane wtyczki"
 
-#: admin/inc/meta-options.php:290
+#: admin/inc/meta-options.php:318
 #: classes/class-cartflows-ca-settings.php:439
 msgid "Enabling this option will delete the plugin data while deleting the Plugin."
 msgstr "Włączenie tej opcji spowoduje usunięcie danych wtyczki podczas usuwania wtyczki."
 
-#: admin/inc/meta-options.php:295
+#: admin/inc/meta-options.php:323
 msgid "Help Improve Cart Abandonment"
 msgstr "Pomóż poprawić porzucanie koszyka"
 
 #. translators: %1$s: Start Link Node and $2%s End Link Node.
-#: admin/inc/meta-options.php:300
+#: admin/inc/meta-options.php:328
 #, php-format
 msgid "Collect non-sensitive information from your website, such as the PHP version and features used, to help us fix bugs faster, make smarter decisions, and build features that actually matter to you. %1$sLearn more%2$s"
 msgstr "Zbieraj niesensytywne informacje z Twojej strony internetowej, takie jak wersja PHP i używane funkcje, aby pomóc nam szybciej naprawiać błędy, podejmować mądrzejsze decyzje i tworzyć funkcje, które naprawdę mają dla Ciebie znaczenie. %1$sDowiedz się więcej%2$s"
 
-#: admin/inc/meta-options.php:473
-#: admin/inc/wcar-admin.php:352
+#: admin/inc/meta-options.php:501
+#: admin/inc/wcar-admin.php:391
 msgid "OttoKit"
 msgstr "OttoKit"
 
-#: admin/inc/meta-options.php:494
+#: admin/inc/meta-options.php:522
 msgid "Activate Template Now?"
 msgstr "Aktywować szablon teraz?"
 
-#: admin/inc/meta-options.php:502
+#: admin/inc/meta-options.php:530
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:200
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Template Name"
 msgstr "Nazwa szablonu"
 
-#: admin/inc/meta-options.php:510
+#: admin/inc/meta-options.php:538
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:201
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:96
-#: admin/build/settings.js:11
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
 msgid "Email Subject"
 msgstr "Temat e-maila"
 
-#: admin/inc/meta-options.php:512
+#: admin/inc/meta-options.php:540
 msgid "Enter the email subject."
 msgstr "Wprowadź temat e-maila."
 
-#: admin/inc/meta-options.php:545
+#: admin/inc/meta-options.php:573
 msgid "Email Body"
 msgstr "Treść e-maila"
 
-#: admin/inc/meta-options.php:547
+#: admin/inc/meta-options.php:575
 msgid "Enter the email body."
 msgstr "Wprowadź treść e-maila."
 
-#: admin/inc/meta-options.php:553
+#: admin/inc/meta-options.php:581
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:731
 msgid "Send This Email"
 msgstr "Wyślij ten e-mail"
 
-#: admin/inc/meta-options.php:570
+#: admin/inc/meta-options.php:598
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:749
 msgid "Minute(s)"
 msgstr "Minuta(y)"
 
-#: admin/inc/meta-options.php:447
-#: admin/inc/meta-options.php:578
-#: admin/inc/meta-options.php:778
+#: admin/inc/meta-options.php:475
+#: admin/inc/meta-options.php:606
+#: admin/inc/meta-options.php:861
 #: classes/class-cartflows-ca-settings.php:653
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:654
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:751
 msgid "Day(s)"
 msgstr "Dzień(dni)"
 
-#: admin/inc/meta-options.php:583
+#: admin/inc/meta-options.php:611
 msgid "Time after cart is abandoned to send this email."
 msgstr "Czas po porzuceniu koszyka na wysłanie tego e-maila."
 
-#: admin/inc/meta-options.php:589
+#: admin/inc/meta-options.php:617
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:542
 msgid "Use WooCommerce email style"
 msgstr "Użyj stylu e-mail WooCommerce"
 
-#: admin/inc/meta-options.php:591
+#: admin/inc/meta-options.php:619
 msgid "Email will be sent in WooCommerce email format."
 msgstr "Email zostanie wysłany w formacie email WooCommerce."
 
-#: admin/inc/meta-options.php:697
+#: admin/inc/meta-options.php:725
 msgid "Send Test Email To"
 msgstr "Wyślij wiadomość testową do"
 
-#: admin/inc/meta-options.php:707
+#: admin/inc/meta-options.php:790
 msgid "Auto-create a special coupon for the abandoned cart."
 msgstr "Automatycznie utwórz specjalny kupon dla porzuconego koszyka."
 
-#: admin/inc/meta-options.php:743
+#: admin/inc/meta-options.php:826
 msgid "Amount for the coupon."
 msgstr "Kwota kuponu."
 
-#: admin/inc/meta-options.php:798
+#: admin/inc/meta-options.php:881
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:670
 msgid "Free Shipping"
 msgstr "Darmowa wysyłka"
 
-#: admin/inc/meta-options.php:800
+#: admin/inc/meta-options.php:883
 msgid "Grant free shipping with this coupon."
 msgstr "Przyznaj darmową wysyłkę z tym kuponem."
 
-#: admin/inc/meta-options.php:815
+#: admin/inc/meta-options.php:898
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:690
 msgid "Individual use only"
 msgstr "Tylko do użytku indywidualnego"
 
-#: admin/inc/meta-options.php:817
+#: admin/inc/meta-options.php:900
 msgid "Coupon cannot be used in conjunction with other coupons."
 msgstr "Kupon nie może być używany w połączeniu z innymi kuponami."
 
-#: admin/inc/meta-options.php:833
+#: admin/inc/meta-options.php:916
 msgid "Auto apply coupon"
 msgstr "Automatyczne zastosowanie kuponu"
 
-#: admin/inc/meta-options.php:835
+#: admin/inc/meta-options.php:918
 msgid "Automatically apply coupon at checkout."
 msgstr "Automatycznie zastosuj kupon przy kasie."
 
-#: admin/inc/wcar-admin.php:139
+#: admin/inc/wcar-admin.php:151
 msgid "Create new automation"
 msgstr "Utwórz nową automatyzację"
 
-#: admin/inc/wcar-admin.php:207
-#: admin/inc/wcar-admin.php:417
+#: admin/inc/wcar-admin.php:228
+#: admin/inc/wcar-admin.php:456
+#: admin/inc/wcar-admin.php:525
 msgid "Nonce verification failed."
 msgstr "Weryfikacja nonce nie powiodła się."
 
-#: admin/inc/wcar-admin.php:336
+#: admin/inc/wcar-admin.php:375
 #: classes/class-cartflows-ca-tabs.php:215
 msgid "CartFlows"
 msgstr "CartFlows"
 
-#: admin/inc/wcar-admin.php:337
+#: admin/inc/wcar-admin.php:376
 msgid "CartFlows helps users boost sales by creating optimized checkout flows and sales funnels."
 msgstr "CartFlows pomaga użytkownikom zwiększać sprzedaż poprzez tworzenie zoptymalizowanych procesów realizacji zamówień i lejków sprzedażowych."
 
-#: admin/inc/wcar-admin.php:353
+#: admin/inc/wcar-admin.php:392
 msgid "OttoKit automates work by integrating apps and plugins to share data and perform tasks automatically."
 msgstr "OttoKit automatyzuje pracę, integrując aplikacje i wtyczki w celu udostępniania danych i automatycznego wykonywania zadań."
 
-#: classes/class-cartflows-ca-admin-notices.php:98
-msgid "Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the CartFlows cart abandonment plugin."
-msgstr "Czy mógłbyś zrobić nam wielką przysługę i ocenić nas na 5 gwiazdek na WordPressie? To zwiększyłoby naszą motywację i pomogło innym użytkownikom podjąć komfortową decyzję przy wyborze wtyczki do porzucania koszyka CartFlows."
-
-#: classes/class-cartflows-ca-admin-notices.php:100
+#: classes/class-cartflows-ca-admin-notices.php:109
 msgid "Ok, you deserve it"
 msgstr "Ok, zasługujesz na to"
 
-#: classes/class-cartflows-ca-admin-notices.php:102
+#: classes/class-cartflows-ca-admin-notices.php:111
 msgid "Nope, maybe later"
 msgstr "Nie, może później"
 
-#: classes/class-cartflows-ca-admin-notices.php:103
+#: classes/class-cartflows-ca-admin-notices.php:112
 msgid "I already did"
 msgstr "Już to zrobiłem"
 
-#: classes/class-cartflows-ca-admin-notices.php:132
+#: classes/class-cartflows-ca-admin-notices.php:141
 msgid "How likely are you to recommend #pluginname to your friends or colleagues?"
 msgstr "Jak bardzo prawdopodobne jest, że polecisz #pluginname swoim znajomym lub kolegom?"
 
-#: classes/class-cartflows-ca-admin-notices.php:139
+#: classes/class-cartflows-ca-admin-notices.php:148
 msgid "Thank you for your feedback"
 msgstr "Dziękuję za Twoją opinię"
 
-#: classes/class-cartflows-ca-admin-notices.php:140
+#: classes/class-cartflows-ca-admin-notices.php:149
 msgid "We value your input. How can we improve your experience?"
 msgstr "Cenimy sobie Twoją opinię. Jak możemy poprawić Twoje doświadczenie?"
 
-#: classes/class-cartflows-ca-admin-notices.php:285
+#: classes/class-cartflows-ca-admin-notices.php:294
 msgid "Insufficient permissions"
 msgstr "Niewystarczające uprawnienia"
 
-#: classes/class-cartflows-ca-admin-notices.php:290
+#: classes/class-cartflows-ca-admin-notices.php:299
 msgid "No post data found"
 msgstr "Nie znaleziono danych do wysłania"
 
-#: classes/class-cartflows-ca-admin-notices.php:296
+#: classes/class-cartflows-ca-admin-notices.php:305
 msgid "Invalid Nonce."
 msgstr "Nieprawidłowy nonce."
 
-#: classes/class-cartflows-ca-admin-notices.php:305
+#: classes/class-cartflows-ca-admin-notices.php:314
 msgid "Button action not found."
 msgstr "Nie znaleziono akcji przycisku."
 
-#: classes/class-cartflows-ca-admin-notices.php:314
+#: classes/class-cartflows-ca-admin-notices.php:323
 msgid "Switched to new UI"
 msgstr "Przełączono na nowy interfejs użytkownika"
 
-#: classes/class-cartflows-ca-admin-notices.php:323
+#: classes/class-cartflows-ca-admin-notices.php:332
 msgid "Notice dismissed"
 msgstr "Zawiadomienie odrzucone"
 
-#: classes/class-cartflows-ca-admin-notices.php:329
+#: classes/class-cartflows-ca-admin-notices.php:338
 msgid "Invalid action"
 msgstr "Nieprawidłowa akcja"
 
-#: classes/class-cartflows-ca-default-meta.php:119
+#: classes/class-cartflows-ca-default-meta.php:122
 msgid "Sample Email Template 1"
 msgstr "Przykładowy szablon e-mail 1"
 
-#: classes/class-cartflows-ca-default-meta.php:120
+#: classes/class-cartflows-ca-default-meta.php:123
 msgid "Purchase issue?"
 msgstr "Problem z zakupem?"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:124
+#: classes/class-cartflows-ca-default-meta.php:127
 msgid "<p>Hi {{customer.firstname}}!</p><p>We're having trouble processing your recent purchase. Would you mind completing it?</p><p>Here's a link to continue where you left off:</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Continue Your Purchase Now </a></p><p>Kindly,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Cześć {{customer.firstname}}!</p><p>Mamy problem z przetworzeniem Twojego ostatniego zakupu. Czy mógłbyś go dokończyć?</p><p>Oto link, aby kontynuować tam, gdzie przerwałeś:</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Kontynuuj zakupy teraz </a></p><p>Z wyrazami szacunku,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:134
+#: classes/class-cartflows-ca-default-meta.php:137
 msgid "Sample Email Template 2"
 msgstr "Przykładowy szablon e-mail 2"
 
-#: classes/class-cartflows-ca-default-meta.php:135
+#: classes/class-cartflows-ca-default-meta.php:138
 msgid "Need help?"
 msgstr "Potrzebujesz pomocy?"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:139
+#: classes/class-cartflows-ca-default-meta.php:142
 msgid "<p>Hi {{customer.firstname}}!</p><p>I'm {{admin.firstname}}, and I help handle customer issues at {{admin.company}}.</p><p>I just noticed that you tried to make a purchase, but unfortunately, there was some trouble. Is there anything I can do to help?</p><p>You should be able to complete your checkout in less than a minute:<br /><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Click here to continue your purchase </a><p><p>Thanks!<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Cześć {{customer.firstname}}!</p><p>Jestem {{admin.firstname}}, i zajmuję się obsługą problemów klientów w {{admin.company}}.</p><p>Zauważyłem, że próbowałeś dokonać zakupu, ale niestety wystąpił problem. Czy mogę w czymś pomóc?</p><p>Powinieneś być w stanie dokończyć zakupy w mniej niż minutę:<br /><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'> Kliknij tutaj, aby kontynuować zakupy </a><p><p>Dzięki!<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:149
+#: classes/class-cartflows-ca-default-meta.php:152
 msgid "Sample Email Template 3"
 msgstr "Przykładowy szablon e-mail 3"
 
-#: classes/class-cartflows-ca-default-meta.php:150
+#: classes/class-cartflows-ca-default-meta.php:153
 msgid "Exclusive discount for you. Let's get things started!"
 msgstr "Ekskluzywna zniżka dla Ciebie. Zaczynajmy!"
 
 #. translators: Email template with placeholders
-#: classes/class-cartflows-ca-default-meta.php:154
+#: classes/class-cartflows-ca-default-meta.php:157
 msgid "<p>Few days back you left {{cart.product.names}} in your cart.</p><p>To help make up your mind, we have added an exclusive 10%% discount coupon {{cart.coupon_code}} to your cart.</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'>Complete Your Purchase Now &gt;&gt;</a></p><p>Hurry! This is a onetime offer and will expire in 24 Hours.</p><p>In case you couldn't finish your order due to technical difficulties or because you need some help, just reply to this email we will be happy to help.</p><p>Kind Regards,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 msgstr "<p>Kilka dni temu zostawiłeś {{cart.product.names}} w swoim koszyku.</p><p>Aby pomóc Ci podjąć decyzję, dodaliśmy do Twojego koszyka ekskluzywny kupon rabatowy 10%% {{cart.coupon_code}}.</p><p><a href='{{cart.checkout_url}}' target='_blank' rel='noopener'>Dokończ zakupy teraz &gt;&gt;</a></p><p>Pośpiesz się! To jednorazowa oferta i wygaśnie za 24 godziny.</p><p>Jeśli nie udało Ci się dokończyć zamówienia z powodu problemów technicznych lub potrzebujesz pomocy, po prostu odpowiedz na tego e-maila, a chętnie pomożemy.</p><p>Z poważaniem,<br />{{admin.firstname}}<br />{{admin.company}}</p><p>{{cart.unsubscribe}}</p>"
 
-#: classes/class-cartflows-ca-default-meta.php:273
+#: classes/class-cartflows-ca-default-meta.php:284
 msgid "Your email & cart are saved so we can send email reminders about this order."
 msgstr "Twój e-mail i koszyk są zapisane, abyśmy mogli wysyłać przypomnienia e-mailowe dotyczące tego zamówienia."
 
-#: classes/class-cartflows-ca-default-meta.php:623
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:175
+#: classes/class-cartflows-ca-default-meta.php:657
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:196
 msgid "Admin"
 msgstr "Administrator"
 
-#: classes/class-cartflows-ca-loader.php:191
+#: classes/class-cartflows-ca-loader.php:193
 msgid "Activate WooCommerce"
 msgstr "Aktywuj WooCommerce"
 
-#: classes/class-cartflows-ca-loader.php:199
+#: classes/class-cartflows-ca-loader.php:201
 msgid "Install WooCommerce"
 msgstr "Zainstaluj WooCommerce"
 
@@ -847,32 +843,34 @@ msgid "Product Custom Data: "
 msgstr "Dane niestandardowe produktu: "
 
 #: classes/class-cartflows-ca-tabs.php:506
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:451
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:503
 msgid "Item"
 msgstr "Przedmiot"
 
-#: admin/inc/meta-options.php:667
+#: admin/inc/meta-options.php:695
 #: classes/class-cartflows-ca-tabs.php:507
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:454
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:506
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:296
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:187
 msgid "Name"
 msgstr "Imię"
 
-#: admin/inc/meta-options.php:671
+#: admin/inc/meta-options.php:699
 #: classes/class-cartflows-ca-tabs.php:508
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:457
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:509
+#: admin/build/settings.js:31
 msgid "Quantity"
 msgstr "Ilość"
 
-#: admin/inc/meta-options.php:675
+#: admin/inc/meta-options.php:703
 #: classes/class-cartflows-ca-tabs.php:509
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:460
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:512
+#: admin/build/settings.js:31
 msgid "Price"
 msgstr "Cena"
 
 #: classes/class-cartflows-ca-tabs.php:510
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:463
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:515
 msgid "Line Subtotal"
 msgstr "Suma częściowa wiersza"
 
@@ -890,8 +888,9 @@ msgstr "Wysyłka"
 
 #: classes/class-cartflows-ca-tabs.php:529
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:298
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Cart Total"
 msgstr "Suma koszyka"
 
@@ -900,10 +899,6 @@ msgstr "Suma koszyka"
 #, php-format
 msgid "Looks like abandonment tracking is disabled! Please enable it from %1$s settings %2$s."
 msgstr "Wygląda na to, że śledzenie porzucenia jest wyłączone! Proszę włączyć je w ustawieniach %1$s %2$s."
-
-#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:61
-msgid "Every Fifteen Minutes"
-msgstr "Co piętnaście minut"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:47
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:161
@@ -920,22 +915,22 @@ msgstr "Poczta została wysłana pomyślnie!"
 msgid "Mail sending failed!"
 msgstr "Wysyłanie poczty nie powiodło się!"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:107
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:128
 msgid "there"
 msgstr "tam"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:155
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:176
 msgid "Don't remind me again."
 msgstr "Nie przypominaj mi tego ponownie."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:444
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:496
 msgid "Cart Total ( Cart Total + Shipping + Tax )"
 msgstr "Łączna kwota koszyka ( Łączna kwota koszyka + Wysyłka + Podatek )"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:78
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:34
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Edit"
 msgstr "Edytuj"
 
@@ -944,9 +939,10 @@ msgid "Clone"
 msgstr "Klon"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:202
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Trigger After"
 msgstr "Wyzwalacz po"
 
@@ -1027,6 +1023,7 @@ msgid "Something went wrong"
 msgstr "Coś poszło nie tak"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:179
+#: admin/build/settings.js:4
 msgid "Activated"
 msgstr "Aktywowany"
 
@@ -1125,6 +1122,7 @@ msgid "Send a test email"
 msgstr "Wyślij wiadomość testową"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:791
+#: admin/build/settings.js:31
 msgid "Save Changes"
 msgstr "Zapisz zmiany"
 
@@ -1133,9 +1131,9 @@ msgid "Update Changes"
 msgstr "Zaktualizuj zmiany"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1121
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Create New Template"
 msgstr "Utwórz nowy szablon"
 
@@ -1144,20 +1142,22 @@ msgid " Restore Default Templates"
 msgstr " Przywróć domyślne szablony"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:104
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
+#: admin/build/settings.js:29
 msgid "View"
 msgstr "Widok"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:136
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:197
 #: modules/weekly-email-report/templates/email-footer.php:55
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Unsubscribe"
 msgstr "Anuluj subskrypcję"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-order-table.php:299
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Order Status"
 msgstr "Status zamówienia"
 
@@ -1182,41 +1182,44 @@ msgstr "Ten kupon jest przeznaczony dla szablonów e-maili dotyczących porzucon
 msgid "New Customer Order - Recovered Order ID: %d"
 msgstr "Nowe zamówienie klienta - Odzyskane ID zamówienia: %d"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:212
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:927
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:223
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:987
 msgid "This order was abandoned & subsequently recovered."
 msgstr "Zamówienie to zostało porzucone i następnie odzyskane."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:252
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:267
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:291
 msgid "You have successfully unsubscribed from our email list."
 msgstr " Pomyślnie wypisałeś się z naszej listy mailingowej."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:255
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:270
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:294
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:178
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:182
-#: admin/build/settings.js:9
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Unsubscribed"
 msgstr "Wypisano z subskrypcji"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:413
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:463
 msgid "No Thanks"
 msgstr "Nie, dziękuję"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:414
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:464
 msgid "You won't receive further emails from us, thank you!"
 msgstr "Nie będziesz otrzymywać od nas dalszych e-maili, dziękujemy!"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1115
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1377
 msgid "Do you really want to delete the used and expired coupons created by Cart Abandonment Plugin?"
 msgstr "Czy na pewno chcesz usunąć użyte i przeterminowane kupony utworzone przez wtyczkę Cart Abandonment?"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1116
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1378
 msgid "Do you really want to export orders?"
 msgstr "Czy na pewno chcesz wyeksportować zamówienia?"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1120
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:1382
 msgid "No such order is found."
 msgstr "Nie znaleziono takiego zamówienia."
 
@@ -1260,7 +1263,7 @@ msgstr "Szablony zoptymalizowane pod kątem konwersji"
 msgid "Quickly build sales funnels, product pages, and checkout flows using ready-made, high-converting templates."
 msgstr "Szybko twórz lejki sprzedażowe, strony produktowe i procesy zakupu, korzystając z gotowych, wysoko konwertujących szablonów."
 
-#: classes/class-cartflows-ca-admin-notices.php:131
+#: classes/class-cartflows-ca-admin-notices.php:140
 #: inc/abilities/class-wcar-abilities-register.php:77
 #: modules/cart-abandonment/includes/cartflows-ca-cf-promotion-page.php:51
 msgid "Cart Abandonment Recovery"
@@ -1367,6 +1370,7 @@ msgid "Install Now"
 msgstr "Zainstaluj teraz"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:31
+#: admin/build/settings.js:31
 msgid "Back to Reports"
 msgstr "Powrót do raportów"
 
@@ -1395,7 +1399,7 @@ msgid "Do you really want to reschedule emails?"
 msgstr "Czy na pewno chcesz zmienić termin wysyłania e-maili?"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:72
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Reschedule Emails"
 msgstr "Przełóż e-maile"
 
@@ -1416,9 +1420,7 @@ msgid "Email Sent"
 msgstr "Email wysłany"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:99
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Scheduled At"
 msgstr "Zaplanowano na"
 
@@ -1461,13 +1463,13 @@ msgid "Address 2:"
 msgstr "Adres 2:"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:206
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Country, City:"
 msgstr "Kraj, Miasto:"
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:209
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:229
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "State:"
 msgstr "Stan:"
 
@@ -1518,7 +1520,7 @@ msgstr "Filtr niestandardowy"
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:50
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:116
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "Recoverable Orders"
 msgstr "Zamówienia do odzyskania"
 
@@ -1528,8 +1530,8 @@ msgstr "Całkowita liczba odzyskiwalnych zamówień."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:59
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:119
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Recovered Orders"
 msgstr "Odzyskane zamówienia"
 
@@ -1539,8 +1541,8 @@ msgstr "Łączna liczba odzyskanych zamówień."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:66
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:122
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Lost Orders"
 msgstr "Zagubione zamówienia"
 
@@ -1549,8 +1551,7 @@ msgid "Total Lost Orders."
 msgstr "Całkowita liczba utraconych zamówień."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:78
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recoverable Revenue"
 msgstr "Odzyskiwalne przychody"
 
@@ -1561,8 +1562,7 @@ msgstr "Całkowity dochód możliwy do odzyskania."
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:91
 #: modules/weekly-email-report/templates/email-recovery-stat.php:119
 #: modules/weekly-email-report/templates/email-recovery-stat.php:479
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recovered Revenue"
 msgstr "Odzyskane przychody"
 
@@ -1572,7 +1572,7 @@ msgstr "Całkowite odzyskane przychody."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-reports.php:103
 #: modules/weekly-email-report/templates/email-recovery-stat.php:310
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "Recovery Rate"
 msgstr "Wskaźnik odzysku"
 
@@ -1641,8 +1641,6 @@ msgid "We aim to answer all priority support requests within 2-3 hours."
 msgstr "Naszym celem jest odpowiadanie na wszystkie priorytetowe zgłoszenia wsparcia w ciągu 2-3 godzin."
 
 #: admin/build/settings.js:1
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
 msgid "Request Support"
 msgstr "Poproś o wsparcie"
 
@@ -1675,6 +1673,7 @@ msgid "Dashboard"
 msgstr "Panel"
 
 #: admin/build/settings.js:1
+#: admin/build/settings.js:44
 msgid "Reports"
 msgstr "Raporty"
 
@@ -1682,1665 +1681,2922 @@ msgstr "Raporty"
 msgid "Integrations"
 msgstr "Integracje"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Overview"
 msgstr "Przegląd"
 
-#: admin/build/settings.js:2
-msgid "View All"
-msgstr "Zobacz wszystkie"
-
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "User Name"
 msgstr "Nazwa użytkownika"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Date & Time"
 msgstr "Data i czas"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Not Available"
 msgstr "Niedostępne"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:25
 msgid "No Follow-Up Reports Yet"
 msgstr "Brak jeszcze raportów uzupełniających"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:3
+#: admin/build/settings.js:25
 msgid "Reports will show up here once customers start abandoning their carts."
 msgstr "Raporty pojawią się tutaj, gdy klienci zaczną porzucać swoje koszyki."
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade to Pro for advanced features"
 msgstr "Ulepsz do wersji Pro, aby uzyskać zaawansowane funkcje"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Activate your license to unlock pro features"
 msgstr "Aktywuj swoją licencję, aby odblokować funkcje pro"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade Now"
 msgstr "Zaktualizuj teraz"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:9
+#: admin/build/settings.js:1
+#: admin/build/settings.js:3
+#: admin/build/settings.js:24
 msgid "Activate License"
 msgstr "Aktywuj licencję"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Upgrade to Pro"
 msgstr "Uaktualnij do wersji Pro"
 
-#: admin/build/settings.js:2
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:3
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Unlock Pro Features"
 msgstr "Odblokuj funkcje Pro"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Product Name"
 msgstr "Nazwa produktu"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "No. of time Abandoned"
 msgstr "Liczba porzuceń"
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "No. of time Recovered"
 msgstr "Liczba przypadków wyzdrowienia"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
 msgid "No Product Data Yet"
 msgstr "Brak danych o produkcie"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:10
+#: admin/build/settings.js:4
 msgid "You'll see product abandonment stats here once customers start adding items to their carts."
 msgstr "Zobaczysz tutaj statystyki porzucenia produktów, gdy klienci zaczną dodawać przedmioty do swoich koszyków."
 
-#: admin/build/settings.js:2
 #: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Failed to activate plugin"
 msgstr "Nie udało się aktywować wtyczki"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Extend Your Website"
 msgstr "Rozszerz swoją stronę internetową"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Failed to install plugin"
 msgstr "Nie udało się zainstalować wtyczki"
 
 #: admin/build/settings.js:3
-#: admin/build/settings.js:16
-msgid "Installed"
-msgstr "Zainstalowany"
-
-#: admin/build/settings.js:2
-#: admin/build/settings.js:3
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
 msgid "Activate"
 msgstr "Aktywuj"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
 msgid "Install & Activate"
 msgstr "Zainstaluj i aktywuj"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:6
+#: admin/build/settings.js:10
+#: admin/build/settings.js:18
 msgid "Select an option"
 msgstr "Wybierz opcję"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Coupons deleted"
 msgstr "Kupony usunięte"
 
-#: admin/build/settings.js:3
-#: admin/build/settings.js:9
 #: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:25
+#: admin/build/settings.js:27
+#: admin/build/settings.js:36
 msgid "Delete failed"
 msgstr "Usunięcie nie powiodło się"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Enter Webhook URL"
 msgstr "Wprowadź adres URL webhooka"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
 msgid "Webhook trigger successful"
 msgstr "Wyzwalacz webhooka zakończony pomyślnie"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:10
+#: admin/build/settings.js:13
 msgid "Webhook trigger failed"
 msgstr "Wyzwalacz webhooka nie powiódł się"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "AND"
 msgstr "I"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select condition"
 msgstr "Wybierz stan"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select operator"
 msgstr "Wybierz operatora"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Select value"
 msgstr "Wybierz wartość"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Search products…"
 msgstr "Wyszukaj produkty…"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Enter value"
 msgstr "Wprowadź wartość"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "OR"
 msgstr "LUB"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Add Rule"
 msgstr "Dodaj regułę"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:104
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates-table.php:129
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1126
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:42
 msgid "Export"
 msgstr "Eksport"
 
-#: admin/build/settings.js:6
-msgid "Confirm Delete"
-msgstr "Potwierdź usunięcie"
-
-#: admin/build/settings.js:6
-msgid "Are you sure you want to delete this item? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć ten element? Tej operacji nie można cofnąć."
-
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1173
-#: admin/build/settings.js:6
+#: admin/build/settings.js:10
 msgid "Cancel"
 msgstr "Anuluj"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Unsubscribed Successfully"
 msgstr "Wypisano pomyślnie"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Unsubscribe failed"
 msgstr "Rezygnacja z subskrypcji nie powiodła się"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "No matching data available"
 msgstr "Brak pasujących danych"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:25
+#: admin/build/settings.js:29
 msgid "Record(s) deleted"
 msgstr "Usunięto rekord(y)"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:25
+#: admin/build/settings.js:29
 msgid "Record deleted"
 msgstr "Rekord usunięty"
 
-#: admin/build/settings.js:9
-msgid "Delete Selected Records"
-msgstr "Usuń wybrane rekordy"
-
-#: admin/build/settings.js:9
-msgid "Delete Record"
-msgstr "Usuń rekord"
-
-#. translators: %s: number of selected records
-#: admin/build/settings.js:10
-#, js-format
-msgid "Are you sure you want to delete %s selected record(s)? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć %s wybrany(-e) rekord(-y)? Tej operacji nie można cofnąć."
-
-#: admin/build/settings.js:10
-msgid "Are you sure you want to delete this record? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć ten rekord? Tej operacji nie można cofnąć."
-
-#: admin/build/settings.js:1
-#: admin/build/settings.js:2
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:3
+#: admin/build/settings.js:4
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Product Reports"
 msgstr "Raporty produktowe"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "SMS + WhatsApp Followups"
 msgstr "Śledzenie SMS + WhatsApp"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Smart Rules"
 msgstr "Inteligentne zasady"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Advanced Automations"
 msgstr "Zaawansowane automatyzacje"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "And More…"
 msgstr "I więcej…"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:29
 msgid "Delete Selected Products"
 msgstr "Usuń wybrane produkty"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:29
 msgid "Delete Product"
 msgstr "Usuń produkt"
 
-#. translators: %s: number of selected products
-#: admin/build/settings.js:11
-#, js-format
-msgid "Are you sure you want to delete %s selected product(s)? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć %s wybrany(e) produkt(y)? Tej akcji nie można cofnąć."
-
-#: admin/build/settings.js:11
-msgid "Are you sure you want to delete this product? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć ten produkt? Tej operacji nie można cofnąć."
-
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "No data available"
 msgstr "Brak dostępnych danych"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email Scheduled Successfully"
 msgstr "E-mail zaplanowany pomyślnie"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Template saved successfully"
 msgstr "Szablon zapisany pomyślnie"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Failed to save template"
 msgstr "Nie udało się zapisać szablonu"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-msgid "Selected"
-msgstr "Wybrano"
-
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:17
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Search…"
 msgstr "Szukaj…"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Search"
 msgstr "Szukaj"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
 msgid "Default templates restored"
 msgstr "Przywrócono domyślne szablony"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
 msgid "Restore failed"
 msgstr "Przywracanie nie powiodło się"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Sent"
 msgstr "Wysłano"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:35
+#: admin/build/settings.js:36
 msgid "PRO"
 msgstr "ZA"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:38
 msgid "Open Rate"
 msgstr "Wskaźnik otwarć"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Click Rate"
 msgstr "Wskaźnik kliknięć"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
+#: admin/build/settings.js:43
 msgid "Status"
 msgstr "Status"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template status updated successfully"
 msgstr "Status szablonu został pomyślnie zaktualizowany"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Failed to update status"
 msgstr "Nie udało się zaktualizować statusu"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:34
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Duplicate"
 msgstr "Duplikat"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Clone failed"
 msgstr "Klonowanie nie powiodło się"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template(s) deleted"
 msgstr "Szablon(y) usunięte"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
 msgid "Template deleted"
 msgstr "Szablon usunięty"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:37
+#: admin/build/settings.js:39
+#: admin/build/settings.js:41
 msgid "Delete Selected Templates"
 msgstr "Usuń wybrane szablony"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Delete Template"
 msgstr "Usuń szablon"
 
-#. translators: %s: number of selected templates
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-#: admin/build/settings.js:16
-#, js-format
-msgid "Are you sure you want to delete %s selected template(s)? This action cannot be undone."
-msgstr "Czy na pewno chcesz usunąć %s wybrany(e) szablon(y)? Tej operacji nie można cofnąć."
-
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-#: admin/build/settings.js:16
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Are you sure you want to delete this template? This action cannot be undone."
 msgstr "Czy na pewno chcesz usunąć ten szablon? Tej operacji nie można cofnąć."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:42
+#: admin/build/settings.js:43
 msgid "Installing…"
 msgstr "Instalowanie…"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:4
+#: admin/build/settings.js:24
+#: admin/build/settings.js:42
 msgid "Activating…"
 msgstr "Aktywowanie…"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Reloading"
 msgstr "Ponowne ładowanie"
 
 #. Plugin Name of the plugin
 #: woo-cart-abandonment-recovery.php
 msgid "Cart Abandonment Recovery for WooCommerce"
-msgstr ""
+msgstr "Cart Abandonment Recovery for WooCommerce"
 
 #: admin/ajax/email-templates.php:723
 #: admin/ajax/email-templates.php:729
 msgid "Out of stock"
-msgstr ""
+msgstr "Brak w magazynie"
 
 #. translators: %d: Number of items in stock.
 #: admin/ajax/email-templates.php:733
 #, php-format
 msgid "%d in stock"
-msgstr ""
+msgstr "%d w magazynie"
 
 #: admin/ajax/email-templates.php:738
 msgid "In stock"
-msgstr ""
+msgstr "W magazynie"
 
-#: admin/inc/meta-options.php:108
-#: admin/inc/meta-options.php:908
+#: admin/inc/meta-options.php:109
+#: admin/inc/meta-options.php:992
 msgid "Abandoned cart lost time"
-msgstr ""
+msgstr "Czas utraty porzuconego koszyka"
 
-#: admin/inc/meta-options.php:111
-#: admin/inc/meta-options.php:911
-msgid "Consider cart lost after above entered days of item being added to cart and order not placed."
-msgstr ""
-
-#: admin/inc/meta-options.php:112
-#: admin/inc/meta-options.php:912
+#: admin/inc/meta-options.php:113
+#: admin/inc/meta-options.php:996
 msgid "days"
-msgstr ""
+msgstr "dni"
 
-#: admin/inc/meta-options.php:239
+#: admin/inc/meta-options.php:267
 msgid "Enable Email GDPR Integration"
-msgstr ""
+msgstr "Włącz integrację RODO dla e-maila"
 
-#: admin/inc/meta-options.php:247
+#: admin/inc/meta-options.php:275
 msgid "Email GDPR Message"
-msgstr ""
+msgstr "Wiadomość RODO dla e-maila"
 
-#: admin/inc/meta-options.php:279
-#: admin/inc/wcar-admin.php:566
-#: admin/inc/wcar-admin.php:597
-#: admin/build/settings.js:6
+#: admin/inc/meta-options.php:307
+#: admin/inc/wcar-admin.php:562
+#: admin/inc/wcar-admin.php:593
+#: admin/build/settings.js:18
 msgid "Rollback to Previous Version"
-msgstr ""
+msgstr "Przywróć poprzednią wersję"
 
-#: admin/inc/meta-options.php:281
+#: admin/inc/meta-options.php:309
 msgid "Experiencing an issue with the current version of Cart Abandonment Recovery? Roll back to a previous version to help troubleshoot the problem."
-msgstr ""
+msgstr "Masz problem z bieżącą wersją Cart Abandonment Recovery? Przywróć poprzednią wersję, aby pomóc w rozwiązaniu problemu."
 
-#: admin/inc/meta-options.php:876
+#: admin/inc/meta-options.php:959
 msgid "Email Follow Ups (Default)"
-msgstr ""
+msgstr "Wiadomości uzupełniające e-mail (domyślnie)"
 
-#: admin/inc/meta-options.php:879
+#: admin/inc/meta-options.php:962
 msgid "Allows you to send emails upon cart abandonment."
-msgstr ""
+msgstr "Umożliwia wysyłanie e-maili po porzuceniu koszyka."
 
-#: admin/inc/meta-options.php:934
-#: admin/inc/meta-options.php:1013
+#: admin/inc/meta-options.php:1019
+#: admin/inc/meta-options.php:1098
 msgid "Enable SMS Follow-ups"
-msgstr ""
+msgstr "Włącz wiadomości uzupełniające SMS"
 
-#: admin/inc/meta-options.php:937
-#: admin/inc/meta-options.php:1017
+#: admin/inc/meta-options.php:1022
+#: admin/inc/meta-options.php:1102
 msgid "Automatically send SMS reminders to customers when they abandon their cart."
-msgstr ""
+msgstr "Automatycznie wysyłaj przypomnienia SMS do klientów, gdy porzucą koszyk."
 
-#: admin/inc/meta-options.php:944
 #: admin/inc/meta-options.php:1029
+#: admin/inc/meta-options.php:1114
 msgid "Enable WhatsApp Follow-ups"
-msgstr ""
+msgstr "Włącz wiadomości uzupełniające WhatsApp"
 
-#: admin/inc/meta-options.php:947
-#: admin/inc/meta-options.php:1033
+#: admin/inc/meta-options.php:1032
+#: admin/inc/meta-options.php:1118
 msgid "Automatically send WhatsApp reminders to customers when they abandon their cart."
-msgstr ""
+msgstr "Automatycznie wysyłaj przypomnienia WhatsApp do klientów, gdy porzucą koszyk."
 
-#: admin/inc/meta-options.php:968
+#: admin/inc/meta-options.php:1053
 msgid "Exclude Products"
-msgstr ""
+msgstr "Wyklucz produkty"
 
-#: admin/inc/meta-options.php:970
+#: admin/inc/meta-options.php:1055
 msgid "Select products for which the coupon should not be created."
-msgstr ""
+msgstr "Wybierz produkty, dla których kupon nie powinien być tworzony."
 
-#: admin/inc/meta-options.php:971
+#: admin/inc/meta-options.php:1056
 msgid "Type to search a product"
-msgstr ""
+msgstr "Wpisz, aby wyszukać produkt"
 
-#: admin/inc/meta-options.php:987
-#: admin/build/settings.js:3
-#: admin/build/settings.js:6
+#: admin/inc/meta-options.php:1072
+#: admin/build/settings.js:14
+#: admin/build/settings.js:17
 msgid "Dynamic Conditions"
-msgstr ""
+msgstr "Warunki dynamiczne"
 
-#: admin/inc/meta-options.php:989
+#: admin/inc/meta-options.php:1074
 msgid "Set conditions to automatically control when this email is sent."
-msgstr ""
+msgstr "Ustaw warunki, aby automatycznie kontrolować, kiedy ten e-mail zostanie wysłany."
 
-#: admin/inc/meta-options.php:1008
+#: admin/inc/meta-options.php:1093
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "SMS"
-msgstr ""
+msgstr "SMS"
 
-#: admin/inc/meta-options.php:1024
+#: admin/inc/meta-options.php:1109
+#: admin/build/settings.js:35
+#: admin/build/settings.js:42
 msgid "WhatsApp"
-msgstr ""
+msgstr "WhatsApp"
 
-#: admin/inc/meta-options.php:1058
+#: admin/inc/meta-options.php:1143
 msgid "Enable Phone GDPR Integration"
-msgstr ""
+msgstr "Włącz integrację RODO dla telefonu"
 
-#: admin/inc/meta-options.php:1062
+#: admin/inc/meta-options.php:1147
 msgid "Show a GDPR consent message below the phone number field on the checkout page."
-msgstr ""
+msgstr "Wyświetlaj komunikat zgody RODO pod polem numeru telefonu na stronie kasy."
 
-#: admin/inc/meta-options.php:1066
+#: admin/inc/meta-options.php:1151
+#: admin/build/settings.js:24
 msgid "Blacklist"
-msgstr ""
+msgstr "Czarna lista"
 
-#: admin/inc/meta-options.php:1071
+#: admin/inc/meta-options.php:1156
 msgid "Enable Blacklist"
-msgstr ""
+msgstr "Włącz czarną listę"
 
-#: admin/inc/meta-options.php:1075
+#: admin/inc/meta-options.php:1160
 msgid "Prevent recovery emails from being sent to specific email addresses or domains."
-msgstr ""
+msgstr "Zapobiegaj wysyłaniu e-maili odzyskujących na określone adresy e-mail lub domeny."
 
-#: admin/inc/wcar-admin.php:344
+#: admin/inc/wcar-admin.php:383
 msgid "Modern Cart"
-msgstr ""
+msgstr "Modern Cart"
 
-#: admin/inc/wcar-admin.php:345
+#: admin/inc/wcar-admin.php:384
 msgid "Modern Cart helps shop owner improve their user experience, increase conversions & maximize profits."
-msgstr ""
+msgstr "Modern Cart pomaga właścicielom sklepów poprawić doświadczenia użytkowników, zwiększyć konwersje i zmaksymalizować zyski."
 
-#: admin/inc/wcar-admin.php:360
+#: admin/inc/wcar-admin.php:399
 msgid "Power Coupons"
-msgstr ""
+msgstr "Power Coupons"
 
-#: admin/inc/wcar-admin.php:361
+#: admin/inc/wcar-admin.php:400
 msgid "Power Coupons helps shop owners create smart discounts and auto-apply coupons to reduce friction and boost conversions."
-msgstr ""
+msgstr "Power Coupons pomaga właścicielom sklepów tworzyć inteligentne rabaty i automatycznie stosować kupony, aby ograniczyć bariery i zwiększyć konwersje."
 
-#: admin/inc/wcar-admin.php:421
+#: admin/inc/wcar-admin.php:462
+#: admin/inc/wcar-admin.php:529
 msgid "You do not have sufficient permissions to access this page."
-msgstr ""
+msgstr "Nie masz wystarczających uprawnień, aby uzyskać dostęp do tej strony."
 
-#: admin/inc/wcar-admin.php:565
+#: admin/inc/wcar-admin.php:561
 msgid "You do not have permission to access this page."
-msgstr ""
+msgstr "Nie masz uprawnień dostępu do tej strony."
 
-#: admin/inc/wcar-admin.php:579
+#: admin/inc/wcar-admin.php:575
 msgid "Error occurred, The version selected is invalid. Try selecting different version."
-msgstr ""
+msgstr "Wystąpił błąd. Wybrana wersja jest nieprawidłowa. Spróbuj wybrać inną wersję."
 
-#: classes/class-cartflows-ca-admin-notices.php:97
-msgid "Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts. &mdash; Thanks a ton!"
-msgstr ""
-
-#: classes/class-cartflows-ca-admin-notices.php:135
+#: classes/class-cartflows-ca-admin-notices.php:144
 msgid "Could you please do us a favor and give us a 5-star rating on WordPress? It would help others choose Cart Abandonment Recovery for WooCommerce with confidence. Thank you!"
-msgstr ""
+msgstr "Czy możesz wyświadczyć nam przysługę i wystawić nam ocenę 5 gwiazdek na WordPress? Pomoże to innym z pewnością wybrać Cart Abandonment Recovery for WooCommerce. Dziękujemy!"
 
 #. translators: %1$s Software Title, %2$s Plugin, %3$s Anchor opening tag, %4$s Anchor closing tag, %5$s Software Title.
-#: classes/class-cartflows-ca-admin-notices.php:167
+#: classes/class-cartflows-ca-admin-notices.php:176
 #, php-format
 msgid "%1$sCart Abandonment Recovery for WooCommerce:%2$s We just introduced an awesome new feature, weekly order recovery reports via email. Now you can see how many orders we are recovering for your store each week, without having to log into your website. You can set the email address for these email from %3$shere.%4$s"
-msgstr ""
+msgstr "%1$sCart Abandonment Recovery for WooCommerce:%2$s Właśnie wprowadziliśmy świetną nową funkcję – cotygodniowe raporty odzyskiwania zamówień wysyłane e-mailem. Teraz możesz zobaczyć, ile zamówień odzyskujemy dla Twojego sklepu każdego tygodnia, bez logowania się do witryny. Adres e-mail dla tych wiadomości możesz ustawić %3$stutaj.%4$s"
 
-#: classes/class-cartflows-ca-admin-notices.php:264
+#: classes/class-cartflows-ca-admin-notices.php:273
 msgid "Legacy UI Deprecation"
-msgstr ""
+msgstr "Wycofanie starego interfejsu"
 
-#: classes/class-cartflows-ca-admin-notices.php:267
+#: classes/class-cartflows-ca-admin-notices.php:276
 msgid "Switch to New UI"
-msgstr ""
+msgstr "Przełącz na nowy interfejs"
 
 #. translators: %s: html tags
-#: classes/class-cartflows-ca-loader.php:160
+#: classes/class-cartflows-ca-loader.php:162
 #, php-format
 msgid "Required database tables are not created for %1$sCart Abandonment Recovery for WooCommerce%2$s plugin. Please make sure that the database user has the REFERENCES privilege to create tables."
-msgstr ""
+msgstr "Wymagane tabele bazy danych nie zostały utworzone dla wtyczki %1$sCart Abandonment Recovery for WooCommerce%2$s. Upewnij się, że użytkownik bazy danych ma uprawnienie REFERENCES do tworzenia tabel."
 
 #. translators: %s: html tags
-#: classes/class-cartflows-ca-loader.php:182
+#: classes/class-cartflows-ca-loader.php:184
 #, php-format
 msgid "The %1$sCart Abandonment Recovery for WooCommerce%2$s plugin requires %1$sWooCommerce%2$s plugin installed & activated."
-msgstr ""
+msgstr "Wtyczka %1$sCart Abandonment Recovery for WooCommerce%2$s wymaga zainstalowanej i aktywnej wtyczki %1$sWooCommerce%2$s."
 
 #: classes/class-cartflows-ca-rollback.php:167
 msgid "Cart Abandonment Recovery <p>Rollback to Previous Version</p>"
-msgstr ""
+msgstr "Cart Abandonment Recovery <p>Przywróć poprzednią wersję</p>"
 
 #: classes/class-cartflows-ca-settings.php:450
 msgid "Use New Interface"
-msgstr ""
+msgstr "Użyj nowego interfejsu"
 
 #: classes/class-cartflows-ca-settings.php:454
 msgid "Experience the new design with updated layout and features."
-msgstr ""
+msgstr "Poznaj nowy wygląd ze zaktualizowanym układem i funkcjami."
 
 #: classes/class-cartflows-ca-settings.php:540
 msgid "New UI Enabled"
-msgstr ""
+msgstr "Nowy interfejs włączony"
 
 #: classes/class-cartflows-ca-settings.php:540
 msgid "Switch UI"
-msgstr ""
+msgstr "Przełącz interfejs"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:298
 msgid "Email Templates imported successfully."
-msgstr ""
+msgstr "Szablony e-mail zostały pomyślnie zaimportowane."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1129
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1176
 msgid "Import"
-msgstr ""
+msgstr "Importuj"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1134
 msgid "Import Templates"
-msgstr ""
+msgstr "Importuj szablony"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1136
 msgid "Select a Cart Abandonment Recovery export file to import templates."
-msgstr ""
+msgstr "Wybierz plik eksportu Cart Abandonment Recovery, aby zaimportować szablony."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1143
 msgid "Upload a file or drag and drop"
-msgstr ""
+msgstr "Prześlij plik lub przeciągnij i upuść"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1145
 msgid "JSON file up to 5MB"
-msgstr ""
+msgstr "Plik JSON do 5 MB"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1159
 msgid "File Selected:"
-msgstr ""
+msgstr "Wybrany plik:"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-email-templates.php:1164
 msgid "Dismiss"
-msgstr ""
+msgstr "Odrzuć"
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:196
 msgid "Security check failed."
-msgstr ""
+msgstr "Weryfikacja bezpieczeństwa nie powiodła się."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:200
 msgid "Required data missing."
-msgstr ""
+msgstr "Brak wymaganych danych."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:206
 msgid "Invalid value provided."
-msgstr ""
+msgstr "Podano nieprawidłową wartość."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:213
 msgid "Setting saved successfully."
-msgstr ""
+msgstr "Ustawienie zostało pomyślnie zapisane."
 
 #: modules/cart-abandonment/classes/class-cartflows-ca-setting-functions.php:215
 msgid "Failed to save setting."
-msgstr ""
+msgstr "Nie udało się zapisać ustawienia."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:358
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:408
 msgid "This checkout page was generated by the Cart Abandonment Recovery for WooCommerce plugin for testing."
-msgstr ""
+msgstr "Ta strona kasy została wygenerowana przez wtyczkę Cart Abandonment Recovery for WooCommerce w celach testowych."
 
 #: modules/cart-abandonment/includes/cartflows-ca-single-report-details.php:142
 msgid "Email not sent - Rule conditions not satisfied."
-msgstr ""
+msgstr "E-mail nie został wysłany – warunki reguły nie zostały spełnione."
 
 #: modules/cart-abandonment/includes/cartflows-cart-abandonment-tabs.php:14
 msgid "Cart Abandonment Recovery for WooCommerce  "
-msgstr ""
+msgstr "Cart Abandonment Recovery for WooCommerce  "
 
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:106
 msgid "Your weekly Cart Abandonment Recovery report"
-msgstr ""
+msgstr "Twój cotygodniowy raport Cart Abandonment Recovery"
 
 #. translators: %s: recovered revenue amount
 #: modules/weekly-email-report/class-cartflows-ca-admin-report-emails.php:112
 #, php-format
 msgid "Your weekly Cart Abandonment Recovery report - %s recovered"
-msgstr ""
+msgstr "Twój cotygodniowy raport Cart Abandonment Recovery – odzyskano %s"
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:65
 msgid "CartFlows can you generate more revenue."
-msgstr ""
+msgstr "CartFlows może pomóc Ci generować większe przychody."
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:85
 msgid "Explore our other products designed to help you boost sales and convert more visitors into customers."
-msgstr ""
+msgstr "Poznaj nasze inne produkty, które pomogą Ci zwiększyć sprzedaż i zamienić więcej odwiedzających w klientów."
 
 #: modules/weekly-email-report/templates/email-bsf-product-block.php:107
 msgid "Discover More Products"
-msgstr ""
+msgstr "Odkryj więcej produktów"
 
 #: modules/weekly-email-report/templates/email-content-section.php:86
 msgid "Top Wins &amp; Highlights:"
-msgstr ""
+msgstr "Największe sukcesy &amp; najważniejsze informacje:"
 
 #: modules/weekly-email-report/templates/email-content-section.php:91
 msgid "Top recovered product:"
-msgstr ""
+msgstr "Najczęściej odzyskiwany produkt:"
 
 #. translators: %1$s: product name, %2$s: total frequency  %3$s: total amount
 #: modules/weekly-email-report/templates/email-content-section.php:95
 #, php-format
 msgid "\"%1$s\" - %2$s recovered orders → %3$s recovered"
-msgstr ""
+msgstr "\"%1$s\" – odzyskane zamówienia: %2$s → odzyskano %3$s"
 
 #: modules/weekly-email-report/templates/email-content-section.php:109
 msgid "Best campaign: "
-msgstr ""
+msgstr "Najlepsza kampania: "
 
 #. translators: %1$s: template name, %2$s: recovery rate  %3$s: sent count
 #: modules/weekly-email-report/templates/email-content-section.php:113
 #, php-format
 msgid "\"%1$s\" - recovery rate %2$s (sent to %3$s carts)"
-msgstr ""
+msgstr "\"%1$s\" – wskaźnik odzysku %2$s (wysłano do %3$s koszyków)"
 
 #. translators: %s: The user name.
 #: modules/weekly-email-report/templates/email-content-welcome-section.php:66
 #, php-format
 msgid "Hi %s, here's a quick report on how your recovery flows performed."
-msgstr ""
+msgstr "Cześć %s, oto krótki raport o skuteczności Twoich sekwencji odzyskiwania."
 
 #: modules/weekly-email-report/templates/email-footer.php:55
 msgid "This email was auto-generated and sent from "
-msgstr ""
+msgstr "Ten e-mail został wygenerowany automatycznie i wysłany z "
 
 #. translators: %s: Total revenue.
 #: modules/weekly-email-report/templates/email-header.php:30
 #, php-format
 msgid "Your Weekly Cart Abandonment Recovery Report - %s Recovered"
-msgstr ""
+msgstr "Twój cotygodniowy raport Cart Abandonment Recovery – odzyskano %s"
 
 #. translators: %1$s: Report Start Date, %2$s: Report End Date.
 #: modules/weekly-email-report/templates/email-recovery-stat.php:31
 #, php-format
 msgid "Last 7 Days (%1$s - %2$s):"
-msgstr ""
+msgstr "Ostatnie 7 dni (%1$s – %2$s):"
 
 #: modules/weekly-email-report/templates/email-recovery-stat.php:344
 msgid "Avg. Recovered Value"
-msgstr ""
+msgstr "Śr. odzyskana wartość"
 
 #: admin/build/settings.js:1
-#: admin/build/settings.js:16
+#: admin/build/settings.js:42
 msgid "Follow Up Templates"
-msgstr ""
+msgstr "Szablony wiadomości uzupełniających"
 
 #: admin/build/settings.js:1
 msgid "Follow Up"
-msgstr ""
+msgstr "Wiadomość uzupełniająca"
 
 #: admin/build/settings.js:1
 msgid "Product"
-msgstr ""
+msgstr "Produkt"
 
-#: admin/build/settings.js:1
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Follow Up Reports"
-msgstr ""
+msgstr "Raporty wiadomości uzupełniających"
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The revenue that has been recovered."
-msgstr ""
+msgstr "Przychody, które zostały odzyskane."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that have been recovered."
-msgstr ""
+msgstr "Liczba zamówień, które zostały odzyskane."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The revenue that can be recovered."
-msgstr ""
+msgstr "Przychody, które można odzyskać."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that can be recovered."
-msgstr ""
+msgstr "Liczba zamówień, które można odzyskać."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The number of orders that have been lost."
-msgstr ""
+msgstr "Liczba zamówień, które zostały utracone."
 
-#: admin/build/settings.js:1
+#: admin/build/settings.js:3
 msgid "The percentage of orders that have been recovered."
-msgstr ""
+msgstr "Odsetek zamówień, które zostały odzyskane."
 
 #. translators: 1: recovery rate change percentage, 2: 'increase' or 'decrease'.
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 #, js-format
 msgid "%1$s%% %2$s from previous period"
-msgstr ""
+msgstr "%1$s%% %2$s względem poprzedniego okresu"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "increase"
-msgstr ""
+msgstr "wzrost"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "decrease"
-msgstr ""
+msgstr "spadek"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Clear Filter"
-msgstr ""
+msgstr "Wyczyść filtr"
 
-#: admin/build/settings.js:2
-msgid "recoverable"
-msgstr ""
-
-#: admin/build/settings.js:2
-msgid "recovered"
-msgstr ""
-
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Recent Follow Up Reports"
-msgstr ""
+msgstr "Ostatnie raporty wiadomości uzupełniających"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Pro plugin installed but license not activated"
-msgstr ""
+msgstr "Wtyczka Pro zainstalowana, ale licencja nie została aktywowana"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Pro plugin not installed"
-msgstr ""
+msgstr "Wtyczka Pro nie jest zainstalowana"
 
-#: admin/build/settings.js:2
+#: admin/build/settings.js:3
 msgid "Go Pro"
-msgstr ""
+msgstr "Przejdź na Pro"
 
 #. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Product Report shows you which items bring the most recoveries and sales."
-msgstr ""
+msgstr "Raport produktów pokazuje, które produkty przynoszą najwięcej odzyskań i sprzedaży."
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Quick Access"
-msgstr ""
+msgstr "Szybki dostęp"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Help Center"
-msgstr ""
+msgstr "Centrum pomocy"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Join the Community"
-msgstr ""
+msgstr "Dołącz do społeczności"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Rate Us"
-msgstr ""
+msgstr "Oceń nas"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:4
 msgid "Open Support Ticket"
-msgstr ""
+msgstr "Otwórz zgłoszenie do pomocy technicznej"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "Add Condition"
-msgstr ""
+msgstr "Dodaj warunek"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Country Code"
-msgstr ""
+msgstr "Kod kraju"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Enter Phone no."
-msgstr ""
+msgstr "Wpisz nr telefonu"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter SMS body"
-msgstr ""
+msgstr "Wprowadź treść SMS"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please select a WhatsApp template"
-msgstr ""
+msgstr "Wybierz szablon WhatsApp"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter a valid phone number"
-msgstr ""
+msgstr "Wprowadź prawidłowy numer telefonu"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please enter a phone number"
-msgstr ""
+msgstr "Wprowadź numer telefonu"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Please select a country code"
-msgstr ""
+msgstr "Wybierz kod kraju"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Success"
-msgstr ""
+msgstr "Sukces"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
+#: admin/build/settings.js:18
 msgid "Error"
-msgstr ""
+msgstr "Błąd"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Send Message"
-msgstr ""
+msgstr "Wyślij wiadomość"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Character limit exceeded"
-msgstr ""
+msgstr "Przekroczono limit znaków"
 
-#: admin/build/settings.js:6
-msgid "Open Dropdown"
-msgstr ""
-
-#: admin/build/settings.js:6
+#: admin/build/settings.js:18
 msgid "Rollback"
-msgstr ""
+msgstr "Przywróć wersję"
 
 #. translators: %1$s is the selected product of CartFlows, %2$s is the selected version of CartFlows.
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 #, js-format
 msgid "Are you sure you want to rollback to %1$s v%2$s?"
-msgstr ""
+msgstr "Czy na pewno chcesz przywrócić %1$s do wersji v%2$s?"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Confirm"
-msgstr ""
+msgstr "Potwierdź"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Deactivate License"
-msgstr ""
+msgstr "Dezaktywuj licencję"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Please enter a valid license key!"
-msgstr ""
+msgstr "Wprowadź prawidłowy klucz licencyjny!"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "Unknown error occurred while activating the license."
-msgstr ""
+msgstr "Wystąpił nieznany błąd podczas aktywacji licencji."
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
+#: admin/build/settings.js:24
 msgid "My Account"
-msgstr ""
+msgstr "Moje konto"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:21
 msgid "License Key"
-msgstr ""
+msgstr "Klucz licencyjny"
 
-#: admin/build/settings.js:9
-msgid "Enter your valid license key below to activate Cart Abandonment Recovery Pro. If you don't have a license key yet, you can get it from your account."
-msgstr ""
-
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
-msgid "Need Support?"
-msgstr ""
-
-#: admin/build/settings.js:9
-#: admin/build/settings.js:16
-msgid "We're happy to help!"
-msgstr ""
-
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "All"
-msgstr ""
+msgstr "Wszystkie"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Abandoned Orders"
-msgstr ""
+msgstr "Porzucone zamówienia"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
 msgid "Blacklisted"
-msgstr ""
+msgstr "Na czarnej liście"
 
-#: admin/build/settings.js:9
+#. translators: %d: number of selected products
+#. translators: %d: number of selected templates
+#: admin/build/settings.js:24
+#: admin/build/settings.js:28
+#: admin/build/settings.js:36
 #, js-format
 msgid "%d Selected"
-msgstr ""
+msgstr "Wybrano: %d"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
+#: admin/build/settings.js:43
 msgid "Clear Filters"
-msgstr ""
+msgstr "Wyczyść filtry"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Email To"
-msgstr ""
+msgstr "E-mail do"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
+#: admin/build/settings.js:35
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Actions"
-msgstr ""
+msgstr "Akcje"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Cart blacklisted successfully"
-msgstr ""
+msgstr "Koszyk został dodany do czarnej listy"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:25
 msgid "Cart whitelisted successfully"
-msgstr ""
+msgstr "Koszyk został usunięty z czarnej listy"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Blacklist failed"
-msgstr ""
+msgstr "Nie udało się dodać do czarnej listy"
 
-#: admin/build/settings.js:9
+#: admin/build/settings.js:24
+#: admin/build/settings.js:25
 msgid "Whitelist failed"
-msgstr ""
+msgstr "Nie udało się usunąć z czarnej listy"
 
-#: admin/build/settings.js:9
-#: admin/build/settings.js:10
+#: admin/build/settings.js:24
 msgid "Items per page:"
-msgstr ""
+msgstr "Elementów na stronę:"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:43
 msgid "Cart Abandonment Recovery Pro is Here 🔥"
-msgstr ""
+msgstr "Cart Abandonment Recovery Pro już jest 🔥"
 
-#: admin/build/settings.js:10
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:29
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "You've seen how emails bring shoppers back. With Pro, you'll unlock advanced tools that recover more carts, boost profits, and grow your store faster."
-msgstr ""
+msgstr "Widzisz już, jak e-maile przyciągają klientów z powrotem. Z wersją Pro odblokujesz zaawansowane narzędzia, które odzyskują więcej koszyków, zwiększają zyski i pozwalają szybciej rozwijać sklep."
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Times Abandoned"
-msgstr ""
+msgstr "Liczba porzuceń"
 
-#: admin/build/settings.js:10
+#: admin/build/settings.js:27
+#: admin/build/settings.js:29
 msgid "Times Recovered"
-msgstr ""
+msgstr "Liczba odzyskań"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Email Details"
-msgstr ""
+msgstr "Szczegóły e-maila"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Scheduled Templates"
-msgstr ""
+msgstr "Zaplanowane szablony"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Not Sent"
-msgstr ""
+msgstr "Nie wysłano"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
+#: admin/build/settings.js:42
 msgid "Scheduled"
-msgstr ""
+msgstr "Zaplanowano"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
-msgid "Rule Condition Failed"
-msgstr ""
-
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "User Address Details"
-msgstr ""
+msgstr "Szczegóły adresu użytkownika"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Billing Address:"
-msgstr ""
+msgstr "Adres rozliczeniowy:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Full Name:"
-msgstr ""
+msgstr "Imię i nazwisko:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Contact Email:"
-msgstr ""
+msgstr "E-mail kontaktowy:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Contact Number:"
-msgstr ""
+msgstr "Numer kontaktowy:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Street Address 1:"
-msgstr ""
+msgstr "Adres (ulica) 1:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Street Address 2:"
-msgstr ""
+msgstr "Adres (ulica) 2:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Zip Code:"
-msgstr ""
+msgstr "Kod pocztowy:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Shipping Address:"
-msgstr ""
+msgstr "Adres wysyłki:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Checkout Page:"
-msgstr ""
+msgstr "Strona kasy:"
 
-#: admin/build/settings.js:11
+#: admin/build/settings.js:31
 msgid "Link to Checkout Page"
-msgstr ""
+msgstr "Link do strony kasy"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "SMS Details"
-msgstr ""
+msgstr "Szczegóły SMS"
 
-#: admin/build/settings.js:11
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "Reschedule SMS"
-msgstr ""
+msgstr "Przeplanuj SMS"
 
-#. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "View all scheduled SMS follow-ups in SMS details."
-msgstr ""
+msgstr "Zobacz wszystkie zaplanowane wiadomości uzupełniające SMS w szczegółach SMS."
 
-#: admin/build/settings.js:12
+#: admin/build/settings.js:31
 msgid "SMS Body"
-msgstr ""
+msgstr "Treść SMS"
 
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "WhatsApp Details"
-msgstr ""
+msgstr "Szczegóły WhatsApp"
 
-#: admin/build/settings.js:12
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Reschedule Messages"
-msgstr ""
+msgstr "Przeplanuj wiadomości"
 
-#. translators: %%1$s: Link HTML Start and %2$sof: Link HTML End.
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "View all scheduled WhatsApp follow-ups in WhatsApp details."
-msgstr ""
+msgstr "Zobacz wszystkie zaplanowane wiadomości uzupełniające WhatsApp w szczegółach WhatsApp."
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "WhatsApp Template"
-msgstr ""
+msgstr "Szablon WhatsApp"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email Scheduling failed"
-msgstr ""
+msgstr "Planowanie e-maili nie powiodło się"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "SMS Scheduled Successfully"
-msgstr ""
+msgstr "SMS zaplanowane pomyślnie"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "SMS Scheduling failed"
-msgstr ""
+msgstr "Planowanie SMS nie powiodło się"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Messages Scheduled Successfully"
-msgstr ""
+msgstr "Wiadomości zaplanowane pomyślnie"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Message Scheduling failed"
-msgstr ""
+msgstr "Planowanie wiadomości nie powiodło się"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Template name is required"
-msgstr ""
+msgstr "Nazwa szablonu jest wymagana"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email subject is required"
-msgstr ""
+msgstr "Temat e-maila jest wymagany"
 
-#: admin/build/settings.js:13
+#: admin/build/settings.js:31
 msgid "Email body is required"
-msgstr ""
+msgstr "Treść e-maila jest wymagana"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Time should be minimum 1 min."
-msgstr ""
+msgstr "Czas powinien wynosić co najmniej 1 min."
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
 msgid "Invalid JSON in rule engine"
-msgstr ""
+msgstr "Nieprawidłowy JSON w silniku reguł"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:31
 msgid "Missing fields in rule: condition, operator, or value."
-msgstr ""
+msgstr "Brakujące pola w regule: warunek, operator lub wartość."
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
 msgid "Restore Default Templates"
-msgstr ""
+msgstr "Przywróć domyślne szablony"
 
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
-msgid "No Templates available"
-msgstr ""
-
-#: admin/build/settings.js:13
-msgid "Follow Up Email Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:13
-#: admin/build/settings.js:14
-#: admin/build/settings.js:15
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
 msgid "Conversion Rate"
-msgstr ""
+msgstr "Współczynnik konwersji"
 
-#: admin/build/settings.js:14
+#: admin/build/settings.js:38
 msgid "SMS body is required"
-msgstr ""
+msgstr "Treść SMS jest wymagana"
 
-#: admin/build/settings.js:14
-msgid "SMS body should be less than 160 characters."
-msgstr ""
-
-#: admin/build/settings.js:14
-msgid "Follow Up SMS Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:15
+#: admin/build/settings.js:40
 msgid "WhatsApp template is required"
-msgstr ""
+msgstr "Szablon WhatsApp jest wymagany"
 
-#: admin/build/settings.js:15
-msgid "Follow Up WhatsApp Templates data will appear here after templates are created"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:43
 msgid "Back"
-msgstr ""
+msgstr "Wstecz"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:43
 msgid "Next"
-msgstr ""
+msgstr "Dalej"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Finish Setup"
-msgstr ""
+msgstr "Zakończ konfigurację"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Recover lost revenue automatically and effortlessly"
-msgstr ""
+msgstr "Odzyskuj utracone przychody automatycznie i bez wysiłku"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Quick and easy setup, no technical skills needed"
-msgstr ""
+msgstr "Szybka i łatwa konfiguracja, bez umiejętności technicznych"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Track, log, and resend emails with ease"
-msgstr ""
+msgstr "Łatwe śledzenie, rejestrowanie i ponowne wysyłanie e-maili"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Fully customizable to your store"
-msgstr ""
+msgstr "W pełni dostosowywalne do Twojego sklepu"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Dynamic coupon generation with expiry control"
-msgstr ""
+msgstr "Dynamiczne generowanie kuponów z kontrolą ważności"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Welcome to Cart Abandonment Recovery"
-msgstr ""
+msgstr "Witamy w Cart Abandonment Recovery"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Track abandoned carts in real time & recover lost revenue automatically."
-msgstr ""
+msgstr "Śledź porzucone koszyki w czasie rzeczywistym i automatycznie odzyskuj utracone przychody."
 
-#: admin/build/settings.js:16
-msgid "Get Started with Onboarding"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Configure Recovery Settings"
-msgstr ""
+msgstr "Skonfiguruj ustawienia odzyskiwania"
 
-#: admin/build/settings.js:16
-msgid "Personalize the look and feel of your cart to create a seamless shopping experience."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Select Your Follow Up Sequence Channels"
-msgstr ""
+msgstr "Wybierz kanały sekwencji wiadomości uzupełniających"
 
-#: admin/build/settings.js:16
-msgid "Set up cart settings to match your store’s needs in just a few clicks."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Setup Recovery Report Emails"
-msgstr ""
+msgstr "Skonfiguruj e-maile z raportem odzyskiwania"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "First Name"
-msgstr ""
+msgstr "Imię"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Last Name"
-msgstr ""
+msgstr "Nazwisko"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Your Email"
-msgstr ""
+msgstr "Twój e-mail"
 
-#: admin/build/settings.js:16
-msgid "Allow Cart Abandonment Recovery and our other products to track non-sensitive usage tracking data. "
-msgstr ""
-
-#: admin/build/settings.js:16
-msgid "Learn More"
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Add More Power to Your Website"
-msgstr ""
+msgstr "Dodaj więcej mocy swojej witrynie"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "These tools can help you build your website faster and easier. Try them out and see how they can help your website grow."
-msgstr ""
+msgstr "Te narzędzia pomogą Ci budować witrynę szybciej i łatwiej. Wypróbuj je i zobacz, jak mogą pomóc w jej rozwoju."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "You're Good to Go! 🚀"
-msgstr ""
+msgstr "Wszystko gotowe! 🚀"
 
-#: admin/build/settings.js:16
-msgid "Great job! 🎉 With Cart Abandonment Recovery active, your store is ready to start recovering the lost revenue automatically."
-msgstr ""
-
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Here’s What Cart Abandonment Recovery Will Do for You Now:"
-msgstr ""
+msgstr "Oto, co Cart Abandonment Recovery zrobi teraz dla Ciebie:"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Recover lost sales automatically"
-msgstr ""
+msgstr "Automatycznie odzyskuj utraconą sprzedaż"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "by reminding shoppers to complete their purchase."
-msgstr ""
+msgstr "przypominając klientom o dokończeniu zakupu."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Increase conversions"
-msgstr ""
+msgstr "Zwiększ konwersje"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "with timely follow-ups via Emails."
-msgstr ""
+msgstr "dzięki terminowym wiadomościom uzupełniającym e-mail."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "Turn abandoned carts into revenue"
-msgstr ""
+msgstr "Zamieniaj porzucone koszyki w przychody"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:44
 msgid "without any manual effort."
-msgstr ""
+msgstr "bez żadnego ręcznego wysiłku."
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:1
+#: admin/build/settings.js:48
 msgid "Go To Dashboard"
-msgstr ""
+msgstr "Przejdź do panelu"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Documentation"
-msgstr ""
+msgstr "Dokumentacja"
 
-#: admin/build/settings.js:16
+#: admin/build/settings.js:48
 msgid "Exit Guided Setup"
-msgstr ""
+msgstr "Zakończ konfigurację z przewodnikiem"
 
-#: admin/inc/meta-options.php:598
+#: admin/inc/meta-options.php:626
 msgid "Modify Product Table"
-msgstr ""
+msgstr "Modyfikuj tabelę produktów"
 
-#: admin/inc/meta-options.php:600
+#: admin/inc/meta-options.php:628
 msgid "Customize how the abandoned products table renders in this email."
-msgstr ""
+msgstr "Dostosuj sposób wyświetlania tabeli porzuconych produktów w tym e-mailu."
 
-#: admin/inc/meta-options.php:607
+#: admin/inc/meta-options.php:635
 msgid "Product Image Size"
-msgstr ""
+msgstr "Rozmiar obrazu produktu"
 
-#: admin/inc/meta-options.php:609
+#: admin/inc/meta-options.php:637
 msgid "Image size in the abandoned products table."
-msgstr ""
-
-#: admin/inc/meta-options.php:613
-msgid "Small (32px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:617
-msgid "Medium (48px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:621
-msgid "Large (64px)"
-msgstr ""
-
-#: admin/inc/meta-options.php:639
-msgid "Show Prices With Tax"
-msgstr ""
+msgstr "Rozmiar obrazu w tabeli porzuconych produktów."
 
 #: admin/inc/meta-options.php:641
+msgid "Small (32px)"
+msgstr "Mały (32px)"
+
+#: admin/inc/meta-options.php:645
+msgid "Medium (48px)"
+msgstr "Średni (48px)"
+
+#: admin/inc/meta-options.php:649
+msgid "Large (64px)"
+msgstr "Duży (64px)"
+
+#: admin/inc/meta-options.php:667
+msgid "Show Prices With Tax"
+msgstr "Pokaż ceny z podatkiem"
+
+#: admin/inc/meta-options.php:669
 msgid "Include tax in prices shown in the abandoned products table."
-msgstr ""
+msgstr "Uwzględnij podatek w cenach wyświetlanych w tabeli porzuconych produktów."
 
-#: admin/inc/meta-options.php:657
+#: admin/inc/meta-options.php:685
 msgid "Visible Columns"
-msgstr ""
+msgstr "Widoczne kolumny"
 
-#: admin/inc/meta-options.php:659
+#: admin/inc/meta-options.php:687
 msgid "Choose which columns appear in the products table."
-msgstr ""
+msgstr "Wybierz, które kolumny pojawią się w tabeli produktów."
 
-#: admin/inc/meta-options.php:663
+#: admin/inc/meta-options.php:691
 msgid "Image"
-msgstr ""
+msgstr "Obraz"
 
-#: admin/inc/meta-options.php:679
+#: admin/inc/meta-options.php:707
+#: admin/build/settings.js:31
 msgid "Subtotal"
-msgstr ""
+msgstr "Suma częściowa"
 
-#: classes/class-cartflows-ca-admin-notices.php:265
+#: classes/class-cartflows-ca-admin-notices.php:274
 msgid "The Legacy UI will no longer be available in a future release of Cart Abandonment Recovery. To ensure uninterrupted cart recovery and access to upcoming features, please switch to the new UI."
-msgstr ""
+msgstr "Stary interfejs nie będzie dostępny w przyszłej wersji Cart Abandonment Recovery. Aby zapewnić nieprzerwane odzyskiwanie koszyków i dostęp do nadchodzących funkcji, przełącz się na nowy interfejs."
 
 #: inc/abilities/class-wcar-abilities-register.php:78
 msgid "Abilities for managing Cart Abandonment Recovery settings and statistics."
-msgstr ""
+msgstr "Uprawnienia do zarządzania ustawieniami i statystykami Cart Abandonment Recovery."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:29
 msgid "Get Dashboard Stats"
-msgstr ""
+msgstr "Pobierz statystyki panelu"
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:30
 msgid "Returns aggregated cart abandonment metrics — recoverable, recovered, and lost order counts and revenue, plus recovery rate — for a given date range. Defaults to last 7 days."
-msgstr ""
+msgstr "Zwraca zagregowane wskaźniki porzuconych koszyków — liczbę i przychody zamówień do odzyskania, odzyskanych i utraconych oraz wskaźnik odzysku — dla podanego zakresu dat. Domyślnie ostatnie 7 dni."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:39
 msgid "Use to answer questions about overall cart abandonment performance, revenue at risk, or recovery success. Defaults to last 7 days. When the user specifies a time period, translate it to start_date and end_date in YYYY-MM-DD format. The recovery_rate is the percentage of tracked orders that were recovered."
-msgstr ""
+msgstr "Używaj, aby odpowiadać na pytania o ogólną skuteczność odzyskiwania porzuconych koszyków, zagrożone przychody lub skuteczność odzyskiwania. Domyślnie ostatnie 7 dni. Gdy użytkownik określi okres, przekształć go na start_date i end_date w formacie YYYY-MM-DD. recovery_rate to odsetek śledzonych zamówień, które zostały odzyskane."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:53
 #: inc/abilities/class-wcar-ability-get-product-stats.php:53
 msgid "Start date in YYYY-MM-DD format (defaults to 7 days ago)."
-msgstr ""
+msgstr "Data początkowa w formacie YYYY-MM-DD (domyślnie 7 dni temu)."
 
 #: inc/abilities/class-wcar-ability-get-dashboard-stats.php:57
 #: inc/abilities/class-wcar-ability-get-product-stats.php:57
 msgid "End date in YYYY-MM-DD format (defaults to today)."
-msgstr ""
+msgstr "Data końcowa w formacie YYYY-MM-DD (domyślnie dzisiaj)."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:29
 msgid "Get Product Stats"
-msgstr ""
+msgstr "Pobierz statystyki produktów"
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:30
 msgid "Returns the top N abandoned products ranked by abandonment frequency, with total abandoned cart value per product. Defaults to last 7 days, top 10 products."
-msgstr ""
+msgstr "Zwraca N najczęściej porzucanych produktów uszeregowanych według częstotliwości porzuceń, wraz z łączną wartością porzuconych koszyków dla każdego produktu. Domyślnie ostatnie 7 dni, 10 najlepszych produktów."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:39
 msgid "Use when the user asks which products are most abandoned or wants to prioritize recovery campaigns. Results are sorted by times_abandoned descending. Use the limit parameter to control how many products are returned. Combine with wcar/get-dashboard-stats for a full performance picture."
-msgstr ""
+msgstr "Używaj, gdy użytkownik pyta, które produkty są najczęściej porzucane, lub chce ustalić priorytety kampanii odzyskiwania. Wyniki są posortowane malejąco według times_abandoned. Użyj parametru limit, aby określić liczbę zwracanych produktów. Połącz z wcar/get-dashboard-stats, aby uzyskać pełny obraz skuteczności."
 
 #: inc/abilities/class-wcar-ability-get-product-stats.php:61
 msgid "Maximum number of products to return (default 10)."
-msgstr ""
+msgstr "Maksymalna liczba zwracanych produktów (domyślnie 10)."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:29
 msgid "Get Setting"
-msgstr ""
+msgstr "Pobierz ustawienie"
 
 #: inc/abilities/class-wcar-ability-get-setting.php:30
 msgid "Returns the current value and metadata for one specific setting, looked up by option key or human-readable label. Use before updating to confirm a setting exists."
-msgstr ""
+msgstr "Zwraca bieżącą wartość i metadane jednego ustawienia, wyszukanego po kluczu opcji lub czytelnej etykiecie. Używaj przed aktualizacją, aby potwierdzić, że ustawienie istnieje."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:39
 msgid "Use when you need the current value of one specific setting. If you do not know the exact key or label, call wcar/get-settings first to discover available options. Always call this before wcar/update-setting to confirm the setting exists and record the current value."
-msgstr ""
+msgstr "Używaj, gdy potrzebujesz bieżącej wartości jednego ustawienia. Jeśli nie znasz dokładnego klucza ani etykiety, najpierw wywołaj wcar/get-settings, aby poznać dostępne opcje. Zawsze wywołuj to przed wcar/update-setting, aby potwierdzić istnienie ustawienia i zapisać bieżącą wartość."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:53
 msgid "Option key to look up (e.g. \"wcf_ca_status\")."
-msgstr ""
+msgstr "Klucz opcji do wyszukania (np. \"wcf_ca_status\")."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:57
 msgid "Human-readable label to search for (case-insensitive, e.g. \"Enable Tracking\")."
-msgstr ""
+msgstr "Czytelna etykieta do wyszukania (bez rozróżniania wielkości liter, np. \"Enable Tracking\")."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:96
 #: inc/abilities/class-wcar-ability-update-setting.php:99
 msgid "Please provide either a \"key\" or a \"name\" parameter."
-msgstr ""
+msgstr "Podaj parametr \"key\" lub \"name\"."
 
 #: inc/abilities/class-wcar-ability-get-setting.php:104
 #: inc/abilities/class-wcar-ability-update-setting.php:113
 msgid "Setting not found. Please check the key or name and try again."
-msgstr ""
+msgstr "Nie znaleziono ustawienia. Sprawdź klucz lub nazwę i spróbuj ponownie."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:29
 msgid "Get All Settings"
-msgstr ""
+msgstr "Pobierz wszystkie ustawienia"
 
 #: inc/abilities/class-wcar-ability-get-settings.php:30
 msgid "Returns all plugin settings grouped by tab with current values. Use for a full configuration overview or to discover option keys before making targeted changes."
-msgstr ""
+msgstr "Zwraca wszystkie ustawienia wtyczki pogrupowane według kart wraz z bieżącymi wartościami. Używaj do pełnego przeglądu konfiguracji lub do poznania kluczy opcji przed wprowadzeniem konkretnych zmian."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:39
 msgid "Call when the user asks about current plugin configuration or wants to see all settings. Use the tab parameter to narrow results when you know the relevant section (e.g. \"general-settings\", \"email-settings\", \"webhook-integration\"). Call this before wcar/get-setting if you do not know the exact option key."
-msgstr ""
+msgstr "Wywołuj, gdy użytkownik pyta o bieżącą konfigurację wtyczki lub chce zobaczyć wszystkie ustawienia. Użyj parametru tab, aby zawęzić wyniki, gdy znasz odpowiednią sekcję (np. \"general-settings\", \"email-settings\", \"webhook-integration\"). Wywołaj to przed wcar/get-setting, jeśli nie znasz dokładnego klucza opcji."
 
 #: inc/abilities/class-wcar-ability-get-settings.php:53
 msgid "Optional tab slug to filter results (e.g. \"general-settings\", \"email-settings\", \"webhook-integration\")."
-msgstr ""
+msgstr "Opcjonalny slug karty do filtrowania wyników (np. \"general-settings\", \"email-settings\", \"webhook-integration\")."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:29
 msgid "Update Setting"
-msgstr ""
+msgstr "Aktualizuj ustawienie"
 
 #: inc/abilities/class-wcar-ability-update-setting.php:30
 msgid "Writes a new value for one setting identified by key or label. Returns old and new values. Destructive and non-idempotent — the change persists immediately."
-msgstr ""
+msgstr "Zapisuje nową wartość jednego ustawienia wskazanego kluczem lub etykietą. Zwraca starą i nową wartość. Operacja destrukcyjna i nieidempotentna — zmiana jest zapisywana natychmiast."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:42
 msgid "Use only after confirming intent with the user — this change is immediate and irreversible. Always read the current value with wcar/get-setting first. Provide either key or name and the new value. The response includes old_value and new_value so the change can be verified."
-msgstr ""
+msgstr "Używaj tylko po potwierdzeniu zamiaru z użytkownikiem — ta zmiana jest natychmiastowa i nieodwracalna. Zawsze najpierw odczytaj bieżącą wartość za pomocą wcar/get-setting. Podaj key lub name oraz nową wartość. Odpowiedź zawiera old_value i new_value, aby można było zweryfikować zmianę."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:57
 msgid "Option key to update (e.g. \"wcf_ca_status\")."
-msgstr ""
+msgstr "Klucz opcji do aktualizacji (np. \"wcf_ca_status\")."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:61
 msgid "Human-readable label of the setting to update (case-insensitive)."
-msgstr ""
+msgstr "Czytelna etykieta ustawienia do aktualizacji (bez rozróżniania wielkości liter)."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:64
 msgid "The new value for the setting."
-msgstr ""
+msgstr "Nowa wartość ustawienia."
 
 #: inc/abilities/class-wcar-ability-update-setting.php:105
 msgid "A \"value\" parameter is required."
-msgstr ""
+msgstr "Parametr \"value\" jest wymagany."
 
 #. translators: %s: option key
 #: inc/abilities/class-wcar-ability-update-setting.php:124
 #, php-format
 msgid "The setting \"%s\" is not a writable plugin option."
-msgstr ""
+msgstr "Ustawienie \"%s\" nie jest zapisywalną opcją wtyczki."
 
 #. translators: %s: option key
 #: inc/abilities/class-wcar-ability-update-setting.php:137
 #, php-format
 msgid "Failed to save the setting \"%s\"."
-msgstr ""
+msgstr "Nie udało się zapisać ustawienia \"%s\"."
 
 #: inc/abilities/class-wcar-abstract-ability.php:168
 msgid "You do not have permission to perform this action."
-msgstr ""
+msgstr "Nie masz uprawnień do wykonania tej akcji."
 
 #: inc/abilities/class-wcar-abstract-ability.php:176
 msgid "Dry run — no changes made."
-msgstr ""
+msgstr "Próbne uruchomienie — nie wprowadzono zmian."
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:369
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:418
 msgid "(incl. tax)"
-msgstr ""
+msgstr "(z podatkiem)"
 
-#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:370
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:419
 msgid "(excl. tax)"
-msgstr ""
+msgstr "(bez podatku)"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
+#: admin/build/settings.js:48
 msgid "Done"
-msgstr ""
+msgstr "Gotowe"
 
-#: admin/build/settings.js:3
+#: admin/build/settings.js:14
 msgid "No conditions configured."
-msgstr ""
+msgstr "Nie skonfigurowano warunków."
 
 #. translators: %d: number of conditions
-#: admin/build/settings.js:4
+#: admin/build/settings.js:15
 #, js-format
 msgid "%d condition"
 msgid_plural "%d conditions"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%d warunek"
+msgstr[1] "%d warunki"
+msgstr[2] "%d warunków"
 
 #. translators: %d: number of groups
-#: admin/build/settings.js:5
+#: admin/build/settings.js:16
 #, js-format
 msgid "%d group"
 msgid_plural "%d groups"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%d grupa"
+msgstr[1] "%d grupy"
+msgstr[2] "%d grup"
 
 #. translators: 1: conditions count phrase, 2: groups count phrase
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 #, js-format
 msgid "%1$s across %2$s"
-msgstr ""
+msgstr "%1$s w %2$s"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Conditions"
-msgstr ""
+msgstr "Warunki"
 
-#: admin/build/settings.js:6
+#: admin/build/settings.js:17
 msgid "Edit Conditions"
-msgstr ""
+msgstr "Edytuj warunki"
+
+#: admin/inc/meta-options.php:101
+#: admin/inc/meta-options.php:984
+msgid "Consider cart abandoned after above entered minutes of item being added to cart and order not placed. Minimum value: 10 minutes."
+msgstr "Uznaj koszyk za porzucony po upływie podanej wyżej liczby minut od dodania produktu do koszyka, jeśli zamówienie nie zostało złożone. Wartość minimalna: 10 minut."
+
+#: admin/inc/meta-options.php:112
+#: admin/inc/meta-options.php:995
+msgid "Consider cart lost after above entered days of item being added to cart and order not placed. Minimum value: 10 days."
+msgstr "Uznaj koszyk za utracony po upływie podanej wyżej liczby dni od dodania produktu do koszyka, jeśli zamówienie nie zostało złożone. Wartość minimalna: 10 dni."
+
+#: admin/inc/meta-options.php:148
+msgid "Background task scheduler"
+msgstr "Harmonogram zadań w tle"
+
+#: admin/inc/meta-options.php:151
+msgid "WP-Cron is used by default. When WP-Cron is disabled on the site (DISABLE_WP_CRON), recovery jobs automatically run via Action Scheduler so emails stay on time. Choose Action Scheduler to always use it for reliable, observable scheduling."
+msgstr "Domyślnie używany jest WP-Cron. Gdy WP-Cron jest wyłączony w witrynie (DISABLE_WP_CRON), zadania odzyskiwania automatycznie działają przez Action Scheduler, aby e-maile były wysyłane na czas. Wybierz Action Scheduler, aby zawsze korzystać z niezawodnego i przejrzystego planowania."
+
+#: admin/inc/meta-options.php:155
+msgid "Action Scheduler (recommended)"
+msgstr "Action Scheduler (zalecane)"
+
+#: admin/inc/meta-options.php:159
+msgid "WP-Cron (legacy)"
+msgstr "WP-Cron (starsza metoda)"
+
+#: admin/inc/meta-options.php:252
+msgid "Notify when abandoned cart products go out of stock"
+msgstr "Powiadamiaj, gdy produkty z porzuconych koszyków staną się niedostępne"
+
+#: admin/inc/meta-options.php:255
+msgid "Email the store admin when products in abandoned carts go out of stock, so recovery emails are not sent for unavailable products. Uses the email address(es) above."
+msgstr "Wyślij e-mail do administratora sklepu, gdy produkty w porzuconych koszykach staną się niedostępne, aby e-maile odzyskujące nie były wysyłane dla niedostępnych produktów. Używa powyższych adresów e-mail."
+
+#: admin/inc/meta-options.php:733
+msgid "Send a Copy to Admin"
+msgstr "Wyślij kopię do administratora"
+
+#: admin/inc/meta-options.php:735
+msgid "Send the admin a copy of each recovery email from this template. Test emails are excluded."
+msgstr "Wysyłaj administratorowi kopię każdego e-maila odzyskującego z tego szablonu. Testowe e-maile są wykluczone."
+
+#: admin/inc/meta-options.php:742
+msgid "Copy Type"
+msgstr "Typ kopii"
+
+#: admin/inc/meta-options.php:744
+msgid "BCC keeps the admin address hidden from the customer."
+msgstr "UDW ukrywa adres administratora przed klientem."
+
+#: admin/inc/meta-options.php:748
+msgid "BCC (hidden)"
+msgstr "UDW (ukryta)"
+
+#: admin/inc/meta-options.php:752
+msgid "CC (visible)"
+msgstr "DW (widoczna)"
+
+#: admin/inc/meta-options.php:770
+msgid "Copy To Email Address"
+msgstr "Adres e-mail dla kopii"
+
+#: admin/inc/meta-options.php:772
+msgid "Separate multiple email addresses with commas. Defaults to the site admin email when left empty."
+msgstr "Oddziel wiele adresów e-mail przecinkami. Gdy pole jest puste, używany jest adres e-mail administratora witryny."
+
+#: admin/inc/meta-options.php:1167
+msgid "On-site Banner"
+msgstr "Baner w witrynie"
+
+#: admin/inc/meta-options.php:1172
+msgid "Enable On-site Reminder Banner"
+msgstr "Włącz baner przypomnienia w witrynie"
+
+#: admin/inc/meta-options.php:1176
+msgid "Display a reminder banner to returning shoppers about the items they left in their cart."
+msgstr "Wyświetlaj powracającym klientom baner przypominający o produktach pozostawionych w koszyku."
+
+#: admin/inc/meta-options.php:1183
+msgid "Capture Popup"
+msgstr "Popup przechwytywania"
+
+#: admin/inc/meta-options.php:1188
+msgid "Enable Email Capture Popup"
+msgstr "Włącz popup przechwytywania e-maila"
+
+#: admin/inc/meta-options.php:1192
+msgid "Ask visitors for their email before checkout, so abandoned carts can still be recovered."
+msgstr "Poproś odwiedzających o adres e-mail przed przejściem do kasy, aby porzucone koszyki nadal można było odzyskać."
+
+#: admin/inc/wcar-admin.php:469
+msgid "Missing onboarding data."
+msgstr "Brak danych wdrożenia."
+
+#: classes/class-cartflows-ca-admin-notices.php:106
+msgid "Hello! Seems like you have used Cart Abandonment Recovery for WooCommerce plugin to recover abandoned carts &mdash; Thanks a ton!"
+msgstr "Cześć! Wygląda na to, że używasz wtyczki Cart Abandonment Recovery for WooCommerce do odzyskiwania porzuconych koszyków &mdash; bardzo dziękujemy!"
+
+#: classes/class-cartflows-ca-admin-notices.php:107
+msgid "Could you please do us a BIG favor and give it a 5-star rating on WordPress? This would boost our motivation and help other users make a comfortable decision while choosing the Cart Abandonment Recovery for WooCommerce!"
+msgstr "Czy możesz wyświadczyć nam OGROMNĄ przysługę i wystawić jej ocenę 5 gwiazdek na WordPress? To zwiększy naszą motywację i pomoże innym użytkownikom podjąć decyzję przy wyborze Cart Abandonment Recovery for WooCommerce!"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:207
+msgid "Cart Abandonment Recovery order-status interval"
+msgstr "Interwał statusu zamówień Cart Abandonment Recovery"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:243
+msgid "Cart Abandonment Recovery relies on WP-Cron, but WP-Cron is disabled on this site (DISABLE_WP_CRON) and Action Scheduler is unavailable. Recovery emails may be delayed until a background scheduler is available."
+msgstr "Cart Abandonment Recovery korzysta z WP-Cron, ale WP-Cron jest wyłączony w tej witrynie (DISABLE_WP_CRON), a Action Scheduler jest niedostępny. E-maile odzyskujące mogą być opóźnione, dopóki nie będzie dostępny harmonogram zadań w tle."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-cron.php:252
+msgid "WP-Cron is disabled on this site (DISABLE_WP_CRON), so Cart Abandonment Recovery is automatically using Action Scheduler to keep recovery emails on time. You can change this under the \"Background task scheduler\" setting."
+msgstr "WP-Cron jest wyłączony w tej witrynie (DISABLE_WP_CRON), więc Cart Abandonment Recovery automatycznie korzysta z Action Scheduler, aby e-maile odzyskujące były wysyłane na czas. Możesz to zmienić w ustawieniu \"Harmonogram zadań w tle\"."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:128
+msgid "Cart Abandonment Recovery database update required."
+msgstr "Wymagana aktualizacja bazy danych Cart Abandonment Recovery."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:131
+msgid "We need to update your database to maintain compatibility with the latest features. Please back up your database before running this update."
+msgstr "Musimy zaktualizować Twoją bazę danych, aby zachować zgodność z najnowszymi funkcjami. Przed uruchomieniem tej aktualizacji wykonaj kopię zapasową bazy danych."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:135
+msgid "Update Database"
+msgstr "Aktualizuj bazę danych"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:167
+msgid "Database updated successfully!"
+msgstr "Baza danych została pomyślnie zaktualizowana!"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:168
+msgid "Update failed. Please try again."
+msgstr "Aktualizacja nie powiodła się. Spróbuj ponownie."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:183
+msgid "You don't have permission to perform this action."
+msgstr "Nie masz uprawnień do wykonania tej akcji."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-db-updater.php:187
+msgid "Database update could not complete. Please try again, and contact support if the problem persists."
+msgstr "Nie udało się ukończyć aktualizacji bazy danych. Spróbuj ponownie, a jeśli problem się powtarza, skontaktuj się z pomocą techniczną."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:87
+msgid "Out-of-stock product in cart"
+msgstr "Niedostępny produkt w koszyku"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-email-schedule.php:101
+msgid "Already purchased"
+msgstr "Już zakupione"
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:300
+msgid "This unsubscribe link is no longer valid. If you still receive cart reminder emails, please use the unsubscribe link in the most recent one."
+msgstr "Ten link do wypisania się nie jest już ważny. Jeśli nadal otrzymujesz e-maile z przypomnieniem o koszyku, użyj linku do wypisania się z najnowszego z nich."
+
+#: modules/cart-abandonment/classes/class-cartflows-ca-tracking.php:303
+msgid "Link expired"
+msgstr "Link wygasł"
+
+#: modules/oos-warning/class-cartflows-ca-oos-warning.php:582
+msgid "(Guest User)"
+msgstr "(Gość)"
+
+#: modules/oos-warning/class-cartflows-ca-oos-warning.php:615
+msgid "Out-of-stock alert: products in abandoned carts need attention"
+msgstr "Alert o braku w magazynie: produkty w porzuconych koszykach wymagają uwagi"
+
+#. translators: %s: number of out-of-stock products.
+#: modules/oos-warning/templates/email-body.php:53
+#, php-format
+msgid "%s out-of-stock product"
+msgid_plural "%s out-of-stock products"
+msgstr[0] "%s niedostępny produkt"
+msgstr[1] "%s niedostępne produkty"
+msgstr[2] "%s niedostępnych produktów"
+
+#. translators: %s: number of abandoned carts.
+#: modules/oos-warning/templates/email-body.php:59
+#, php-format
+msgid "%s abandoned cart"
+msgid_plural "%s abandoned carts"
+msgstr[0] "%s porzucony koszyk"
+msgstr[1] "%s porzucone koszyki"
+msgstr[2] "%s porzuconych koszyków"
+
+#: modules/oos-warning/templates/email-body.php:68
+msgid "Out-of-stock alert"
+msgstr "Alert o braku w magazynie"
+
+#: modules/oos-warning/templates/email-body.php:78
+msgid "Out-of-stock products in abandoned carts"
+msgstr "Niedostępne produkty w porzuconych koszykach"
+
+#. translators: %s: linked store name.
+#: modules/oos-warning/templates/email-body.php:89
+#, php-format
+msgid "Some abandoned carts on %s contain products that are now out of stock. Recovery emails for these carts may point customers to items they can no longer purchase."
+msgstr "Niektóre porzucone koszyki w %s zawierają produkty, które są obecnie niedostępne. E-maile odzyskujące dla tych koszyków mogą kierować klientów do produktów, których nie mogą już kupić."
+
+#. translators: 1: count of out-of-stock products, 2: count of abandoned carts.
+#: modules/oos-warning/templates/email-body.php:101
+#, php-format
+msgid "%1$s across %2$s."
+msgstr "%1$s w %2$s."
+
+#: modules/oos-warning/templates/email-body.php:111
+msgid "Customer"
+msgstr "Klient"
+
+#: modules/oos-warning/templates/email-body.php:112
+msgid "Abandoned"
+msgstr "Porzucono"
+
+#: modules/oos-warning/templates/email-body.php:113
+msgid "Out-of-stock products"
+msgstr "Niedostępne produkty"
+
+#. translators: %s: number of additional abandoned carts not listed.
+#: modules/oos-warning/templates/email-body.php:148
+#, php-format
+msgid "and %s more abandoned cart with out-of-stock products."
+msgid_plural "and %s more abandoned carts with out-of-stock products."
+msgstr[0] "i jeszcze %s porzucony koszyk z niedostępnymi produktami."
+msgstr[1] "i jeszcze %s porzucone koszyki z niedostępnymi produktami."
+msgstr[2] "i jeszcze %s porzuconych koszyków z niedostępnymi produktami."
+
+#: modules/oos-warning/templates/email-body.php:165
+msgid "Review abandoned carts"
+msgstr "Przejrzyj porzucone koszyki"
+
+#. translators: %s: linked store name.
+#: modules/oos-warning/templates/email-body.php:176
+#, php-format
+msgid "You are receiving this because out-of-stock notifications are enabled for %s."
+msgstr "Otrzymujesz tę wiadomość, ponieważ powiadomienia o braku w magazynie są włączone dla %s."
+
+#: admin/build/settings.js:1
+msgid "Core"
+msgstr "Podstawowe"
+
+#: admin/build/settings.js:1
+msgid "Pro"
+msgstr "Pro"
+
+#: admin/build/settings.js:1
+msgid "Not saved"
+msgstr "Nie zapisano"
+
+#: admin/build/settings.js:1
+msgid "The setting could not be saved. Reload the page and try again."
+msgstr "Nie udało się zapisać ustawienia. Odśwież stronę i spróbuj ponownie."
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:31
+msgid "Saved"
+msgstr "Zapisano"
+
+#: admin/build/settings.js:1
+msgid "Your change has been saved."
+msgstr "Twoja zmiana została zapisana."
+
+#: admin/build/settings.js:1
+msgid "Request failed"
+msgstr "Żądanie nie powiodło się"
+
+#: admin/build/settings.js:1
+msgid "Something went wrong. Check your connection and try again."
+msgstr "Coś poszło nie tak. Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:43
+msgid "Activity Log"
+msgstr "Dziennik aktywności"
+
+#: admin/build/settings.js:1
+#: admin/build/settings.js:43
+msgid "Scheduled Jobs"
+msgstr "Zaplanowane zadania"
+
+#: admin/build/settings.js:1
+msgid "Main"
+msgstr "Główne"
+
+#: admin/build/settings.js:1
+msgid "Valid License"
+msgstr "Ważna licencja"
+
+#: admin/build/settings.js:1
+msgid "Activate your license"
+msgstr "Aktywuj swoją licencję"
+
+#: admin/build/settings.js:1
+msgid "This screen hit a problem"
+msgstr "Na tym ekranie wystąpił problem"
+
+#: admin/build/settings.js:1
+msgid "Nothing has been changed on your store. Reload to try again, or go back to the dashboard."
+msgstr "W Twoim sklepie nic nie zostało zmienione. Odśwież, aby spróbować ponownie, lub wróć do panelu."
+
+#: admin/build/settings.js:1
+msgid "Reload"
+msgstr "Odśwież"
+
+#. translators: %s: the selected date range, e.g. "09/23/2026 - 09/29/2026".
+#: admin/build/settings.js:2
+#, js-format
+msgid "Date range: %s"
+msgstr "Zakres dat: %s"
+
+#: admin/build/settings.js:2
+msgid "Select date range"
+msgstr "Wybierz zakres dat"
+
+#: admin/build/settings.js:3
+msgid "Loading…"
+msgstr "Ładowanie…"
+
+#: admin/build/settings.js:3
+msgid "Revenue by day"
+msgstr "Przychody według dni"
+
+#: admin/build/settings.js:3
+msgid "Day"
+msgstr "Dzień"
+
+#: admin/build/settings.js:3
+msgid "View all follow-up reports"
+msgstr "Zobacz wszystkie raporty wiadomości uzupełniających"
+
+#: admin/build/settings.js:3
+msgid "View all"
+msgstr "Zobacz wszystkie"
+
+#: admin/build/settings.js:3
+msgid "View all product reports"
+msgstr "Zobacz wszystkie raporty produktów"
+
+#: admin/build/settings.js:4
+msgid "Build high-converting checkout funnels."
+msgstr "Twórz skutecznie konwertujące lejki kasy."
+
+#: admin/build/settings.js:4
+msgid "Fast and customizable cart for your website."
+msgstr "Szybki i konfigurowalny koszyk dla Twojej witryny."
+
+#: admin/build/settings.js:4
+msgid "Automate tasks between your apps."
+msgstr "Automatyzuj zadania między aplikacjami."
+
+#: admin/build/settings.js:4
+msgid "Convert more with automated coupons."
+msgstr "Konwertuj więcej dzięki automatycznym kuponom."
+
+#: admin/build/settings.js:4
+msgid "Resume Setup"
+msgstr "Wznów konfigurację"
+
+#: admin/build/settings.js:4
+msgid "Launch Setup"
+msgstr "Uruchom konfigurację"
+
+#: admin/build/settings.js:4
+msgid "(opens in a new tab)"
+msgstr "(otwiera się w nowej karcie)"
+
+#. translators: 1: lowest allowed number, 2: highest allowed number.
+#: admin/build/settings.js:7
+#, js-format
+msgid "Enter a whole number from %1$s to %2$s."
+msgstr "Wprowadź liczbę całkowitą od %1$s do %2$s."
+
+#. translators: %s: lowest allowed number.
+#: admin/build/settings.js:10
+#, js-format
+msgid "Enter a whole number of %s or more."
+msgstr "Wprowadź liczbę całkowitą równą %s lub większą."
+
+#: admin/build/settings.js:10
+msgid "Close dialog"
+msgstr "Zamknij okno"
+
+#: admin/build/settings.js:10
+msgid "Delete coupons"
+msgstr "Usuń kupony"
+
+#: admin/build/settings.js:10
+msgid "Delete used and expired coupons?"
+msgstr "Usunąć wykorzystane i wygasłe kupony?"
+
+#: admin/build/settings.js:10
+msgid "Coupons this plugin created that were fully used or have expired will be deleted. This cannot be undone."
+msgstr "Kupony utworzone przez tę wtyczkę, które zostały w pełni wykorzystane lub wygasły, zostaną usunięte. Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:10
+msgid "This page is out of date. Reload it and try again."
+msgstr "Ta strona jest nieaktualna. Odśwież ją i spróbuj ponownie."
+
+#: admin/build/settings.js:10
+msgid "Enter the Webhook URL"
+msgstr "Wprowadź adres URL webhooka"
+
+#. translators: %d: HTTP status code returned by the webhook URL.
+#: admin/build/settings.js:13
+#, js-format
+msgid "The webhook URL answered with status %d."
+msgstr "Adres URL webhooka zwrócił status %d."
+
+#: admin/build/settings.js:13
+msgid "The URL could not be reached, or it does not accept requests from this page."
+msgstr "Nie można połączyć się z adresem URL lub nie akceptuje on żądań z tej strony."
+
+#: admin/build/settings.js:13
+msgid "Trigger Sample"
+msgstr "Wyślij próbkę"
+
+#. translators: 1: field title, 2: the part of the value this control sets (amount or unit)
+#: admin/build/settings.js:14
+#, js-format
+msgid "%1$s: %2$s"
+msgstr "%1$s: %2$s"
+
+#: admin/build/settings.js:14
+msgid "amount"
+msgstr "kwota"
+
+#: admin/build/settings.js:14
+msgid "unit"
+msgstr "jednostka"
+
+#: admin/build/settings.js:14
+msgid "Type at least 3 letters to search"
+msgstr "Wpisz co najmniej 3 litery, aby wyszukać"
+
+#: admin/build/settings.js:14
+msgid "No products found"
+msgstr "Nie znaleziono produktów"
+
+#: admin/build/settings.js:14
+msgid "Visual"
+msgstr "Wizualny"
+
+#: admin/build/settings.js:14
+msgid "HTML"
+msgstr "HTML"
+
+#: admin/build/settings.js:14
+msgid "Select Media"
+msgstr "Wybierz media"
+
+#: admin/build/settings.js:14
+msgid "Insert Media"
+msgstr "Wstaw media"
+
+#: admin/build/settings.js:14
+msgid "Add Media"
+msgstr "Dodaj media"
+
+#: admin/build/settings.js:14
+msgid "Enter Email"
+msgstr "Wprowadź e-mail"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email body"
+msgstr "Wprowadź treść e-maila"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email subject"
+msgstr "Wprowadź temat e-maila"
+
+#: admin/build/settings.js:14
+msgid "Please enter a valid email address"
+msgstr "Wprowadź prawidłowy adres e-mail"
+
+#: admin/build/settings.js:14
+msgid "Please enter an email address"
+msgstr "Wprowadź adres e-mail"
+
+#: admin/build/settings.js:14
+msgid "Send a Test Email"
+msgstr "Wyślij testowy e-mail"
+
+#: admin/build/settings.js:14
+#: admin/build/settings.js:17
+msgid "Insert placeholder"
+msgstr "Wstaw symbol zastępczy"
+
+#: admin/build/settings.js:17
+msgid "Enter a valid email address, like name@example.com."
+msgstr "Wprowadź prawidłowy adres e-mail, np. name@example.com."
+
+#: admin/build/settings.js:17
+msgid "Country code"
+msgstr "Kod kraju"
+
+#: admin/build/settings.js:17
+msgid "Phone number"
+msgstr "Numer telefonu"
+
+#: admin/build/settings.js:17
+msgid "Search options…"
+msgstr "Szukaj opcji…"
+
+#: admin/build/settings.js:17
+msgid "Search options"
+msgstr "Szukaj opcji"
+
+#. translators: %d: number of matching options
+#: admin/build/settings.js:18
+#, js-format
+msgid "%d option found"
+msgid_plural "%d options found"
+msgstr[0] "Znaleziono %d opcję"
+msgstr[1] "Znaleziono %d opcje"
+msgstr[2] "Znaleziono %d opcji"
+
+#: admin/build/settings.js:18
+msgid "No options available"
+msgstr "Brak dostępnych opcji"
+
+#: admin/build/settings.js:18
+msgid "Refresh Options"
+msgstr "Odśwież opcje"
+
+#: admin/build/settings.js:18
+msgid "Version to roll back to"
+msgstr "Wersja do przywrócenia"
+
+#: admin/build/settings.js:21
+msgid "Previous versions could not be loaded. Reload the page to try again."
+msgstr "Nie udało się wczytać poprzednich wersji. Odśwież stronę, aby spróbować ponownie."
+
+#: admin/build/settings.js:21
+msgid "A network error occurred. Please try again."
+msgstr "Wystąpił błąd sieci. Spróbuj ponownie."
+
+#: admin/build/settings.js:21
+msgid "Your license is active on this site. Professional support and automatic updates for Cart Abandonment Recovery Pro are enabled."
+msgstr "Twoja licencja jest aktywna w tej witrynie. Profesjonalna pomoc techniczna i automatyczne aktualizacje Cart Abandonment Recovery Pro są włączone."
+
+#. translators: %1$s: link html start, %2$s: link html end
+#: admin/build/settings.js:24
+#, js-format
+msgid "Enter your valid license key below to activate Cart Abandonment Recovery Pro. If you don't have a license key yet, you can get it from %1$shere%2$s."
+msgstr "Wprowadź poniżej swój ważny klucz licencyjny, aby aktywować Cart Abandonment Recovery Pro. Jeśli nie masz jeszcze klucza licencyjnego, możesz go uzyskać %1$stutaj%2$s."
+
+#: admin/build/settings.js:24
+msgid "Your license key is activated"
+msgstr "Twój klucz licencyjny jest aktywny"
+
+#: admin/build/settings.js:24
+msgid "License key status"
+msgstr "Status klucza licencyjnego"
+
+#: admin/build/settings.js:24
+msgid "Paste your license key here"
+msgstr "Wklej tutaj swój klucz licencyjny"
+
+#: admin/build/settings.js:24
+msgid "License key input"
+msgstr "Pole klucza licencyjnego"
+
+#: admin/build/settings.js:24
+msgid "Deactivating…"
+msgstr "Dezaktywowanie…"
+
+#: admin/build/settings.js:24
+msgid "Deactivate this license?"
+msgstr "Dezaktywować tę licencję?"
+
+#: admin/build/settings.js:24
+msgid "This site will stop receiving automatic updates and support for Cart Abandonment Recovery Pro until a license is activated again."
+msgstr "Ta witryna przestanie otrzymywać automatyczne aktualizacje i pomoc techniczną dla Cart Abandonment Recovery Pro, dopóki licencja nie zostanie ponownie aktywowana."
+
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+#: admin/build/settings.js:48
+msgid "Check your connection and try again."
+msgstr "Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:24
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+msgid "Try Again"
+msgstr "Spróbuj ponownie"
+
+#: admin/build/settings.js:24
+msgid "Loading reports…"
+msgstr "Ładowanie raportów…"
+
+#: admin/build/settings.js:24
+msgid "Whitelist"
+msgstr "Biała lista"
+
+#: admin/build/settings.js:24
+msgid "Items per page"
+msgstr "Elementów na stronę"
+
+#: admin/build/settings.js:24
+msgid "Pagination"
+msgstr "Paginacja"
+
+#: admin/build/settings.js:24
+msgid "Nothing to export"
+msgstr "Brak danych do eksportu"
+
+#: admin/build/settings.js:24
+msgid "Export failed"
+msgstr "Eksport nie powiódł się"
+
+#: admin/build/settings.js:24
+msgid "Report ID"
+msgstr "ID raportu"
+
+#: admin/build/settings.js:24
+msgid "Country"
+msgstr "Kraj"
+
+#: admin/build/settings.js:24
+msgid "Yes"
+msgstr "Tak"
+
+#: admin/build/settings.js:24
+msgid "No"
+msgstr "Nie"
+
+#: admin/build/settings.js:24
+msgid "Cart(s) blacklisted"
+msgstr "Koszyk(i) dodane do czarnej listy"
+
+#: admin/build/settings.js:24
+msgid "Cart(s) whitelisted"
+msgstr "Koszyk(i) usunięte z czarnej listy"
+
+#: admin/build/settings.js:24
+msgid "Bulk Actions"
+msgstr "Akcje zbiorcze"
+
+#: admin/build/settings.js:24
+msgid "Record(s) unsubscribed"
+msgstr "Rekord(y) wypisane"
+
+#: admin/build/settings.js:24
+msgid "Apply"
+msgstr "Zastosuj"
+
+#. translators: %d: number of reports that match the search and filters
+#: admin/build/settings.js:25
+#, js-format
+msgid "%d report found"
+msgid_plural "%d reports found"
+msgstr[0] "Znaleziono %d raport"
+msgstr[1] "Znaleziono %d raporty"
+msgstr[2] "Znaleziono %d raportów"
+
+#: admin/build/settings.js:25
+msgid "Could not load the reports"
+msgstr "Nie udało się wczytać raportów"
+
+#: admin/build/settings.js:25
+msgid "No reports match these filters"
+msgstr "Żadne raporty nie pasują do tych filtrów"
+
+#: admin/build/settings.js:25
+msgid "No follow-up reports match the current search, status or dates. Try changing them."
+msgstr "Żadne raporty wiadomości uzupełniających nie pasują do bieżącego wyszukiwania, statusu ani dat. Spróbuj je zmienić."
+
+#: admin/build/settings.js:25
+msgid "Delete Selected Reports"
+msgstr "Usuń wybrane raporty"
+
+#: admin/build/settings.js:25
+msgid "Delete Report"
+msgstr "Usuń raport"
+
+#. translators: %d: number of selected reports
+#: admin/build/settings.js:26
+#, js-format
+msgid "Are you sure you want to delete the %d selected report? Its cart and follow-up history will be removed. This action cannot be undone."
+msgid_plural "Are you sure you want to delete the %d selected reports? Their carts and follow-up history will be removed. This action cannot be undone."
+msgstr[0] "Czy na pewno chcesz usunąć %d wybrany raport? Jego koszyk i historia wiadomości uzupełniających zostaną usunięte. Tej operacji nie można cofnąć."
+msgstr[1] "Czy na pewno chcesz usunąć %d wybrane raporty? Ich koszyki i historia wiadomości uzupełniających zostaną usunięte. Tej operacji nie można cofnąć."
+msgstr[2] "Czy na pewno chcesz usunąć %d wybranych raportów? Ich koszyki i historia wiadomości uzupełniających zostaną usunięte. Tej operacji nie można cofnąć."
+
+#. translators: %s: customer name
+#: admin/build/settings.js:27
+#, js-format
+msgid "Are you sure you want to delete the report for “%s”? The cart and its follow-up history will be removed. This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć raport dla „%s”? Koszyk i jego historia wiadomości uzupełniających zostaną usunięte. Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:27
+msgid "Are you sure you want to delete this report? The cart and its follow-up history will be removed. This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć ten raport? Koszyk i jego historia wiadomości uzupełniających zostaną usunięte. Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:27
+msgid "Loading products…"
+msgstr "Ładowanie produktów…"
+
+#: admin/build/settings.js:27
+msgid "Product ID"
+msgstr "ID produktu"
+
+#: admin/build/settings.js:27
+msgid "Product Link"
+msgstr "Link do produktu"
+
+#: admin/build/settings.js:27
+#: admin/build/settings.js:35
+msgid "Clear selection"
+msgstr "Wyczyść zaznaczenie"
+
+#. translators: %d: number of products that match the search and dates
+#: admin/build/settings.js:29
+#, js-format
+msgid "%d product found"
+msgid_plural "%d products found"
+msgstr[0] "Znaleziono %d produkt"
+msgstr[1] "Znaleziono %d produkty"
+msgstr[2] "Znaleziono %d produktów"
+
+#: admin/build/settings.js:29
+msgid "Could not load the product reports"
+msgstr "Nie udało się wczytać raportów produktów"
+
+#: admin/build/settings.js:29
+msgid "No product data for these dates"
+msgstr "Brak danych produktów dla tych dat"
+
+#: admin/build/settings.js:29
+msgid "No products were abandoned or recovered in the selected date range. Try a wider date range."
+msgstr "W wybranym zakresie dat żadne produkty nie zostały porzucone ani odzyskane. Spróbuj szerszego zakresu dat."
+
+#: admin/build/settings.js:29
+msgid "No matching products"
+msgstr "Brak pasujących produktów"
+
+#: admin/build/settings.js:29
+msgid "Try a different search term."
+msgstr "Spróbuj innego wyszukiwanego hasła."
+
+#: admin/build/settings.js:29
+msgid "Total times the product was abandoned and the associated abandoned amount"
+msgstr "Łączna liczba porzuceń produktu i powiązana porzucona kwota"
+
+#: admin/build/settings.js:29
+msgid "Total times the product was recovered and the associated recovered amount"
+msgstr "Łączna liczba odzyskań produktu i powiązana odzyskana kwota"
+
+#. translators: %d: number of selected products
+#: admin/build/settings.js:30
+#, js-format
+msgid "Are you sure you want to delete the %d selected product? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgid_plural "Are you sure you want to delete the %d selected products? The carts that contain them and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr[0] "Czy na pewno chcesz usunąć %d wybrany produkt? Koszyki, które go zawierają, oraz ich historia wiadomości uzupełniających zostaną usunięte, a inne produkty w tych koszykach również stracą te liczniki koszyków. Tej operacji nie można cofnąć."
+msgstr[1] "Czy na pewno chcesz usunąć %d wybrane produkty? Koszyki, które je zawierają, oraz ich historia wiadomości uzupełniających zostaną usunięte, a inne produkty w tych koszykach również stracą te liczniki koszyków. Tej operacji nie można cofnąć."
+msgstr[2] "Czy na pewno chcesz usunąć %d wybranych produktów? Koszyki, które je zawierają, oraz ich historia wiadomości uzupełniających zostaną usunięte, a inne produkty w tych koszykach również stracą te liczniki koszyków. Tej operacji nie można cofnąć."
+
+#. translators: %s: product name and ID, e.g. "Blue Hoodie (#123)"
+#: admin/build/settings.js:31
+#, js-format
+msgid "Are you sure you want to delete the product “%s”? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć produkt „%s”? Koszyki, które go zawierają, oraz ich historia wiadomości uzupełniających zostaną usunięte, a inne produkty w tych koszykach również stracą te liczniki koszyków. Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:31
+msgid "Are you sure you want to delete this product? The carts that contain it and their follow-up history will be removed, and other products in those carts will lose those cart counts too. This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć ten produkt? Koszyki, które go zawierają, oraz ich historia wiadomości uzupełniających zostaną usunięte, a inne produkty w tych koszykach również stracą te liczniki koszyków. Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:31
+msgid "Rule condition failed or product excluded"
+msgstr "Warunek reguły niespełniony lub produkt wykluczony"
+
+#: admin/build/settings.js:31
+msgid "Recipient is blacklisted"
+msgstr "Odbiorca jest na czarnej liście"
+
+#: admin/build/settings.js:31
+msgid "Recipient unsubscribed"
+msgstr "Odbiorca wypisał się"
+
+#: admin/build/settings.js:31
+msgid "This cart is blacklisted, so no follow-ups can be scheduled for it."
+msgstr "Ten koszyk jest na czarnej liście, więc nie można zaplanować dla niego wiadomości uzupełniających."
+
+#: admin/build/settings.js:31
+msgid "No follow-up emails are scheduled for this cart. Use Reschedule Emails to schedule them."
+msgstr "Dla tego koszyka nie zaplanowano żadnych e-maili uzupełniających. Użyj opcji Przeplanuj e-maile, aby je zaplanować."
+
+#: admin/build/settings.js:31
+msgid "Discount:"
+msgstr "Rabat:"
+
+#: admin/build/settings.js:31
+msgid "Others:"
+msgstr "Inne:"
+
+#: admin/build/settings.js:31
+msgid "Shipping:"
+msgstr "Wysyłka:"
+
+#: admin/build/settings.js:31
+msgid "Cart Total:"
+msgstr "Suma koszyka:"
+
+#: admin/build/settings.js:31
+msgid "User Order Details"
+msgstr "Szczegóły zamówienia użytkownika"
+
+#: admin/build/settings.js:31
+msgid "Items in the cart"
+msgstr "Produkty w koszyku"
+
+#: admin/build/settings.js:31
+msgid "Items"
+msgstr "Produkty"
+
+#: admin/build/settings.js:31
+msgid "No follow-up SMS are scheduled for this cart. Use Reschedule SMS to schedule them."
+msgstr "Dla tego koszyka nie zaplanowano żadnych SMS-ów uzupełniających. Użyj opcji Przeplanuj SMS, aby je zaplanować."
+
+#: admin/build/settings.js:31
+msgid "No follow-up WhatsApp messages are scheduled for this cart. Use Reschedule Messages to schedule them."
+msgstr "Dla tego koszyka nie zaplanowano żadnych wiadomości uzupełniających WhatsApp. Użyj opcji Przeplanuj wiadomości, aby je zaplanować."
+
+#: admin/build/settings.js:31
+msgid "Could not load this report"
+msgstr "Nie udało się wczytać tego raportu"
+
+#: admin/build/settings.js:31
+msgid "Report not found"
+msgstr "Nie znaleziono raportu"
+
+#: admin/build/settings.js:31
+msgid "It may have been deleted. Go back to the reports list to pick another one."
+msgstr "Mógł zostać usunięty. Wróć do listy raportów, aby wybrać inny."
+
+#: admin/build/settings.js:31
+msgid "Report details"
+msgstr "Szczegóły raportu"
+
+#: admin/build/settings.js:31
+msgid "How long the coupon stays valid after it is created."
+msgstr "Jak długo kupon pozostaje ważny po utworzeniu."
+
+#: admin/build/settings.js:31
+msgid "Enter the email subject"
+msgstr "Wprowadź temat e-maila"
+
+#: admin/build/settings.js:31
+msgid "Enter the email address"
+msgstr "Wprowadź adres e-mail"
+
+#: admin/build/settings.js:31
+msgid "Enter the template name"
+msgstr "Wprowadź nazwę szablonu"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:44
+msgid "Saving…"
+msgstr "Zapisywanie…"
+
+#: admin/build/settings.js:31
+msgid "Discard your changes? They have not been saved."
+msgstr "Odrzucić zmiany? Nie zostały zapisane."
+
+#: admin/build/settings.js:31
+msgid "Keep editing"
+msgstr "Kontynuuj edycję"
+
+#: admin/build/settings.js:31
+msgid "Discard changes"
+msgstr "Odrzuć zmiany"
+
+#: admin/build/settings.js:31
+msgid "New Email Template"
+msgstr "Nowy szablon e-mail"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Error!"
+msgstr "Błąd!"
+
+#: admin/build/settings.js:31
+#: admin/build/settings.js:36
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Success!"
+msgstr "Sukces!"
+
+#. translators: %d: number of minutes
+#: admin/build/settings.js:32
+#, js-format
+msgid "%d Minute"
+msgid_plural "%d Minutes"
+msgstr[0] "%d minuta"
+msgstr[1] "%d minuty"
+msgstr[2] "%d minut"
+
+#. translators: %d: number of hours
+#: admin/build/settings.js:33
+#, js-format
+msgid "%d Hour"
+msgid_plural "%d Hours"
+msgstr[0] "%d godzina"
+msgstr[1] "%d godziny"
+msgstr[2] "%d godzin"
+
+#. translators: %d: number of days
+#: admin/build/settings.js:34
+#, js-format
+msgid "%d Day"
+msgid_plural "%d Days"
+msgstr[0] "%d dzień"
+msgstr[1] "%d dni"
+msgstr[2] "%d dni"
+
+#. translators: %s: template name
+#: admin/build/settings.js:35
+#, js-format
+msgid "Activate %s"
+msgstr "Aktywuj %s"
+
+#: admin/build/settings.js:35
+msgid "Loading templates…"
+msgstr "Ładowanie szablonów…"
+
+#: admin/build/settings.js:36
+msgid "Couldn't load templates"
+msgstr "Nie udało się wczytać szablonów"
+
+#: admin/build/settings.js:36
+#: admin/build/settings.js:42
+msgid "Try again"
+msgstr "Spróbuj ponownie"
+
+#: admin/build/settings.js:36
+msgid "Available in Pro"
+msgstr "Dostępne w wersji Pro"
+
+#. translators: %s: template name
+#: admin/build/settings.js:37
+#: admin/build/settings.js:39
+#: admin/build/settings.js:41
+#, js-format
+msgid "Are you sure you want to delete “%s”? This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć „%s”? Tej operacji nie można cofnąć."
+
+#. translators: %d: number of selected templates
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+#: admin/build/settings.js:42
+#, js-format
+msgid "Are you sure you want to delete %d selected template(s)? This action cannot be undone."
+msgstr "Czy na pewno chcesz usunąć wybrane szablony (%d)? Tej operacji nie można cofnąć."
+
+#: admin/build/settings.js:38
+msgid "Something went wrong while loading your email templates. Check your connection and try again."
+msgstr "Coś poszło nie tak podczas wczytywania szablonów e-mail. Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:38
+msgid "No email templates yet"
+msgstr "Brak szablonów e-mail"
+
+#: admin/build/settings.js:38
+msgid "Create a template to email shoppers who leave items in their cart, or restore the defaults."
+msgstr "Utwórz szablon, aby wysyłać e-maile do klientów, którzy zostawili produkty w koszyku, lub przywróć domyślne."
+
+#: admin/build/settings.js:38
+msgid "The default email templates go back to their original content. Any edits you made to them are lost."
+msgstr "Domyślne szablony e-mail powrócą do swojej oryginalnej treści. Wszystkie wprowadzone w nich zmiany zostaną utracone."
+
+#: admin/build/settings.js:38
+#: admin/build/settings.js:40
+msgid "Restore"
+msgstr "Przywróć"
+
+#: admin/build/settings.js:38
+msgid "New SMS Template"
+msgstr "Nowy szablon SMS"
+
+#: admin/build/settings.js:38
+msgid "SMS body can’t be longer than 160 characters."
+msgstr "Treść SMS nie może być dłuższa niż 160 znaków."
+
+#: admin/build/settings.js:40
+msgid "Something went wrong while loading your SMS templates. Check your connection and try again."
+msgstr "Coś poszło nie tak podczas wczytywania szablonów SMS. Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:40
+msgid "No SMS templates yet"
+msgstr "Brak szablonów SMS"
+
+#: admin/build/settings.js:40
+msgid "Create a template to text shoppers who leave items in their cart, or restore the defaults."
+msgstr "Utwórz szablon, aby wysyłać SMS-y do klientów, którzy zostawili produkty w koszyku, lub przywróć domyślne."
+
+#: admin/build/settings.js:40
+msgid "The default SMS templates go back to their original content. Any edits you made to them are lost."
+msgstr "Domyślne szablony SMS powrócą do swojej oryginalnej treści. Wszystkie wprowadzone w nich zmiany zostaną utracone."
+
+#: admin/build/settings.js:40
+msgid "New WhatsApp Template"
+msgstr "Nowy szablon WhatsApp"
+
+#: admin/build/settings.js:42
+msgid "Something went wrong while loading your WhatsApp templates. Check your connection and try again."
+msgstr "Coś poszło nie tak podczas wczytywania szablonów WhatsApp. Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:42
+msgid "No WhatsApp templates yet"
+msgstr "Brak szablonów WhatsApp"
+
+#: admin/build/settings.js:42
+msgid "Create a template to message shoppers on WhatsApp when they leave items in their cart."
+msgstr "Utwórz szablon, aby wysyłać wiadomości WhatsApp do klientów, którzy zostawili produkty w koszyku."
+
+#: admin/build/settings.js:42
+msgid "OttoKit could not be loaded"
+msgstr "Nie udało się wczytać OttoKit"
+
+#: admin/build/settings.js:42
+msgid "Automate Cart Recovery with OttoKit"
+msgstr "Automatyzuj odzyskiwanie koszyków z OttoKit"
+
+#: admin/build/settings.js:42
+msgid "Supercharge your recovery process by connecting WooCommerce Cart Abandonment Recovery with OttoKit. Get real-time alerts, automate actions, and keep your team in the loop instantly."
+msgstr "Usprawnij proces odzyskiwania, łącząc WooCommerce Cart Abandonment Recovery z OttoKit. Otrzymuj powiadomienia w czasie rzeczywistym, automatyzuj działania i natychmiast informuj swój zespół."
+
+#: admin/build/settings.js:42
+msgid "Connect with tools you already use like Slack, Telegram, WhatsApp, Google Sheets, and more."
+msgstr "Połącz z narzędziami, których już używasz, takimi jak Slack, Telegram, WhatsApp, Google Sheets i inne."
+
+#: admin/build/settings.js:42
+msgid "Engage customers on channels they use like SMS, WhatsApp, or Facebook Messenger."
+msgstr "Docieraj do klientów przez kanały, z których korzystają, takie jak SMS, WhatsApp czy Facebook Messenger."
+
+#: admin/build/settings.js:42
+msgid "Automatically resend failed emails or trigger alerts to your team."
+msgstr "Automatycznie wysyłaj ponownie nieudane e-maile lub uruchamiaj powiadomienia dla zespołu."
+
+#: admin/build/settings.js:42
+msgid "OttoKit could not be set up. Check your connection and try again."
+msgstr "Nie udało się skonfigurować OttoKit. Sprawdź połączenie i spróbuj ponownie."
+
+#: admin/build/settings.js:42
+msgid "All Channels"
+msgstr "Wszystkie kanały"
+
+#: admin/build/settings.js:42
+msgid "All Statuses"
+msgstr "Wszystkie statusy"
+
+#: admin/build/settings.js:42
+msgid "Skipped"
+msgstr "Pominięte"
+
+#: admin/build/settings.js:42
+msgid "Pending"
+msgstr "Oczekujące"
+
+#: admin/build/settings.js:42
+msgid "Search recipient…"
+msgstr "Szukaj odbiorcy…"
+
+#: admin/build/settings.js:42
+msgid "Search recipient"
+msgstr "Szukaj odbiorcy"
+
+#: admin/build/settings.js:42
+msgid "Filter by channel"
+msgstr "Filtruj według kanału"
+
+#: admin/build/settings.js:42
+msgid "Filter by status"
+msgstr "Filtruj według statusu"
+
+#. translators: %d: number of rows that match the search and filters
+#: admin/build/settings.js:43
+#, js-format
+msgid "%d result found"
+msgid_plural "%d results found"
+msgstr[0] "Znaleziono %d wynik"
+msgstr[1] "Znaleziono %d wyniki"
+msgstr[2] "Znaleziono %d wyników"
+
+#: admin/build/settings.js:43
+msgid "Activity Log & Scheduled Jobs"
+msgstr "Dziennik aktywności i zaplanowane zadania"
+
+#: admin/build/settings.js:43
+msgid "Nothing matches these filters"
+msgstr "Nic nie pasuje do tych filtrów"
+
+#: admin/build/settings.js:43
+msgid "Try a different search, channel, status or date range."
+msgstr "Spróbuj innego wyszukiwania, kanału, statusu lub zakresu dat."
+
+#: admin/build/settings.js:43
+msgid "Channel"
+msgstr "Kanał"
+
+#: admin/build/settings.js:43
+msgid "Event"
+msgstr "Zdarzenie"
+
+#: admin/build/settings.js:43
+msgid "Recipient"
+msgstr "Odbiorca"
+
+#: admin/build/settings.js:43
+msgid "Template"
+msgstr "Szablon"
+
+#: admin/build/settings.js:43
+msgid "Timestamp"
+msgstr "Znacznik czasu"
+
+#: admin/build/settings.js:43
+msgid "Detail"
+msgstr "Szczegóły"
+
+#: admin/build/settings.js:43
+msgid "Loading activity…"
+msgstr "Ładowanie aktywności…"
+
+#: admin/build/settings.js:43
+msgid "Could not load the activity log"
+msgstr "Nie udało się wczytać dziennika aktywności"
+
+#: admin/build/settings.js:43
+msgid "No activity yet"
+msgstr "Brak aktywności"
+
+#: admin/build/settings.js:43
+msgid "Sent, failed, and skipped recovery messages will show up here."
+msgstr "Tutaj pojawią się wysłane, nieudane i pominięte wiadomości odzyskujące."
+
+#: admin/build/settings.js:43
+msgid "Track every email, SMS, and WhatsApp event with Pro."
+msgstr "Śledź każde zdarzenie e-mail, SMS i WhatsApp z wersją Pro."
+
+#: admin/build/settings.js:43
+msgid "Execution Time"
+msgstr "Czas wykonania"
+
+#: admin/build/settings.js:43
+msgid "Loading scheduled jobs…"
+msgstr "Ładowanie zaplanowanych zadań…"
+
+#: admin/build/settings.js:43
+msgid "Could not load the scheduled jobs"
+msgstr "Nie udało się wczytać zaplanowanych zadań"
+
+#: admin/build/settings.js:43
+msgid "No upcoming jobs"
+msgstr "Brak nadchodzących zadań"
+
+#: admin/build/settings.js:43
+msgid "Recovery messages queued to send will appear here."
+msgstr "Tutaj pojawią się wiadomości odzyskujące oczekujące w kolejce do wysłania."
+
+#: admin/build/settings.js:43
+msgid "Monitor upcoming email, SMS, and WhatsApp follow-ups with Pro."
+msgstr "Monitoruj nadchodzące wiadomości uzupełniające e-mail, SMS i WhatsApp z wersją Pro."
+
+#: admin/build/settings.js:43
+msgid "Skip"
+msgstr "Pomiń"
+
+#: admin/build/settings.js:43
+msgid "Not installed"
+msgstr "Nie zainstalowano"
+
+#: admin/build/settings.js:43
+msgid "Not activated"
+msgstr "Nie aktywowano"
+
+#: admin/build/settings.js:43
+msgid "Install failed"
+msgstr "Instalacja nie powiodła się"
+
+#: admin/build/settings.js:43
+msgid "Activation failed"
+msgstr "Aktywacja nie powiodła się"
+
+#: admin/build/settings.js:43
+msgid "Active"
+msgstr "Aktywne"
+
+#. translators: %s: plugin name.
+#: admin/build/settings.js:44
+#, js-format
+msgid "Install %s"
+msgstr "Zainstaluj %s"
+
+#: admin/build/settings.js:44
+msgid "Customize your follow-up email templates"
+msgstr "Dostosuj szablony e-maili uzupełniających"
+
+#: admin/build/settings.js:44
+msgid "Review your recovery settings"
+msgstr "Przejrzyj ustawienia odzyskiwania"
+
+#: admin/build/settings.js:44
+msgid "See how your follow-ups are performing"
+msgstr "Zobacz skuteczność wiadomości uzupełniających"
+
+#: admin/build/settings.js:44
+msgid "Enter your first name."
+msgstr "Wprowadź swoje imię."
+
+#: admin/build/settings.js:44
+msgid "Enter your last name."
+msgstr "Wprowadź swoje nazwisko."
+
+#: admin/build/settings.js:44
+msgid "That doesn't look like a valid email address."
+msgstr "To nie wygląda na prawidłowy adres e-mail."
+
+#: admin/build/settings.js:44
+msgid "Enter an email address."
+msgstr "Wprowadź adres e-mail."
+
+#: admin/build/settings.js:44
+msgid "We don't collect any personal information, just basic details like your PHP version, admin language, and which features you use. <a>Learn more about what we collect and why.</a>"
+msgstr "Nie zbieramy żadnych danych osobowych, tylko podstawowe informacje, takie jak wersja PHP, język panelu administracyjnego i używane funkcje. <a>Dowiedz się więcej o tym, co zbieramy i dlaczego.</a>"
+
+#: admin/build/settings.js:44
+msgid "≈ 3 min setup"
+msgstr "≈ 3 min konfiguracji"
+
+#: admin/build/settings.js:44
+msgid "Cart Abandonment Recovery walkthrough"
+msgstr "Przewodnik po Cart Abandonment Recovery"
+
+#: admin/build/settings.js:44
+msgid "Set Up My Cart Recovery"
+msgstr "Skonfiguruj odzyskiwanie koszyków"
+
+#: admin/build/settings.js:44
+msgid "Welcome"
+msgstr "Witamy"
+
+#: admin/build/settings.js:44
+msgid "Decide when a cart counts as abandoned, when it’s lost for good, and which user roles to leave out of tracking."
+msgstr "Zdecyduj, kiedy koszyk jest uznawany za porzucony, kiedy jest ostatecznie utracony i które role użytkowników wykluczyć ze śledzenia."
+
+#: admin/build/settings.js:44
+msgid "Could not save your changes"
+msgstr "Nie udało się zapisać zmian"
+
+#: admin/build/settings.js:44
+msgid "Recovery"
+msgstr "Odzyskiwanie"
+
+#: admin/build/settings.js:44
+msgid "Choose how you reach shoppers who leave items in their cart."
+msgstr "Wybierz, jak docierasz do klientów, którzy zostawili produkty w koszyku."
+
+#: admin/build/settings.js:44
+msgid "Channels"
+msgstr "Kanały"
+
+#: admin/build/settings.js:44
+msgid "Get a quick weekly recap of your cart recovery performance, right in your inbox."
+msgstr "Otrzymuj krótkie cotygodniowe podsumowanie skuteczności odzyskiwania koszyków prosto do skrzynki odbiorczej."
+
+#: admin/build/settings.js:44
+msgid "Jane"
+msgstr "Jan"
+
+#: admin/build/settings.js:44
+msgid "Doe"
+msgstr "Kowalski"
+
+#: admin/build/settings.js:44
+msgid "you@yourstore.com"
+msgstr "you@yourstore.com"
+
+#: admin/build/settings.js:44
+msgid "Help improve Cart Abandonment Recovery by sharing non-sensitive usage data."
+msgstr "Pomóż ulepszyć Cart Abandonment Recovery, udostępniając niewrażliwe dane o użytkowaniu."
+
+#: admin/build/settings.js:44
+msgid "Continue"
+msgstr "Kontynuuj"
+
+#: admin/build/settings.js:44
+msgid "Almost There"
+msgstr "Prawie gotowe"
+
+#: admin/build/settings.js:44
+msgid "Every recommended plugin is already active, so there was nothing to install. Saving your answers is all that is left."
+msgstr "Wszystkie zalecane wtyczki są już aktywne, więc nie było nic do zainstalowania. Pozostało tylko zapisanie odpowiedzi."
+
+#: admin/build/settings.js:44
+#: admin/build/settings.js:45
+msgid "Could not finish setup"
+msgstr "Nie udało się zakończyć konfiguracji"
+
+#: admin/build/settings.js:44
+msgid "Finishing setup…"
+msgstr "Kończenie konfiguracji…"
+
+#: admin/build/settings.js:44
+msgid "Some plugins could not be set up"
+msgstr "Niektórych wtyczek nie udało się skonfigurować"
+
+#. translators: %s: comma-separated plugin names.
+#: admin/build/settings.js:45
+#, js-format
+msgid "%s. Tick a plugin to try it again, or select Finish Setup to continue without it."
+msgstr "%s. Zaznacz wtyczkę, aby spróbować ponownie, lub wybierz Zakończ konfigurację, aby kontynuować bez niej."
+
+#. translators: 1: plugin being installed, 2: total to install.
+#: admin/build/settings.js:46
+#, js-format
+msgid "Installing plugin %1$d of %2$d."
+msgstr "Instalowanie wtyczki %1$d z %2$d."
+
+#. translators: 1: plugin being installed, 2: total to install.
+#: admin/build/settings.js:47
+#, js-format
+msgid "Installing %1$d of %2$d…"
+msgstr "Instalowanie %1$d z %2$d…"
+
+#: admin/build/settings.js:47
+msgid "Setting things up…"
+msgstr "Konfigurowanie…"
+
+#. translators: %d: number of selected plugins.
+#: admin/build/settings.js:48
+#, js-format
+msgid "Install %d & Finish"
+msgstr "Zainstaluj %d i zakończ"
+
+#: admin/build/settings.js:48
+msgid "Plugins"
+msgstr "Wtyczki"
+
+#: admin/build/settings.js:48
+msgid "Recommended Next Step:"
+msgstr "Zalecany następny krok:"
+
+#: admin/build/settings.js:48
+msgid "Recommended Next Steps:"
+msgstr "Zalecane następne kroki:"
+
+#: admin/build/settings.js:48
+msgid "Great job! With Cart Abandonment Recovery active, your store is ready to start recovering the lost revenue automatically."
+msgstr "Świetna robota! Dzięki aktywnej wtyczce Cart Abandonment Recovery Twój sklep jest gotowy do automatycznego odzyskiwania utraconych przychodów."
+
+#: admin/build/settings.js:48
+msgid "The setup wizard hit a problem"
+msgstr "W kreatorze konfiguracji wystąpił problem"
+
+#: admin/build/settings.js:48
+msgid "Nothing has been changed on your store. You can configure everything from the settings screen instead, or reload to try the wizard again."
+msgstr "W Twoim sklepie nic nie zostało zmienione. Możesz zamiast tego skonfigurować wszystko na ekranie ustawień lub odświeżyć, aby ponownie uruchomić kreator."
+
+#: admin/build/settings.js:48
+msgid "Reload And Retry"
+msgstr "Odśwież i spróbuj ponownie"
+
+#: admin/build/settings.js:48
+msgid "Exit the setup?"
+msgstr "Zakończyć konfigurację?"
+
+#: admin/build/settings.js:48
+msgid "Answers from steps you already moved past are saved. You can pick up where you left off any time from Dashboard → Quick Access → Resume Setup."
+msgstr "Odpowiedzi z ukończonych kroków są zapisane. W każdej chwili możesz kontynuować od miejsca, w którym przerwano, w Panel → Szybki dostęp → Wznów konfigurację."
+
+#: admin/build/settings.js:48
+msgid "Continue Setup"
+msgstr "Kontynuuj konfigurację"
+
+#: admin/build/settings.js:48
+msgid "Exit Setup"
+msgstr "Zakończ konfigurację"
+
+#. translators: 1: current step number, 2: total steps.
+#: admin/build/settings.js:49
+#, js-format
+msgid "Step %1$d of %2$d"
+msgstr "Krok %1$d z %2$d"
+
+#. translators: 1: current step number, 2: total steps, 3: step name.
+#: admin/build/settings.js:50
+#, js-format
+msgid "Step %1$d of %2$d: %3$s"
+msgstr "Krok %1$d z %2$d: %3$s"

@@ -34,7 +34,8 @@ class StepStatisticController {
       $automation->getId(),
       AutomationRun::STATUS_RUNNING,
       $query->getAfter(),
-      $query->getBefore()
+      $query->getBefore(),
+      $query->getVersionId()
     );
 
     $data = [];
@@ -53,7 +54,8 @@ class StepStatisticController {
       $automation->getId(),
       AutomationRun::STATUS_FAILED,
       $query->getAfter(),
-      $query->getBefore()
+      $query->getBefore(),
+      $query->getVersionId()
     );
 
     $data = [];
@@ -72,7 +74,8 @@ class StepStatisticController {
       $automation->getId(),
       AutomationRunLog::STATUS_COMPLETE,
       $query->getAfter(),
-      $query->getBefore()
+      $query->getBefore(),
+      $query->getVersionId()
     );
 
     $data = [];

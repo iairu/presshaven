@@ -43,7 +43,7 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
     public function execute()
     {
         $runner = \ActionScheduler::runner();
-        $progress_bar = \WP_CLI\Utils\make_progress_bar(sprintf(
+        $progress_bar = \WpifyWooDeps\WP_CLI\Utils\make_progress_bar(sprintf(
             /* translators: %d: number of actions */
             _n('Executing %d action', 'Executing %d actions', $this->action_counts['total'], 'action-scheduler'),
             number_format_i18n($this->action_counts['total'])
@@ -64,9 +64,9 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
              * %2$s: type of action evaluated.
              */
             $format = _n('%1$d action %2$s.', '%1$d actions %2$s.', $count, 'action-scheduler');
-            \WP_CLI::warning(sprintf($format, number_format_i18n($count), $type));
+            \WpifyWooDeps\WP_CLI::warning(sprintf($format, number_format_i18n($count), $type));
         }
-        \WP_CLI::success(sprintf(
+        \WpifyWooDeps\WP_CLI::success(sprintf(
             /* translators: %d: number of executed actions */
             _n('Executed %d action.', 'Executed %d actions.', $this->action_counts['executed'], 'action-scheduler'),
             number_format_i18n($this->action_counts['executed'])
@@ -88,7 +88,7 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
             return;
         }
         $this->action_counts['ignored']++;
-        \WP_CLI::debug(sprintf('Action %d was ignored.', $action_id));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('Action %d was ignored.', $action_id));
     }
     /**
      * Action: action_scheduler_after_execute
@@ -106,7 +106,7 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
             return;
         }
         $this->action_counts['executed']++;
-        \WP_CLI::debug(sprintf('Action %d was executed.', $action_id));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('Action %d was executed.', $action_id));
     }
     /**
      * Action: action_scheduler_failed_execution
@@ -125,7 +125,7 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
             return;
         }
         $this->action_counts['failed']++;
-        \WP_CLI::debug(sprintf('Action %d failed execution: %s', $action_id, $e->getMessage()));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('Action %d failed execution: %s', $action_id, $e->getMessage()));
     }
     /**
      * Action: action_scheduler_failed_validation
@@ -144,6 +144,6 @@ class Run_Command extends \ActionScheduler_WPCLI_Command
             return;
         }
         $this->action_counts['invalid']++;
-        \WP_CLI::debug(sprintf('Action %d failed validation: %s', $action_id, $e->getMessage()));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('Action %d failed validation: %s', $action_id, $e->getMessage()));
     }
 }

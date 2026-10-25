@@ -7,13 +7,18 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\Captcha\CaptchaHooks;
 use MailPoet\Captcha\ReCaptchaHooks;
+use MailPoet\Captcha\TurnstileHooks;
 use MailPoet\Cron\CronTrigger;
+use MailPoet\EmailEditor\Integrations\MailPoet\Coupons\CouponBlockGenerator;
+use MailPoet\EmailEditor\Integrations\MailPoet\ProductCollection\ProductCollectionEmailRendererRegistrar;
 use MailPoet\Form\DisplayFormInWPContent;
 use MailPoet\Mailer\WordPress\WordpressMailerReplacer;
 use MailPoet\Newsletter\Scheduler\PostNotificationScheduler;
 use MailPoet\Segments\WP;
+use MailPoet\Segments\WPUserDeleteNotice;
 use MailPoet\Settings\SettingsController;
 use MailPoet\Statistics\Track\SubscriberHandler;
+use MailPoet\Subscribers\SubscriberLimitNotificationScheduler;
 use MailPoet\Subscription\AdminUserSubscription;
 use MailPoet\Subscription\Comment;
 use MailPoet\Subscription\Form;
@@ -40,6 +45,7 @@ class Hooks {
     self::OPTIN_POSITION_BEFORE_PAYMENT_METHODS => 'woocommerce_review_order_before_payment',
     self::OPTIN_POSITION_BEFORE_TERMS_AND_CONDITIONS => 'woocommerce_checkout_before_terms_and_conditions',
   ];
+  const FOOTER_RATED_OPTION = 'mailpoet_admin_footer_text_rated';
 
   /** @var Form */
   private $subscriptionForm;
@@ -71,6 +77,9 @@ class Hooks {
   /** @var WP */
   private $wpSegment;
 
+  /** @var WPUserDeleteNotice */
+  private $wpUserDeleteNotice;
+
   /** @var SubscriberHandler */
   private $subscriberHandler;
 
@@ -79,6 +88,9 @@ class Hooks {
 
   /** @var SubscriberChangesNotifier */
   private $subscriberChangesNotifier;
+
+  /** @var SubscriberLimitNotificationScheduler */
+  private $subscriberLimitNotificationScheduler;
 
   /** @var DotcomLicenseProvisioner */
   private $dotcomLicenseProvisioner;
@@ -92,6 +104,9 @@ class Hooks {
   /** @var ReCaptchaHooks */
   private $reCaptchaHooks;
 
+  /** @var TurnstileHooks */
+  private $turnstileHooks;
+
   /** @var WooSystemInfoController */
   private $wooSystemInfoController;
 
@@ -104,6 +119,10 @@ class Hooks {
   /** @var AdminUserSubscription */
   private $adminUserSubscription;
 
+  private CouponBlockGenerator $couponBlockGenerator;
+
+  private ProductCollectionEmailRendererRegistrar $productCollectionEmailRendererRegistrar;
+
   public function __construct(
     Form $subscriptionForm,
     Comment $subscriptionComment,
@@ -115,17 +134,22 @@ class Hooks {
     WordpressMailerReplacer $wordpressMailerReplacer,
     DisplayFormInWPContent $displayFormInWPContent,
     WP $wpSegment,
+    WPUserDeleteNotice $wpUserDeleteNotice,
     SubscriberHandler $subscriberHandler,
     HooksWooCommerce $hooksWooCommerce,
     SubscriberChangesNotifier $subscriberChangesNotifier,
+    SubscriberLimitNotificationScheduler $subscriberLimitNotificationScheduler,
     DotcomLicenseProvisioner $dotcomLicenseProvisioner,
     AutomateWooHooks $automateWooHooks,
     CaptchaHooks $captchaHooks,
     ReCaptchaHooks $reCaptchaHooks,
+    TurnstileHooks $turnstileHooks,
     WooSystemInfoController $wooSystemInfoController,
     CronTrigger $cronTrigger,
     WooHelper $wooHelper,
-    AdminUserSubscription $adminUserSubscription
+    AdminUserSubscription $adminUserSubscription,
+    CouponBlockGenerator $couponBlockGenerator,
+    ProductCollectionEmailRendererRegistrar $productCollectionEmailRendererRegistrar
   ) {
     $this->subscriptionForm = $subscriptionForm;
     $this->subscriptionComment = $subscriptionComment;
@@ -137,35 +161,43 @@ class Hooks {
     $this->wordpressMailerReplacer = $wordpressMailerReplacer;
     $this->displayFormInWPContent = $displayFormInWPContent;
     $this->wpSegment = $wpSegment;
+    $this->wpUserDeleteNotice = $wpUserDeleteNotice;
     $this->subscriberHandler = $subscriberHandler;
     $this->hooksWooCommerce = $hooksWooCommerce;
     $this->captchaHooks = $captchaHooks;
     $this->reCaptchaHooks = $reCaptchaHooks;
+    $this->turnstileHooks = $turnstileHooks;
     $this->subscriberChangesNotifier = $subscriberChangesNotifier;
+    $this->subscriberLimitNotificationScheduler = $subscriberLimitNotificationScheduler;
     $this->dotcomLicenseProvisioner = $dotcomLicenseProvisioner;
     $this->automateWooHooks = $automateWooHooks;
     $this->wooSystemInfoController = $wooSystemInfoController;
     $this->cronTrigger = $cronTrigger;
     $this->wooHelper = $wooHelper;
     $this->adminUserSubscription = $adminUserSubscription;
+    $this->couponBlockGenerator = $couponBlockGenerator;
+    $this->productCollectionEmailRendererRegistrar = $productCollectionEmailRendererRegistrar;
   }
 
   public function init() {
     $this->setupWPUsers();
     $this->setupWooCommerceUsers();
     $this->setupWooCommercePurchases();
+    $this->setupWooCommerceOrderAttribution();
     $this->setupWooCommerceSubscriberEngagement();
     $this->setupWooCommerceTracking();
-    $this->setupListing();
     $this->setupSubscriptionEvents();
     $this->setupWooCommerceSubscriptionEvents();
     $this->setupAutomateWooSubscriptionEvents();
     $this->setupPostNotifications();
     $this->setupWooCommerceSettings();
+    $this->couponBlockGenerator->init();
+    $this->productCollectionEmailRendererRegistrar->init();
     $this->setupWoocommerceSystemInfo();
     $this->setupFooter();
     $this->setupSettingsLinkInPluginPage();
     $this->setupChangeNotifications();
+    $this->setupSubscriberLimitNotifications();
     $this->setupLicenseProvisioning();
     $this->setupCaptchaOnRegisterForm();
     $this->adminUserSubscription->setupHooks();
@@ -360,6 +392,11 @@ class Hooks {
       6
     );
     $this->wp->addAction(
+      'user_register',
+      [$this->subscriptionRegistration, 'applyTrackingConsentOnUserRegister'],
+      7
+    );
+    $this->wp->addAction(
       'added_existing_user',
       [$this->wpSegment, 'synchronizeUser'],
       6
@@ -398,6 +435,9 @@ class Hooks {
       [$this->wpSegment, 'synchronizeUser'],
       1
     );
+
+    // Warn on the delete-user confirmation screen that the subscriber is kept.
+    $this->wpUserDeleteNotice->setupHooks();
 
     // login
     $this->wp->addAction(
@@ -506,6 +546,41 @@ class Hooks {
     );
   }
 
+  public function setupWooCommerceOrderAttribution() {
+    // The reconciliation boundary must be persisted before any post-activation
+    // order exists, and on the init hook because this setup runs on
+    // plugins_loaded, where WooCommerce may not be loaded yet
+    $this->wp->addAction(
+      'init',
+      [$this->hooksWooCommerce, 'markAttributionWritesStarted']
+    );
+    // After Woo's own priority-10 handler so the resolved values overwrite
+    // the empty placeholders Woo persists from the checkout form
+    $this->wp->addAction(
+      'woocommerce_order_save_attribution_data',
+      [$this->hooksWooCommerce, 'writeOrderAttribution'],
+      20
+    );
+    // Admin and REST orders; gated inside to stay out of storefront checkout
+    $this->wp->addAction(
+      'woocommerce_new_order',
+      [$this->hooksWooCommerce, 'writeOrderAttributionForNewOrder'],
+      20
+    );
+    $this->wp->addAction(
+      'woocommerce_order_status_changed',
+      [$this->hooksWooCommerce, 'writeOrderAttribution'],
+      10,
+      1
+    );
+    // After WC_Meta_Box_Order_Data::save (priority 40) so the billing email is saved
+    $this->wp->addAction(
+      'woocommerce_process_shop_order_meta',
+      [$this->hooksWooCommerce, 'writeOrderAttribution'],
+      50
+    );
+  }
+
   public function setupWooCommerceSubscriberEngagement() {
     $this->wp->addAction(
       'woocommerce_new_order',
@@ -528,23 +603,6 @@ class Hooks {
     );
   }
 
-  public function setupListing() {
-    $this->wp->addFilter(
-      'set-screen-option',
-      [$this, 'setScreenOption'],
-      10,
-      3
-    );
-  }
-
-  public function setScreenOption($status, $option, $value) {
-    if (preg_match('/^mailpoet_(.*)_per_page$/', $option)) {
-      return $value;
-    } else {
-      return $status;
-    }
-  }
-
   public function setupPostNotifications() {
     $this->wp->addAction(
       'transition_post_status',
@@ -555,22 +613,111 @@ class Hooks {
   }
 
   public function setupFooter() {
-    if (!Menu::isOnMailPoetAdminPage()) {
-      return;
-    }
+    // Register AJAX handler on all admin pages (AJAX requests go to admin-ajax.php)
+    $this->wp->addAction(
+      'wp_ajax_mailpoet_rated',
+      [$this, 'setFooterRated']
+    );
+
+    // Register hooks that will check the page later
     $this->wp->addFilter(
       'admin_footer_text',
       [$this, 'setFooter'],
       1,
       1
     );
+    $this->wp->addAction(
+      'admin_enqueue_scripts',
+      [$this, 'enqueueFooterRatingScript']
+    );
+  }
+
+  public function enqueueFooterRatingScript(): void {
+    // Only show on MailPoet pages
+    if (!Menu::isOnMailPoetAdminPage()) {
+      return;
+    }
+
+    if (Menu::isOnMailPoetAutomationPage()) {
+      return;
+    }
+
+    if (!$this->wp->getOption(self::FOOTER_RATED_OPTION)) {
+      $handle = 'mailpoet-admin-footer-rating';
+      $this->wp->wpRegisterScript($handle, false, [], Env::$version, true);
+      $this->wp->wpEnqueueScript($handle);
+
+      $nonce = $this->wp->wpCreateNonce('mailpoet-rated');
+
+      $script = "(function() {
+        'use strict';
+        var ratingLink = document.querySelector('a.mailpoet-rating-link');
+        if (ratingLink) {
+          ratingLink.addEventListener('click', function(e) {
+            var link = e.currentTarget;
+            var formData = new FormData();
+            formData.append('action', 'mailpoet_rated');
+            formData.append('nonce', '" . esc_js($nonce) . "');
+
+            fetch('" . esc_js(admin_url('admin-ajax.php')) . "', {
+              method: 'POST',
+              body: formData,
+              credentials: 'same-origin'
+            });
+
+            if (link) {
+              link.textContent = link.getAttribute('data-rated');
+            }
+          });
+        }
+      })();";
+
+      $this->wp->wpAddInlineScript($handle, $script);
+    }
   }
 
   public function setFooter(): string {
+    // Only show footer on MailPoet pages
+    if (!Menu::isOnMailPoetAdminPage()) {
+      return '';
+    }
+
     if (Menu::isOnMailPoetAutomationPage()) {
       return '';
     }
-    return '<a href="https://feedback.mailpoet.com/" rel="noopener noreferrer" target="_blank">' . esc_html__('Give feedback', 'mailpoet') . '</a>';
+
+    $feedbackLink = '<a href="https://feedback.mailpoet.com/" rel="noopener noreferrer" target="_blank">' . esc_html__('Give feedback', 'mailpoet') . '</a>';
+
+    if (!$this->wp->getOption(self::FOOTER_RATED_OPTION)) {
+      $reviewLink = '<a href="https://wordpress.org/support/plugin/mailpoet/reviews/#new-post" rel="noopener noreferrer" target="_blank" class="mailpoet-rating-link" aria-label="' . esc_attr__('five star', 'mailpoet') . '" data-rated="' . esc_attr__('Thanks :)', 'mailpoet') . '">' . esc_html__('Help other businesses grow their email lists – share your ★★★★★ MailPoet experience!', 'mailpoet') . '</a>';
+
+      return $reviewLink . ' | ' . $feedbackLink;
+    } else {
+      return esc_html__('Thank you for using MailPoet.', 'mailpoet') . ' | ' . $feedbackLink;
+    }
+  }
+
+  public function setFooterRated(): void {
+    if (!$this->wp->currentUserCan('manage_options')) {
+      $this->wp->wpDie(
+        esc_html__('You do not have permission to perform this action.', 'mailpoet'),
+        esc_html__('Unauthorized', 'mailpoet'),
+        ['response' => 403]
+      );
+    }
+
+    $nonce = isset($_POST['nonce']) && is_string($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+
+    if (!$this->wp->wpVerifyNonce($nonce, 'mailpoet-rated')) {
+      $this->wp->wpDie(
+        esc_html__('Security check failed.', 'mailpoet'),
+        esc_html__('Error', 'mailpoet'),
+        ['response' => 403]
+      );
+    }
+
+    $this->wp->updateOption(self::FOOTER_RATED_OPTION, 1);
+    $this->wp->wpDie();
   }
 
   public function setupSettingsLinkInPluginPage() {
@@ -597,6 +744,10 @@ class Hooks {
       'shutdown',
       [$this->subscriberChangesNotifier, 'notify']
     );
+  }
+
+  public function setupSubscriberLimitNotifications(): void {
+    $this->subscriberLimitNotificationScheduler->setupHooks();
   }
 
   public function setupLicenseProvisioning(): void {
@@ -668,6 +819,40 @@ class Hooks {
         $this->wp->addAction(
           'woocommerce_process_registration_errors',
           [$this->reCaptchaHooks, 'validate']
+        );
+      }
+    } else if ($this->turnstileHooks->isEnabled()) {
+      $this->wp->addAction(
+        'login_enqueue_scripts',
+        [$this->turnstileHooks, 'enqueueScripts']
+      );
+
+      $this->wp->addAction(
+        'register_form',
+        [$this->turnstileHooks, 'render']
+      );
+
+      $this->wp->addFilter(
+        'registration_errors',
+        [$this->turnstileHooks, 'validate'],
+        10,
+        3
+      );
+
+      if ($this->wooHelper->isWooCommerceActive()) {
+        $this->wp->addAction(
+          'woocommerce_before_customer_login_form',
+          [$this->turnstileHooks, 'enqueueScripts']
+        );
+
+        $this->wp->addAction(
+          'woocommerce_register_form',
+          [$this->turnstileHooks, 'render']
+        );
+
+        $this->wp->addAction(
+          'woocommerce_process_registration_errors',
+          [$this->turnstileHooks, 'validate']
         );
       }
     }

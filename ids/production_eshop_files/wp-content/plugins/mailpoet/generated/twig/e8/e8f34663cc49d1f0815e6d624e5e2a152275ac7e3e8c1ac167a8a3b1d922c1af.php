@@ -77,12 +77,12 @@ class __TwigTemplate_040602ebc7669cdfb9da26116daadadf72855abd5f9690ec0e527b909dc
         yield "';
   var admin_email = ";
         // line 9
-        yield json_encode(($context["admin_email"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["admin_email"] ?? null));
         yield ";
   var hide_mailpoet_beacon = true;
   var mailpoet_show_customers_import = ";
         // line 11
-        yield json_encode(($context["show_customers_import"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["show_customers_import"] ?? null));
         yield ";
   var mailpoet_account_url = '";
         // line 12
@@ -90,23 +90,23 @@ class __TwigTemplate_040602ebc7669cdfb9da26116daadadf72855abd5f9690ec0e527b909dc
         yield "';
   var mailpoet_settings = ";
         // line 13
-        yield json_encode(($context["settings"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["settings"] ?? null));
         yield ";
   var mailpoet_premium_key_valid = ";
         // line 14
-        yield json_encode(($context["premium_key_valid"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["premium_key_valid"] ?? null));
         yield ";
   var mailpoet_mss_key_valid = ";
         // line 15
-        yield json_encode(($context["mss_key_valid"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["mss_key_valid"] ?? null));
         yield ";
   var wizard_has_tracking_settings = ";
         // line 16
-        yield json_encode(($context["has_tracking_settings"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["has_tracking_settings"] ?? null));
         yield ";
   var mailpoet_welcome_wizard_current_step = ";
         // line 17
-        yield json_encode(($context["welcome_wizard_current_step"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["welcome_wizard_current_step"] ?? null));
         yield ";
 </script>
 

@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import parse from 'html-react-parser';
-import { Title, Table } from '@bsf/force-ui';
+import { Button, Table } from '@bsf/force-ui';
 import {
 	ArrowUpRightIcon,
-	ExclamationTriangleIcon,
+	InboxIcon,
 } from '@heroicons/react/24/outline';
 import { __ } from '@wordpress/i18n';
 
-import SectionWrapper from '@Components/common/SectionWrapper';
+import DashboardCard from '@Components/dashboard/DashboardCard';
 import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
 import { EmptyBlock } from '@Components/common/empty-blocks';
 import { BASE_URL } from '@Admin/constants';
@@ -19,34 +20,46 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 	const hasData = logs.length > 0;
 
 	return (
-		<SectionWrapper className="lg:w-1/2 flex flex-col gap-2 min-h-64">
-			<div className="flex justify-between items-center">
-				<Title
-					description=""
-					icon={ null }
-					iconPosition="right"
+		<DashboardCard
+			title={ __(
+				'Recent Follow Up Reports',
+				'woo-cart-abandonment-recovery'
+			) }
+			action={
+				<Button
+					variant="ghost"
 					size="xs"
-					tag="h2"
-					title={ __(
-						'Recent Follow Up Reports',
+					tag={ Link }
+					to={ BASE_URL + '&path=follow-up' }
+					icon={ <ArrowUpRightIcon className="rtl:-scale-x-100" /> }
+					iconPosition="right"
+					aria-label={ __(
+						'View all follow-up reports',
 						'woo-cart-abandonment-recovery'
 					) }
-					className="[&>*]:text-gray-900"
-				/>
-				<Link
-					to={ BASE_URL + '&path=follow-up' }
-					className="text-gray-900 text-xs font-semibold inline-flex items-center no-underline gap-1"
+					className="no-underline hover:no-underline [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:px-3"
 				>
-					{ __( 'View All', 'woo-cart-abandonment-recovery' ) }
-					<ArrowUpRightIcon className="h-3 w-3 text-gray-900 font-semibold" />
-				</Link>
-			</div>
+					{ __( 'View all', 'woo-cart-abandonment-recovery' ) }
+				</Button>
+			}
+		>
+			<span className="sr-only" role="status">
+				{ isDashboardLoading
+					? __( 'Loading…', 'woo-cart-abandonment-recovery' )
+					: '' }
+			</span>
 			{ isDashboardLoading ? (
 				<SkeletonLoader height="200px" />
 			) : (
 				<>
 					{ hasData ? (
-						<Table className="whitespace-nowrap sm:whitespace-normal">
+						<Table
+							aria-label={ __(
+								'Recent Follow Up Reports',
+								'woo-cart-abandonment-recovery'
+							) }
+							className="whitespace-nowrap sm:whitespace-normal"
+						>
 							<Table.Head>
 								<Table.HeadCell>
 									{ __(
@@ -81,7 +94,7 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 							</Table.Head>
 							<Table.Body>
 								{ logs.map( ( item, index ) => (
-									<Table.Row key={ index }>
+									<Table.Row key={ item?.id ?? index }>
 										<Table.Cell>
 											{ item?.userName ||
 												__(
@@ -90,7 +103,20 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 												) }
 										</Table.Cell>
 										<Table.Cell>
-											{ item?.email || '-' }
+											{ item?.id && item?.email ? (
+												<Link
+													to={
+														BASE_URL +
+														'&path=detailed-report&id=' +
+														item.id
+													}
+													className="inline-flex items-center text-text-primary no-underline hover:underline [@media(pointer:coarse)]:min-h-11"
+												>
+													{ item.email }
+												</Link>
+											) : (
+												item?.email || '-'
+											) }
 										</Table.Cell>
 										<Table.Cell>
 											{ parse( item?.cartTotal || '-' ) }
@@ -102,7 +128,7 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 												}
 											/>
 										</Table.Cell>
-										<Table.Cell>
+										<Table.Cell className="whitespace-nowrap">
 											{ item?.dateTime || '-' }
 										</Table.Cell>
 									</Table.Row>
@@ -112,7 +138,7 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 					) : (
 						<EmptyBlock
 							icon={
-								<ExclamationTriangleIcon className="h-12 w-12 text-yellow-500" />
+								<InboxIcon className="size-12 text-icon-secondary" />
 							}
 							title={ __(
 								'No Follow-Up Reports Yet',
@@ -126,8 +152,13 @@ const RecentEmailLogs = ( { dashboardData, isDashboardLoading } ) => {
 					) }
 				</>
 			) }
-		</SectionWrapper>
+		</DashboardCard>
 	);
+};
+
+RecentEmailLogs.propTypes = {
+	dashboardData: PropTypes.object,
+	isDashboardLoading: PropTypes.bool,
 };
 
 export default RecentEmailLogs;

@@ -39,9 +39,9 @@ class ActionScheduler_RecurringActionScheduler
     {
         if (\false === \wp_cache_get('as_is_ensure_recurring_actions_scheduled')) {
             if (!\as_has_scheduled_action(self::RUN_SCHEDULED_RECURRING_ACTIONS_HOOK)) {
-                \as_schedule_recurring_action(\time(), \WpifyWooDeps\DAY_IN_SECONDS, self::RUN_SCHEDULED_RECURRING_ACTIONS_HOOK, [], 'ActionScheduler', \true, 20);
+                \as_schedule_recurring_action(\time(), \DAY_IN_SECONDS, self::RUN_SCHEDULED_RECURRING_ACTIONS_HOOK, [], 'ActionScheduler', \true, 20);
             }
-            \wp_cache_set('as_is_ensure_recurring_actions_scheduled', \true, \WpifyWooDeps\HOUR_IN_SECONDS);
+            \wp_cache_set('as_is_ensure_recurring_actions_scheduled', \true, \HOUR_IN_SECONDS);
         }
     }
     /**
@@ -73,3 +73,11 @@ class ActionScheduler_RecurringActionScheduler
         \do_action('action_scheduler_ensure_recurring_actions');
     }
 }
+/**
+ * Class ActionScheduler_RecurringActionScheduler
+ *
+ * This class ensures that the `action_scheduler_ensure_recurring_actions` hook is triggered on a daily interval. This
+ * simplifies the process for other plugins to register their recurring actions without requiring each plugin to query
+ * or schedule actions independently on every request.
+ */
+\class_alias('WpifyWooDeps\ActionScheduler_RecurringActionScheduler', 'ActionScheduler_RecurringActionScheduler', \false);

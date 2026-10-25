@@ -13,6 +13,7 @@ use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use WC_Order;
 use WC_Payment_Gateway;
 use WooCommerce\PayPalCommerce\ApiClient\Exception\PayPalApiException;
+use WooCommerce\PayPalCommerce\Assets\AssetGetter;
 use WooCommerce\PayPalCommerce\Session\SessionHandler;
 use WooCommerce\PayPalCommerce\WcGateway\Exception\GatewayGenericException;
 use WooCommerce\PayPalCommerce\WcGateway\Exception\PayPalOrderMissingException;
@@ -59,12 +60,6 @@ class GooglePayGateway extends WC_Payment_Gateway
      */
     protected $session_handler;
     /**
-     * The URL to the module.
-     *
-     * @var string
-     */
-    private $module_url;
-    /**
      * The logger.
      *
      * @var LoggerInterface
@@ -78,10 +73,10 @@ class GooglePayGateway extends WC_Payment_Gateway
      * @param RefundProcessor         $refund_processor The Refund Processor.
      * @param TransactionUrlProvider  $transaction_url_provider Service providing transaction view URL based on order.
      * @param SessionHandler          $session_handler The Session Handler.
-     * @param string                  $module_url The URL to the module.
+     * @param AssetGetter             $asset_getter
      * @param LoggerInterface         $logger The logger.
      */
-    public function __construct(OrderProcessor $order_processor, callable $paypal_checkout_url_factory, RefundProcessor $refund_processor, TransactionUrlProvider $transaction_url_provider, SessionHandler $session_handler, string $module_url, LoggerInterface $logger)
+    public function __construct(OrderProcessor $order_processor, callable $paypal_checkout_url_factory, RefundProcessor $refund_processor, TransactionUrlProvider $transaction_url_provider, SessionHandler $session_handler, AssetGetter $asset_getter, LoggerInterface $logger)
     {
         $this->id = self::ID;
         $this->supports = array('refunds', 'products');
@@ -89,8 +84,7 @@ class GooglePayGateway extends WC_Payment_Gateway
         $this->method_description = __('The separate payment gateway with the Google Pay button. If disabled, the button is included in the PayPal gateway.', 'woocommerce-paypal-payments');
         $this->title = $this->get_option('title', __('Google Pay', 'woocommerce-paypal-payments'));
         $this->description = $this->get_option('description', '');
-        $this->module_url = $module_url;
-        $this->icon = esc_url($this->module_url) . 'assets/images/googlepay.svg';
+        $this->icon = $asset_getter->get_static_asset_url('images/googlepay.svg');
         $this->init_form_fields();
         $this->init_settings();
         $this->order_processor = $order_processor;
@@ -118,7 +112,7 @@ class GooglePayGateway extends WC_Payment_Gateway
     public function process_payment($order_id)
     {
         $wc_order = wc_get_order($order_id);
-        if (!is_a($wc_order, WC_Order::class)) {
+        if (!$wc_order instanceof WC_Order) {
             return $this->handle_payment_failure(null, new GatewayGenericException(new Exception('WC order was not found.')));
         }
         /**
@@ -151,6 +145,10 @@ class GooglePayGateway extends WC_Payment_Gateway
                 return array('result' => 'success', 'redirect' => ($this->paypal_checkout_url_factory)($order->id()));
             }
         } catch (PayPalApiException $error) {
+            $wallet_failure = $this->handle_wallet_payer_action($wc_order, $error);
+            if ($wallet_failure) {
+                return $wallet_failure;
+            }
             return $this->handle_payment_failure($wc_order, new Exception(Messages::generic_payment_error_message() . ' ' . $error->getMessage(), $error->getCode(), $error));
         } catch (Exception $error) {
             return $this->handle_payment_failure($wc_order, $error);
@@ -170,7 +168,7 @@ class GooglePayGateway extends WC_Payment_Gateway
     public function process_refund($order_id, $amount = null, $reason = '')
     {
         $order = wc_get_order($order_id);
-        if (!is_a($order, \WC_Order::class)) {
+        if (!$order instanceof \WC_Order) {
             return \false;
         }
         return $this->refund_processor->process($order, (float) $amount, (string) $reason);

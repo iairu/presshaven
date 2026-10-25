@@ -4,5 +4,5 @@ namespace MailPoetVendor\Doctrine\DBAL\Platforms\MySQL;
 if (!defined('ABSPATH')) exit;
 interface CollationMetadataProvider
 {
- public function getCollationCharset(string $collation) : ?string;
+public function getCollationCharset(string $collation): ?string;
 }

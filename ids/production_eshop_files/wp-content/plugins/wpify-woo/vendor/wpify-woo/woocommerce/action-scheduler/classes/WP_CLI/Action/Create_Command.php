@@ -35,7 +35,7 @@ class Create_Command extends \ActionScheduler_WPCLI_Command
                 $function_args['start'] = $schedule_start->format('U');
             }
         } catch (\Exception $e) {
-            \WP_CLI::error($e->getMessage());
+            \WpifyWooDeps\WP_CLI::error($e->getMessage());
         }
         // Default to creating single action.
         $action_type = 'single';
@@ -89,7 +89,7 @@ class Create_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_success($action_id, $action_type)
     {
-        \WP_CLI::success(sprintf(
+        \WpifyWooDeps\WP_CLI::success(sprintf(
             /* translators: %1$s: type of action, %2$d: ID of the created action */
             __('%1$s action (%2$d) scheduled.', 'action-scheduler'),
             ucfirst($action_type),
@@ -105,7 +105,7 @@ class Create_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_error(\Exception $e)
     {
-        \WP_CLI::error(sprintf(
+        \WpifyWooDeps\WP_CLI::error(sprintf(
             /* translators: %s refers to the exception error message. */
             __('There was an error creating the scheduled action: %s', 'action-scheduler'),
             $e->getMessage()

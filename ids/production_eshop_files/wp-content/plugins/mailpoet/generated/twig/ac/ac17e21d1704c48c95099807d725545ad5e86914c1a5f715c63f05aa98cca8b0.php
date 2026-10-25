@@ -57,55 +57,55 @@ class __TwigTemplate_d7e5c6eabd771def3ba904afb1433c0226390ff983f51ef08486a758acf
     ";
         // line 8
         yield "      var mailpoet_authorized_emails = ";
-        yield json_encode(($context["authorized_emails"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["authorized_emails"] ?? null));
         yield ";
       var mailpoet_verified_sender_domains = ";
         // line 9
-        yield json_encode(($context["verified_sender_domains"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["verified_sender_domains"] ?? null));
         yield ";
       var mailpoet_partially_verified_sender_domains = ";
         // line 10
-        yield json_encode(($context["partially_verified_sender_domains"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["partially_verified_sender_domains"] ?? null));
         yield ";
       var mailpoet_all_sender_domains = ";
         // line 11
-        yield json_encode(($context["all_sender_domains"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["all_sender_domains"] ?? null));
         yield ";
       var mailpoet_sender_restrictions = ";
         // line 12
-        yield json_encode(($context["sender_restrictions"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["sender_restrictions"] ?? null));
         yield ";
       var mailpoet_members_plugin_active = ";
         // line 13
-        yield json_encode((($context["is_members_plugin_active"] ?? null) == true));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode((($context["is_members_plugin_active"] ?? null) == true));
         yield ";
       var mailpoet_settings = ";
         // line 14
-        yield json_encode(($context["settings"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["settings"] ?? null));
         yield ";
       var mailpoet_segments = ";
         // line 15
-        yield json_encode(($context["segments"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["segments"] ?? null));
         yield ";
       var mailpoet_pages = ";
         // line 16
-        yield json_encode(($context["pages"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["pages"] ?? null));
         yield ";
       var mailpoet_mss_key_valid = ";
         // line 17
-        yield json_encode(($context["mss_key_valid"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["mss_key_valid"] ?? null));
         yield ";
       var mailpoet_premium_key_valid = ";
         // line 18
-        yield json_encode(($context["premium_key_valid"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["premium_key_valid"] ?? null));
         yield ";
       var mailpoet_paths = ";
         // line 19
-        yield json_encode(($context["paths"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["paths"] ?? null));
         yield ";
       var mailpoet_built_in_captcha_supported = ";
         // line 20
-        yield json_encode((($context["built_in_captcha_supported"] ?? null) == true));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode((($context["built_in_captcha_supported"] ?? null) == true));
         yield ";
       var mailpoet_free_plan_url = \"";
         // line 21
@@ -117,11 +117,11 @@ class __TwigTemplate_d7e5c6eabd771def3ba904afb1433c0226390ff983f51ef08486a758acf
         yield "\";
       var mailpoet_hosts = ";
         // line 23
-        yield json_encode(($context["hosts"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["hosts"] ?? null));
         yield ";
       var mailpoet_current_site_title = ";
         // line 24
-        yield json_encode(($context["current_site_title"] ?? null));
+        yield $this->extensions['MailPoet\Twig\Functions']->jsonEncode(($context["current_site_title"] ?? null));
         yield ";
     ";
         // line 26

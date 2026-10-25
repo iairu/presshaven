@@ -10,11 +10,12 @@ declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\Settings\Handler;
 
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
+use Exception;
 use RuntimeException;
 use WooCommerce\PayPalCommerce\Settings\Service\AuthenticationManager;
+use WooCommerce\PayPalCommerce\Settings\Service\OnboardingNotices;
 use WooCommerce\PayPalCommerce\Settings\Service\OnboardingUrlManager;
 use WooCommerce\WooCommerce\Logging\Logger\NullLogger;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 use WooCommerce\PayPalCommerce\Http\RedirectorInterface;
 use WooCommerce\PayPalCommerce\Settings\Enum\SellerTypeEnum;
 /**
@@ -37,69 +38,60 @@ class ConnectionListener
      */
     private const TOKEN_STATE_TRANSIENT = 'ppcp_auth_token_state';
     /**
-     * ID of the current settings page; empty if not on a PayPal settings page.
-     *
-     * @var string
+     * Whether the current request renders the plugin's settings page.
      */
-    private string $settings_page_id;
+    private bool $is_settings_page;
     /**
      * Access to the onboarding URL manager.
-     *
-     * @var OnboardingUrlManager
      */
     private OnboardingUrlManager $url_manager;
     /**
      * Authentication manager service, responsible to update connection details.
-     *
-     * @var AuthenticationManager
      */
     private AuthenticationManager $authentication_manager;
     /**
      * A redirector-instance to redirect the merchant after authentication.
-     * ™
-     *
-     * @var RedirectorInterface
      */
     private RedirectorInterface $redirector;
     /**
+     * Queues user-facing notices that are shown after the redirect.
+     */
+    private OnboardingNotices $notices;
+    /**
      * Logger instance, mainly used for debugging purposes.
-     *
-     * @var LoggerInterface
      */
     private LoggerInterface $logger;
     /**
      * ID of the current user, set by the process() method.
      *
-     * Default value is 0 (guest), until the real ID is provided to process().
-     *
-     * @var int
+     * The default value is 0 (guest), until the real ID is provided to process().
      */
     private int $user_id = 0;
     /**
      * The request details (usually the GET data) which were provided.
-     *
-     * @var array
      */
     private array $request_data = array();
     /**
      * Prepare the instance.
      *
-     * @param string                $settings_page_id       Current plugin settings page ID.
+     * @param bool                  $is_settings_page       Whether this is the settings page.
      * @param OnboardingUrlManager  $url_manager            Get OnboardingURL instances.
      * @param AuthenticationManager $authentication_manager Authentication manager service.
      * @param RedirectorInterface   $redirector             Redirect-handler.
+     * @param OnboardingNotices     $notices                Queues user-facing notices.
      * @param ?LoggerInterface      $logger                 The logger, for debugging purposes.
      */
-    public function __construct(string $settings_page_id, OnboardingUrlManager $url_manager, AuthenticationManager $authentication_manager, RedirectorInterface $redirector, ?LoggerInterface $logger = null)
+    public function __construct(bool $is_settings_page, OnboardingUrlManager $url_manager, AuthenticationManager $authentication_manager, RedirectorInterface $redirector, OnboardingNotices $notices, ?LoggerInterface $logger = null)
     {
-        $this->settings_page_id = $settings_page_id;
+        $this->is_settings_page = $is_settings_page;
         $this->url_manager = $url_manager;
         $this->authentication_manager = $authentication_manager;
         $this->redirector = $redirector;
+        $this->notices = $notices;
         $this->logger = $logger ?: new NullLogger();
     }
     /**
-     * Process the request data, and extract connection details, if present.
+     * Process the request data and extract connection details, if present.
      *
      * @param int   $user_id The current user ID.
      * @param array $request Request details to process.
@@ -152,33 +144,42 @@ class ConnectionListener
             wp_safe_redirect($current_url);
             exit;
         }
+        $seller_nonce = $this->url_manager->get_seller_nonce_for_token($token, $this->user_id);
+        if (!$seller_nonce) {
+            $this->logger->error('Could not retrieve seller nonce for token', array('token' => $log_token));
+            return;
+        }
         if (!$this->url_manager->validate_token_and_delete($token, $this->user_id)) {
             $this->logger->error('Token validation failed', array('token' => $log_token));
+            $this->notices->add(__('We couldn’t verify your PayPal connection. Please try connecting again.', 'woocommerce-paypal-payments'));
             return;
         }
         $data = $this->extract_data();
         if (!$data) {
             $this->logger->error('Failed to extract merchant data from request');
+            $this->notices->add(__('PayPal didn’t return the expected account details. Please try connecting again.', 'woocommerce-paypal-payments'));
             return;
         }
+        $data['seller_nonce'] = $seller_nonce;
         $this->logger->info('Found OAuth merchant data in request', $data);
         try {
             $this->set_token_state($token, self::TOKEN_STATE_PROCESSING);
             $this->authentication_manager->handle_oauth_authentication($data);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->logger->error('Failed to complete authentication: ' . $e->getMessage());
+            $this->notices->add(__('We couldn’t complete the connection to PayPal. Please try again.', 'woocommerce-paypal-payments'));
         }
         $this->set_token_state($token, self::TOKEN_STATE_PROCESSED);
     }
     /**
-     * Determine, if the request details contain connection data that should be
+     * Determine if the request details contain connection data that should be
      * extracted and stored.
      *
      * @return bool True, if the request contains valid connection details.
      */
     private function is_valid_request(): bool
     {
-        if ($this->user_id < 1 || !$this->settings_page_id) {
+        if ($this->user_id < 1 || !$this->is_settings_page) {
             return \false;
         }
         if (!user_can($this->user_id, 'manage_woocommerce')) {
@@ -365,6 +366,6 @@ class ConnectionListener
         /**
          * The URL opened at the end of onboarding after saving the merchant ID/email.
          */
-        return apply_filters('woocommerce_paypal_payments_onboarding_redirect_url', admin_url('admin.php?page=wc-settings&tab=checkout&section=ppcp-gateway&ppcp-tab=' . Settings::CONNECTION_TAB_ID));
+        return apply_filters('woocommerce_paypal_payments_onboarding_redirect_url', admin_url('admin.php?page=wc-settings&tab=checkout&section=ppcp-gateway'));
     }
 }

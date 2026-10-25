@@ -204,6 +204,10 @@ class Cartflows_Ca_Default_Meta {
 				'default'  => 20,
 				'sanitize' => 'FILTER_SANITIZE_NUMBER_INT',
 			],
+			'wcf_ca_scheduler_engine'                     => [
+				'default'  => 'wp_cron',
+				'sanitize' => 'FILTER_SANITIZE_STRING',
+			],
 			'wcf_ca_cart_lost_time'                       => [
 				'default'  => WCF_DEFAULT_CART_LOST_TIME,
 				'sanitize' => 'FILTER_SANITIZE_NUMBER_INT',
@@ -234,6 +238,10 @@ class Cartflows_Ca_Default_Meta {
 			],
 			'wcf_ca_send_recovery_report_emails_to_admin' => [
 				'default'  => 'on',
+				'sanitize' => 'FILTER_SANITIZE_STRING',
+			],
+			'wcf_ca_send_oos_warning_emails_to_admin'     => [
+				'default'  => 'off',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
 			],
 			'wcf_ca_zapier_tracking_status'               => [
@@ -301,6 +309,10 @@ class Cartflows_Ca_Default_Meta {
 				'sanitize' => 'FILTER_SANITIZE_STRING',
 			],
 			'wcf_ca_banner_status'                        => [
+				'default'  => 'off',
+				'sanitize' => 'FILTER_SANITIZE_STRING',
+			],
+			'wcf_ca_popup_status'                         => [
 				'default'  => 'off',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
 			],
@@ -426,6 +438,9 @@ class Cartflows_Ca_Default_Meta {
 			case 'FILTER_SANITIZE_ARRAY':
 				if ( is_array( $value ) ) {
 					$meta_value = array_map( 'sanitize_text_field', array_map( 'wp_unslash', $value ) );
+				} else {
+					// Comma-separated values, e.g. product IDs from the product search field.
+					$meta_value = sanitize_text_field( wp_unslash( $value ) );
 				}
 				break;
 

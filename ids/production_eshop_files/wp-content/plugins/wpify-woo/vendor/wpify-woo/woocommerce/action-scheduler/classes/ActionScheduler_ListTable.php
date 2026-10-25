@@ -92,7 +92,7 @@ class ActionScheduler_ListTable extends \ActionScheduler_Abstract_ListTable
         }
         $this->row_actions = array('hook' => array('run' => array('name' => \__('Run', 'action-scheduler'), 'desc' => \__('Process the action now as if it were run as part of a queue', 'action-scheduler')), 'cancel' => array('name' => \__('Cancel', 'action-scheduler'), 'desc' => \__('Cancel the action now to avoid it being run in future', 'action-scheduler'), 'class' => 'cancel trash')));
         self::$time_periods = array(array(
-            'seconds' => \WpifyWooDeps\YEAR_IN_SECONDS,
+            'seconds' => \YEAR_IN_SECONDS,
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s year', '%s years', 'action-scheduler'),
         ), array(
@@ -100,19 +100,19 @@ class ActionScheduler_ListTable extends \ActionScheduler_Abstract_ListTable
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s month', '%s months', 'action-scheduler'),
         ), array(
-            'seconds' => \WpifyWooDeps\WEEK_IN_SECONDS,
+            'seconds' => \WEEK_IN_SECONDS,
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s week', '%s weeks', 'action-scheduler'),
         ), array(
-            'seconds' => \WpifyWooDeps\DAY_IN_SECONDS,
+            'seconds' => \DAY_IN_SECONDS,
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s day', '%s days', 'action-scheduler'),
         ), array(
-            'seconds' => \WpifyWooDeps\HOUR_IN_SECONDS,
+            'seconds' => \HOUR_IN_SECONDS,
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s hour', '%s hours', 'action-scheduler'),
         ), array(
-            'seconds' => \WpifyWooDeps\MINUTE_IN_SECONDS,
+            'seconds' => \MINUTE_IN_SECONDS,
             /* translators: %s: amount of time */
             'names' => \_n_noop('%s minute', '%s minutes', 'action-scheduler'),
         ), array(

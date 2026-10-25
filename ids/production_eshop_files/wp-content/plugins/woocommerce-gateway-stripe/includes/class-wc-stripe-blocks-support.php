@@ -2,29 +2,34 @@
 use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
 use Automattic\WooCommerce\StoreApi\Payments\PaymentResult;
 use Automattic\WooCommerce\StoreApi\Payments\PaymentContext;
+use Automattic\WooCommerce\StoreApi\Utilities\PaymentUtils;
 
 defined( 'ABSPATH' ) || exit;
 
 /**
  * WC_Stripe_Blocks_Support class.
- *
- * @extends AbstractPaymentMethodType
  */
 final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
+	/**
+	 * Handle for our integration script for block cart and checkout.
+	 *
+	 * @var string
+	 */
+	private const BLOCKS_SCRIPT_HANDLE = 'wc-stripe-blocks-integration';
+
+	/**
+	 * Handle for our stylesheet for block cart and checkout.
+	 *
+	 * @var string
+	 */
+	private const BLOCKS_STYLE_HANDLE = 'wc-stripe-blocks-checkout-style';
+
 	/**
 	 * Payment method name defined by payment methods extending this class.
 	 *
 	 * @var string
 	 */
 	protected $name = 'stripe';
-
-	/**
-	 * The Payment Request configuration class used for Shortcode PRBs. We use it here to retrieve
-	 * the same configurations.
-	 *
-	 * @var WC_Stripe_Payment_Request
-	 */
-	private $payment_request_configuration;
 
 	/**
 	 * The Express Checkout configuration class used for Shortcode PRBs. We use it here to retrieve
@@ -35,19 +40,35 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	private $express_checkout_configuration;
 
 	/**
+	 * Local cache for the UPE blocks asset metadata. Used to avoid multiple file reads.
+	 *
+	 * @var array{version: string, dependencies: array}|null
+	 */
+	private $blocks_asset = null;
+
+	/**
 	 * Constructor
 	 *
-	 * @param WC_Stripe_Payment_Request  The Stripe Payment Request configuration used for Payment
-	 *                                   Request buttons.
+	 * @param mixed                                   $payment_request_configuration The Stripe Payment Request configuration used for Payment Request buttons (removed).
+	 * @param WC_Stripe_Express_Checkout_Element|null $express_checkout_configuration The Stripe Express Checkout configuration used for Express Checkout buttons.
+	 *
+	 * @deprecated Parameter $payment_request_configuration is deprecated since version 10.4.0 and will be removed in later versions.
 	 */
-	public function __construct( $payment_request_configuration = null, $express_checkout_configuration = null ) {
-		add_action( 'woocommerce_rest_checkout_process_payment_with_context', [ $this, 'add_payment_request_order_meta' ], 8, 2 );
+	public function __construct( $payment_request_configuration = null, ?WC_Stripe_Express_Checkout_Element $express_checkout_configuration = null ) {
+		if ( null !== $payment_request_configuration ) {
+			_deprecated_argument(
+				__FUNCTION__,
+				'10.4.0'
+			);
+		}
+
+		add_action( 'woocommerce_rest_checkout_process_payment_with_context', [ $this, 'add_express_checkout_order_meta' ], 8, 2 );
 		add_action( 'woocommerce_rest_checkout_process_payment_with_context', [ $this, 'add_stripe_intents' ], 9999, 2 );
-		$this->payment_request_configuration = null !== $payment_request_configuration ? $payment_request_configuration : new WC_Stripe_Payment_Request();
+		add_action( 'woocommerce_rest_checkout_process_payment_with_context', [ $this, 'fail_unprocessed_payment' ], 10000, 2 );
 
 		if ( null === $express_checkout_configuration ) {
-			$helper = new WC_Stripe_Express_Checkout_Helper();
-			$ajax_handler = new WC_Stripe_Express_Checkout_Ajax_Handler( $helper );
+			$helper                         = new WC_Stripe_Express_Checkout_Helper();
+			$ajax_handler                   = new WC_Stripe_Express_Checkout_Ajax_Handler( $helper );
 			$express_checkout_configuration = new WC_Stripe_Express_Checkout_Element( $ajax_handler, $helper );
 		}
 		$this->express_checkout_configuration = $express_checkout_configuration;
@@ -55,9 +76,84 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 
 	/**
 	 * Initializes the payment method type.
+	 *
+	 * @return void
 	 */
 	public function initialize() {
 		$this->settings = WC_Stripe_Helper::get_stripe_settings();
+
+		add_filter( 'woocommerce_hydration_request_after_callbacks', [ $this, 'clear_hydrated_payment_method_for_default_token' ], 10, 3 );
+
+		// Hooks to manually enqueue the block CSS, as WooCommerce doesn't have an API for styles.
+		add_filter( 'render_block_woocommerce/checkout', [ $this, 'maybe_enqueue_blocks_style' ] );
+		add_filter( 'render_block_woocommerce/cart', [ $this, 'maybe_enqueue_blocks_style' ] );
+		// Note that this is hooked at priority 20 so we run after WooCommerce has registered and enqueued the Cart and Checkout editor scripts.
+		add_action( 'enqueue_block_editor_assets', [ $this, 'maybe_enqueue_blocks_style_for_editor' ], 20 );
+	}
+
+	/**
+	 * Lets Blocks select the visible default Stripe token instead of an earlier token for the same gateway.
+	 *
+	 * @param mixed $response Hydrated Store API response.
+	 * @param mixed $handler  Store API route handler.
+	 * @param mixed $request  Store API request.
+	 *
+	 * @return mixed
+	 */
+	public function clear_hydrated_payment_method_for_default_token( $response, $handler, $request ) {
+		if (
+			! $response instanceof WP_REST_Response
+			|| ! $request instanceof WP_REST_Request
+			|| '/wc/store/v1/checkout' !== $request->get_route()
+			|| ! is_user_logged_in()
+		) {
+			return $response;
+		}
+
+		$data = $response->get_data();
+		if (
+			! is_array( $data )
+			|| ! in_array( $data['payment_method'] ?? null, WC_Stripe_Payment_Tokens::UPE_REUSABLE_GATEWAYS_BY_PAYMENT_METHOD, true )
+		) {
+			return $response;
+		}
+
+		$saved_payment_methods = PaymentUtils::get_saved_payment_methods();
+		$enabled_methods       = $saved_payment_methods['enabled'] ?? null;
+		if ( ! is_array( $enabled_methods ) ) {
+			return $response;
+		}
+
+		$has_earlier_gateway_token = false;
+		foreach ( $enabled_methods as $methods ) {
+			if ( ! is_array( $methods ) ) {
+				continue;
+			}
+
+			foreach ( $methods as $method ) {
+				if (
+					! is_array( $method )
+					|| ( $method['method']['gateway'] ?? null ) !== $data['payment_method']
+				) {
+					continue;
+				}
+
+				if ( true === ( $method['is_default'] ?? null ) ) {
+					if ( ! $has_earlier_gateway_token ) {
+						return $response;
+					}
+
+					$data['payment_method'] = '';
+					$response->set_data( $data );
+
+					return $response;
+				}
+
+				$has_earlier_gateway_token = true;
+			}
+		}
+
+		return $response;
 	}
 
 	/**
@@ -78,6 +174,12 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 			return true;
 		}
 
+		// With OC the single OC element stands in for the gateway, so the per-method checks below don't
+		// apply. Needed in the block editor where those methods may all be unavailable (e.g. no cart).
+		if ( $stripe_gateway->should_render_optimized_checkout() ) {
+			return true;
+		}
+
 		// This payment method is active if there is at least 1 UPE method available.
 		foreach ( $stripe_gateway->payment_methods as $upe_method ) {
 			if ( $upe_method->is_enabled() && $upe_method->is_available() ) {
@@ -93,64 +195,145 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	 *
 	 * @return array
 	 */
-	public function get_payment_method_script_handles() {
-		// Ensure Stripe JS is enqueued
-		wp_register_script(
-			'stripe',
-			'https://js.stripe.com/v3/',
-			[],
-			'3.0',
-			true
-		);
+	public function get_payment_method_script_handles(): array {
+		// Ensure Stripe JS is registered
+		WC_Stripe_Helper::register_stripe_js();
 
-		if ( WC_Stripe_Feature_Flags::is_upe_checkout_enabled() ) {
-			$this->register_upe_payment_method_script_handles();
-		} else {
-			$this->register_legacy_payment_method_script_handles();
-		}
+		$this->register_upe_payment_method_script_handles();
 
-		return [ 'wc-stripe-blocks-integration' ];
+		return [ self::BLOCKS_SCRIPT_HANDLE ];
 	}
 
 	/**
 	 * Registers the UPE JS scripts.
+	 *
+	 * @return void
 	 */
-	private function register_upe_payment_method_script_handles() {
-		$asset_path   = WC_STRIPE_PLUGIN_PATH . '/build/upe-blocks.asset.php';
-		$version      = WC_STRIPE_VERSION;
-		$dependencies = [];
-		if ( file_exists( $asset_path ) ) {
-			$asset        = require $asset_path;
-			$version      = is_array( $asset ) && isset( $asset['version'] )
-				? $asset['version']
-				: $version;
-			$dependencies = is_array( $asset ) && isset( $asset['dependencies'] )
-				? $asset['dependencies']
-				: $dependencies;
-		}
+	private function register_upe_payment_method_script_handles(): void {
+		$this->register_upe_payment_method_style_handle();
 
-		wp_enqueue_style(
-			'wc-stripe-blocks-checkout-style',
-			WC_STRIPE_PLUGIN_URL . '/build/upe-blocks.css',
-			[],
-			$version
-		);
+		$asset = $this->get_upe_blocks_asset();
 
 		wp_register_script(
-			'wc-stripe-blocks-integration',
+			self::BLOCKS_SCRIPT_HANDLE,
 			WC_STRIPE_PLUGIN_URL . '/build/upe-blocks.js',
-			array_merge( [ 'stripe' ], $dependencies ),
-			$version,
+			array_merge( [ 'stripe' ], $asset['dependencies'] ),
+			$asset['version'],
 			true
 		);
 		wp_set_script_translations(
-			'wc-stripe-blocks-integration',
+			self::BLOCKS_SCRIPT_HANDLE,
 			'woocommerce-gateway-stripe'
 		);
 	}
 
 	/**
+	 * Registers our stylesheet for block cart and checkout.
+	 *
+	 * @return void
+	 */
+	private function register_upe_payment_method_style_handle(): void {
+		if ( wp_style_is( self::BLOCKS_STYLE_HANDLE, 'registered' ) ) {
+			return;
+		}
+
+		$asset = $this->get_upe_blocks_asset();
+
+		wp_register_style(
+			self::BLOCKS_STYLE_HANDLE,
+			WC_STRIPE_PLUGIN_URL . '/build/upe-blocks.css',
+			[],
+			$asset['version']
+		);
+
+		// Register RTL support.
+		wp_style_add_data( self::BLOCKS_STYLE_HANDLE, 'rtl', 'replace' );
+	}
+
+	/**
+	 * Get the build metadata for the UPE blocks bundle, with fallback logic when the file doesn't exist.
+	 *
+	 * @return array{version: string, dependencies: array} The build version and script dependencies.
+	 */
+	private function get_upe_blocks_asset(): array {
+		if ( null !== $this->blocks_asset ) {
+			return $this->blocks_asset;
+		}
+
+		$asset_path   = WC_STRIPE_PLUGIN_PATH . '/build/upe-blocks.asset.php';
+		$version      = WC_STRIPE_VERSION;
+		$dependencies = [];
+
+		if ( file_exists( $asset_path ) ) {
+			$asset = require $asset_path;
+
+			if ( is_array( $asset ) ) {
+				$version      = $asset['version'] ?? $version;
+				$dependencies = is_array( $asset['dependencies'] ?? null ) ? $asset['dependencies'] : $dependencies;
+			}
+		}
+
+		$this->blocks_asset = [
+			'version'      => $version,
+			'dependencies' => $dependencies,
+		];
+
+		return $this->blocks_asset;
+	}
+
+	/**
+	 * Enqueue the block stylesheet when the Cart or Checkout block renders AND
+	 * our blocks script has also been enqueued.
+	 *
+	 * Implemented to run as a filter callback for `render_block_woocommerce/cart`
+	 * and `render_block_woocommerce/checkout`, so the content MUST be returned as-is.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param string $content The rendered block content.
+	 *
+	 * @return string The unmodified block content.
+	 */
+	public function maybe_enqueue_blocks_style( $content ) {
+		$this->enqueue_blocks_style_if_script_enqueued();
+
+		return $content;
+	}
+
+	/**
+	 * Block editor counterpart to {@see maybe_enqueue_blocks_style()},
+	 * which enqueues our block stylesheet when the block script has been enqueued.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @return void
+	 */
+	public function maybe_enqueue_blocks_style_for_editor(): void {
+		$this->enqueue_blocks_style_if_script_enqueued();
+	}
+
+	/**
+	 * Enqueues the blocks stylesheet if the block script has been enqueued.
+	 *
+	 * @return void
+	 */
+	private function enqueue_blocks_style_if_script_enqueued(): void {
+		// Check if our script handle has been enqueued. Note that wp_script_is()
+		// also checks dependencies and catches cases where the script will be
+		// enqueued as a dependency of another script.
+		if ( ! wp_script_is( self::BLOCKS_SCRIPT_HANDLE, 'enqueued' ) ) {
+			return;
+		}
+
+		$this->register_upe_payment_method_style_handle();
+
+		wp_enqueue_style( self::BLOCKS_STYLE_HANDLE );
+	}
+
+	/**
 	 * Registers the classic JS scripts.
+	 *
+	 * @return void
 	 */
 	private function register_legacy_payment_method_script_handles() {
 		$asset_path   = WC_STRIPE_PLUGIN_PATH . '/build/index.asset.php';
@@ -161,7 +344,7 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 			$version      = is_array( $asset ) && isset( $asset['version'] )
 				? $asset['version']
 				: $version;
-			$dependencies = is_array( $asset ) && isset( $asset['dependencies'] )
+			$dependencies = is_array( $asset ) && isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] )
 				? $asset['dependencies']
 				: $dependencies;
 		}
@@ -184,14 +367,11 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	 * @return array
 	 */
 	public function get_payment_method_data() {
-		$js_params = WC_Stripe_Feature_Flags::is_upe_checkout_enabled() && WC_Stripe_Feature_Flags::is_stripe_ece_enabled()
-			? $this->get_express_checkout_javascript_params()
-			: $this->get_payment_request_javascript_params();
 		// We need to call array_merge_recursive so the blocks 'button' setting doesn't overwrite
 		// what's provided from the gateway or payment request configuration.
 		return array_replace_recursive(
 			$this->get_gateway_javascript_params(),
-			$js_params,
+			$this->get_express_checkout_javascript_params(),
 			// Blocks-specific options
 			[
 				'icons'                           => $this->get_icons(),
@@ -200,63 +380,14 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 				'showSavedCards'                  => $this->get_show_saved_cards(),
 				'showSaveOption'                  => $this->get_show_save_option(),
 				'isAdmin'                         => is_admin(),
-				'shouldShowPaymentRequestButton'  => $this->should_show_payment_request_button(),
 				'shouldShowExpressCheckoutButton' => $this->should_show_express_checkout_button(),
 				'button'                          => [
-					'customLabel' => $this->payment_request_configuration->get_button_label(),
+					'customLabel' => '',
 				],
 				'style'                           => $this->get_style(),
 				'baseLocation'                    => wc_get_base_location(),
 			]
 		);
-	}
-
-	/**
-	 * Returns true if the PRB should be shown on the current page, false otherwise.
-	 *
-	 * Note: We use `has_block()` in this function, which isn't supported until WP 5.0. However,
-	 * WooCommerce Blocks hasn't supported a WP version lower than 5.0 since 2019. Since this
-	 * function is only called when the WooCommerce Blocks extension is available, it should be
-	 * safe to call `has_block()` here.
-	 * That said, we only run those checks if the `has_block()` function exists, just in case.
-	 *
-	 * @return boolean  True if PRBs should be displayed, false otherwise
-	 */
-	private function should_show_payment_request_button() {
-		// TODO: Remove the `function_exists()` check once the minimum WP version has been bumped
-		//       to version 5.0.
-		if ( function_exists( 'has_block' ) ) {
-			// Don't show if PRBs are turned off entirely.
-			if ( ! $this->payment_request_configuration->is_at_least_one_payment_request_button_enabled() ) {
-				return false;
-			}
-
-			// Don't show if PRBs are supposed to be hidden on the cart page.
-			if (
-				has_block( 'woocommerce/cart' )
-				&& ! $this->payment_request_configuration->should_show_prb_on_cart_page()
-			) {
-				return false;
-			}
-
-			// Don't show if PRBs are supposed to be hidden on the checkout page.
-			if (
-				has_block( 'woocommerce/checkout' )
-				&& ! $this->payment_request_configuration->should_show_prb_on_checkout_page()
-			) {
-				return false;
-			}
-
-			// Don't show PRB if there are unsupported products in the cart.
-			if (
-				( has_block( 'woocommerce/checkout' ) || has_block( 'woocommerce/cart' ) )
-				&& ! $this->payment_request_configuration->allowed_items_in_cart()
-			) {
-				return false;
-			}
-		}
-
-		return $this->payment_request_configuration->should_show_payment_request_button();
 	}
 
 	/**
@@ -278,35 +409,6 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	 * @return boolean True if ECEs should be displayed, false otherwise.
 	 */
 	private function should_show_express_checkout_button() {
-		// Don't show if ECEs are turned off in settings.
-		if ( ! $this->express_checkout_configuration->express_checkout_helper->is_express_checkout_enabled() ) {
-			return false;
-		}
-
-		// Don't show if ECEs are supposed to be hidden on the cart page.
-		if (
-			has_block( 'woocommerce/cart' )
-			&& ! $this->express_checkout_configuration->express_checkout_helper->should_show_ece_on_cart_page()
-		) {
-			return false;
-		}
-
-		// Don't show if ECEs are supposed to be hidden on the checkout page.
-		if (
-			has_block( 'woocommerce/checkout' )
-			&& ! $this->express_checkout_configuration->express_checkout_helper->should_show_ece_on_checkout_page()
-		) {
-			return false;
-		}
-
-		// Don't show ECEs if there are unsupported products in the cart.
-		if (
-			( has_block( 'woocommerce/checkout' ) || has_block( 'woocommerce/cart' ) )
-			&& ! $this->express_checkout_configuration->express_checkout_helper->allowed_items_in_cart()
-		) {
-			return false;
-		}
-
 		return $this->express_checkout_configuration->express_checkout_helper->should_show_express_checkout_button();
 	}
 
@@ -318,28 +420,27 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	private function get_gateway_javascript_params() {
 		$js_configuration   = [];
 		$available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+		$main_gateway       = WC_Stripe::get_instance()->get_main_stripe_gateway();
 
 		if ( isset( $available_gateways['stripe'] ) ) {
 			$js_configuration = $available_gateways['stripe']->javascript_params();
 		} elseif ( $this->is_upe_method_available( $available_gateways ) ) {
-			$js_configuration = WC_Stripe::get_instance()->get_main_stripe_gateway()->javascript_params();
+			$js_configuration = $main_gateway->javascript_params();
+		} elseif (
+			is_a( $main_gateway, 'WC_Stripe_UPE_Payment_Gateway' )
+			&& $main_gateway->should_render_optimized_checkout()
+		) {
+			// In the Cart/Checkout block editor with OC enabled and card disabled, the consolidated
+			// gateway is unavailable (is_available() requires the card method) and the per-method
+			// gateways are filtered out of the editor, so neither branch above fires. Build the config
+			// anyway so the OC element registers as 'stripe' and the block reports it as supported.
+			$js_configuration = $main_gateway->javascript_params();
 		}
 
+		/** This filter is documented in includes/abstracts/abstract-wc-stripe-payment-gateway.php. */
 		return apply_filters(
 			'wc_stripe_params',
 			$js_configuration
-		);
-	}
-
-	/**
-	 * Returns the Stripe Payment Request JavaScript configuration object.
-	 *
-	 * @return array  the JS configuration for Stripe Payment Requests.
-	 */
-	private function get_payment_request_javascript_params() {
-		return apply_filters(
-			'wc_stripe_payment_request_params',
-			$this->payment_request_configuration->javascript_params()
 		);
 	}
 
@@ -349,6 +450,11 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	 * @return array  the JS configuration for Stripe Express Checkout.
 	 */
 	private function get_express_checkout_javascript_params() {
+		/**
+		 * Filters the Express Checkout JavaScript parameters.
+		 *
+		 * @param array $params Express Checkout JavaScript parameters.
+		 */
 		return apply_filters(
 			'wc_stripe_express_checkout_params',
 			$this->express_checkout_configuration->javascript_params()
@@ -372,9 +478,14 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	private function get_show_save_option() {
 		$saved_cards = $this->get_show_saved_cards();
 		// This assumes that Stripe supports `tokenization` - currently this is true, based on
-		// https://github.com/woocommerce/woocommerce-gateway-stripe/blob/master/includes/class-wc-gateway-stripe.php#L95 .
-		// See https://github.com/woocommerce/woocommerce-gateway-stripe/blob/ad19168b63df86176cbe35c3e95203a245687640/includes/class-wc-gateway-stripe.php#L271 and
+		// https://github.com/woocommerce/woocommerce-gateway-stripe/blob/master/includes/payment-methods/class-wc-stripe-upe-payment-gateway.php#L222.
+		// See https://github.com/woocommerce/woocommerce-gateway-stripe/blob/master/includes/payment-methods/class-wc-stripe-upe-payment-gateway.php#L905 and
 		// https://github.com/woocommerce/woocommerce/wiki/Payment-Token-API .
+		/**
+		 * Filters whether the save payment method checkbox should be displayed.
+		 *
+		 * @param bool $display Whether the save payment method checkbox should be displayed.
+		 */
 		return apply_filters( 'wc_stripe_display_save_payment_method_checkbox', filter_var( $saved_cards, FILTER_VALIDATE_BOOLEAN ) );
 	}
 
@@ -426,32 +537,37 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	}
 
 	/**
-	 * Add payment request data to the order meta as hooked on the
+	 * Add express checkout data to the order meta as hooked on the
+	 * woocommerce_rest_checkout_process_payment_with_context action.
+	 *
+	 * @deprecated 10.6.0 Use add_express_checkout_order_meta() instead.
+	 *
+	 * @param PaymentContext $context Holds context for the payment.
+	 * @param PaymentResult  $result  Result object for the payment.
+	 *
+	 * @return void
+	 */
+	public function add_payment_request_order_meta( PaymentContext $context, PaymentResult &$result ) {
+		wc_deprecated_function( __METHOD__, '10.6.0', 'WC_Stripe_Blocks_Support::add_express_checkout_order_meta' );
+		$this->add_express_checkout_order_meta( $context, $result );
+	}
+
+	/**
+	 * Add express checkout data to the order meta as hooked on the
 	 * woocommerce_rest_checkout_process_payment_with_context action.
 	 *
 	 * @param PaymentContext $context Holds context for the payment.
 	 * @param PaymentResult  $result  Result object for the payment.
+	 *
+	 * @return void
 	 */
-	public function add_payment_request_order_meta( PaymentContext $context, PaymentResult &$result ) {
+	public function add_express_checkout_order_meta( PaymentContext $context, PaymentResult &$result ) {
 		$data = $context->payment_data;
-		if ( ! empty( $data['payment_request_type'] ) && 'stripe' === $context->payment_method ) {
-			$this->add_order_meta( $context->order, $data['payment_request_type'] );
-		} elseif ( ! empty( $data['express_checkout_type'] ) && 'stripe' === $context->payment_method ) {
+		if ( ! empty( $data['express_checkout_type'] ) && 'stripe' === $context->payment_method ) {
 			$this->add_order_meta( $context->order, $data['express_checkout_type'] );
 		}
 
-		$is_stripe_payment_method = $this->name === $context->payment_method;
-		$main_gateway             = WC_Stripe::get_instance()->get_main_stripe_gateway();
-		$is_upe                   = $main_gateway instanceof WC_Stripe_UPE_Payment_Gateway;
-
-		// Check if the payment method is a UPE payment method. UPE methods start with `stripe_`.
-		if ( $is_upe && ! $is_stripe_payment_method && 0 === strpos( $context->payment_method, "{$this->name}_" ) ) {
-			// Strip "Stripe_" from the payment method name to get the payment method type.
-			$payment_method_type      = substr( $context->payment_method, strlen( $this->name ) + 1 );
-			$is_stripe_payment_method = isset( $main_gateway->payment_methods[ $payment_method_type ] );
-		}
-
-		if ( ! $is_stripe_payment_method ) {
+		if ( ! $this->is_stripe_payment_method( (string) $context->payment_method ) ) {
 			return;
 		}
 
@@ -459,8 +575,16 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 		 * When using UPE on the block checkout and a saved token is being used, we need to set a flag
 		 * to indicate that deferred intent should be used.
 		 */
-		if ( $is_upe && isset( $data['issavedtoken'] ) && $data['issavedtoken'] ) {
-			$context->set_payment_data( array_merge( $data, [ 'wc-stripe-is-deferred-intent' => true ] ) );
+		$is_using_saved_token = isset( $data['issavedtoken'] ) && $data['issavedtoken'];
+
+		// For split UPE gateways (e.g., stripe_us_bank_account), WooCommerce Blocks doesn't set the isSavedToken flag.
+		// Check if a payment token is being used by looking for the wc-{gateway_id}-payment-token field.
+		if ( ! $is_using_saved_token && ! empty( $data['token'] ) ) {
+			// Payment data keys use underscores, not hyphens (e.g., wc-stripe_us_bank_account-payment-token).
+			$token_key = 'wc-' . $context->payment_method . '-payment-token';
+			if ( isset( $data[ $token_key ] ) && ! empty( $data[ $token_key ] ) ) {
+				$is_using_saved_token = true;
+			}
 		}
 
 		// Hook into Stripe error processing so that we can capture the error to payment details.
@@ -484,6 +608,8 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	 *
 	 * @param PaymentContext $context Holds context for the payment.
 	 * @param PaymentResult  $result  Result object for the payment.
+	 *
+	 * @return void
 	 */
 	public function add_stripe_intents( PaymentContext $context, PaymentResult &$result ) {
 		if ( 'stripe' === $context->payment_method
@@ -517,14 +643,85 @@ final class WC_Stripe_Blocks_Support extends AbstractPaymentMethodType {
 	}
 
 	/**
-	 * Handles adding information about the payment request type used to the order meta.
+	 * Whether the given Store API payment method id belongs to this gateway.
 	 *
-	 * @param \WC_Order $order The order being processed.
-	 * @param string    $payment_request_type The payment request type used for payment.
+	 * A bare `stripe_` prefix test is not enough: other vendors register gateways under
+	 * that prefix too, so split UPE ids are matched against the methods this gateway
+	 * actually registers.
+	 *
+	 * @param string $payment_method The payment method id from the payment context.
+	 *
+	 * @return bool
 	 */
-	private function add_order_meta( \WC_Order $order, $payment_request_type ) {
+	private function is_stripe_payment_method( string $payment_method ): bool {
+		if ( $this->name === $payment_method ) {
+			return true;
+		}
+
+		$prefix = $this->name . '_';
+		if ( 0 !== strpos( $payment_method, $prefix ) ) {
+			return false;
+		}
+
+		$main_gateway = WC_Stripe::get_instance()->get_main_stripe_gateway();
+		if ( ! $main_gateway instanceof WC_Stripe_UPE_Payment_Gateway ) {
+			return false;
+		}
+
+		return isset( $main_gateway->payment_methods[ substr( $payment_method, strlen( $prefix ) ) ] );
+	}
+
+	/**
+	 * Fails the payment when WooCommerce never handed it to the gateway.
+	 *
+	 * Every path through `Legacy::process_legacy_payment()` sets a status once the gateway
+	 * runs, so an empty one here means the gateway was never invoked and no charge was
+	 * attempted. The Store API would otherwise answer 200 with an empty payment status,
+	 * leaving an unpaid order with its stock still reserved and nothing logged. Throwing
+	 * gives the shopper an error and lets WooCommerce release the stock it held.
+	 *
+	 * @param PaymentContext $context Holds context for the payment.
+	 * @param PaymentResult  $result  Result object for the payment.
+	 *
+	 * @throws Exception When the payment was never processed.
+	 *
+	 * @return void
+	 */
+	public function fail_unprocessed_payment( PaymentContext $context, PaymentResult &$result ) {
+		if ( '' !== (string) $result->status ) {
+			return;
+		}
+
+		$payment_method = (string) $context->payment_method;
+		if ( ! $this->is_stripe_payment_method( $payment_method ) ) {
+			return;
+		}
+
+		// The context is hook-derived, so don't let the log line itself be what fatals.
+		$order_id = $context->order instanceof WC_Order ? $context->order->get_id() : 0;
+
+		WC_Stripe_Logger::error(
+			'Payment was never processed for order: ' . $order_id,
+			[
+				'payment_method' => $payment_method,
+				'reason'         => 'WooCommerce set no payment result status, so the gateway was never invoked.',
+			]
+		);
+
+		throw new Exception( __( 'This payment method is not available right now. Please try again or use a different one.', 'woocommerce-gateway-stripe' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+	}
+
+	/**
+	 * Handles adding information about the express checkout type used to the order meta.
+	 *
+	 * @param \WC_Order $order                The order being processed.
+	 * @param string    $express_checkout_type The express checkout type used for payment.
+	 *
+	 * @return void
+	 */
+	private function add_order_meta( \WC_Order $order, $express_checkout_type ) {
 		$payment_method_title = '';
-		switch ( $payment_request_type ) {
+		switch ( $express_checkout_type ) {
 			case WC_Stripe_Payment_Methods::APPLE_PAY:
 				$payment_method_title = WC_Stripe_Payment_Methods::APPLE_PAY_LABEL;
 				break;

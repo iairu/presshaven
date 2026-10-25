@@ -7,16 +7,16 @@ use MailPoetVendor\Doctrine\DBAL\Platforms\AbstractPlatform;
 use Exception;
 class VarDateTimeType extends DateTimeType
 {
- public function convertToPHPValue($value, AbstractPlatform $platform)
- {
- if ($value === null || $value instanceof DateTime) {
- return $value;
- }
- try {
- $dateTime = new DateTime($value);
- } catch (Exception $e) {
- throw ConversionException::conversionFailed($value, $this->getName(), $e);
- }
- return $dateTime;
- }
+public function convertToPHPValue($value, AbstractPlatform $platform)
+{
+if ($value === null || $value instanceof DateTime) {
+return $value;
+}
+try {
+$dateTime = new DateTime($value);
+} catch (Exception $e) {
+throw ConversionException::conversionFailed($value, $this->getName(), $e);
+}
+return $dateTime;
+}
 }

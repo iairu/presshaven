@@ -13,10 +13,18 @@ use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Newsletter\Links\Links;
 use MailPoet\Newsletter\Renderer\Renderer;
 use MailPoet\Newsletter\Shortcodes\Shortcodes;
+use MailPoet\Newsletter\Url as NewsletterUrl;
 use MailPoet\Settings\TrackingConfig;
 use MailPoet\WP\Emoji;
 
 class ViewInBrowserRenderer {
+  private const OPTION_RENDER_AS_PREVIEW = 'renderAsPreview';
+  private const OPTION_SANITIZE_RENDERED_QUEUE_LINKS = 'sanitizeRenderedQueueLinks';
+  private const OPTION_SHORTCODES_PREVIEW = 'shortcodesPreview';
+  private const OPTION_REPLACE_SUBSCRIBER_TRACKING = 'replaceSubscriberTracking';
+  private const OPTION_PERSONALIZER_PREVIEW = 'personalizerPreview';
+  private const OPTION_REPLACE_VIEW_IN_BROWSER_URL = 'replaceViewInBrowserUrlWithPublicShareUrl';
+
   /** @var Emoji */
   private $emoji;
 
@@ -32,6 +40,9 @@ class ViewInBrowserRenderer {
   /** @var Links */
   private $links;
 
+  /** @var NewsletterUrl */
+  private $newsletterUrl;
+
   private Personalizer $personalizer;
 
   public function __construct(
@@ -39,13 +50,15 @@ class ViewInBrowserRenderer {
     TrackingConfig $trackingConfig,
     Shortcodes $shortcodes,
     Renderer $renderer,
-    Links $links
+    Links $links,
+    NewsletterUrl $newsletterUrl
   ) {
     $this->emoji = $emoji;
     $this->trackingConfig = $trackingConfig;
     $this->renderer = $renderer;
     $this->shortcodes = $shortcodes;
     $this->links = $links;
+    $this->newsletterUrl = $newsletterUrl;
     $this->personalizer = Email_Editor_Container::container()->get(Personalizer::class);
   }
 
@@ -55,7 +68,52 @@ class ViewInBrowserRenderer {
     ?SubscriberEntity $subscriber = null,
     ?SendingQueueEntity $queue = null
   ) {
-    $wpUserPreview = $isPreview;
+    return $this->renderWithContext(
+      $newsletter,
+      $subscriber,
+      $queue,
+      $this->buildRenderOptionsForPreview($isPreview)
+    );
+  }
+
+  public function renderPublicShare(
+    NewsletterEntity $newsletter,
+    ?SendingQueueEntity $queue = null
+  ): string {
+    // An empty SubscriberEntity (not null) is intentional: the subscriber
+    // shortcode handler treats null as "leave the shortcode in place" but
+    // resolves `default:` arguments against any SubscriberEntity instance.
+    return $this->renderWithContext(
+      $newsletter,
+      new SubscriberEntity(),
+      $queue,
+      $this->buildRenderOptionsForPublicShare()
+    );
+  }
+
+  /**
+   * @param array{
+   *   renderAsPreview: bool,
+   *   sanitizeRenderedQueueLinks: bool,
+   *   shortcodesPreview: bool,
+   *   replaceSubscriberTracking: bool,
+   *   personalizerPreview: bool,
+   *   replaceViewInBrowserUrlWithPublicShareUrl: bool
+   * } $options
+   */
+  private function renderWithContext(
+    NewsletterEntity $newsletter,
+    ?SubscriberEntity $subscriber,
+    ?SendingQueueEntity $queue,
+    array $options
+  ): string {
+    $renderAsPreview = $options[self::OPTION_RENDER_AS_PREVIEW];
+    $sanitizeRenderedQueueLinks = $options[self::OPTION_SANITIZE_RENDERED_QUEUE_LINKS];
+    $shortcodesPreview = $options[self::OPTION_SHORTCODES_PREVIEW];
+    $replaceSubscriberTracking = $options[self::OPTION_REPLACE_SUBSCRIBER_TRACKING];
+    $personalizerPreview = $options[self::OPTION_PERSONALIZER_PREVIEW];
+    $replaceViewInBrowserUrlWithPublicShareUrl = $options[self::OPTION_REPLACE_VIEW_IN_BROWSER_URL];
+
     $isTrackingEnabled = $this->trackingConfig->isEmailTrackingEnabled();
 
     if ($queue && $queue->getNewsletterRenderedBody()) {
@@ -70,7 +128,7 @@ class ViewInBrowserRenderer {
       // isolate "view in browser", "unsubscribe" and "manage subscription" links
       // and convert them to shortcodes, which later will be replaced with "#" when
       // newsletter is previewed
-      if ($wpUserPreview && preg_match($this->links->getLinkRegex(), $newsletterBody)) {
+      if ($sanitizeRenderedQueueLinks && preg_match($this->links->getLinkRegex(), $newsletterBody)) {
         $newsletterBody = $this->links->convertHashedLinksToShortcodesAndUrls(
           $newsletterBody,
           $queue->getId(),
@@ -80,7 +138,7 @@ class ViewInBrowserRenderer {
         $newsletterBody = str_replace(Links::DATA_TAG_OPEN, '', $newsletterBody);
       }
     } else {
-      if ($wpUserPreview) {
+      if ($renderAsPreview) {
         $newsletterBody = $this->renderer->renderAsPreview($newsletter, 'html');
       } else {
         $newsletterBody = $this->renderer->render($newsletter, $sendingTask = null, 'html');
@@ -90,10 +148,17 @@ class ViewInBrowserRenderer {
       $newsletter,
       $subscriber,
       $queue,
-      $wpUserPreview
+      $shortcodesPreview
     );
     $renderedNewsletter = $this->shortcodes->replace($newsletterBody);
-    if (!$wpUserPreview && $queue && $subscriber && $isTrackingEnabled) {
+    if ($replaceViewInBrowserUrlWithPublicShareUrl) {
+      $renderedNewsletter = str_replace(
+        $this->newsletterUrl->getViewInBrowserUrl($newsletter, null, $queue, true),
+        $this->newsletterUrl->getPublicShareUrl($newsletter),
+        $renderedNewsletter
+      );
+    }
+    if ($replaceSubscriberTracking && $queue && $subscriber && $isTrackingEnabled) {
       $renderedNewsletter = $this->links->replaceSubscriberData(
         $subscriber->getId(),
         $queue->getId(),
@@ -103,13 +168,58 @@ class ViewInBrowserRenderer {
     if ($newsletter->getWpPostId() !== null) {
       $this->personalizer->set_context([
         'recipient_email' => $subscriber ? $subscriber->getEmail() : null,
-        'is_user_preview' => $wpUserPreview,
+        'is_user_preview' => $personalizerPreview,
         'newsletter_id' => $newsletter->getId(),
         'queue_id' => $queue ? $queue->getId() : null,
       ]);
-      $renderedNewsletter = $this->personalizer->personalize_content($renderedNewsletter);
+      $renderedNewsletter = $this->personalizer->personalize_content($renderedNewsletter, Personalizer::RENDERING_CONTEXT_HTML);
     }
     return $renderedNewsletter;
+  }
+
+  /**
+   * @return array{
+   *   renderAsPreview: bool,
+   *   sanitizeRenderedQueueLinks: bool,
+   *   shortcodesPreview: bool,
+   *   replaceSubscriberTracking: bool,
+   *   personalizerPreview: bool,
+   *   replaceViewInBrowserUrlWithPublicShareUrl: bool
+   * }
+   */
+  private function buildRenderOptionsForPreview(bool $isPreview): array {
+    return [
+      self::OPTION_RENDER_AS_PREVIEW => $isPreview,
+      self::OPTION_SANITIZE_RENDERED_QUEUE_LINKS => $isPreview,
+      self::OPTION_SHORTCODES_PREVIEW => $isPreview,
+      self::OPTION_REPLACE_SUBSCRIBER_TRACKING => !$isPreview,
+      self::OPTION_PERSONALIZER_PREVIEW => $isPreview,
+      self::OPTION_REPLACE_VIEW_IN_BROWSER_URL => false,
+    ];
+  }
+
+  /**
+   * @return array{
+   *   renderAsPreview: bool,
+   *   sanitizeRenderedQueueLinks: bool,
+   *   shortcodesPreview: bool,
+   *   replaceSubscriberTracking: bool,
+   *   personalizerPreview: bool,
+   *   replaceViewInBrowserUrlWithPublicShareUrl: bool
+   * }
+   */
+  private function buildRenderOptionsForPublicShare(): array {
+    return [
+      // Keep no-queue public share fallback in preview mode to avoid
+      // send-time preprocessing side effects and keep shortcode behavior
+      // consistent with the rendering mode.
+      self::OPTION_RENDER_AS_PREVIEW => true,
+      self::OPTION_SANITIZE_RENDERED_QUEUE_LINKS => true,
+      self::OPTION_SHORTCODES_PREVIEW => true,
+      self::OPTION_REPLACE_SUBSCRIBER_TRACKING => false,
+      self::OPTION_PERSONALIZER_PREVIEW => true,
+      self::OPTION_REPLACE_VIEW_IN_BROWSER_URL => true,
+    ];
   }
 
   private function prepareShortcodes(

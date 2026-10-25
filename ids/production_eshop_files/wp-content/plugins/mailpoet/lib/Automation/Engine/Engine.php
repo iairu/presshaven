@@ -13,8 +13,10 @@ use MailPoet\Automation\Engine\Endpoints\Automations\AutomationsDeleteEndpoint;
 use MailPoet\Automation\Engine\Endpoints\Automations\AutomationsDuplicateEndpoint;
 use MailPoet\Automation\Engine\Endpoints\Automations\AutomationsGetEndpoint;
 use MailPoet\Automation\Engine\Endpoints\Automations\AutomationsPutEndpoint;
+use MailPoet\Automation\Engine\Endpoints\Automations\AutomationTemplateEmailPreviewEndpoint;
 use MailPoet\Automation\Engine\Endpoints\Automations\AutomationTemplateGetEndpoint;
 use MailPoet\Automation\Engine\Endpoints\Automations\AutomationTemplatesGetEndpoint;
+use MailPoet\Automation\Engine\Endpoints\Automations\AutomationVersionsGetEndpoint;
 use MailPoet\Automation\Engine\Storage\AutomationStorage;
 use MailPoet\Automation\Integrations\Core\CoreIntegration;
 use MailPoet\Automation\Integrations\WordPress\WordPressIntegration;
@@ -83,10 +85,12 @@ class Engine {
     $this->wordPress->addAction(Hooks::API_INITIALIZE, function (API $api) {
       $api->registerGetRoute('automations', AutomationsGetEndpoint::class);
       $api->registerPutRoute('automations/(?P<id>\d+)', AutomationsPutEndpoint::class);
+      $api->registerGetRoute('automations/(?P<id>\d+)/versions', AutomationVersionsGetEndpoint::class);
       $api->registerDeleteRoute('automations/(?P<id>\d+)', AutomationsDeleteEndpoint::class);
       $api->registerPostRoute('automations/(?P<id>\d+)/duplicate', AutomationsDuplicateEndpoint::class);
       $api->registerPostRoute('automations/create-from-template', AutomationsCreateFromTemplateEndpoint::class);
       $api->registerGetRoute('automation-templates', AutomationTemplatesGetEndpoint::class);
+      $api->registerGetRoute('automation-template-email-preview', AutomationTemplateEmailPreviewEndpoint::class);
       $api->registerGetRoute('automation-templates/(?P<slug>.+)', AutomationTemplateGetEndpoint::class);
     });
   }

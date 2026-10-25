@@ -14,11 +14,17 @@ class CaptchaRenderer {
   const DEFAULT_HEIGHT = 60;
 
   private CaptchaPhrase $phrase;
+  private CaptchaSession $session;
+  private CaptchaAudioBuilder $audioBuilder;
 
   public function __construct(
-    CaptchaPhrase $phrase
+    CaptchaPhrase $phrase,
+    CaptchaSession $session,
+    CaptchaAudioBuilder $audioBuilder
   ) {
     $this->phrase = $phrase;
+    $this->session = $session;
+    $this->audioBuilder = $audioBuilder;
   }
 
   public function isSupported(): bool {
@@ -26,41 +32,36 @@ class CaptchaRenderer {
   }
 
   public function renderAudio(string $sessionId): void {
-    $audioPath = Env::$assetsPath . '/audio/';
-    $phrase = $this->getPhrase($sessionId);
-
-    $files = [];
-    foreach (str_split($phrase) as $character) {
-      $file = $audioPath . strtolower($character) . '.mp3';
-      if (!file_exists($file)) {
-        throw new \RuntimeException("File not found.");
-      }
-      $files[] = $file;
+    $phrase = $this->phrase->getPhrase($sessionId);
+    if (!$phrase) {
+      return;
     }
+
+    $audio = $this->audioBuilder->build($phrase, Env::$assetsPath . '/audio', $sessionId);
 
     Headers::setNoCacheHeaders();
-    header('Content-Type: audio/mpeg');
-    foreach ($files as $file) {
-      readfile($file);
-    }
+    header('Content-Type: audio/wav');
+    echo $audio; // phpcs:ignore WordPress.Security.EscapeOutput -- binary WAV data
   }
 
-  public function renderImage(string $sessionId, $width = null, $height = null): void {
+  public function renderImage(string $sessionId): void {
     if (!$this->isSupported()) {
       return;
     }
 
-    $width = (isset($width) && $width > 0) ? intval($width) : self::DEFAULT_WIDTH;
-    $height = (isset($height) && $height > 0) ? intval($height) : self::DEFAULT_HEIGHT;
+    $width = self::DEFAULT_WIDTH;
+    $height = self::DEFAULT_HEIGHT;
 
-    $fontNumbers = array_merge(range(0, 3), [5]); // skip font #4
+    $fontNumbers = array_merge(range(0, 3), [5]); // MailPoet ships captcha0–3 and captcha5 in assets/fonts/captcha
     $fontNumber = $fontNumbers[mt_rand(0, count($fontNumbers) - 1)];
 
-    $reflector = new \ReflectionClass(CaptchaBuilder::class);
-    $captchaDirectory = dirname((string)$reflector->getFileName());
-    $font = $captchaDirectory . '/Font/captcha' . $fontNumber . '.ttf';
+    $font = Env::$assetsPath . '/fonts/captcha/captcha' . $fontNumber . '.ttf';
 
-    $phrase = $this->getPhrase($sessionId);
+    $phrase = $this->phrase->getPhrase($sessionId);
+    if (!$phrase) {
+      return;
+    }
+
     $builder = CaptchaBuilder::create($phrase)
       ->setBackgroundColor(255, 255, 255)
       ->setTextColor(1, 1, 1)
@@ -73,14 +74,9 @@ class CaptchaRenderer {
   }
 
   public function refreshPhrase(string $sessionId): string {
-    return $this->phrase->createPhrase($sessionId);
-  }
-
-  private function getPhrase(string $sessionId): string {
-    $phrase = $this->phrase->getPhrase($sessionId);
-    if (!$phrase) {
-      throw new \RuntimeException("No CAPTCHA phrase was generated.");
+    if (!$this->session->exists($sessionId)) {
+      return '';
     }
-    return $phrase;
+    return $this->phrase->createPhrase($sessionId);
   }
 }

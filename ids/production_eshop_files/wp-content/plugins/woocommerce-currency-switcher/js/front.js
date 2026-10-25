@@ -2,6 +2,54 @@
 var woocs_loading_first_time = true;//simply flag var
 var woocs_sumbit_currency_changing = true;//just a flag variable for drop-down redraws when prices redraws by AJAX
 
+
+// Unique per-browser storage key. Generated once and kept in localStorage forever.
+// Used ONLY in browser key mode as the storage key instead of the visitor IP.
+// IMPORTANT: the value must stay lowercase. The PHP side runs it through
+// sanitize_key(), which lowercases, so an uppercase character here would produce
+// a different md5 on the server and silently split the storage bucket in two.
+var woocs_sk = '';
+if (typeof woocs_browser_key_mode !== 'undefined' && woocs_browser_key_mode) {
+    try {
+        woocs_sk = localStorage.getItem('woocs_sk') || '';
+        if (!woocs_sk) {
+            woocs_sk = (window.crypto && crypto.randomUUID)
+                    ? crypto.randomUUID().replace(/-/g, '')
+                    : String(Date.now()) + Math.random().toString(36).slice(2, 12);
+            localStorage.setItem('woocs_sk', woocs_sk);
+        }
+    } catch (e) {
+        woocs_sk = ''; // private mode / storage disabled: silently fall back to the IP based key
+    }
+}
+
+// Must run at top level, NOT on document ready: WooCommerce Blocks and the Store API
+// start calling fetch() before ready fires, and anything sent earlier misses the key.
+// jQuery covers admin-ajax and wc-ajax (see ajaxSend below); fetch() based callers -
+// Blocks, the Store API, PayPal PPCP - never pass through jQuery, so the key has to
+// travel as a request header. A header, not a query argument: a per visitor query
+// argument would fragment the page cache per visitor.
+if (woocs_sk && window.fetch) {
+    var woocs_native_fetch = window.fetch;
+    window.fetch = function (input, init) {
+
+        var url = (typeof input === 'string') ? input : (input && input.url) || '';
+
+        // Same origin only. A custom header on a cross origin request triggers a
+        // preflight and can break payment SDKs loaded from third party domains.
+        if (url.indexOf('http') === 0 && url.indexOf(window.location.origin) !== 0) {
+            return woocs_native_fetch(input, init);
+        }
+
+        init = init || {};
+        init.headers = new Headers(init.headers || (input && input.headers) || {});
+        if (!init.headers.has('X-WOOCS-SK')) {
+            init.headers.set('X-WOOCS-SK', woocs_sk);
+        }
+        return woocs_native_fetch(input, init);
+    };
+}
+
 jQuery(function ($) {
 
     if (typeof woocs_array_of_get === 'undefined') {
@@ -9,6 +57,37 @@ jQuery(function ($) {
     }
 
     woocs_array_of_get = JSON.parse(woocs_array_of_get);
+
+    // Attach the browser key to every AJAX request (admin-ajax and wc-ajax),
+    // so the cart and the checkout resolve the same currency as the catalog pages.
+    if (woocs_sk) {
+        $(document).ajaxSend(function (e, xhr, settings) {
+            if (typeof settings.data === 'string' && settings.data.indexOf('woocs_sk=') === -1) {
+                settings.data += (settings.data ? '&' : '') + 'woocs_sk=' + encodeURIComponent(woocs_sk);
+            }
+        });
+
+
+        // A currency arrived in the URL, but a plain page load carries no browser key,
+        // so the value was stored under the IP key. Mirror it to the browser key bucket
+        // before any redraw runs, otherwise the redraw reads an empty bucket and falls
+        // back to the base currency.
+        // Uppercased on purpose: the URL handler uses strtoupper() while set_currency()
+        // stores whatever it is given, so a lowercase code would be saved as is and then
+        // never match the currency array keys.
+        if (woocs_array_of_get.currency !== undefined) {
+            jQuery.post(woocs_ajaxurl, {
+                action: 'woocs_set_currency_ajax',
+                currency: String(woocs_array_of_get.currency).toUpperCase()
+            }, function () {
+                // The mini cart HTML is cached in sessionStorage keyed by the CART hash,
+                // and the currency is not part of that hash - so the stale fragment would
+                // otherwise survive every later navigation. Refresh it now that the
+                // storage bucket already holds the new currency.
+                jQuery(document.body).trigger('wc_fragment_refresh');
+            });
+        }
+    }
 
     //wp-content\plugins\woocommerce\assets\js\frontend\cart.js
     if (Object.keys(woocs_array_of_get).length !== 0) {
@@ -165,6 +244,8 @@ jQuery(function ($) {
     if (typeof woocs_shop_is_cached !== 'undefined') {
         if (woocs_shop_is_cached) {
 
+            woocs_late_prices_watch();
+
             setTimeout(function () {
 
                 woocs_sumbit_currency_changing = false;
@@ -194,7 +275,11 @@ jQuery(function ($) {
                             current_currency: woocs_current_currency['name']
                         };
                         jQuery.post(woocs_ajaxurl, data, function (data) {
-                            data = JSON.parse(data);
+                            // The server answers with wp_send_json (already parsed by jQuery)
+                            // in one branch and with wp_die(json_encode()) (plain string) in another.
+                            if (typeof data === 'string') {
+                                data = JSON.parse(data);
+                            }
                             if (!jQuery.isEmptyObject(data)) {
                                 jQuery.each(data, function (val, price) {
                                     jQuery(".woocs_amount_custom_price[data-value='" + val + "']").replaceWith(price);
@@ -221,7 +306,11 @@ jQuery(function ($) {
                             };
 
                             jQuery.post(woocs_ajaxurl, data_var, function (data) {
-                                data = JSON.parse(data);
+                                // The server answers with wp_send_json (already parsed by jQuery)
+                                // in one branch and with wp_die(json_encode()) (plain string) in another.
+                                if (typeof data === 'string') {
+                                    data = JSON.parse(data);
+                                }
 
                                 if (!jQuery.isEmptyObject(data)) {
                                     jQuery.each(var_data, function (indx, attr) {
@@ -249,6 +338,7 @@ jQuery(function ($) {
                     //if no prices on the page - do nothing
                     if (Object.keys(products_ids).length === 0) {
                         woocs_sumbit_currency_changing = true;
+                        woocs_late_prices_ready('');
                         return;
                     }
 
@@ -261,9 +351,16 @@ jQuery(function ($) {
 
                     jQuery.post(woocs_ajaxurl, data, function (data) {
 
-                        data = JSON.parse(data);
+                        // The server answers with wp_send_json (already parsed by jQuery)
+                        // in one branch and with wp_die(json_encode()) (plain string) in another.
+                        if (typeof data === 'string') {
+                            data = JSON.parse(data);
+                        }
+
                         if (jQuery.isEmptyObject(data)) {
                             woocs_sumbit_currency_changing = true;
+                            //the server answers empty when the page was rendered in the visitor currency
+                            woocs_late_prices_ready(woocs_late_prices.page_currency);
                         }
                         if (!jQuery.isEmptyObject(data)) {
                             jQuery('.woocs_price_info').remove();
@@ -341,13 +438,18 @@ jQuery(function ($) {
                             document.dispatchEvent(new CustomEvent('after_woocs_get_products_price_html', {detail: {
                                     current_currency: data.current_currency
                                 }}));
+
+                            woocs_late_prices_ready(data.current_currency);
                         }
 
+                    }).fail(function () {
+                        woocs_late_prices_ready('');
                     });
 
                 } else {
                     woocs_sumbit_currency_changing = true;
-
+                    //the currency came in the URL: such a page is rendered for it, not taken from the cache
+                    woocs_late_prices_ready(woocs_late_prices.page_currency);
                 }
                 jQuery(".single_variation_wrap").on("show_variation", function (event, variation) {
                     jQuery('.woocs_price_code').removeClass('woocs_preloader_ajax');
@@ -365,7 +467,91 @@ jQuery(function ($) {
     }, 300);
     //***
 
+    //fix: https://pluginus.net/support/topic/wrong-currency-displayed/#postid-100678
+    //for shortcode [woocs_show_custom_price value="100"] when sites has cache enabled
+    setTimeout(function () {
+        // Check if cache mode is enabled
+        if (typeof woocs_shop_is_cached !== 'undefined' && woocs_shop_is_cached) {
 
+            // Recalculate custom prices function
+            function woocs_recalculate_custom_prices() {
+                jQuery('.woocs_amount_custom_price').each(function () {
+                    var $item = jQuery(this);
+                    var base_value = parseFloat($item.data('value'));
+                    var decimals = parseInt($item.data('decimals'));
+
+                    if (isNaN(base_value)) {
+                        return;
+                    }
+
+                    // Convert to current currency
+                    var converted_value = base_value * woocs_current_currency.rate;
+
+                    // Determine decimals
+                    if (decimals === -1 || isNaN(decimals)) {
+                        decimals = parseInt(woocs_current_currency.decimals);
+                    }
+
+                    // Apply hide_cents setting
+                    if (woocs_current_currency.hide_cents == 1) {
+                        decimals = 0;
+                    }
+
+                    // Format number
+                    var price_formatted = converted_value.toFixed(decimals);
+
+                    // Apply separators
+                    if (woocs_current_currency.separators === "1") {
+                        // European format: 1.234,56
+                        price_formatted = price_formatted.replace('.', ',');
+                        var parts = price_formatted.split(',');
+                        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                        price_formatted = parts.join(',');
+                    } else {
+                        // American format: 1,234.56
+                        var parts = price_formatted.split('.');
+                        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                        price_formatted = parts.join('.');
+                    }
+
+                    // Build HTML with currency symbol
+                    var symbol = woocs_current_currency.symbol;
+                    var position = woocs_current_currency.position;
+                    var final_html = '';
+
+                    switch (position) {
+                        case 'left':
+                            final_html = symbol + price_formatted;
+                            break;
+                        case 'left_space':
+                            final_html = symbol + '&nbsp;' + price_formatted;
+                            break;
+                        case 'right':
+                            final_html = price_formatted + symbol;
+                            break;
+                        case 'right_space':
+                            final_html = price_formatted + '&nbsp;' + symbol;
+                            break;
+                        default:
+                            final_html = symbol + price_formatted;
+                    }
+
+                    // Update inner span with class woocs_amount
+                    $item.find('.woocs_amount').html(final_html);
+                });
+
+                console.log('WOOCS custom prices recalculated');
+            }
+
+            // Run on page load
+            woocs_recalculate_custom_prices();
+
+            // Run on currency change
+            jQuery(document).on('woocs_currencies_changed', function () {
+                setTimeout(woocs_recalculate_custom_prices, 100);
+            });
+        }
+    }, 500);
 });
 
 
@@ -408,15 +594,216 @@ function woocs_redirect(currency) {
         });
 
     } else {
+
         if (Object.keys(woocs_array_of_get).length > 0) {
-	    let get_values = [];
+            let get_values = [];
             jQuery.each(woocs_array_of_get, function (index, value) {
                 get_values.push(index + "=" + value);
             });
-	    string_of_get += get_values.join("&");
-	}
-        window.location = l + string_of_get + id_key;
+            string_of_get += get_values.join("&");
+        }
+
+        if (woocs_sk) {
+            jQuery.post(woocs_ajaxurl, {
+                action: "woocs_set_currency_ajax",
+                currency: currency,
+                woocs_sk
+            }, function (value) {
+                window.location = l + string_of_get + id_key;
+            });
+
+        } else {
+            window.location = l + string_of_get + id_key;
+        }
+
     }
+}
+
+//+++
+//Cache mode: prices inserted into the page after the first redraw pass (Composite Products options,
+//Product Bundles, quick views, AJAX fragments) are not part of that pass. Their markup may come from a
+//page cache, so it may carry the preloader class and be in another currency than the visitor uses.
+//Watch for them and, as soon as they appear, either just clear the preloader (the markup is already in
+//the visitor currency) or redraw them in the visitor currency.
+var woocs_late_prices = {
+    pending: true, //until the first redraw pass answers
+    visitor_currency: '', //'' while unknown
+    page_currency: '', //the currency the page markup was rendered in
+    queue: [],
+    html: {}, //redraw-id => price html already received from the server
+    timer: null,
+    busy: false
+};
+
+function woocs_late_prices_watch() {
+    if (typeof woocs_current_currency !== 'undefined' && woocs_current_currency) {
+        woocs_late_prices.page_currency = woocs_current_currency['name'];
+    }
+
+    if (typeof MutationObserver === 'undefined') {
+        return;
+    }
+
+    new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            for (var j = 0; j < mutations[i].addedNodes.length; j++) {
+                if (mutations[i].addedNodes[j].nodeType === 1) {
+                    woocs_late_prices_take(mutations[i].addedNodes[j]);
+                }
+            }
+        }
+    }).observe(document.documentElement, {childList: true, subtree: true});
+}
+
+//the currency a price markup was rendered in; markup cached before data-price-currency existed
+//is taken as rendered in the page currency
+function woocs_late_prices_currency(el) {
+    return el.getAttribute('data-price-currency') || woocs_late_prices.page_currency;
+}
+
+function woocs_late_prices_take(node) {
+    var found = node.classList.contains('woocs_price_code') ? [node] : node.getElementsByClassName('woocs_price_code');
+    if (!found.length) {
+        return;
+    }
+
+    found = Array.prototype.slice.call(found);
+    for (var i = 0; i < found.length; i++) {
+        var el = found[i];
+        var redraw_id = el.getAttribute('data-redraw-id');
+        //data-live: rendered by AJAX for this visitor, nothing to redraw
+        var redrawable = redraw_id && el.getAttribute('data-product-id') && !el.hasAttribute('data-live');
+        var visitor = woocs_late_prices.visitor_currency;
+
+        if (!redrawable || (visitor && woocs_late_prices_currency(el) === visitor)) {
+            //no request needed: cleared synchronously, before the browser paints the spinner
+            el.classList.remove('woocs_preloader_ajax');
+        } else if (visitor && typeof woocs_late_prices.html[redraw_id] !== 'undefined') {
+            //the same cached markup inserted again, for example a Composite option chosen twice
+            jQuery(el).replaceWith(woocs_late_prices.html[redraw_id]);
+        } else {
+            woocs_late_prices.queue.push(el);
+        }
+    }
+
+    woocs_late_prices_schedule();
+}
+
+//called by the first redraw pass with the visitor currency, or with '' when it could not tell
+function woocs_late_prices_ready(visitor_currency) {
+    woocs_late_prices.pending = false;
+    if (visitor_currency) {
+        woocs_late_prices.visitor_currency = visitor_currency;
+    }
+    woocs_late_prices_schedule();
+}
+
+function woocs_late_prices_schedule() {
+    //while the first redraw pass is running it handles what is on the page, so late prices wait for it
+    if (woocs_late_prices.pending || woocs_late_prices.timer || !woocs_late_prices.queue.length) {
+        return;
+    }
+
+    //short debounce: one request for all prices a plugin inserts in one go
+    woocs_late_prices.timer = setTimeout(woocs_late_prices_flush, 30);
+}
+
+function woocs_late_prices_flush() {
+    woocs_late_prices.timer = null;
+    if (woocs_late_prices.busy) {
+        return; //called again when the running request completes
+    }
+
+    var visitor = woocs_late_prices.visitor_currency;
+    var groups = {}; //rendered currency => elements
+    var group_currency = '';
+    for (var i = 0; i < woocs_late_prices.queue.length; i++) {
+        var el = woocs_late_prices.queue[i];
+        //removed from the page meanwhile, for example replaced by the first redraw pass
+        if (!document.documentElement.contains(el)) {
+            continue;
+        }
+        var currency = woocs_late_prices_currency(el);
+        if (visitor && currency === visitor) {
+            el.classList.remove('woocs_preloader_ajax');
+            continue;
+        }
+        if (!groups[currency]) {
+            groups[currency] = [];
+        }
+        if (groups[currency].indexOf(el) === -1) {
+            groups[currency].push(el);
+        }
+        group_currency = currency;
+    }
+    woocs_late_prices.queue = [];
+
+    if (!group_currency) {
+        return;
+    }
+
+    //one request per rendered currency, normally there is only one; the rest waits for the next round
+    var items = groups[group_currency];
+    for (var c in groups) {
+        if (c !== group_currency) {
+            woocs_late_prices.queue = woocs_late_prices.queue.concat(groups[c]);
+        }
+    }
+
+    var clear = function (list) {
+        for (var i = 0; i < list.length; i++) {
+            list[i].classList.remove('woocs_preloader_ajax');
+        }
+    };
+
+    var products_ids = {};
+    var products_currency = {};
+    for (var i = 0; i < items.length; i++) {
+        var redraw_id = items[i].getAttribute('data-redraw-id');
+        products_ids[redraw_id] = items[i].getAttribute('data-product-id');
+        if (items[i].getAttribute('data-currency')) {
+            products_currency[redraw_id] = items[i].getAttribute('data-currency');
+        }
+    }
+
+    woocs_late_prices.busy = true;
+    jQuery.post(woocs_ajaxurl, {
+        action: "woocs_get_products_price_html",
+        products_ids: products_ids,
+        products_currency: products_currency,
+        current_currency: group_currency
+    }, function (data) {
+        if (typeof data === 'string') {
+            data = JSON.parse(data);
+        }
+
+        //empty answer: this markup is already in the visitor currency
+        if (jQuery.isEmptyObject(data) || typeof data.ids === 'undefined') {
+            woocs_late_prices.visitor_currency = group_currency;
+            clear(items);
+            return;
+        }
+
+        woocs_late_prices.visitor_currency = data.current_currency;
+        for (var i = 0; i < items.length; i++) {
+            var redraw_id = items[i].getAttribute('data-redraw-id');
+            if (typeof data.ids[redraw_id] !== 'undefined') {
+                //the answer is rendered by AJAX (data-live, no preloader), the replace is a guard against a loop
+                woocs_late_prices.html[redraw_id] = String(data.ids[redraw_id]).replace(/\bwoocs_preloader_ajax\b/g, '');
+                if (document.documentElement.contains(items[i])) {
+                    jQuery(items[i]).replaceWith(woocs_late_prices.html[redraw_id]);
+                }
+            } else {
+                items[i].classList.remove('woocs_preloader_ajax');
+            }
+        }
+    }).fail(function () {
+        //never leave a spinner forever
+        clear(items);
+    }).always(function () {
+        woocs_late_prices.busy = false;
+        woocs_late_prices_schedule();
+    });
 }
 
 function woocs_refresh_mini_cart(delay) {
@@ -571,4 +958,3 @@ function woocs_init_ddslick_select() {
         });
     });
 }
-

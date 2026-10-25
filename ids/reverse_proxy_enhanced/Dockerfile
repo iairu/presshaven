@@ -1,4 +1,4 @@
-FROM openresty/openresty:alpine
+FROM openresty/openresty:1.31.1.1-5-alpine
 
 # Install additional packages including perl for opm
 # ca-certificates is required for resty.http's ssl_verify=true to succeed on

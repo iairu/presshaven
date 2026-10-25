@@ -18,6 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * API V5 Methods
+ *
+ * @class   APIV5
+ * @version 1.6.0
  */
 class APIV5 extends Base {
 
@@ -153,8 +156,8 @@ class APIV5 extends Base {
 	 *
 	 * @param string $ad_account_id the advertiser_id to request the tags for.
 	 *
-	 * @return array {
-	 *      Tag objects list.
+	 * @return array|null {
+	 *      Tag objects list; null when the response body is empty.
 	 *
 	 *      @type array[] $items {
 	 *         Tag object.
@@ -178,6 +181,7 @@ class APIV5 extends Base {
 	 *              @type ?bool $aem_ge_enabled     Whether Automatic Enhanced Match gender is enabled.
 	 *              @type ?bool $aem_db_enabled     Whether Automatic Enhanced Match birthdate is enabled.
 	 *              @type ?bool $aem_loc_enabled    Whether Automatic Enhanced Match location is enabled.
+	 *              @type ?bool $aem_external_id_enabled Whether Automatic Enhanced Match external ID is enabled.
 	 *          }
 	 *      }
 	 * }
@@ -221,6 +225,7 @@ class APIV5 extends Base {
 	 *          @type bool    $aem_ge_enabled      Whether Automatic Enhanced Match gender is enabled.
 	 *          @type bool    $aem_db_enabled      Whether Automatic Enhanced Match birthdate is enabled.
 	 *          @type bool    $aem_loc_enabled     Whether Automatic Enhanced Match location is enabled.
+	 *          @type bool    $aem_external_id_enabled Whether Automatic Enhanced Match external ID is enabled.
 	 *      }
 	 * }
 	 * @throws PinterestApiException Throws 500 exception in case of unexpected error.
@@ -259,6 +264,7 @@ class APIV5 extends Base {
 	 *          @type ?bool $aem_ge_enabled     Whether Automatic Enhanced Match gender is enabled.
 	 *          @type ?bool $aem_db_enabled     Whether Automatic Enhanced Match birthdate is enabled.
 	 *          @type ?bool $aem_loc_enabled    Whether Automatic Enhanced Match location is enabled.
+	 *          @type ?bool $aem_external_id_enabled Whether Automatic Enhanced Match external ID is enabled.
 	 *      }
 	 * }
 	 * @throws PinterestApiException|Exception Throws 500 exception.
@@ -269,14 +275,15 @@ class APIV5 extends Base {
 			"ad_accounts/{$ad_account_id}/conversion_tags",
 			'POST',
 			array(
-				'name'             => $tag_name,
-				'aem_enabled'      => true,
-				'md_frequency'     => 1,
-				'aem_fnln_enabled' => true,
-				'aem_ph_enabled'   => true,
-				'aem_ge_enabled'   => true,
-				'aem_db_enabled'   => true,
-				'ae_loc_enabled'   => true,
+				'name'                    => $tag_name,
+				'aem_enabled'             => true,
+				'md_frequency'            => 1,
+				'aem_fnln_enabled'        => true,
+				'aem_ph_enabled'          => true,
+				'aem_ge_enabled'          => true,
+				'aem_db_enabled'          => true,
+				'aem_loc_enabled'         => true,
+				'aem_external_id_enabled' => true,
 			)
 		);
 	}
@@ -404,11 +411,18 @@ class APIV5 extends Base {
 	 * @since 1.4.0
 	 */
 	public static function create_commerce_integration( array $integration_data ): array {
-		return self::make_request(
+		$response = self::make_request(
 			'integrations/commerce',
 			'POST',
 			$integration_data
 		);
+
+		// A 204 or other empty success has no integration to save; fail like an API error so the caller retries.
+		if ( ! is_array( $response ) ) {
+			throw new PinterestApiException( esc_html__( 'Empty commerce integration response.', 'pinterest-for-woocommerce' ), 204 );
+		}
+
+		return $response;
 	}
 
 	/**
@@ -570,8 +584,10 @@ class APIV5 extends Base {
 	 * Get merchant's feeds.
 	 *
 	 * @since 1.4.0
+	 * @since 1.6.0 Added the $bookmark parameter. Only the first page is cached.
 	 *
 	 * @param string $ad_account_id Pinterest Ad Account ID.
+	 * @param string $bookmark      Cursor of the page to fetch, from the previous page's bookmark. Empty for the first page.
 	 *
 	 * @return array {
 	 *      List of feeds.
@@ -606,13 +622,18 @@ class APIV5 extends Base {
 	 * }
 	 * @throws PinterestApiException If the request fails with 2xx status.
 	 */
-	public static function get_feeds( string $ad_account_id ): array {
+	public static function get_feeds( string $ad_account_id, string $bookmark = '' ): array {
+		$endpoint = "catalogs/feeds?ad_account_id={$ad_account_id}";
+		if ( '' !== $bookmark ) {
+			$endpoint .= '&bookmark=' . rawurlencode( $bookmark );
+		}
+
 		return self::make_request(
-			"catalogs/feeds?ad_account_id={$ad_account_id}",
+			$endpoint,
 			'GET',
 			array(),
 			'',
-			MINUTE_IN_SECONDS
+			'' === $bookmark ? MINUTE_IN_SECONDS : false
 		);
 	}
 

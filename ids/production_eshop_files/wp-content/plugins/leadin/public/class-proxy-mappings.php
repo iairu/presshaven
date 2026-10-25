@@ -205,20 +205,8 @@ class Proxy_Mappings {
 			$http_code        = wp_remote_retrieve_response_code( $response );
 			$response_headers = wp_remote_retrieve_headers( $response );
 
-			$skip_headers = array(
-				'transfer-encoding',
-				'content-encoding',
-				'content-length',
-				'connection',
-				'keep-alive',
-			);
-
-			foreach ( $response_headers as $name => $value ) {
-				if ( in_array( strtolower( $name ), $skip_headers, true ) ) {
-					continue;
-				}
-				$safe_value = str_replace( array( "\r", "\n" ), '', $value );
-				header( "$name: $safe_value" );
+			foreach ( $this->build_passthrough_headers( $response_headers ) as $passthrough_header ) {
+				header( $passthrough_header['name'] . ': ' . $passthrough_header['value'], $passthrough_header['replace'] );
 			}
 
 			status_header( $http_code );
@@ -413,12 +401,52 @@ class Proxy_Mappings {
 	}
 
 	private function strip_headers( $headers ) {
-		$headers_to_strip = array( 'host', 'content-length', 'cf-connecting-ip', 'true-client-ip' );
+		$headers_to_strip = array( 'host', 'content-length', 'cf-connecting-ip', 'true-client-ip', 'accept-encoding' );
 		foreach ( array_keys( $headers ) as $header_key ) {
 			if ( in_array( strtolower( $header_key ), $headers_to_strip, true ) ) {
 				unset( $headers[ $header_key ] );
 			}
 		}
+		return $headers;
+	}
+
+	/**
+	 * Builds the list of response headers to forward back to the client.
+	 *
+	 * Skips hop-by-hop headers, strips CR/LF to prevent header injection, and
+	 * expands multi-value headers (e.g. multiple Set-Cookie) into separate
+	 * entries so an array value is never stringified to the literal "Array".
+	 *
+	 * @param iterable $response_headers The upstream response headers.
+	 * @return array List of array( 'name' => string, 'value' => string, 'replace' => bool ).
+	 */
+	private function build_passthrough_headers( $response_headers ) {
+		$skip_headers = array(
+			'transfer-encoding',
+			'content-encoding',
+			'content-length',
+			'connection',
+			'keep-alive',
+		);
+
+		$headers = array();
+		foreach ( $response_headers as $name => $value ) {
+			if ( in_array( strtolower( $name ), $skip_headers, true ) ) {
+				continue;
+			}
+
+			$values  = is_array( $value ) ? array_values( $value ) : array( $value );
+			$replace = true;
+			foreach ( $values as $single_value ) {
+				$headers[] = array(
+					'name'    => $name,
+					'value'   => str_replace( array( "\r", "\n" ), '', $single_value ),
+					'replace' => $replace,
+				);
+				$replace = false;
+			}
+		}
+
 		return $headers;
 	}
 

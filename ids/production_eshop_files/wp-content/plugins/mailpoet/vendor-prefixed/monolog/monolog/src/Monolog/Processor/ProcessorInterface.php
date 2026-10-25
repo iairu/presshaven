@@ -4,5 +4,5 @@ namespace MailPoetVendor\Monolog\Processor;
 if (!defined('ABSPATH')) exit;
 interface ProcessorInterface
 {
- public function __invoke(array $record);
+public function __invoke(array $record);
 }

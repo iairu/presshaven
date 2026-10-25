@@ -14,6 +14,7 @@ class Updater {
   private $plugin;
   private $slug;
   private $version;
+  public $currentFreeVersion;
 
   /** @var SettingsController */
   private $settings;
@@ -27,6 +28,7 @@ class Updater {
     $this->slug = $slug;
     $this->version = $version;
     $this->settings = SettingsController::getInstance();
+    $this->currentFreeVersion = MAILPOET_VERSION;
   }
 
   public function init() {
@@ -40,15 +42,27 @@ class Updater {
 
     $latestVersion = $this->getLatestVersion();
 
-    if (isset($latestVersion->new_version)) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-      if (version_compare((string)$this->version, $latestVersion->new_version, '<')) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-        $updateTransient->response[$this->plugin] = $latestVersion;
-      } else {
-        $updateTransient->no_update[$this->plugin] = $latestVersion; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-      }
-      $updateTransient->last_checked = time(); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-      $updateTransient->checked[$this->plugin] = $this->version;
+    if (!$latestVersion instanceof \stdClass || !isset($latestVersion->new_version)) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+      return $updateTransient; // no latest version found.
     }
+
+    if (property_exists($updateTransient, 'response') && isset($updateTransient->response[$this->plugin])) {
+      unset($updateTransient->response[$this->plugin]); // remove the cached version from the transient.
+    }
+
+    if (empty($this->currentFreeVersion)) {
+      return $updateTransient;
+    }
+
+    $latestVersion = $this->getCompatibleVersion($latestVersion);
+
+    if (version_compare((string)$this->version, $latestVersion->new_version, '<')) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+      $updateTransient->response[$this->plugin] = $latestVersion;
+    } else {
+      $updateTransient->no_update[$this->plugin] = $latestVersion; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    }
+    $updateTransient->last_checked = time(); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    $updateTransient->checked[$this->plugin] = $this->version;
 
     return $updateTransient;
   }
@@ -58,5 +72,41 @@ class Updater {
     $api = new API($key);
     $data = $api->getPluginInformation($this->slug . '/latest');
     return $data;
+  }
+
+  public function isVersionCompatible($premiumVersion, $freeVersion): bool {
+    if (empty($premiumVersion) || empty($freeVersion)) {
+        return false;
+    }
+
+    // Extract major.minor from premium version (e.g., "5.17.0" -> "5.17")
+    $premiumParts = explode('.', $premiumVersion);
+    $requiredMainVersion = isset($premiumParts[0], $premiumParts[1])
+        ? $premiumParts[0] . '.' . $premiumParts[1]
+        : $premiumVersion;
+
+    // Extract major.minor from free version (e.g., "5.17.5" -> "5.17")
+    $freeParts = explode('.', $freeVersion);
+    $currentMainVersion = isset($freeParts[0], $freeParts[1])
+        ? $freeParts[0] . '.' . $freeParts[1]
+        : $freeVersion;
+
+    // Check compatibility: free version must be >= required version
+    return version_compare($currentMainVersion, $requiredMainVersion, '>=');
+  }
+
+  public function getCompatibleVersion(\stdClass $latest): \stdClass {
+    // wordpress.org holds new free releases for up to 24h (https://wordpress.org/news/2026/06/pts/),
+    // so clamp to the installed free version to keep Premium from getting ahead of it.
+    if ($this->isVersionCompatible($latest->new_version, $this->currentFreeVersion)) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+      return $latest;
+    }
+
+    $compatible = clone $latest;
+    $compatible->new_version = Installer::getMinorVersionZero((string)$this->currentFreeVersion); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    $compatible->package = empty($latest->package)
+      ? ''
+      : Installer::buildDownloadUrlForVersion($compatible->new_version); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    return $compatible;
   }
 }

@@ -38,9 +38,11 @@ class UserRole implements Filter {
       // compatibility with the older segment before multiple roles were added
       $role = [$role];
     }
-    if (!$operator) {
-      $operator = DynamicSegmentFilterData::OPERATOR_ANY;
+    $role = array_values(array_map('strval', array_filter($role, 'is_scalar')));
+    if ($role === []) {
+      throw new InvalidFilterException('Missing role', InvalidFilterException::MISSING_ROLE);
     }
+    $operator = is_string($operator) && $operator !== '' ? $operator : DynamicSegmentFilterData::OPERATOR_ANY;
 
     $subscribersTable = $this->entityManager->getClassMetadata(SubscriberEntity::class)->getTableName();
     $parameterSuffix = ((string)$filter->getId()) . Security::generateRandomString();
@@ -88,6 +90,9 @@ class UserRole implements Filter {
       throw new InvalidStateException();
     }
     foreach ($roles as $roleSlug) {
+      if (!is_string($roleSlug)) {
+        continue;
+      }
       $roleData = $wp_roles->roles[$roleSlug] ?? null;
       if (is_array($roleData)) {
         $lookupData['roles'][$roleSlug] = $roleData['name'];

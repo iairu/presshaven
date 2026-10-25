@@ -5,7 +5,6 @@ namespace MailPoet\Config;
 if (!defined('ABSPATH')) exit;
 
 
-use MailPoet\CustomFields\CustomFieldsRepository;
 use MailPoet\DI\ContainerWrapper;
 use MailPoet\Subscribers\ImportExport\PersonalDataExporters\NewsletterClicksExporter;
 use MailPoet\Subscribers\ImportExport\PersonalDataExporters\NewsletterOpensExporter;
@@ -20,17 +19,10 @@ class PersonalDataExporters {
   /*** @var SubscribersRepository */
   private $subscribersRepository;
 
-  /**
-   * @var CustomFieldsRepository
-   */
-  private $customFieldsRepository;
-
   public function __construct(
-    SubscribersRepository $subscribersRepository,
-    CustomFieldsRepository $customFieldsRepository
+    SubscribersRepository $subscribersRepository
   ) {
     $this->subscribersRepository = $subscribersRepository;
-    $this->customFieldsRepository = $customFieldsRepository;
   }
 
   public function init() {
@@ -52,7 +44,7 @@ class PersonalDataExporters {
   public function registerSubscriberExporter($exporters) {
     $exporters[] = [
       'exporter_friendly_name' => __('MailPoet Subscriber Data', 'mailpoet'),
-      'callback' => [new SubscriberExporter($this->subscribersRepository, $this->customFieldsRepository), 'export'],
+      'callback' => [ContainerWrapper::getInstance()->get(SubscriberExporter::class), 'export'],
     ];
     return $exporters;
   }

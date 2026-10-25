@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Symfony\Component\Validator\Mapping\ClassMetadata;
 interface LoaderInterface
 {
- public function loadClassMetadata(ClassMetadata $metadata);
+public function loadClassMetadata(ClassMetadata $metadata);
 }

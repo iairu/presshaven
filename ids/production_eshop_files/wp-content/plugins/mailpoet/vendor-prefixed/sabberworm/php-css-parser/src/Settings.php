@@ -1,36 +1,49 @@
 <?php
+declare (strict_types=1);
 namespace MailPoetVendor\Sabberworm\CSS;
 if (!defined('ABSPATH')) exit;
 class Settings
 {
- public $bMultibyteSupport;
- public $sDefaultCharset = 'utf-8';
- public $bLenientParsing = \true;
- private function __construct()
- {
- $this->bMultibyteSupport = \extension_loaded('mbstring');
- }
- public static function create()
- {
- return new Settings();
- }
- public function withMultibyteSupport($bMultibyteSupport = \true)
- {
- $this->bMultibyteSupport = $bMultibyteSupport;
- return $this;
- }
- public function withDefaultCharset($sDefaultCharset)
- {
- $this->sDefaultCharset = $sDefaultCharset;
- return $this;
- }
- public function withLenientParsing($bLenientParsing = \true)
- {
- $this->bLenientParsing = $bLenientParsing;
- return $this;
- }
- public function beStrict()
- {
- return $this->withLenientParsing(\false);
- }
+private $multibyteSupport;
+private $defaultCharset = 'utf-8';
+private $lenientParsing = \true;
+private function __construct()
+{
+$this->multibyteSupport = \extension_loaded('mbstring');
+}
+public static function create(): self
+{
+return new Settings();
+}
+public function withMultibyteSupport(bool $multibyteSupport = \true): self
+{
+$this->multibyteSupport = $multibyteSupport;
+return $this;
+}
+public function withDefaultCharset(string $defaultCharset): self
+{
+$this->defaultCharset = $defaultCharset;
+return $this;
+}
+public function withLenientParsing(bool $usesLenientParsing = \true): self
+{
+$this->lenientParsing = $usesLenientParsing;
+return $this;
+}
+public function beStrict(): self
+{
+return $this->withLenientParsing(\false);
+}
+public function hasMultibyteSupport(): bool
+{
+return $this->multibyteSupport;
+}
+public function getDefaultCharset(): string
+{
+return $this->defaultCharset;
+}
+public function usesLenientParsing(): bool
+{
+return $this->lenientParsing;
+}
 }

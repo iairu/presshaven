@@ -10,6 +10,7 @@ import { __ } from '@wordpress/i18n';
 
 import { ProUpgradeCta } from '@Components/pro';
 import TemplatesNav from '../TemplatesNav';
+import { formatDuration } from '../shared/utils';
 
 const WhatsappPreview = () => {
 	// Temporary mock data for table preview
@@ -94,26 +95,11 @@ const WhatsappPreview = () => {
 		},
 	];
 
-	const formatDuration = ( value, unit ) => {
-		const units = {
-			MINUTE: 'Minutes',
-			HOUR: 'Hours',
-			DAY: 'Days',
-		};
-		unit = units[ unit ];
-		const formattedUnit =
-			parseInt( value ) === 1
-				? unit.slice( 0, -1 ) // remove 's' for singular: "days" -> "day"
-				: unit;
-
-		return `${ value } ${ formattedUnit }`;
-	};
-
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col md:flex-row gap-4 md:gap-0 justify-between relative">
 				<TemplatesNav currentTab={ 'whatsapp' } />
-				<div className="flex flex-col md:flex-row gap-4">
+				<div className="flex flex-col md:flex-row md:items-center gap-4">
 					<Input
 						placeholder={ __(
 							'Search…',
@@ -122,18 +108,17 @@ const WhatsappPreview = () => {
 						prefix={
 							<MagnifyingGlassIcon className="h-6 w-6 text-gray-500" />
 						}
-						size="md"
-						type="text"
+						size="sm"
+						type="search"
 						aria-label={ __(
 							'Search',
 							'woo-cart-abandonment-recovery'
 						) }
-						className="w-full lg:w-52"
+						className="w-full lg:w-52 [&_input]:min-h-0"
 						disabled={ true }
 					/>
 					<Button
-						className=""
-						icon={ <PlusIcon aria-label="icon" role="img" /> }
+						icon={ <PlusIcon aria-hidden="true" /> }
 						iconPosition="left"
 						size="sm"
 						tag="button"
@@ -149,93 +134,96 @@ const WhatsappPreview = () => {
 				</div>
 			</div>
 			<div className="relative">
-				<Table
-					checkboxSelection={ true }
-					className="whitespace-nowrap sm:whitespace-normal"
-				>
-					<Table.Head>
-						<Table.HeadCell>
-							{ __(
-								'Template Name',
-								'woo-cart-abandonment-recovery'
-							) }
-						</Table.HeadCell>
-						<Table.HeadCell>
-							{ __(
-								'Trigger After',
-								'woo-cart-abandonment-recovery'
-							) }
-						</Table.HeadCell>
-						<Table.HeadCell>
-							{ __( 'Status', 'woo-cart-abandonment-recovery' ) }
-						</Table.HeadCell>
-						<Table.HeadCell className="text-right">
-							{ __( 'Actions', 'woo-cart-abandonment-recovery' ) }
-						</Table.HeadCell>
-					</Table.Head>
-					<Table.Body>
-						{ data.map( ( item ) => (
-							<Table.Row key={ item.id } value={ item }>
-								<Table.Cell>
-									<span className="cursor-pointer hover:text-flamingo-400 focus-visible:text-flamingo-400">
-										{ item.template_name }
-									</span>
-								</Table.Cell>
+				{ /* Sample rows behind the upgrade prompt: not real data, so keep them out of the tab order and the accessibility tree. */ }
+				<div aria-hidden="true" inert="">
+					<Table
+						checkboxSelection={ true }
+						className="whitespace-nowrap sm:whitespace-normal"
+					>
+						<Table.Head>
+							<Table.HeadCell>
+								{ __(
+									'Template Name',
+									'woo-cart-abandonment-recovery'
+								) }
+							</Table.HeadCell>
+							<Table.HeadCell>
+								{ __(
+									'Trigger After',
+									'woo-cart-abandonment-recovery'
+								) }
+							</Table.HeadCell>
+							<Table.HeadCell>
+								{ __( 'Status', 'woo-cart-abandonment-recovery' ) }
+							</Table.HeadCell>
+							<Table.HeadCell className="text-right">
+								{ __( 'Actions', 'woo-cart-abandonment-recovery' ) }
+							</Table.HeadCell>
+						</Table.Head>
+						<Table.Body>
+							{ data.map( ( item ) => (
+								<Table.Row key={ item.id } value={ item }>
+									<Table.Cell>
+										<span>
+											{ item.template_name }
+										</span>
+									</Table.Cell>
 
-								<Table.Cell>
-									{ formatDuration(
-										item.whatsapp_frequency,
-										item.whatsapp_frequency_unit
-									) }
-								</Table.Cell>
-								<Table.Cell>
-									<Switch
-										value={ true }
-										size="md"
-										className="border-none moderncart-toggle-field"
-										role="switch"
-									/>
-								</Table.Cell>
-								<Table.Cell>
-									<div className="flex items-center justify-end gap-2">
-										<Button
-											variant="ghost"
-											icon={
-												<PencilIcon className="h-6 w-6" />
-											}
-											size="xs"
-											className="text-gray-500 hover:text-flamingo-400"
-											aria-label={ __(
-												'Edit',
-												'woo-cart-abandonment-recovery'
-											) }
+									<Table.Cell>
+										{ formatDuration(
+											item.whatsapp_frequency,
+											item.whatsapp_frequency_unit
+										) }
+									</Table.Cell>
+									<Table.Cell>
+										<Switch
+											value={ true }
+											size="md"
+											className="border-none"
+											role="switch"
 										/>
-										<Button
-											variant="ghost"
-											icon={
-												<DocumentDuplicateIcon className="h-6 w-6" />
-											}
-											size="xs"
-											className="text-gray-500 hover:text-flamingo-400"
-											aria-label={ __(
-												'Duplicate',
-												'woo-cart-abandonment-recovery'
-											) }
-										/>
-										<Button
-											variant="ghost"
-											icon={
-												<TrashIcon className="h-6 w-6" />
-											}
-											size="xs"
-											className="text-gray-500 hover:text-red-600"
-										/>
-									</div>
-								</Table.Cell>
-							</Table.Row>
-						) ) }
-					</Table.Body>
-				</Table>
+									</Table.Cell>
+									<Table.Cell>
+										<div className="flex items-center justify-end gap-2">
+											<Button
+												variant="ghost"
+												icon={
+													<PencilIcon className="h-6 w-6" />
+												}
+												size="xs"
+												className="text-gray-500 hover:text-flamingo-400"
+												aria-label={ __(
+													'Edit',
+													'woo-cart-abandonment-recovery'
+												) }
+											/>
+											<Button
+												variant="ghost"
+												icon={
+													<DocumentDuplicateIcon className="h-6 w-6" />
+												}
+												size="xs"
+												className="text-gray-500 hover:text-flamingo-400"
+												aria-label={ __(
+													'Duplicate',
+													'woo-cart-abandonment-recovery'
+												) }
+											/>
+											<Button
+												variant="ghost"
+												icon={
+													<TrashIcon className="h-6 w-6" />
+												}
+												size="xs"
+												className="text-gray-500 hover:text-red-600"
+											/>
+										</div>
+									</Table.Cell>
+								</Table.Row>
+							) ) }
+						</Table.Body>
+					</Table>
+				</div>
 				<ProUpgradeCta
 					isVisible={ true }
 					highlightText={ __(

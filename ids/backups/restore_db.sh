@@ -3,7 +3,7 @@
 # previously written by backup.sh.
 #
 # PURPOSE:
-#   Runs inside the backup_service Docker container (alpine:latest +
+#   Runs inside the backup_service Docker container (alpine:3.24.3 +
 #   mysql-client, same as backup.sh -- both share that container's
 #   dependencies). Given the filename of a *.sql.gz dump under
 #   /backups/db (as produced by backup.sh, e.g.

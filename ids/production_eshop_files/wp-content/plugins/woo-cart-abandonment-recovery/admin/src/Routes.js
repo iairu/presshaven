@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { Toaster } from '@bsf/force-ui';
 
 import Header from '@Components/common/Header';
+import PageErrorBoundary from '@Components/common/PageErrorBoundary';
 import Dashboard from '@Admin/pages/Dashboard';
 import Settings from '@Admin/pages/Settings';
 import FollowUp from '@Admin/pages/FollowUp';
@@ -11,6 +12,8 @@ import Product from '@Admin/pages/Product';
 import DetailedReport from '@Admin/pages/DetailedReport';
 import FollowUpTemplates from '@Admin/pages/FollowUpTemplates';
 import Integrations from '@Admin/pages/Integrations';
+import ActivityLog from '@Admin/pages/ActivityLog';
+import ScheduledJobs from '@Admin/pages/ScheduledJobs';
 import OnboardingLayout from '@Components/onboarding/OnboardingLayout';
 import ProUpgradeHeaderBanner from '@Components/pro/ProUpgradeHeaderBanner';
 // import Ottokit from '@Admin/components/integrations/Ottokit';
@@ -22,6 +25,14 @@ const Routes = () => {
 	useEffect( () => {
 		window.scrollTo( { top: 0, behavior: 'smooth' } );
 	}, [ currentPath ] );
+
+	// Force UI's toaster renders a plain list, so a screen reader never hears a result that
+	// appears there (a save, a delete, a test message). Make the list a polite live region.
+	useEffect( () => {
+		document
+			.querySelector( '#wcar-admin-app .fui-toast-container' )
+			?.setAttribute( 'aria-live', 'polite' );
+	}, [] );
 
 	// Define routes array with path and component mapping
 	const routes = [
@@ -54,6 +65,14 @@ const Routes = () => {
 			component: <Integrations />,
 		},
 		{
+			path: 'activity-log',
+			component: <ActivityLog />,
+		},
+		{
+			path: 'scheduled-jobs',
+			component: <ScheduledJobs />,
+		},
+		{
 			path: 'onboarding',
 			component: <OnboardingLayout />,
 		},
@@ -73,7 +92,9 @@ const Routes = () => {
 					<Header />
 				</>
 			) }
-			{ routePage }
+			<PageErrorBoundary resetKey={ urlParams.toString() }>
+				{ routePage }
+			</PageErrorBoundary>
 			<Toaster
 				position="top-right"
 				design="stack"

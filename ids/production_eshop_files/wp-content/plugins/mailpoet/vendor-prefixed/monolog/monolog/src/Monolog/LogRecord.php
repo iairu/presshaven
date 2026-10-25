@@ -5,5 +5,5 @@ if (!defined('ABSPATH')) exit;
 use ArrayAccess;
 interface LogRecord extends \ArrayAccess
 {
- public function toArray() : array;
+public function toArray(): array;
 }

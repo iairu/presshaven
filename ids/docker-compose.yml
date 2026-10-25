@@ -193,7 +193,7 @@ services:
   # ---------------------------------------------------------------------------
   honeypot_db_migration:
     logging: *default-logging
-    image: mysql:5.7
+    image: mysql:8.4.13
     depends_on:
       init_setup:
         condition: service_completed_successfully
@@ -384,7 +384,7 @@ services:
   # for the full non-destructive apply strategy and the pattern-gating
   # coordination with pool_router.lua's is_pool_healthy().
   #
-  # Built from mysql:5.7 purely for its mysql/mysqldump client tools (same
+  # Built from mysql:8.4 purely for its mysql/mysqldump client tools (same
   # image family as every other DB-touching service here); it never runs
   # mysqld itself. redis-cli isn't present on that image, so
   # images/content_sync/Dockerfile adds it once at build time; it's used to
@@ -523,16 +523,25 @@ services:
       - session_network
 
   # Production WordPress database
+  # ---------------------------------------------------------------------------
+  # MySQL 8.4 LTS (upgraded in place from 5.7 via 8.0, 2026-10). Every server
+  # here runs with mysql_native_password enabled and as the default for new
+  # users: the MariaDB-based clients in wordpress:cli and backup_service
+  # (Alpine mysql-client) ship no caching_sha2_password plugin, so with 8.4's
+  # default they can't log in at all (confirmed against mysql:8.4.13: "Plugin
+  # caching_sha2_password could not be loaded"). 8.4 is the last series with
+  # native auth; moving off it means giving those clients the plugin first.
+  # ---------------------------------------------------------------------------
   production_database:
     logging: *default-logging
-    image: mysql:5.7
+    image: mysql:8.4.13
     depends_on:
       init_setup:
         condition: service_completed_successfully
     command: |
       bash -c "
         rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld
+        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
       "
     environment:
       - MYSQL_DATABASE=production_database
@@ -585,7 +594,7 @@ services:
     # honeypot pools and pool_manager's runtime pools reuse this local tag.
     # pull_policy build: the tag must never be pulled from Docker Hub, where
     # anyone can publish under that name.
-    image: presshaven/wordpress:6.8.3-php8.1-hardened
+    image: presshaven/wordpress:7.1.3-php8.4-hardened
     build: ./images/wordpress_hardened
     pull_policy: build
     depends_on:
@@ -745,7 +754,7 @@ services:
   # ---------------------------------------------------------------------------
   production_db_seed:
     logging: *default-logging
-    image: wordpress:cli-php8.1
+    image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
       production_database:
@@ -819,7 +828,7 @@ services:
 
   honeypot_db_seed_1:
     logging: *default-logging
-    image: wordpress:cli-php8.1
+    image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
       honeypot_database_1:
@@ -887,7 +896,7 @@ services:
 
   honeypot_db_seed_2:
     logging: *default-logging
-    image: wordpress:cli-php8.1
+    image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
       honeypot_database_2:
@@ -952,7 +961,7 @@ services:
 
   honeypot_db_seed_3:
     logging: *default-logging
-    image: wordpress:cli-php8.1
+    image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
       honeypot_database_3:
@@ -1026,14 +1035,14 @@ services:
   # Pool 1 – uses the original honeypot_database_data directory (backward compat)
   honeypot_database_1:
     logging: *default-logging
-    image: mysql:5.7
+    image: mysql:8.4.13
     depends_on:
       init_setup:
         condition: service_completed_successfully
     command: |
       bash -c "
         rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld
+        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
       "
     environment:
       - MYSQL_DATABASE=production_database
@@ -1085,14 +1094,14 @@ services:
   # Pool 2 – independent database instance
   honeypot_database_2:
     logging: *default-logging
-    image: mysql:5.7
+    image: mysql:8.4.13
     depends_on:
       init_setup:
         condition: service_completed_successfully
     command: |
       bash -c "
         rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld
+        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
       "
     environment:
       - MYSQL_DATABASE=production_database
@@ -1131,14 +1140,14 @@ services:
   # Pool 3 – independent database instance
   honeypot_database_3:
     logging: *default-logging
-    image: mysql:5.7
+    image: mysql:8.4.13
     depends_on:
       init_setup:
         condition: service_completed_successfully
     command: |
       bash -c "
         rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld
+        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
       "
     environment:
       - MYSQL_DATABASE=production_database
@@ -1194,7 +1203,7 @@ services:
     # The hardened image built by production_eshop (see the note there).
     # pull_policy never: run only the local build, never a Docker Hub image
     # of the same name.
-    image: presshaven/wordpress:6.8.3-php8.1-hardened
+    image: presshaven/wordpress:7.1.3-php8.4-hardened
     pull_policy: never
     depends_on:
       honeypot_database_1:
@@ -1314,7 +1323,7 @@ services:
     # The hardened image built by production_eshop (see the note there).
     # pull_policy never: run only the local build, never a Docker Hub image
     # of the same name.
-    image: presshaven/wordpress:6.8.3-php8.1-hardened
+    image: presshaven/wordpress:7.1.3-php8.4-hardened
     pull_policy: never
     depends_on:
       honeypot_database_2:
@@ -1404,7 +1413,7 @@ services:
     # The hardened image built by production_eshop (see the note there).
     # pull_policy never: run only the local build, never a Docker Hub image
     # of the same name.
-    image: presshaven/wordpress:6.8.3-php8.1-hardened
+    image: presshaven/wordpress:7.1.3-php8.4-hardened
     pull_policy: never
     depends_on:
       honeypot_database_3:
@@ -1499,7 +1508,7 @@ services:
     # The dashboard checks it on every host that runs this stack and shows
     # the fix in a banner and in the Services start report
     # (dashboard/core/host_settings.py).
-    image: redis:7-alpine
+    image: redis:8.10.2-alpine
     depends_on:
       init_setup:
         condition: service_completed_successfully
@@ -1537,7 +1546,7 @@ services:
   # ---------------------------------------------------------------------------
   suricata_ids:
     logging: *default-logging
-    image: jasonish/suricata:latest
+    image: jasonish/suricata:8.0.7
     depends_on:
       init_setup:
         condition: service_completed_successfully
@@ -1809,7 +1818,7 @@ services:
 
   vector_outbound:
     logging: *default-logging
-    image: timberio/vector:0.43.0-debian
+    image: timberio/vector:0.60.0-debian
     profiles:
       - elk
     user: root
@@ -1977,7 +1986,7 @@ services:
     # loop / bash script / Python with no SIGTERM handler) ignored the
     # signal as PID 1 and `down` killed it after the 10 s stop timeout.
     init: true
-    image: alpine:latest
+    image: alpine:3.24.3
     container_name: log_capper
     restart: unless-stopped
     logging: *default-logging

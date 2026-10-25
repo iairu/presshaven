@@ -13,10 +13,12 @@ use WooCommerce\PayPalCommerce\Applepay\ApplePayGateway;
 use WooCommerce\PayPalCommerce\Axo\Gateway\AxoGateway;
 use WooCommerce\PayPalCommerce\Googlepay\GooglePayGateway;
 use WooCommerce\PayPalCommerce\Settings\Data\PaymentSettings;
+use WooCommerce\PayPalCommerce\WcGateway\Gateway\CardButtonGateway;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\CreditCardGateway;
+use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\OXXOGateway;
+use WooCommerce\PayPalCommerce\LocalAlternativePaymentMethods\PayUponInvoice\PayUponInvoiceGateway;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\CardPaymentsConfiguration;
 use WooCommerce\PayPalCommerce\WcGateway\Helper\DCCProductStatus;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 /**
  * Class PaymentSettingsMigration
  *
@@ -25,7 +27,10 @@ use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 class PaymentSettingsMigration implements \WooCommerce\PayPalCommerce\Settings\Service\Migration\SettingsMigrationInterface
 {
     public const OPTION_NAME_BCDC_MIGRATION_OVERRIDE = 'woocommerce_paypal_payments_bcdc_migration_override';
-    protected Settings $settings;
+    /**
+     * @var array<string, mixed>
+     */
+    protected array $settings;
     protected PaymentSettings $payment_settings;
     protected DccApplies $dcc_applies;
     protected DCCProductStatus $dcc_status;
@@ -36,7 +41,9 @@ class PaymentSettingsMigration implements \WooCommerce\PayPalCommerce\Settings\S
      * @var array<string, array>
      */
     protected array $local_apms;
-    public function __construct(Settings $settings, PaymentSettings $payment_settings, DccApplies $dcc_applies, DCCProductStatus $dcc_status, CardPaymentsConfiguration $dcc_configuration, array $local_apms)
+    protected bool $legacy_pui_enabled;
+    protected bool $legacy_oxxo_enabled;
+    public function __construct(array $settings, PaymentSettings $payment_settings, DccApplies $dcc_applies, DCCProductStatus $dcc_status, CardPaymentsConfiguration $dcc_configuration, array $local_apms)
     {
         $this->settings = $settings;
         $this->payment_settings = $payment_settings;
@@ -44,30 +51,66 @@ class PaymentSettingsMigration implements \WooCommerce\PayPalCommerce\Settings\S
         $this->dcc_status = $dcc_status;
         $this->local_apms = $local_apms;
         $this->dcc_configuration = $dcc_configuration;
+        $pui_option = get_option('woocommerce_' . PayUponInvoiceGateway::ID . '_settings', array());
+        $this->legacy_pui_enabled = is_array($pui_option) && ($pui_option['enabled'] ?? 'no') === 'yes';
+        $oxxo_option = get_option('woocommerce_' . OXXOGateway::ID . '_settings', array());
+        $this->legacy_oxxo_enabled = is_array($oxxo_option) && ($oxxo_option['enabled'] ?? 'no') === 'yes';
     }
     public function migrate(): void
     {
-        $allow_local_apm_gateways = $this->settings->has('allow_local_apm_gateways') && $this->settings->get('allow_local_apm_gateways');
-        if ($this->settings->has('disable_funding')) {
-            $disable_funding = (array) $this->settings->get('disable_funding');
-            if (!in_array('venmo', $disable_funding, \true)) {
-                $this->payment_settings->toggle_method_state('venmo', \true);
-            }
-            if (!$allow_local_apm_gateways) {
-                foreach ($this->local_apms as $apm) {
-                    if (!in_array($apm['id'], $disable_funding, \true)) {
-                        $this->payment_settings->toggle_method_state($apm['id'], \true);
-                    }
-                }
+        $disable_funding = (array) ($this->settings['disable_funding'] ?? array());
+        if (!in_array('venmo', $disable_funding, \true)) {
+            $this->payment_settings->toggle_method_state('venmo', \true);
+        }
+        foreach ($this->local_apms as $apm) {
+            if (!in_array($apm['id'], $disable_funding, \true)) {
+                $this->payment_settings->toggle_method_state($apm['id'], \true);
             }
         }
+        $card_funding_was_active = !in_array('card', $disable_funding, \true);
         if ($this->is_bcdc_enabled_for_acdc_merchant()) {
             update_option(self::OPTION_NAME_BCDC_MIGRATION_OVERRIDE, \true);
         }
+        if ($card_funding_was_active) {
+            $this->payment_settings->toggle_method_state(CardButtonGateway::ID, \true);
+        }
         foreach ($this->map() as $old_key => $method_name) {
-            if ($this->settings->has($old_key) && $this->settings->get($old_key)) {
+            if (!empty($this->settings[$old_key])) {
                 $this->payment_settings->toggle_method_state($method_name, \true);
             }
+        }
+        $pui_settings = get_option('woocommerce_ppcp-pay-upon-invoice-gateway_settings', array());
+        if (is_array($pui_settings)) {
+            if (!empty($pui_settings['brand_name'])) {
+                $this->payment_settings->set_pui_brand_name($pui_settings['brand_name']);
+            }
+            if (!empty($pui_settings['logo_url'])) {
+                $this->payment_settings->set_pui_logo_url($pui_settings['logo_url']);
+            }
+            if (!empty($pui_settings['customer_service_instructions'])) {
+                $this->payment_settings->set_pui_customer_service_instructions($pui_settings['customer_service_instructions']);
+            }
+        }
+        if ($this->legacy_pui_enabled) {
+            $this->payment_settings->toggle_method_state(PayUponInvoiceGateway::ID, \true);
+        }
+        if ($this->legacy_oxxo_enabled) {
+            $this->payment_settings->toggle_method_state(OXXOGateway::ID, \true);
+        }
+        if (isset($this->settings['dcc_name_on_card'])) {
+            $this->payment_settings->set_cardholder_name($this->settings['dcc_name_on_card'] === 'yes');
+        }
+        if (!empty($this->settings['title'])) {
+            $this->payment_settings->set_method_title('ppcp-gateway', $this->settings['title']);
+        }
+        if (!empty($this->settings['description'])) {
+            $this->payment_settings->set_method_description('ppcp-gateway', $this->settings['description']);
+        }
+        if (!empty($this->settings['dcc_gateway_title'])) {
+            $this->payment_settings->set_method_title(CreditCardGateway::ID, $this->settings['dcc_gateway_title']);
+        }
+        if (!empty($this->settings['dcc_gateway_description'])) {
+            $this->payment_settings->set_method_description(CreditCardGateway::ID, $this->settings['dcc_gateway_description']);
         }
         $this->payment_settings->save();
     }
@@ -99,7 +142,6 @@ class PaymentSettingsMigration implements \WooCommerce\PayPalCommerce\Settings\S
         if ($this->dcc_configuration->is_acdc_enabled()) {
             return \false;
         }
-        $disabled_funding = $this->settings->has('disable_funding') ? $this->settings->get('disable_funding') : array();
-        return !in_array('card', $disabled_funding, \true);
+        return !in_array('card', $this->settings['disable_funding'] ?? array(), \true);
     }
 }

@@ -4,6 +4,7 @@ import { __ } from '@wordpress/i18n';
 import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const SelectField = ( {
@@ -18,6 +19,8 @@ const SelectField = ( {
 	disableStyle,
 	isPro = false,
 	proUpgradeMessage = '',
+	ariaLabel,
+	className = 'w-full sm:w-5/12 sm:shrink-0',
 } ) => {
 	const [ state, dispatch ] = useStateValue();
 	const { shouldBlockProFeatures } = useProAccess();
@@ -83,17 +86,22 @@ const SelectField = ( {
 		}
 	}
 
+	const a11y = useFieldA11y( { description } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="inline"
 			disableStyle={ disableStyle }
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
 		>
-			<div>
+			{ /* Fixed width so the control does not resize to fit the selected option. */ }
+			<div className={ className }>
 				<Select
+					id={ a11y.id }
 					onChange={ handleOnChange }
 					size="md"
 					name={ name }
@@ -101,8 +109,13 @@ const SelectField = ( {
 					disabled={ isPro && isFeatureBlocked }
 				>
 					<Select.Button
+						{ ...( a11y.controlProps[ 'aria-describedby' ] && {
+							'aria-describedby':
+								a11y.controlProps[ 'aria-describedby' ],
+						} ) }
+						{ ...( ariaLabel && { 'aria-label': ariaLabel } ) }
 						placeholder={
-							placeholder ??
+							placeholder ||
 							__(
 								'Select an option',
 								'woo-cart-abandonment-recovery'

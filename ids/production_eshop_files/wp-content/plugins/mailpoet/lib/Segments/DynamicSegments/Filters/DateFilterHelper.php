@@ -16,8 +16,18 @@ class DateFilterHelper {
   const ON_OR_BEFORE = 'onOrBefore';
   const ON_OR_AFTER = 'onOrAfter';
   const NOT_ON = 'notOn';
+  const BETWEEN = 'between';
   const IN_THE_LAST = 'inTheLast';
   const NOT_IN_THE_LAST = 'notInTheLast';
+
+  /** @var FilterHelper */
+  private $filterHelper;
+
+  public function __construct(
+    FilterHelper $filterHelper
+  ) {
+    $this->filterHelper = $filterHelper;
+  }
 
   public function getValidOperators(): array {
     return array_merge(
@@ -34,6 +44,7 @@ class DateFilterHelper {
       self::ON_OR_BEFORE,
       self::ON_OR_AFTER,
       self::NOT_ON,
+      self::BETWEEN,
     ];
   }
 
@@ -51,7 +62,7 @@ class DateFilterHelper {
         throw new InvalidFilterException('Invalid date value', InvalidFilterException::INVALID_DATE_VALUE);
       }
     } else if (in_array($operator, self::getRelativeDateOperators())) {
-      $carbon = CarbonImmutable::now()->subDays(intval($value) - 1);
+      $carbon = $this->filterHelper->getDateNDaysAgoImmutable(intval($value) - 1);
     } else {
       throw new InvalidFilterException('Incorrect value for operator', InvalidFilterException::MISSING_VALUE);
     }
@@ -62,6 +73,15 @@ class DateFilterHelper {
   public function getDateValueFromFilter(DynamicSegmentFilterEntity $filter): string {
     $filterData = $filter->getFilterData();
     $dateValue = $filterData->getParam('value');
+    if (!is_string($dateValue)) {
+      throw new InvalidFilterException('Incorrect value for date', InvalidFilterException::INVALID_DATE_VALUE);
+    }
+    return $dateValue;
+  }
+
+  public function getSecondDateValueFromFilter(DynamicSegmentFilterEntity $filter): string {
+    $filterData = $filter->getFilterData();
+    $dateValue = $filterData->getParam('value2');
     if (!is_string($dateValue)) {
       throw new InvalidFilterException('Incorrect value for date', InvalidFilterException::INVALID_DATE_VALUE);
     }

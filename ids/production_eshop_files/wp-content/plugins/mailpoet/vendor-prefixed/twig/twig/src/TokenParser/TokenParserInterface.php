@@ -7,7 +7,7 @@ use MailPoetVendor\Twig\Parser;
 use MailPoetVendor\Twig\Token;
 interface TokenParserInterface
 {
- public function setParser(Parser $parser) : void;
- public function parse(Token $token);
- public function getTag();
+public function setParser(Parser $parser): void;
+public function parse(Token $token);
+public function getTag();
 }

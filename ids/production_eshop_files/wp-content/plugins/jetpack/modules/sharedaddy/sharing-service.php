@@ -105,7 +105,6 @@ class Sharing_Service {
 			'twitter'          => 'Share_Twitter',
 			'tumblr'           => 'Share_Tumblr',
 			'pinterest'        => 'Share_Pinterest',
-			'pocket'           => 'Share_Pocket',
 			'telegram'         => 'Share_Telegram',
 			'threads'          => 'Share_Threads',
 			'jetpack-whatsapp' => 'Jetpack_Share_WhatsApp',
@@ -407,7 +406,7 @@ class Sharing_Service {
 			'sharing_label' => $this->default_sharing_label,
 			'open_links'    => 'same',
 			'show'          => ! isset( $options['global'] ) ? array( 'post', 'page' ) : array(),
-			'custom'        => isset( $options['global']['custom'] ) ? $options['global']['custom'] : array(),
+			'custom'        => $options['global']['custom'] ?? array(),
 		);
 
 		/**
@@ -513,7 +512,7 @@ class Sharing_Service {
 	/**
 	 * Save a sharing service for use.
 	 *
-	 * @param int                     $id Sharing unique ID.
+	 * @param string                  $id Sharing unique ID.
 	 * @param Sharing_Advanced_Source $service Sharing service.
 	 *
 	 * @return void
@@ -874,7 +873,7 @@ function sharing_add_footer() {
 				?>
 
 	<script type="text/javascript">
-		window.WPCOM_sharing_counts = <?php echo wp_json_encode( array_flip( $sharing_post_urls ) ); ?>;
+		window.WPCOM_sharing_counts = <?php echo wp_json_encode( array_flip( $sharing_post_urls ), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP ); ?>;
 	</script>
 				<?php
 			endif;

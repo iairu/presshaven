@@ -17,6 +17,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Endpoint handing Pinterest linked business accounts.
+ *
+ * @class   Businesses
+ * @version 1.5.2
  */
 class Businesses extends VendorAPI {
 
@@ -37,7 +40,7 @@ class Businesses extends VendorAPI {
 	 *
 	 * @param WP_REST_Request $request The request.
 	 *
-	 * @return array|WP_Error
+	 * @return array|\WP_Error
 	 *
 	 * @throws \Exception PHP Exception.
 	 */

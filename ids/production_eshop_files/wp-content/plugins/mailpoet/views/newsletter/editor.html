@@ -395,6 +395,7 @@
   var mailpoet_email_editor_tutorial_seen  = '<%= editor_tutorial_seen %>';
   var mailpoet_email_editor_tutorial_url = '<%= cdn_url('newsletter-editor/editor-drag-demo.20190226-1505.mp4') %>';
   var mailpoet_installed_at = '<%= settings.installed_at %>';
+  var mailpoet_newsletters_api = <%= json_encode(api) %>;
 </script>
 
 <% if brand_styles.available %>
@@ -981,6 +982,9 @@
             ) %>',
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/01-social/LinkedIn.png'
+            ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/01-social/Bluesky.png'
             ) %>'
           },
           'grey': {
@@ -1011,6 +1015,9 @@
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/02-grey/LinkedIn.png'
             ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/02-grey/Bluesky.png'
+            ) %>',
           },
           'white': {
               'custom': '<%= image_url(
@@ -1039,6 +1046,9 @@
             ) %>',
               'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/09-white/LinkedIn.png'
+            ) %>',
+              'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/09-white/Bluesky.png'
             ) %>',
           },
           'black': {
@@ -1069,6 +1079,9 @@
               'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/10-black/LinkedIn.png'
             ) %>',
+              'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/10-black/Bluesky.png'
+            ) %>',
           },
           'circles': {
             'custom': '<%= image_url(
@@ -1097,6 +1110,9 @@
             ) %>',
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/03-circles/LinkedIn.png'
+            ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/03-circles/Bluesky.png'
             ) %>',
           },
           'full-flat-roundrect': {
@@ -1127,6 +1143,9 @@
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/04-full-flat-roundrect/LinkedIn.png'
             ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/04-full-flat-roundrect/Bluesky.png'
+            ) %>',
           },
           'full-gradient-square': {
             'custom': '<%= image_url(
@@ -1155,6 +1174,9 @@
             ) %>',
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/05-full-gradient-square/LinkedIn.png'
+            ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/05-full-gradient-square/Bluesky.png'
             ) %>',
           },
           'full-symbol-color': {
@@ -1185,6 +1207,9 @@
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/06-full-symbol-color/LinkedIn.png'
             ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/06-full-symbol-color/Bluesky.png'
+            ) %>',
           },
           'full-symbol-black': {
             'custom': '<%= image_url(
@@ -1214,6 +1239,9 @@
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/07-full-symbol-black/LinkedIn.png'
             ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/07-full-symbol-black/Bluesky.png'
+            ) %>',
           },
           'full-symbol-grey': {
             'custom': '<%= image_url(
@@ -1242,6 +1270,9 @@
             ) %>',
             'linkedin': '<%= image_url(
               'newsletter_editor/social-icons/08-full-symbol-grey/LinkedIn.png'
+            ) %>',
+            'bluesky': '<%= image_url(
+              'newsletter_editor/social-icons/08-full-symbol-grey/Bluesky.png'
             ) %>',
           },
         },
@@ -1853,9 +1884,11 @@
         previewTypeLocalStorageKey: 'newsletter_editor.preview_type'
       },
       validation: {
-        validateUnsubscribeLinkPresent: <%= mss_active and is_wc_transactional_email != true and is_confirmation_email_template != true ? 'true' : 'false' %>,
-        validateReEngageLinkPresent: <%= mss_active and is_wc_transactional_email != true and is_confirmation_email_template != true ? 'true' : 'false' %>,
-        validateActivationLinkIsPresent: <%= is_confirmation_email_template ? 'true' : 'false' %>,
+        validateUnsubscribeLinkPresent: <%= mss_active and is_wc_transactional_email != true and is_confirmation_email_type != true ? 'true' : 'false' %>,
+        validateReEngageLinkPresent: <%= mss_active and is_wc_transactional_email != true and is_confirmation_email_type != true ? 'true' : 'false' %>,
+        validateActivationLinkIsPresent: <%= is_confirmation_email_type ? 'true' : 'false' %>,
+        <# Deliberately not gated on mss_active: the opt-out link has nothing to do with the sending service. #>
+        validateTrackingOptOutLinkPresent: <%= is_tracking_consent_ask_all and is_wc_transactional_email != true and is_confirmation_email_type != true ? 'true' : 'false' %>,
       },
       urls: {
         send: '<%= admin_url('admin.php?page=mailpoet-newsletters#/send/' ~ (params('id') | intval)) %>',
@@ -1898,7 +1931,7 @@
       },
       hiddenWidgets: ['automatedLatestContentLayout', 'header', 'footer', 'posts', 'products'],
       <% endif %>
-      <% if is_confirmation_email_template %>
+      <% if is_confirmation_email_type %>
       hiddenWidgets: ['automatedLatestContentLayout', 'coupon', 'header', 'footer', 'posts', 'products', 'dynamicProducts'],
       <% endif %>
       coupon: <%= json_encode(woocommerce.coupon.config) %>,

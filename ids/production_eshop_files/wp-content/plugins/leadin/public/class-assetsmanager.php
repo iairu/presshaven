@@ -148,11 +148,14 @@ class AssetsManager {
 	 * Register and localize the Gutenberg scripts.
 	 */
 	public static function localize_gutenberg() {
-		$portal_id    = Portal_Options::get_portal_id();
 		$embed_domain = Filters::apply_js_base_url_filters();
 		wp_enqueue_script( self::APP_EMBEDDER, "$embed_domain/integrated-app-embedder/v1.js", array(), LEADIN_PLUGIN_VERSION, true );
 		self::enqueue_forms_script();
-		self::enqueue_form_v4_script( $portal_id );
+		// The v4 forms embed script is intentionally not enqueued here: in the
+		// WP 6.3+ iframed editor the block renders `.hs-form-frame` inside the
+		// canvas iframe, so PreviewForm injects the embed script into that
+		// iframe instead. A top-frame copy would pre-empt the iframe copy's
+		// init guard and leave the preview blank.
 		self::enqueue_meetings_script();
 		wp_register_style( self::GUTENBERG, LEADIN_JS_BASE_PATH . '/gutenberg.css', array(), LEADIN_PLUGIN_VERSION );
 		wp_enqueue_style( self::GUTENBERG );

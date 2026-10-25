@@ -6,13 +6,20 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\API\JSON\Endpoint as APIEndpoint;
+use MailPoet\Captcha\CaptchaHooks;
 use MailPoet\Captcha\CaptchaSession;
+use MailPoet\Captcha\CaptchaSessionLimitException;
 use MailPoet\Captcha\CaptchaUrlFactory;
 use MailPoet\Config\AccessControl;
+use MailPoet\WP\Functions as WPFunctions;
 
 class Captcha extends APIEndpoint {
+  private const MAX_STASH_SIZE = 8192;
+
   private CaptchaSession $captchaSession;
   private CaptchaUrlFactory $urlFactory;
+  private CaptchaHooks $captchaHooks;
+  private WPFunctions $wp;
 
   public $permissions = [
     'global' => AccessControl::NO_ACCESS_RESTRICTION,
@@ -20,17 +27,73 @@ class Captcha extends APIEndpoint {
 
   public function __construct(
     CaptchaSession $captchaSession,
-    CaptchaUrlFactory $urlFactory
+    CaptchaUrlFactory $urlFactory,
+    CaptchaHooks $captchaHooks,
+    WPFunctions $wp
   ) {
     $this->captchaSession = $captchaSession;
     $this->urlFactory = $urlFactory;
+    $this->captchaHooks = $captchaHooks;
+    $this->wp = $wp;
   }
 
   public function render(array $data = []) {
+    $referrer = $data['referrer_form'] ?? null;
+    $isRegisterForm = in_array($referrer, [CaptchaUrlFactory::REFERER_WP_FORM, CaptchaUrlFactory::REFERER_WC_FORM], true);
+    if (!$isRegisterForm || !$this->captchaHooks->isEnabled()) {
+      return $this->redirectResponse($this->urlFactory->getRegistrationUrl(is_string($referrer) ? $referrer : ''));
+    }
+
+    // The form fields stay on the server and are shown once on the CAPTCHA page.
+    // Only the session ID and the referrer travel in the URL.
+    $stash = array_filter($data, 'is_scalar');
+    unset($stash['captcha_session_id'], $stash['rendered'], $stash['action_url']);
+    if (strlen(serialize($stash)) > self::MAX_STASH_SIZE) {
+      return $this->redirectToCaptchaPageWithError($referrer, CaptchaUrlFactory::ERROR_INVALID);
+    }
+
+    try {
+      $this->captchaSession->registerNewSession();
+    } catch (CaptchaSessionLimitException $e) {
+      return $this->redirectToCaptchaPageWithError($referrer, CaptchaUrlFactory::ERROR_LIMIT);
+    }
     $sessionId = $this->captchaSession->generateSessionId();
-    $data = array_merge($data, ['captcha_session_id' => $sessionId]);
-    $captchaUrl = $this->urlFactory->getCaptchaUrl($data);
+    $this->captchaSession->setFormData($sessionId, $stash);
+
+    $captchaUrl = $this->urlFactory->getCaptchaUrl([
+      'captcha_session_id' => $sessionId,
+      'referrer_form' => $referrer,
+    ]);
+    $this->allowCaptchaPageHost($captchaUrl);
 
     return $this->redirectResponse($captchaUrl);
+  }
+
+  private function redirectToCaptchaPageWithError(string $referrer, string $error) {
+    $captchaUrl = $this->urlFactory->getCaptchaUrl([
+      'referrer_form' => $referrer,
+      'error' => $error,
+    ]);
+    $this->allowCaptchaPageHost($captchaUrl);
+    return $this->redirectResponse($captchaUrl);
+  }
+
+  /**
+   * The captcha page permalink may live on a different host than home_url()
+   * (multilingual domains, mapped domains). The host comes from the configured
+   * page's permalink, not from request data, so it is safe to allow.
+   */
+  private function allowCaptchaPageHost(string $captchaUrl): void {
+    $host = $this->wp->wpParseUrl($captchaUrl, PHP_URL_HOST);
+    if (!is_string($host) || $host === '') {
+      return;
+    }
+    $this->wp->addFilter('allowed_redirect_hosts', function ($hosts) use ($host) {
+      $hosts = is_array($hosts) ? $hosts : [];
+      if (!in_array($host, $hosts, true)) {
+        $hosts[] = $host;
+      }
+      return $hosts;
+    });
   }
 }

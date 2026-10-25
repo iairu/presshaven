@@ -16,21 +16,21 @@ class StatisticsUnsubscribeEntity extends \MailPoet\Entities\StatisticsUnsubscri
      *      three parameters, being respectively the proxy object to be initialized, the method that triggered the
      *      initialization process and an array of ordered parameters that were passed to that method.
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__setInitializer
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__setInitializer
      */
     public $__initializer__;
 
     /**
      * @var \Closure the callback responsible of loading properties that need to be copied in the cloned object
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__setCloner
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__setCloner
      */
     public $__cloner__;
 
     /**
      * @var boolean flag indicating if this object was already initialized
      *
-     * @see \Doctrine\Persistence\Proxy::__isInitialized
+     * @see \MailPoetVendor\Doctrine\Persistence\Proxy::__isInitialized
      */
     public $__isInitialized__ = false;
 
@@ -43,7 +43,7 @@ class StatisticsUnsubscribeEntity extends \MailPoet\Entities\StatisticsUnsubscri
     /**
      * @var array<string, mixed> default values of properties to be lazy loaded, with keys being the property names
      *
-     * @see \Doctrine\Common\Proxy\Proxy::__getLazyProperties
+     * @see \MailPoetVendor\Doctrine\Common\Proxy\Proxy::__getLazyProperties
      */
     public static $lazyPropertiesDefaults = array (
 );
@@ -70,10 +70,10 @@ class StatisticsUnsubscribeEntity extends \MailPoet\Entities\StatisticsUnsubscri
     public function __sleep()
     {
         if ($this->__isInitialized__) {
-            return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'newsletter', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'queue', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'subscriber', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'source', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'meta', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'method', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'createdAt'];
+            return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'newsletter', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'queue', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'subscriber', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'source', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'meta', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'method', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reason', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reasonText', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reasonSubmittedAt', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'createdAt'];
         }
 
-        return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'newsletter', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'queue', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'subscriber', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'source', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'meta', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'method', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'createdAt'];
+        return ['__isInitialized__', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'newsletter', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'queue', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'subscriber', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'source', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'meta', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'method', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reason', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reasonText', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'reasonSubmittedAt', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'id', '' . "\0" . 'MailPoet\\Entities\\StatisticsUnsubscribeEntity' . "\0" . 'createdAt'];
     }
 
     /**
@@ -266,6 +266,83 @@ class StatisticsUnsubscribeEntity extends \MailPoet\Entities\StatisticsUnsubscri
         $this->__initializer__ && $this->__initializer__->__invoke($this, 'getMethod', []);
 
         return parent::getMethod();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setReason(?string $reason): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setReason', [$reason]);
+
+        parent::setReason($reason);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getReason(): ?string
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getReason', []);
+
+        return parent::getReason();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setReasonText(?string $reasonText): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setReasonText', [$reasonText]);
+
+        parent::setReasonText($reasonText);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getReasonText(): ?string
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getReasonText', []);
+
+        return parent::getReasonText();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setReasonSubmittedAt(?\DateTimeInterface $reasonSubmittedAt): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setReasonSubmittedAt', [$reasonSubmittedAt]);
+
+        parent::setReasonSubmittedAt($reasonSubmittedAt);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getReasonSubmittedAt(): ?\DateTimeInterface
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'getReasonSubmittedAt', []);
+
+        return parent::getReasonSubmittedAt();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setReasonData(string $reason, ?string $reasonText): void
+    {
+
+        $this->__initializer__ && $this->__initializer__->__invoke($this, 'setReasonData', [$reason, $reasonText]);
+
+        parent::setReasonData($reason, $reasonText);
     }
 
     /**

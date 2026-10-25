@@ -9,14 +9,20 @@ use MailPoet\Automation\Engine\Data\Automation;
 use MailPoet\Automation\Engine\Exceptions\NotFoundException;
 use MailPoet\Automation\Engine\WordPress;
 use MailPoet\Config\Env;
+use MailPoet\EmailEditor\Integrations\MailPoet\EmailEditor;
+use MailPoet\EmailEditor\Integrations\MailPoet\Patterns\PatternsController;
+use MailPoet\EmailEditor\Integrations\MailPoet\Templates\TemplatesController;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\NewsletterOptionEntity;
 use MailPoet\Entities\NewsletterOptionFieldEntity;
+use MailPoet\Entities\WpPostEntity;
 use MailPoet\Newsletter\NewslettersRepository;
 use MailPoet\Newsletter\Options\NewsletterOptionFieldsRepository;
 use MailPoet\Newsletter\Options\NewsletterOptionsRepository;
 use MailPoet\Settings\SettingsController;
 use MailPoet\Util\Security;
+use MailPoet\WP\Functions as WPFunctions;
+use MailPoetVendor\Doctrine\ORM\EntityManager;
 
 class EmailFactory {
   /** @var NewslettersRepository */
@@ -37,18 +43,34 @@ class EmailFactory {
   /** @var NewsletterOptionFieldsRepository */
   private $newsletterOptionFieldsRepository;
 
+  private PatternsController $patternsController;
+
+  private TemplatesController $templatesController;
+
+  private EntityManager $entityManager;
+
+  private WPFunctions $wpFunctions;
+
   public function __construct(
     NewslettersRepository $newslettersRepository,
     SettingsController $settings,
     WordPress $wp,
     NewsletterOptionsRepository $newsletterOptionsRepository,
-    NewsletterOptionFieldsRepository $newsletterOptionFieldsRepository
+    NewsletterOptionFieldsRepository $newsletterOptionFieldsRepository,
+    PatternsController $patternsController,
+    TemplatesController $templatesController,
+    WPFunctions $wpFunctions,
+    EntityManager $entityManager
   ) {
     $this->newslettersRepository = $newslettersRepository;
     $this->settings = $settings;
     $this->wp = $wp;
     $this->newsletterOptionsRepository = $newsletterOptionsRepository;
     $this->newsletterOptionFieldsRepository = $newsletterOptionFieldsRepository;
+    $this->patternsController = $patternsController;
+    $this->templatesController = $templatesController;
+    $this->entityManager = $entityManager;
+    $this->wpFunctions = $wpFunctions;
   }
 
   /**
@@ -58,15 +80,7 @@ class EmailFactory {
    * @return int|null The ID of the created email or null if the email couldn't be created
    */
   public function createEmail(array $data = []): ?int {
-    // Create a new newsletter entity
-    $newsletter = new NewsletterEntity();
-    $newsletter->setType(NewsletterEntity::TYPE_AUTOMATION);
-    $newsletter->setStatus(NewsletterEntity::STATUS_ACTIVE);
-    $newsletter->setSubject($data['subject'] ?? '');
-    $newsletter->setPreheader($data['preheader'] ?? '');
-    $newsletter->setSenderName($data['sender_name'] ?? $this->getDefaultSenderName());
-    $newsletter->setSenderAddress($data['sender_address'] ?? $this->getDefaultSenderAddress());
-    $newsletter->setHash(Security::generateHash());
+    $newsletter = $this->createNewsletterEntity($data);
 
     // Set content if provided
     if (isset($data['content'])) {
@@ -84,6 +98,77 @@ class EmailFactory {
 
     // Return the newsletter ID
     return $newsletter->getId();
+  }
+
+  /**
+   * Create a block editor email from a pattern and store it in the database.
+   *
+   * This method creates a WordPress post with the pattern content and links it
+   * to a NewsletterEntity for use with the block email editor.
+   *
+   * @param array $data Email data including:
+   *   - 'pattern' (string, required): The pattern name (e.g., 'welcome-email-content')
+   *   - 'subject' (string, optional): Email subject
+   *   - 'preheader' (string, optional): Email preheader
+   *   - 'sender_name' (string, optional): Sender name
+   *   - 'sender_address' (string, optional): Sender email address
+   * @param string|null $templateSlug The slug of the template to associate with the email.
+   * @return array{email_id: int, email_wp_post_id: int}|null The IDs of the created email and WP post, or null if creation failed
+   */
+  public function createBlockEditorEmail(array $data, ?string $templateSlug = null): ?array {
+    $patternName = $data['pattern'] ?? null;
+    if (!$patternName) {
+      return null;
+    }
+
+    // Get pattern content
+    $patternContent = $this->patternsController->getPatternContent($patternName);
+    if ($patternContent === null) {
+      return null;
+    }
+
+    // Create a WordPress post with the pattern content
+    // The meta_input flag prevents other plugins from creating duplicate newsletters
+    // Automation emails use 'private' status to prevent them from appearing in public queries
+    $postId = $this->wpFunctions->wpInsertPost([
+      'post_content' => $patternContent,
+      'post_type' => EmailEditor::MAILPOET_EMAIL_POST_TYPE,
+      'post_status' => 'private',
+      'post_author' => $this->wpFunctions->getCurrentUserId(),
+      'post_title' => $data['subject'] ?? __('New Email', 'mailpoet'),
+      'meta_input' => ['_mailpoet_is_automation_email' => '1'],
+    ]);
+
+    if (!is_int($postId) || $postId <= 0) {
+      return null;
+    }
+
+    // Set the email template to associate the template wrapper (header, footer, unsubscribe links)
+    $templateSlug = $templateSlug ?: $this->templatesController->getDefaultTemplateSlug();
+    $this->wpFunctions->updatePostMeta($postId, '_wp_page_template', $templateSlug);
+
+    // Create a new newsletter entity
+    try {
+      $wpPost = $this->entityManager->getReference(WpPostEntity::class, $postId);
+      $newsletter = $this->createNewsletterEntity($data, $wpPost);
+
+      $this->newslettersRepository->persist($newsletter);
+      $this->newslettersRepository->flush();
+    } catch (\Throwable $e) {
+      $this->wpFunctions->wpDeletePost($postId, true);
+      throw $e;
+    }
+
+    $emailId = $newsletter->getId();
+    if ($emailId === null) {
+      $this->wpFunctions->wpDeletePost($postId, true);
+      return null;
+    }
+
+    return [
+      'email_id' => $emailId,
+      'email_wp_post_id' => $postId,
+    ];
   }
 
   /**
@@ -180,6 +265,30 @@ class EmailFactory {
   }
 
   /**
+   * Create a NewsletterEntity with common automation email properties.
+   *
+   * @param array $data Email data including subject, preheader, sender_name, sender_address
+   * @param WpPostEntity|null $wpPost Optional WP post to associate with the newsletter
+   * @return NewsletterEntity The created newsletter entity (not persisted)
+   */
+  private function createNewsletterEntity(array $data, ?WpPostEntity $wpPost = null): NewsletterEntity {
+    $newsletter = new NewsletterEntity();
+    $newsletter->setType(NewsletterEntity::TYPE_AUTOMATION);
+    $newsletter->setStatus(NewsletterEntity::STATUS_ACTIVE);
+    $newsletter->setSubject($data['subject'] ?? '');
+    $newsletter->setPreheader($data['preheader'] ?? '');
+    $newsletter->setSenderName($data['sender_name'] ?? $this->getDefaultSenderName());
+    $newsletter->setSenderAddress($data['sender_address'] ?? $this->getDefaultSenderAddress());
+    $newsletter->setHash(Security::generateHash());
+
+    if ($wpPost !== null) {
+      $newsletter->setWpPost($wpPost);
+    }
+
+    return $newsletter;
+  }
+
+  /**
    * Get the default sender name from settings
    */
   private function getDefaultSenderName(): string {
@@ -232,7 +341,7 @@ class EmailFactory {
     }
 
     $templateArr = json_decode((string)$templateString, true);
-    if (!is_array($templateArr) || !isset($templateArr['body'])) {
+    if (!is_array($templateArr) || !isset($templateArr['body']) || !is_array($templateArr['body'])) {
       return null;
     }
 

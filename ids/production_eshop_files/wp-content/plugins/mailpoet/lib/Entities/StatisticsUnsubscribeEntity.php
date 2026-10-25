@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use MailPoet\Doctrine\EntityTraits\AutoincrementedIdTrait;
 use MailPoet\Doctrine\EntityTraits\CreatedAtTrait;
 use MailPoet\Doctrine\EntityTraits\SafeToOneAssociationLoadTrait;
+use MailPoetVendor\Carbon\Carbon;
 use MailPoetVendor\Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -29,6 +30,21 @@ class StatisticsUnsubscribeEntity {
   const METHOD_LINK = 'link';
   const METHOD_ONE_CLICK = 'one_click';
   const METHOD_UNKNOWN = 'unknown';
+
+  const REASON_NO_LONGER_INTERESTED = 'normal';
+  const REASON_DID_NOT_SIGN_UP = 'nosignup';
+  const REASON_INAPPROPRIATE_CONTENT = 'inappropriate';
+  const REASON_SPAM = 'spam';
+  const REASON_OTHER = 'other';
+  const REASON_UNSPECIFIED = 'unspecified';
+
+  const REASONS = [
+    self::REASON_NO_LONGER_INTERESTED,
+    self::REASON_DID_NOT_SIGN_UP,
+    self::REASON_INAPPROPRIATE_CONTENT,
+    self::REASON_SPAM,
+    self::REASON_OTHER,
+  ];
 
   /**
    * @ORM\ManyToOne(targetEntity="MailPoet\Entities\NewsletterEntity")
@@ -68,6 +84,24 @@ class StatisticsUnsubscribeEntity {
    * @var string
    */
   private $method = self::METHOD_UNKNOWN;
+
+  /**
+   * @ORM\Column(type="string", length=80, nullable=true)
+   * @var string|null
+   */
+  private $reason;
+
+  /**
+   * @ORM\Column(type="text", name="reason_text", nullable=true)
+   * @var string|null
+   */
+  private $reasonText;
+
+  /**
+   * @ORM\Column(type="datetimetz", name="reason_submitted_at", nullable=true)
+   * @var \DateTimeInterface|null
+   */
+  private $reasonSubmittedAt;
 
   public function __construct(
     ?NewsletterEntity $newsletter,
@@ -129,5 +163,35 @@ class StatisticsUnsubscribeEntity {
 
   public function getMethod(): string {
     return $this->method;
+  }
+
+  public function setReason(?string $reason): void {
+    $this->reason = $reason;
+  }
+
+  public function getReason(): ?string {
+    return $this->reason;
+  }
+
+  public function setReasonText(?string $reasonText): void {
+    $this->reasonText = $reasonText;
+  }
+
+  public function getReasonText(): ?string {
+    return $this->reasonText;
+  }
+
+  public function setReasonSubmittedAt(?\DateTimeInterface $reasonSubmittedAt): void {
+    $this->reasonSubmittedAt = $reasonSubmittedAt;
+  }
+
+  public function getReasonSubmittedAt(): ?\DateTimeInterface {
+    return $this->reasonSubmittedAt;
+  }
+
+  public function setReasonData(string $reason, ?string $reasonText): void {
+    $this->reason = $reason;
+    $this->reasonText = $reasonText;
+    $this->reasonSubmittedAt = Carbon::now()->millisecond(0);
   }
 }

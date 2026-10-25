@@ -1,3 +1,22 @@
+= 11.3.75 (2026-09-16) =
+* Fix Elementor HubSpot form and meeting blocks not being selectable in the editor when the embed renders as an iframe
+
+= 11.3.74 (2026-09-16) =
+* Fix HubSpot widgets showing "Unable to load HubSpot" when the embedder script arrives late by waiting for it before failing, and report the failure when it does not arrive
+
+= 11.3.73 (2026-09-07) =
+* Fix HubSpot meeting Gutenberg block preview not rendering in the WordPress 6.3+ block editor
+
+= 11.3.72 (2026-09-04) =
+* Fix HubSpot form Gutenberg block preview not rendering in the WordPress 6.3+ block editor
+
+= 11.3.71 (2026-08-20) =
+* Fix TypeError crash when the HubSpot embedder script has not loaded by guarding against undefined IntegratedAppOptions in the background app
+
+= 11.3.70 (2026-08-12) =
+* Fix reverse proxy returning a 500 "Error retrieving content" error in browsers by not forwarding the client Accept-Encoding header, which caused Brotli responses WordPress cannot decode
+* Fix reverse proxy collapsing multiple Set-Cookie response headers into the literal "Set-Cookie: Array"
+
 = 11.3.69 (2026-07-30) =
 * Fix tracking code script tag ID and async attribute not applied on WordPress 5.7+
 
@@ -284,22 +303,4 @@ Strip cf-connecting-ip header from reverse proxied requests
 
 = 8.16.25 (2022-08-19) =
 * Fixes the headers missing issue by tying the script with a hook
-
-= 8.16.6 (2022-08-17) =
-* Revert changes for open upgrade link in new tab
-
-= 8.16.5 (2022-08-17) =
-* Removed newline before/after php tag
-
-= 8.16.2 (2022-08-17) =
-* Fixes the headers already sent error
-
-= 8.16.0 (2022-08-17) =
-* Made upgrade link open up in a new tab instead of the iframe
-
-= 8.15.139 (2022-08-04) =
-* Fix for content type customization
-
-= 8.15.65 (2022-07-22) =
-* Fix encode URL for affiliate link
 

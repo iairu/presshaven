@@ -4,7 +4,7 @@ Tags: WooCommerce, Czech, Heureka, IČ DIČ, QR Payment
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 5.4.18
+Stable tag: 5.4.23
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -194,13 +194,13 @@ The plugin includes the following modules:
 1. Go to the administration area > WPify > WPify Woo.
 1. Enable and configure modules.
 
-If you have problems installing, activating or setting up modules, please refer to our [documentation](https://wpify.io/documentation/wpify-woo/).
+If you have problems installing, activating or setting up modules, please refer to our [documentation](https://docs.wpify.cz/wpify-woo/).
 
 == Frequently Asked Questions ==
 
 = Do you have documentation for the plugin? =
 
-Yes, the full documentation for the WPify Woo plugin is available on the website [wpify.io](https://wpify.io/documentation/wpify-woo/)
+Yes, the full documentation for the WPify Woo plugin is available on the website [docs.wpify.cz](https://docs.wpify.cz/wpify-woo/)
 
 = How can I set a custom xz binary path for Slovak QR payments? =
 
@@ -247,6 +247,21 @@ This plugin is brought to you by the WordPress and WooCommerce experts at [wpify
 == Changelog ==
 
 For older releases, see [changelog.txt](https://plugins.svn.wordpress.org/wpify-woo/trunk/changelog.txt).
+
+= 5.4.23 =
+* Update WPify Custom Fields to 4.12.1 — faster settings pages (field data and option lists load on demand and are shared between fields), saved select values show their labels immediately, and asset URLs work on Windows hosting.
+= 5.4.22 =
+* Fix Withdrawal & Claim — orders completed later than the withdrawal/warranty period length no longer show an incorrect, already-passed end date.
+
+= 5.4.21 =
+* Fix Withdrawal & Claim — the form now shows the real withdrawal/warranty end date for each item, including products with a custom period set on the product.
+* Fix Withdrawal & Claim — the claim confirmation email no longer refers to the withdrawal directive.
+
+= 5.4.20 =
+* Fix Guard IC/DIC status portal target
+
+= 5.4.19 =
+* Fix Withdrawal & Claim — the form no longer silently rejects submissions on sites where a typography plugin or theme inserts non-breaking spaces into the page output.
 
 = 5.4.18 =
 * Fix Withdrawal & Claim — request detail in administration now shows the correct submission and period-end time.

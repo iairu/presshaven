@@ -75,8 +75,9 @@ class Migration_20221028_105818 extends DbMigration {
   ];
 
   public function run(): void {
+    global $wpdb;
     $this->prefix = Env::$dbPrefix;
-    $this->charsetCollate = Env::$dbCharsetCollate;
+    $this->charsetCollate = $wpdb->get_charset_collate();
 
     // Ensure dbDelta function
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -116,6 +117,7 @@ class Migration_20221028_105818 extends DbMigration {
       'name varchar(90) NOT NULL,',
       'type varchar(90) NOT NULL DEFAULT \'default\',',
       'description varchar(250) NOT NULL DEFAULT \'\',',
+      'public_description text NULL,',
       'created_at timestamp NULL,', // must be NULL, see comment at the top
       'updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
       'deleted_at timestamp NULL,',
@@ -709,7 +711,6 @@ class Migration_20221028_105818 extends DbMigration {
       return false;
     }
 
-    $dbName = Env::$dbName;
     $statisticsTables = [
       esc_sql("{$this->prefix}statistics_clicks"),
       esc_sql("{$this->prefix}statistics_opens"),
@@ -903,7 +904,8 @@ class Migration_20221028_105818 extends DbMigration {
       if (!is_array($dynamicSegmentFilter)) {
         continue;
       }
-      $filterData = unserialize($dynamicSegmentFilter['filter_data']);
+      $serialized = is_string($dynamicSegmentFilter['filter_data']) ? $dynamicSegmentFilter['filter_data'] : '';
+      $filterData = $serialized !== '' ? unserialize($serialized) : false;
       if (!is_array($filterData)) {
         continue;
       }
@@ -917,11 +919,11 @@ class Migration_20221028_105818 extends DbMigration {
 
       // Clicked link filter is refactored to work with multiple link ids
       if ($action === EmailAction::ACTION_CLICKED) {
-        if (!isset($filterData['link_ids'])) {
+        if (!isset($filterData['link_ids']) || !is_array($filterData['link_ids'])) {
           $filterData['link_ids'] = [];
         }
 
-        if (isset($filterData['link_id']) && !in_array($filterData['link_id'], $filterData['link_ids'])) {
+        if (isset($filterData['link_id']) && is_numeric($filterData['link_id']) && !in_array($filterData['link_id'], $filterData['link_ids'])) {
           $filterData['link_ids'][] = (int)$filterData['link_id'];
           unset($filterData['link_id']);
         }
@@ -935,11 +937,11 @@ class Migration_20221028_105818 extends DbMigration {
 
       // Opened and Machine opened filters are refactored to work with multiple newsletters
       if (($action === EmailAction::ACTION_OPENED) || ($action === EmailAction::ACTION_MACHINE_OPENED)) {
-        if (!isset($filterData['newsletters'])) {
+        if (!isset($filterData['newsletters']) || !is_array($filterData['newsletters'])) {
           $filterData['newsletters'] = [];
         }
 
-        if (isset($filterData['newsletter_id']) && !in_array($filterData['newsletter_id'], $filterData['newsletters'])) {
+        if (isset($filterData['newsletter_id']) && is_numeric($filterData['newsletter_id']) && !in_array($filterData['newsletter_id'], $filterData['newsletters'])) {
           $filterData['newsletters'][] = (int)$filterData['newsletter_id'];
           unset($filterData['newsletter_id']);
         }

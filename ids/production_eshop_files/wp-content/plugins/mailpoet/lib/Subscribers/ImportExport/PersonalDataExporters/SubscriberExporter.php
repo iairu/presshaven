@@ -7,32 +7,45 @@ if (!defined('ABSPATH')) exit;
 
 use MailPoet\CustomFields\CustomFieldsRepository;
 use MailPoet\Entities\CustomFieldEntity;
+use MailPoet\Entities\StatisticsUnsubscribeEntity;
 use MailPoet\Entities\SubscriberEntity;
+use MailPoet\Statistics\StatisticsUnsubscribesRepository;
+use MailPoet\Statistics\UnsubscribeReasonTracker;
 use MailPoet\Subscribers\Source;
 use MailPoet\Subscribers\SubscribersRepository;
 use MailPoet\WP\DateTime;
 
 class SubscriberExporter {
-  /*** @var SubscribersRepository */
+  /** @var SubscribersRepository */
   private $subscribersRepository;
 
-  /*** @var CustomFieldsRepository */
+  /** @var CustomFieldsRepository */
   private $customFieldsRepository;
 
-  /*** @var array<int, string> */
+  /** @var StatisticsUnsubscribesRepository */
+  private $statisticsUnsubscribesRepository;
+
+  /** @var UnsubscribeReasonTracker */
+  private $unsubscribeReasonTracker;
+
+  /** @var array<int, string> */
   private $customFields = [];
 
   public function __construct(
     SubscribersRepository $subscribersRepository,
-    CustomFieldsRepository $customFieldsRepository
+    CustomFieldsRepository $customFieldsRepository,
+    StatisticsUnsubscribesRepository $statisticsUnsubscribesRepository,
+    UnsubscribeReasonTracker $unsubscribeReasonTracker
   ) {
     $this->subscribersRepository = $subscribersRepository;
     $this->customFieldsRepository = $customFieldsRepository;
+    $this->statisticsUnsubscribesRepository = $statisticsUnsubscribesRepository;
+    $this->unsubscribeReasonTracker = $unsubscribeReasonTracker;
   }
 
   /**
    * @param string $email
-   * @return array(data: mixed[], done: boolean)
+   * @return array{data: array<int, array<string, mixed>>, done: bool}
    */
   public function export(string $email): array {
     return [
@@ -104,7 +117,7 @@ class SubscriberExporter {
         continue;
       }
       $customFieldId = $customField->getId();
-      if (isset($this->getCustomFields()[$customFieldId])) {
+      if ($customFieldId !== null && isset($customFields[$customFieldId])) {
         $result[] = [
           'name' => $customFields[$customFieldId],
           'value' => $subscriberCustomField->getValue(),
@@ -117,6 +130,45 @@ class SubscriberExporter {
       'value' => $this->formatSource($subscriber->getSource()),
     ];
 
+    foreach ($this->getUnsubscribeReasonExportData($subscriber) as $item) {
+      $result[] = $item;
+    }
+
+    return $result;
+  }
+
+  /**
+   * @return mixed[][]
+   */
+  private function getUnsubscribeReasonExportData(SubscriberEntity $subscriber): array {
+    $unsubscribes = $this->statisticsUnsubscribesRepository->findBy([
+      'subscriber' => $subscriber,
+    ], [
+      'createdAt' => 'desc',
+    ]);
+
+    $reasonLabels = $this->unsubscribeReasonTracker->getReasonLabels();
+    $result = [];
+    foreach ($unsubscribes as $unsubscribe) {
+      if (!$unsubscribe instanceof StatisticsUnsubscribeEntity || $unsubscribe->getReason() === null) {
+        continue;
+      }
+
+      $reason = $unsubscribe->getReason();
+      $reasonValue = ($reason === '' || $reason === StatisticsUnsubscribeEntity::REASON_UNSPECIFIED)
+        ? __('No reason provided', 'mailpoet')
+        : ($reasonLabels[$reason] ?? $reason);
+      $result[] = [
+        'name' => __('Unsubscribe reason', 'mailpoet'),
+        'value' => $reasonValue,
+      ];
+      if ($unsubscribe->getReasonText() !== null) {
+        $result[] = [
+          'name' => __('Unsubscribe reason details', 'mailpoet'),
+          'value' => $unsubscribe->getReasonText(),
+        ];
+      }
+    }
     return $result;
   }
 
@@ -124,13 +176,16 @@ class SubscriberExporter {
    * @return array<int, string>
    */
   private function getCustomFields(): array {
-    if (!empty($this->customFields)) {
+    if (count($this->customFields) > 0) {
       return $this->customFields;
     }
 
-    $fields = $this->customFieldsRepository->findAll();
+    $fields = $this->customFieldsRepository->findAllActive();
     foreach ($fields as $field) {
-      $this->customFields[$field->getId()] = $field->getName();
+      $fieldId = $field->getId();
+      if ($fieldId !== null) {
+        $this->customFields[$fieldId] = $field->getName();
+      }
     }
     return $this->customFields;
   }
@@ -139,6 +194,8 @@ class SubscriberExporter {
     switch ($source) {
       case Source::WORDPRESS_USER:
         return __('Subscriber information synchronized via WP user sync', 'mailpoet');
+      case Source::WORDPRESS_USER_DELETED:
+        return __('Originally synchronized from a WordPress user that has since been deleted', 'mailpoet');
       case Source::FORM:
         return __('Subscription via a MailPoet subscription form', 'mailpoet');
       case Source::API:

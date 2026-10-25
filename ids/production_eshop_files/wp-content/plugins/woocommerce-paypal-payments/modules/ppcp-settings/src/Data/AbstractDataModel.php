@@ -24,6 +24,11 @@ abstract class AbstractDataModel
      */
     protected array $data = array();
     /**
+     * Whether the "saved" action is currently being dispatched, used to
+     * prevent infinite-loops when an action handler calls save() again.
+     */
+    private bool $firing_saved_action = \false;
+    /**
      * Option key for WordPress storage.
      * Must be overridden by the child class!
      */
@@ -42,7 +47,7 @@ abstract class AbstractDataModel
      */
     public function __construct()
     {
-        if (empty(static::OPTION_KEY)) {
+        if (empty($this->get_option_key())) {
             throw new RuntimeException('OPTION_KEY must be defined in child class.');
         }
         $this->data = $this->get_defaults();
@@ -53,7 +58,7 @@ abstract class AbstractDataModel
      */
     public function load(): void
     {
-        $saved_data = get_option(static::OPTION_KEY, array());
+        $saved_data = get_option($this->get_option_key(), array());
         $filtered_data = array_intersect_key((array) $saved_data, $this->data);
         $this->data = array_merge($this->data, $filtered_data);
     }
@@ -62,14 +67,35 @@ abstract class AbstractDataModel
      */
     public function save(): void
     {
-        update_option(static::OPTION_KEY, $this->data);
+        update_option($this->get_option_key(), $this->data);
+        $this->fire_saved_action();
+    }
+    /**
+     * Notifies listeners that this model was saved.
+     */
+    protected function fire_saved_action(): void
+    {
+        if ($this->firing_saved_action) {
+            return;
+        }
+        $this->firing_saved_action = \true;
+        try {
+            /**
+             * Fires after a settings model has been saved to the database.
+             *
+             * @param AbstractDataModel $model The settings model that was saved.
+             */
+            do_action('woocommerce_paypal_payments_settings_saved', $this);
+        } finally {
+            $this->firing_saved_action = \false;
+        }
     }
     /**
      * Deletes the settings entry from the WordPress database.
      */
     public function purge(): void
     {
-        delete_option(static::OPTION_KEY);
+        delete_option($this->get_option_key());
     }
     /**
      * Gets all model data as an array.
@@ -113,11 +139,15 @@ abstract class AbstractDataModel
         $prefixes_to_strip = array('is_', 'use_', 'has_');
         $stripped_key = $field_key;
         foreach ($prefixes_to_strip as $prefix) {
-            if (str_starts_with($field_key, $prefix)) {
+            if (0 === strpos($field_key, $prefix)) {
                 $stripped_key = substr($field_key, strlen($prefix));
                 break;
             }
         }
         return $stripped_key ? "set_{$stripped_key}" : '';
+    }
+    protected function get_option_key(): string
+    {
+        return static::OPTION_KEY;
     }
 }

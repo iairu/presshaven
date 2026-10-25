@@ -5,5 +5,5 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Doctrine\DBAL\Connection;
 interface SchemaManagerFactory
 {
- public function createSchemaManager(Connection $connection) : AbstractSchemaManager;
+public function createSchemaManager(Connection $connection): AbstractSchemaManager;
 }

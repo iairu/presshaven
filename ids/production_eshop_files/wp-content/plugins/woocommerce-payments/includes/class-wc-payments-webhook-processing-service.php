@@ -75,13 +75,6 @@ class WC_Payments_Webhook_Processing_Service {
 	private $wcpay_gateway;
 
 	/**
-	 * WC_Payment_Gateway_WCPay
-	 *
-	 * @var WC_Payments_Customer_Service
-	 */
-	private $customer_service;
-
-	/**
 	 * Database_Cache instance.
 	 *
 	 * @var Database_Cache
@@ -96,6 +89,13 @@ class WC_Payments_Webhook_Processing_Service {
 	private $onboarding_service;
 
 	/**
+	 * WC_Payments_Token_Service instance.
+	 *
+	 * @var WC_Payments_Token_Service
+	 */
+	private $token_service;
+
+	/**
 	 * WC_Payments_Webhook_Processing_Service constructor.
 	 *
 	 * @param WC_Payments_API_Client                          $api_client          WooCommerce Payments API client.
@@ -105,9 +105,9 @@ class WC_Payments_Webhook_Processing_Service {
 	 * @param WC_Payments_Order_Service                       $order_service       WC_Payments_Order_Service instance.
 	 * @param WC_Payments_In_Person_Payments_Receipts_Service $receipt_service     WC_Payments_In_Person_Payments_Receipts_Service instance.
 	 * @param WC_Payment_Gateway_WCPay                        $wcpay_gateway       WC_Payment_Gateway_WCPay instance.
-	 * @param WC_Payments_Customer_Service                    $customer_service    WC_Payments_Customer_Service instance.
 	 * @param Database_Cache                                  $database_cache      Database_Cache instance.
 	 * @param WC_Payments_Onboarding_Service                  $onboarding_service  WC_Payments_Onboarding_Service instance.
+	 * @param WC_Payments_Token_Service                       $token_service       WC_Payments_Token_Service instance.
 	 */
 	public function __construct(
 		WC_Payments_API_Client $api_client,
@@ -117,9 +117,9 @@ class WC_Payments_Webhook_Processing_Service {
 		WC_Payments_Order_Service $order_service,
 		WC_Payments_In_Person_Payments_Receipts_Service $receipt_service,
 		WC_Payment_Gateway_WCPay $wcpay_gateway,
-		WC_Payments_Customer_Service $customer_service,
 		Database_Cache $database_cache,
-		WC_Payments_Onboarding_Service $onboarding_service
+		WC_Payments_Onboarding_Service $onboarding_service,
+		WC_Payments_Token_Service $token_service
 	) {
 		$this->wcpay_db            = $wcpay_db;
 		$this->account             = $account;
@@ -128,9 +128,9 @@ class WC_Payments_Webhook_Processing_Service {
 		$this->api_client          = $api_client;
 		$this->receipt_service     = $receipt_service;
 		$this->wcpay_gateway       = $wcpay_gateway;
-		$this->customer_service    = $customer_service;
 		$this->database_cache      = $database_cache;
 		$this->onboarding_service  = $onboarding_service;
+		$this->token_service       = $token_service;
 	}
 
 	/**
@@ -164,6 +164,14 @@ class WC_Payments_Webhook_Processing_Service {
 		}
 
 		try {
+			/**
+			 * Fires before a WooPayments webhook event is processed.
+			 *
+			 * @since 1.8.0
+			 *
+			 * @param string $event_type The webhook event type.
+			 * @param array  $event_body The webhook event body.
+			 */
 			do_action( 'woocommerce_payments_before_webhook_delivery', $event_type, $event_body );
 		} catch ( Exception $e ) {
 			Logger::error( $e );
@@ -190,9 +198,13 @@ class WC_Payments_Webhook_Processing_Service {
 			case 'charge.expired':
 				$this->process_webhook_expired_authorization( $event_body );
 				break;
+			case 'radar.early_fraud_warning.created':
+			case 'radar.early_fraud_warning.updated':
+				$this->process_webhook_early_fraud_warning( $event_body );
+				break;
 			case 'account.updated':
 				$this->account->refresh_account_data();
-				$this->customer_service->delete_cached_payment_methods();
+				$this->token_service->clear_all_cached_payment_methods();
 				break;
 			case 'account.deleted':
 				$this->onboarding_service->cleanup_on_account_reset();
@@ -204,6 +216,9 @@ class WC_Payments_Webhook_Processing_Service {
 
 				// Refetch the account data to allow the platform to drive the available next steps.
 				$this->account->refresh_account_data();
+
+				// Use the opportunity to clear cached payment methods.
+				$this->token_service->clear_all_cached_payment_methods();
 				break;
 			case 'wcpay.notification':
 				$this->process_wcpay_notification( $event_body );
@@ -228,6 +243,14 @@ class WC_Payments_Webhook_Processing_Service {
 		}
 
 		try {
+			/**
+			 * Fires after a WooPayments webhook event has been processed.
+			 *
+			 * @since 1.8.0
+			 *
+			 * @param string $event_type The webhook event type.
+			 * @param array  $event_body The webhook event body.
+			 */
 			do_action( 'woocommerce_payments_after_webhook_delivery', $event_type, $event_body );
 		} catch ( Exception $e ) {
 			Logger::error( $e );
@@ -387,11 +410,11 @@ class WC_Payments_Webhook_Processing_Service {
 	/**
 	 * Process webhook for a payment intent canceled event.
 	 *
-	 * @param array $event_body The event that triggered the webhook.
+	 * @param array $_unused_event_body The event that triggered the webhook.
 	 *
 	 * @return void
 	 */
-	private function process_webhook_payment_intent_canceled( $event_body ) {
+	private function process_webhook_payment_intent_canceled( $_unused_event_body ) {
 		// Clear the authorization summary cache to trigger a fetch of new data.
 		$this->database_cache->delete( DATABASE_CACHE::AUTHORIZATION_SUMMARY_KEY );
 		$this->database_cache->delete( DATABASE_CACHE::AUTHORIZATION_SUMMARY_KEY_TEST_MODE );
@@ -400,11 +423,11 @@ class WC_Payments_Webhook_Processing_Service {
 	/**
 	 * Process webhook for a payment intent amount capturable updated event.
 	 *
-	 * @param array $event_body The event that triggered the webhook.
+	 * @param array $_unused_event_body The event that triggered the webhook.
 	 *
 	 * @return void
 	 */
-	private function process_webhook_payment_intent_amount_capturable_updated( $event_body ) {
+	private function process_webhook_payment_intent_amount_capturable_updated( $_unused_event_body ) {
 		// Clear the authorization summary cache to trigger a fetch of new data.
 		$this->database_cache->delete( DATABASE_CACHE::AUTHORIZATION_SUMMARY_KEY );
 		$this->database_cache->delete( DATABASE_CACHE::AUTHORIZATION_SUMMARY_KEY_TEST_MODE );
@@ -479,7 +502,7 @@ class WC_Payments_Webhook_Processing_Service {
 		$charge_id     = $this->read_webhook_property( $charges_data[0], 'id' );
 		$charge_amount = $this->read_webhook_property( $event_object, 'amount' );
 
-		$payment_method_id = $charges_data[0]['payment_method'] ?? null;
+		$payment_method_id = $this->get_webhook_payment_method_id( $charges_data[0]['payment_method'] ?? $event_object['payment_method'] ?? null );
 		if ( ! $order ) {
 			return;
 		}
@@ -498,18 +521,46 @@ class WC_Payments_Webhook_Processing_Service {
 			$meta_data_to_update['_stripe_mandate_id'] = $mandate_id;
 		}
 
-		$application_fee_amount = $charges_data[0]['application_fee_amount'] ?? null;
+		// FEE_BREAKDOWN_FORK_PATCH: remove when envelope is the only path.
+		// Prefer the server-driven fee_breakdown_v1 envelope carried on the
+		// forwarded webhook body when present. Its totals are authoritative
+		// (post-refund, tax-adjusted) so we can always write correct meta
+		// without the prior truthy-check skipping $0 values.
+		$fee_breakdown_v1 = $charges_data[0]['fee_breakdown_v1'] ?? null;
+		if ( is_array( $fee_breakdown_v1 ) && isset( $fee_breakdown_v1['totals']['fee']['amount'], $fee_breakdown_v1['totals']['fee']['currency'] ) ) {
+			$meta_data_to_update['_wcpay_transaction_fee'] = WC_Payments_Utils::interpret_stripe_amount(
+				(int) $fee_breakdown_v1['totals']['fee']['amount'],
+				$fee_breakdown_v1['totals']['fee']['currency']
+			);
+			if ( isset( $fee_breakdown_v1['totals']['net']['amount'], $fee_breakdown_v1['totals']['net']['currency'] ) ) {
+				$meta_data_to_update['_wcpay_net'] = WC_Payments_Utils::interpret_stripe_amount(
+					(int) $fee_breakdown_v1['totals']['net']['amount'],
+					$fee_breakdown_v1['totals']['net']['currency']
+				);
+			}
+		} else {
+			$application_fee_amount = $charges_data[0]['application_fee_amount'] ?? null;
 
-		if ( $application_fee_amount ) {
-			$fee = WC_Payments_Utils::interpret_stripe_amount( $application_fee_amount, $currency );
-			$meta_data_to_update['_wcpay_transaction_fee'] = $fee;
+			if ( $application_fee_amount ) {
+				$fee = WC_Payments_Utils::interpret_stripe_amount( $application_fee_amount, $currency );
+				$meta_data_to_update['_wcpay_transaction_fee'] = $fee;
 
-			$charge_amount                     = WC_Payments_Utils::interpret_stripe_amount( $charge_amount, $currency );
-			$meta_data_to_update['_wcpay_net'] = $charge_amount - $fee;
+				$charge_amount                     = WC_Payments_Utils::interpret_stripe_amount( $charge_amount, $currency );
+				$meta_data_to_update['_wcpay_net'] = $charge_amount - $fee;
+			}
 		}
 
+		// Keys we always write when present in the envelope — including
+		// legitimate $0 values — because their truthiness is semantically
+		// meaningful for the order page "Transaction Fee" row and net.
+		$authoritative_keys = [ '_wcpay_transaction_fee', '_wcpay_net' ];
 		foreach ( $meta_data_to_update as $key => $value ) {
-			// Override existing meta data with incoming values, if present.
+			if ( in_array( $key, $authoritative_keys, true ) ) {
+				if ( null !== $value ) {
+					$order->update_meta_data( $key, $value );
+				}
+				continue;
+			}
 			if ( $value ) {
 				$order->update_meta_data( $key, $value );
 			}
@@ -520,7 +571,14 @@ class WC_Payments_Webhook_Processing_Service {
 		// This is an incoming request from WCPay server rather than an outgoing request to WCPay server.
 		// However, the shape of the payment intent object are the same.
 		// Using this extraction method will reduce the code duplication.
+		$ipp_channel      = $event_object['metadata']['ipp_channel'] ?? '';
+		$allowed_channels = [ 'mobile_pos', 'mobile_store_management' ];
+		if ( in_array( $ipp_channel, $allowed_channels, true ) ) {
+			$this->order_service->set_ipp_channel_for_order( $order, $ipp_channel );
+		}
+
 		$payment_intent = $this->api_client->deserialize_payment_intention_object_from_array( $event_object );
+		$this->ensure_order_payment_token_for_successful_recurring_intent( $order, $payment_intent, $payment_method_id );
 		$this->order_service->update_order_status_from_intent( $order, $payment_intent );
 
 		$payment_method = $charges_data[0]['payment_method_details']['type'] ?? null;
@@ -543,6 +601,95 @@ class WC_Payments_Webhook_Processing_Service {
 	}
 
 	/**
+	 * Ensures recurring orders paid by webhook have a token for future renewals.
+	 *
+	 * @param WC_Order                          $order             The order.
+	 * @param WC_Payments_API_Payment_Intention $payment_intent    The payment intent.
+	 * @param string|null                       $payment_method_id The payment method ID.
+	 */
+	private function ensure_order_payment_token_for_successful_recurring_intent( $order, $payment_intent, $payment_method_id ) {
+		if ( ! $payment_intent->is_authorized() || empty( $payment_method_id ) || ! $this->wcpay_gateway->is_payment_recurring( $order->get_id() ) ) {
+			return;
+		}
+
+		// A paid order already had its token saved at checkout, so this is a redelivered event.
+		// Saving again could re-point sibling subscriptions to a card the customer has since replaced.
+		if ( $order->is_paid() ) {
+			Logger::log( 'Skipping webhook token save for paid order #' . $order->get_id() . '.' );
+			return;
+		}
+
+		$previous_token_id = $this->get_order_last_payment_token_id( $order );
+
+		try {
+			$token = $this->wcpay_gateway->ensure_payment_method_token_for_order( $order, $payment_method_id, $order->get_user() );
+			$this->maybe_add_subscription_token_repair_note( $order, $previous_token_id, $token );
+		} catch ( Exception $e ) {
+			Logger::log( 'Error when saving payment method from webhook: ' . $e->getMessage() );
+			$order->add_order_note( __( 'Unable to save payment method for subscription. Please try again or use a different payment method.', 'woocommerce-payments' ) );
+		}
+	}
+
+	/**
+	 * Gets the last payment token ID attached to an order.
+	 *
+	 * @param WC_Order $order The order.
+	 * @return int|null The last payment token ID, or null if none exists.
+	 */
+	private function get_order_last_payment_token_id( $order ) {
+		$payment_token_ids = $order->get_payment_tokens();
+		if ( ! is_array( $payment_token_ids ) || empty( $payment_token_ids ) ) {
+			return null;
+		}
+
+		$payment_token_id = end( $payment_token_ids );
+
+		return $payment_token_id ? (int) $payment_token_id : null;
+	}
+
+	/**
+	 * Adds observability when webhook token repair changes an existing subscription token.
+	 *
+	 * @param WC_Order         $order             The order.
+	 * @param int|null         $previous_token_id The token ID previously attached to the order.
+	 * @param WC_Payment_Token $token             The token attached after repair.
+	 */
+	private function maybe_add_subscription_token_repair_note( $order, $previous_token_id, $token ) {
+		if ( null === $previous_token_id || ! $token instanceof WC_Payment_Token ) {
+			return;
+		}
+
+		$new_token_id = (int) $token->get_id();
+		if ( $previous_token_id === $new_token_id ) {
+			return;
+		}
+
+		$note = sprintf(
+			/* translators: 1: Previous payment token ID, 2: New payment token ID. */
+			__( 'WooPayments updated the subscription payment method token from token #%1$d to #%2$d after receiving a successful renewal payment webhook.', 'woocommerce-payments' ),
+			$previous_token_id,
+			$new_token_id
+		);
+
+		Logger::log( $note );
+		$order->add_order_note( $note );
+	}
+
+	/**
+	 * Extracts the payment method ID from a webhook payment method value.
+	 *
+	 * @param mixed $payment_method The payment method value from the webhook.
+	 * @return string|null The payment method ID.
+	 */
+	private function get_webhook_payment_method_id( $payment_method ) {
+		if ( is_array( $payment_method ) ) {
+			return isset( $payment_method['id'] ) && is_string( $payment_method['id'] ) ? $payment_method['id'] : null;
+		}
+
+		return is_string( $payment_method ) ? $payment_method : null;
+	}
+
+	/**
 	 * Process webhook dispute created.
 	 *
 	 * @param array $event_body The event that triggered the webhook.
@@ -552,24 +699,20 @@ class WC_Payments_Webhook_Processing_Service {
 	private function process_webhook_dispute_created( $event_body ) {
 		$event_data   = $this->read_webhook_property( $event_body, 'data' );
 		$event_object = $this->read_webhook_property( $event_data, 'object' );
-		$charge_id    = $this->read_webhook_property( $event_object, 'charge' );
-		$reason       = $this->read_webhook_property( $event_object, 'reason' );
-		$amount_raw   = $this->read_webhook_property( $event_object, 'amount' );
-		$evidence     = $this->read_webhook_property( $event_object, 'evidence_details' );
-		$status       = $this->read_webhook_property( $event_object, 'status' );
-		$due_by       = $this->read_webhook_property( $evidence, 'due_by' );
+		// Read the dispute ID defensively: only used to keep notes distinct, so a
+		// (theoretical) event without it should still create the note, not fatal.
+		$dispute_id = $this->has_webhook_property( $event_object, 'id' ) ? $this->read_webhook_property( $event_object, 'id' ) : '';
+		$charge_id  = $this->read_webhook_property( $event_object, 'charge' );
+		$reason     = $this->read_webhook_property( $event_object, 'reason' );
+		$amount_raw = $this->read_webhook_property( $event_object, 'amount' );
+		$evidence   = $this->read_webhook_property( $event_object, 'evidence_details' );
+		$status     = $this->read_webhook_property( $event_object, 'status' );
+		$due_by     = $this->read_webhook_property( $evidence, 'due_by' );
 
 		$order = $this->wcpay_db->order_from_charge_id( $charge_id );
 
-		$currency      = $order->get_currency();
-		$amount_string = wc_price( WC_Payments_Utils::interpret_stripe_amount( $amount_raw, $currency ), [ 'currency' => strtoupper( $currency ) ] );
-
-		// Explicitly add currency info if needed (multi-currency stores).
-		$amount = WC_Payments_Explicit_Price_Formatter::get_explicit_price_with_currency( $amount_string, $currency );
-
-		// Convert due_by to a date string in the store timezone.
-		$due_by = date_i18n( wc_date_format(), $due_by );
-
+		// order_from_charge_id() returns false when no order matches, so guard
+		// before dereferencing $order below.
 		if ( ! $order ) {
 			throw new Invalid_Webhook_Data_Exception(
 				sprintf(
@@ -580,7 +723,16 @@ class WC_Payments_Webhook_Processing_Service {
 			);
 		}
 
-		$this->order_service->mark_payment_dispute_created( $order, $charge_id, $amount, $reason, $due_by, $status );
+		$currency      = $order->get_currency();
+		$amount_string = wc_price( WC_Payments_Utils::interpret_stripe_amount( $amount_raw, $currency ), [ 'currency' => strtoupper( $currency ) ] );
+
+		// Explicitly add currency info if needed (multi-currency stores).
+		$amount = WC_Payments_Explicit_Price_Formatter::get_explicit_price_with_currency( $amount_string, $currency );
+
+		// Convert due_by to a date string in the store timezone.
+		$due_by = date_i18n( wc_date_format(), $due_by );
+
+		$this->order_service->mark_payment_dispute_created( $order, $charge_id, $amount, $reason, $due_by, $status, $dispute_id );
 
 		// Clear dispute caches to trigger a fetch of new data.
 		$this->database_cache->delete_dispute_caches();
@@ -598,6 +750,7 @@ class WC_Payments_Webhook_Processing_Service {
 		$event_object = $this->read_webhook_property( $event_data, 'object' );
 		$charge_id    = $this->read_webhook_property( $event_object, 'charge' );
 		$status       = $this->read_webhook_property( $event_object, 'status' );
+		$dispute_id   = $this->read_webhook_property( $event_object, 'id' );
 		$order        = $this->wcpay_db->order_from_charge_id( $charge_id );
 
 		if ( ! $order ) {
@@ -610,7 +763,22 @@ class WC_Payments_Webhook_Processing_Service {
 			);
 		}
 
-		$this->order_service->mark_payment_dispute_closed( $order, $charge_id, $status );
+		// Fetch dispute summary data.
+		$dispute_summary = [];
+		try {
+			$dispute_summary = $this->api_client->get_dispute_summary( $dispute_id );
+		} catch ( Exception $e ) {
+			Logger::error(
+				sprintf(
+					'Failed to fetch dispute summary for dispute %1$s (charge %2$s): %3$s',
+					$dispute_id,
+					$charge_id,
+					$e->getMessage()
+				)
+			);
+		}
+
+		$this->order_service->mark_payment_dispute_closed( $order, $charge_id, $status, $dispute_summary, $dispute_id );
 
 		// Clear dispute caches to trigger a fetch of new data.
 		$this->database_cache->delete_dispute_caches();
@@ -627,8 +795,11 @@ class WC_Payments_Webhook_Processing_Service {
 		$event_type   = $this->read_webhook_property( $event_body, 'type' );
 		$event_data   = $this->read_webhook_property( $event_body, 'data' );
 		$event_object = $this->read_webhook_property( $event_data, 'object' );
-		$charge_id    = $this->read_webhook_property( $event_object, 'charge' );
-		$order        = $this->wcpay_db->order_from_charge_id( $charge_id );
+		// Read the dispute ID defensively: only used to keep notes distinct, so a
+		// (theoretical) event without it should still create the note, not fatal.
+		$dispute_id = $this->has_webhook_property( $event_object, 'id' ) ? $this->read_webhook_property( $event_object, 'id' ) : '';
+		$charge_id  = $this->read_webhook_property( $event_object, 'charge' );
+		$order      = $this->wcpay_db->order_from_charge_id( $charge_id );
 
 		if ( ! $order ) {
 			throw new Invalid_Webhook_Data_Exception(
@@ -661,14 +832,72 @@ class WC_Payments_Webhook_Processing_Service {
 			)
 		);
 
-		if ( $this->order_service->order_note_exists( $order, $note ) ) {
+		// The message is a fixed string per event type, so a charge's several disputes
+		// all produce byte-identical notes and order_note_exists() collapses them into
+		// one. The dispute ID keeps them distinct while still de-duplicating a
+		// re-delivered webhook for the same dispute.
+		if ( '' !== $dispute_id ) {
+			$note .= ' ' . sprintf(
+				/* translators: %s: the dispute ID */
+				esc_html__( '(Dispute ID: %s)', 'woocommerce-payments' ),
+				esc_html( $dispute_id )
+			);
+		}
+
+		if ( ! $this->order_service->order_note_exists( $order, $note ) ) {
+			$order->add_order_note( $note );
+		}
+
+		// Clear dispute caches to trigger a fetch of new data. The dispute changed on
+		// Stripe's side even when its note is a duplicate of one already on the order.
+		$this->database_cache->delete_dispute_caches();
+	}
+
+	/**
+	 * Process webhook for an early fraud warning being created or updated.
+	 *
+	 * The platform only forwards `created` events for charges without a dispute, but always
+	 * forwards `updated` events so a previously stored warning can be resolved. An `updated`
+	 * event for a warning the store never saw is therefore ignored.
+	 *
+	 * @param array $event_body The event that triggered the webhook.
+	 *
+	 * @throws Invalid_Webhook_Data_Exception Required parameters not found.
+	 */
+	private function process_webhook_early_fraud_warning( $event_body ) {
+		$event_type   = $this->read_webhook_property( $event_body, 'type' );
+		$event_data   = $this->read_webhook_property( $event_body, 'data' );
+		$event_object = $this->read_webhook_property( $event_data, 'object' );
+		$charge_id    = $this->read_webhook_property( $event_object, 'charge' );
+		$efw_id       = $this->read_webhook_property( $event_object, 'id' );
+		$actionable   = $this->read_webhook_property( $event_object, 'actionable' );
+		$created      = $this->read_webhook_property( $event_object, 'created' );
+
+		// Unlike the fields above, `fraud_type` only drives a descriptive label that already
+		// degrades to an empty reason when the value is unknown, so a missing key must not
+		// abort storing the warning — read it optionally and default to an empty string.
+		$fraud_type = $event_object['fraud_type'] ?? '';
+
+		$order = $this->wcpay_db->order_from_charge_id( $charge_id );
+
+		if ( ! $order ) {
+			throw new Invalid_Webhook_Data_Exception(
+				sprintf(
+				/* translators: %1: charge ID */
+					__( 'Could not find order via charge ID: %1$s', 'woocommerce-payments' ),
+					$charge_id
+				)
+			);
+		}
+
+		// An update to a warning the store never received (e.g. its creation was skipped
+		// because the charge was already disputed) would only add a confusing "resolved"
+		// note for a warning the merchant never saw — ignore it.
+		if ( 'radar.early_fraud_warning.updated' === $event_type && null === $this->order_service->get_early_fraud_warning_for_order( $order ) ) {
 			return;
 		}
 
-		$order->add_order_note( $note );
-
-		// Clear dispute caches to trigger a fetch of new data.
-		$this->database_cache->delete_dispute_caches();
+		$this->order_service->mark_payment_early_fraud_warning( $order, $charge_id, $efw_id, (bool) $actionable, (string) $fraud_type, (int) $created );
 	}
 
 	/**
@@ -854,6 +1083,14 @@ class WC_Payments_Webhook_Processing_Service {
 		$is_refunded_event = isset( $event_body['type'] ) && 'charge.refunded' === $event_body['type'];
 		$status            = $this->read_webhook_property( $event_object, 'status' );
 		if ( 'succeeded' !== $status || ! $is_refunded_event ) {
+			return;
+		}
+
+		// Check if the charge was actually captured before processing the refund.
+		// Stripe sends charge.refunded webhooks for cancelled authorizations even though no payment was captured.
+		// We should not create WooCommerce refund objects for these cases as they cause negative values in analytics.
+		$captured = $event_object['captured'] ?? false;
+		if ( ! $captured ) {
 			return;
 		}
 

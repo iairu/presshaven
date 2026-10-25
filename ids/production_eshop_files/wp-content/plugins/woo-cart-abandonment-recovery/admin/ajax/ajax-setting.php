@@ -58,14 +58,14 @@ class Ajax_Setting extends Ajax_Base {
 	 */
 	public function save_setting(): void {
 
-		$response_data = [ 'messsage' => $this->get_error_msg( 'permission' ) ];
+		$response_data = [ 'message' => $this->get_error_msg( 'permission' ) ];
 
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
 			wp_send_json_error( $response_data );
 		}
 
 		if ( empty( $_POST ) ) {
-			$response_data = [ 'messsage' => __( 'No post data found!', 'woo-cart-abandonment-recovery' ) ];
+			$response_data = [ 'message' => __( 'No post data found!', 'woo-cart-abandonment-recovery' ) ];
 			wp_send_json_error( $response_data );
 		}
 
@@ -73,7 +73,7 @@ class Ajax_Setting extends Ajax_Base {
 		 * Nonce verification
 		 */
 		if ( ! check_ajax_referer( 'wcar_save_setting', 'security', false ) ) {
-			$response_data = [ 'messsage' => $this->get_error_msg( 'nonce' ) ];
+			$response_data = [ 'message' => $this->get_error_msg( 'nonce' ) ];
 			wp_send_json_error( $response_data );
 		}
 
@@ -81,7 +81,7 @@ class Ajax_Setting extends Ajax_Base {
 		$value  = isset( $_POST['value'] ) ? wp_unslash( $_POST['value'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized in save_meta_fields function.
 
 		if ( empty( $option ) ) {
-			$response_data = [ 'messsage' => $this->get_error_msg( 'option' ) ];
+			$response_data = [ 'message' => $this->get_error_msg( 'option' ) ];
 			wp_send_json_error( $response_data );
 		}
 

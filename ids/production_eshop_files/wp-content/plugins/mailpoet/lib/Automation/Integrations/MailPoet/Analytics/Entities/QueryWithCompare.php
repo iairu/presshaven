@@ -28,9 +28,10 @@ class QueryWithCompare extends Query {
     string $orderDirection = 'asc',
     int $page = 0,
     array $filter = [],
-    ?string $search = null
+    ?string $search = null,
+    ?int $versionId = null
   ) {
-    parent::__construct($primaryAfter, $primaryBefore, $limit, $orderBy, $orderDirection, $page, $filter, $search);
+    parent::__construct($primaryAfter, $primaryBefore, $limit, $orderBy, $orderDirection, $page, $filter, $search, $versionId);
     $this->secondaryAfter = $secondaryAfter;
     $this->secondaryBefore = $secondaryBefore;
   }
@@ -72,10 +73,13 @@ class QueryWithCompare extends Query {
       throw new UnexpectedValueException('Invalid query parameters');
     }
 
-    $limit = $query['limit'] ?? 25;
-    $orderBy = $query['orderBy'] ?? '';
-    $orderDirection = $query['orderDirection'] ?? 'asc';
-    $page = $query['page'] ?? 0;
+    $limit = is_int($query['limit'] ?? null) ? $query['limit'] : 25;
+    $orderBy = is_string($query['orderBy'] ?? null) ? $query['orderBy'] : '';
+    $orderDirection = is_string($query['orderDirection'] ?? null) ? $query['orderDirection'] : 'asc';
+    $page = is_int($query['page'] ?? null) ? $query['page'] : 0;
+    $filter = is_array($query['filter'] ?? null) ? $query['filter'] : [];
+    $search = isset($query['search']) && is_string($query['search']) ? $query['search'] : null;
+    $versionId = is_int($query['version_id'] ?? null) ? $query['version_id'] : null;
 
     return new self(
       new \DateTimeImmutable($primaryAfter),
@@ -85,7 +89,10 @@ class QueryWithCompare extends Query {
       $limit,
       $orderBy,
       $orderDirection,
-      $page
+      $page,
+      $filter,
+      $search,
+      $versionId
     );
   }
 
@@ -110,6 +117,7 @@ class QueryWithCompare extends Query {
         'page' => Builder::integer()->minimum(1),
         'filter' => Builder::object(),
         'search' => Builder::string()->nullable(),
+        'version_id' => Builder::integer()->minimum(1)->nullable(),
       ]
     );
   }

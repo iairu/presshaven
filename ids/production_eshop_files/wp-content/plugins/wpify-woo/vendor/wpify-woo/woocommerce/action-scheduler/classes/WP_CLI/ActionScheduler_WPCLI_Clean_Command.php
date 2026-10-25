@@ -36,12 +36,12 @@ class ActionScheduler_WPCLI_Clean_Command extends WP_CLI_Command
     public function clean($args, $assoc_args)
     {
         // Handle passed arguments.
-        $batch = \absint(\WP_CLI\Utils\get_flag_value($assoc_args, 'batch-size', 20));
-        $batches = \absint(\WP_CLI\Utils\get_flag_value($assoc_args, 'batches', 0));
+        $batch = \absint(\WpifyWooDeps\WP_CLI\Utils\get_flag_value($assoc_args, 'batch-size', 20));
+        $batches = \absint(\WpifyWooDeps\WP_CLI\Utils\get_flag_value($assoc_args, 'batches', 0));
         $status = \explode(',', WP_CLI\Utils\get_flag_value($assoc_args, 'status', ''));
         $status = \array_filter(\array_map('trim', $status));
-        $before = \WP_CLI\Utils\get_flag_value($assoc_args, 'before', '');
-        $sleep = \WP_CLI\Utils\get_flag_value($assoc_args, 'pause', 0);
+        $before = \WpifyWooDeps\WP_CLI\Utils\get_flag_value($assoc_args, 'before', '');
+        $sleep = \WpifyWooDeps\WP_CLI\Utils\get_flag_value($assoc_args, 'pause', 0);
         $batches_completed = 0;
         $actions_deleted = 0;
         $unlimited = 0 === $batches;

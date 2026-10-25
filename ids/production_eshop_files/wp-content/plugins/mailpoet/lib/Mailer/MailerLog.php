@@ -110,7 +110,7 @@ class MailerLog {
 
     // ensure that sending frequency has not been reached
     if (self::isSendingLimitReached($mailerLog)) {
-      throw new \Exception(__('Sending frequency limit has been reached.', 'mailpoet'));
+      throw new SendingLimitReachedException(__('Sending frequency limit has been reached.', 'mailpoet'));
     }
     return null;
   }
@@ -133,6 +133,18 @@ class MailerLog {
    */
   public static function resumeSending(): array {
     return self::resetMailerLog();
+  }
+
+  public static function resumeSendingIfPausedForPendingApproval(): void {
+    $mailerLog = self::getMailerLog();
+    if (!self::isSendingPaused($mailerLog)) {
+      return;
+    }
+    $operation = self::getError($mailerLog)['operation'] ?? null;
+    if ($operation !== MailerError::OPERATION_PENDING_APPROVAL) {
+      return;
+    }
+    self::resumeSending();
   }
 
   /**

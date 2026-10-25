@@ -12,18 +12,22 @@ use Exception;
 use WC_Order;
 use WC_Order_Item_Product;
 use WooCommerce\PayPalCommerce\Button\Session\CartData;
+use WooCommerce\PayPalCommerce\SdkV6\Helper\MerchantCountrySupport;
+use WooCommerce\PayPalCommerce\Settings\Data\PaymentSettings;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsProvider;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsModel;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExecutableModule;
-use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ExtendingModule;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ModuleClassNameIdTrait;
 use WooCommerce\PayPalCommerce\Vendor\Inpsyde\Modularity\Module\ServiceModule;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Container\ContainerInterface;
+use WooCommerce\PayPalCommerce\Button\Helper\Context;
 use WooCommerce\PayPalCommerce\Compat\Assets\CompatAssets;
 use WooCommerce\PayPalCommerce\WcGateway\Exception\NotFoundException;
 use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
 /**
  * Class CompatModule
  */
-class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
+class CompatModule implements ServiceModule, ExecutableModule
 {
     use ModuleClassNameIdTrait;
     /**
@@ -32,13 +36,6 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
     public function services(): array
     {
         return require __DIR__ . '/../services.php';
-    }
-    /**
-     * {@inheritDoc}
-     */
-    public function extensions(): array
-    {
-        return require __DIR__ . '/../extensions.php';
     }
     /**
      * {@inheritDoc}
@@ -57,9 +54,19 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
             $asset_loader->register();
             add_action('admin_enqueue_scripts', array($asset_loader, 'enqueue'));
         });
+        if (function_exists('WC_GC')) {
+            $context = $c->get('button.helper.context');
+            assert($context instanceof Context);
+            (new \WooCommerce\PayPalCommerce\Compat\WcGiftCardsCompat($context))->register();
+        }
+        if (class_exists('\Kestrel\Account_Funds\Cart')) {
+            (new \WooCommerce\PayPalCommerce\Compat\WcAccountFundsCompat())->register();
+        }
         $this->migrate_pay_later_settings($c);
         $this->migrate_smart_button_settings($c);
+        $this->migrate_sdk_v6_default($c);
         $this->migrate_three_d_secure_setting();
+        $this->migrate_capture_on_status_change();
         $this->fix_page_builders();
         $this->exclude_cache_plugins_js_minification($c);
         $is_nyp_active = $c->get('compat.nyp.is_supported_plugin_version_active');
@@ -70,8 +77,51 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
         if ($is_wc_bookings_active) {
             $this->initialize_wc_bookings_compat_layer($c);
         }
+        $this->initialize_blueprint_compat_layer($c);
         add_action('woocommerce_paypal_payments_gateway_migrate', static fn() => delete_transient('ppcp_has_ppec_subscriptions'));
+        add_action('woocommerce_paypal_payments_authenticated_merchant', function () {
+            $this->disable_legacy_paypal_standard_on_connect();
+        });
+        add_action('admin_notices', function () {
+            $this->maybe_show_wps_subscriptions_notice();
+        });
         $this->legacy_ui_card_payment_mapping($c);
+        /**
+         * Automatically enable Pay Later messaging for Canadian stores during plugin update.
+         *
+         * This action runs during plugin updates to automatically enable Pay Later messaging for stores
+         * that meet the following criteria:
+         * - Store Country is set as Canada
+         * - The "Stay updated" checkbox is enabled
+         *
+         * When all conditions are met, this will:
+         * - Enable Pay Later messaging
+         * - Enable Pay Later Payment Method
+         * - Add default messaging locations (product, cart, checkout) to existing selections
+         *
+         * @hook woocommerce_paypal_payments_gateway_migrate
+         */
+        add_action('woocommerce_paypal_payments_gateway_migrate', static function () use ($c) {
+            // Check if the "Stay updated" checkbox is enabled (checked in either old or new UI).
+            $settings_model = $c->get('settings.data.settings');
+            assert($settings_model instanceof SettingsModel);
+            $settings = $c->get('wcgateway.settings');
+            assert($settings instanceof Settings);
+            // Store Country is set as Canada.
+            if ($c->get('api.shop.country') !== 'CA' || !$settings_model->get_stay_updated()) {
+                return;
+            }
+            // Enable Pay Later messaging.
+            $selected_locations = $settings->has('pay_later_messaging_locations') ? $settings->get('pay_later_messaging_locations') : array();
+            $settings->set('pay_later_messaging_enabled', \true);
+            $settings->set('pay_later_messaging_locations', array_unique(array_merge($selected_locations, array('product', 'cart', 'checkout'))));
+            $settings->persist();
+            // Enable Pay Later Payment Method.
+            $payment_settings = $c->get('settings.data.payment');
+            assert($payment_settings instanceof PaymentSettings);
+            $payment_settings->set_paylater_enabled(\true);
+            $payment_settings->save();
+        });
         return \true;
     }
     /**
@@ -82,18 +132,8 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
      */
     private function initialize_ppec_compat_layer(ContainerInterface $container): void
     {
-        // Process PPEC subscription renewals through PayPal Payments.
         $handler = $container->get('compat.ppec.subscriptions-handler');
         $handler->maybe_hook();
-        // Settings.
-        $ppec_import = $container->get('compat.ppec.settings_importer');
-        $ppec_import->maybe_hook();
-        // Inbox note inviting merchant to disable PayPal Express Checkout.
-        add_action('woocommerce_init', function () {
-            if (is_admin() && is_callable(array(WC(), 'is_wc_admin_active')) && WC()->is_wc_admin_active() && class_exists('Automattic\WooCommerce\Admin\Notes\Notes')) {
-                \WooCommerce\PayPalCommerce\Compat\PPEC\DeactivateNote::init();
-            }
-        });
     }
     /**
      * Sets up the 3rd party plugins compatibility layer for PayPal tracking.
@@ -246,6 +286,61 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
         });
     }
     /**
+     * Hands a store that predates the SDK v6 rollout over to it.
+     *
+     * The rollout shipped v6 to fresh installs only, storing 'no' against every store
+     * that already existed. This clears that hold, so v6 is the default everywhere.
+     *
+     * The merchant country is weighed here rather than left to the runtime check in
+     * SdkV6Module, which only runs on `woocommerce_paypal_payments_authenticated_merchant`
+     * — a store connected long ago would load v6 and never re-evaluate it.
+     *
+     * 'yes' is written rather than the option being deleted: a store that downgrades
+     * would have the option rewritten by the older install path, and with the marker
+     * already set this migration could not put it right again.
+     *
+     * An unsupported country is written back as 'no' rather than left empty, since an
+     * empty option now means "nobody objected" and would load v6 there.
+     *
+     * @param ContainerInterface $c The Container.
+     */
+    protected function migrate_sdk_v6_default(ContainerInterface $c): void
+    {
+        $is_sdk_v6_default_migrated_option_name = 'woocommerce_ppcp-is_sdk_v6_default_migrated';
+        if (get_option($is_sdk_v6_default_migrated_option_name)) {
+            return;
+        }
+        add_action('woocommerce_paypal_payments_gateway_migrate_on_update', static function () use ($c, $is_sdk_v6_default_migrated_option_name) {
+            // Not 'yes': held back by the rollout, or too old to carry an answer.
+            if ('yes' !== get_option('woocommerce-ppcp-sdk-v6-eligible')) {
+                $settings_provider = $c->get('settings.settings-provider');
+                assert($settings_provider instanceof SettingsProvider);
+                $support = new MerchantCountrySupport($settings_provider->merchant_country());
+                update_option('woocommerce-ppcp-sdk-v6-eligible', $support->is_supported() ? 'yes' : 'no');
+            }
+            // Set last, so a failure above leaves the handover to the next update.
+            update_option($is_sdk_v6_default_migrated_option_name, \true);
+        });
+    }
+    /**
+     * Migrates the "capture on status change" setting from the legacy UI.
+     *
+     * The migration will be done on plugin update if it hasn't already done.
+     */
+    protected function migrate_capture_on_status_change(): void
+    {
+        add_action('woocommerce_paypal_payments_gateway_migrate_on_update', static function () {
+            $legacy_settings = (array) get_option('woocommerce-ppcp-settings') ?: array();
+            $payment_settings = (array) get_option('woocommerce-ppcp-data-payment') ?: array();
+            // Noop if the legacy setting does not exist, or the setting was already migrated.
+            if (!isset($legacy_settings['capture_on_status_change']) || isset($payment_settings['capture_on_status_change'])) {
+                return;
+            }
+            $payment_settings['capture_on_status_change'] = $legacy_settings['capture_on_status_change'];
+            update_option('woocommerce-ppcp-data-payment', $payment_settings);
+        });
+    }
+    /**
      * Changes the button rendering place for page builders
      * that do not work well with our default places.
      *
@@ -369,7 +464,7 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
                         continue;
                     }
                     foreach ($wc_order->get_items() as $wc_order_item) {
-                        if (!is_a($wc_order_item, WC_Order_Item_Product::class)) {
+                        if (!$wc_order_item instanceof WC_Order_Item_Product) {
                             continue;
                         }
                         $product_id = $wc_order_item->get_variation_id() ?: $wc_order_item->get_product_id();
@@ -391,6 +486,21 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
                 $container->get('woocommerce.logger.woocommerce')->warning('Failed to create booking for WooCommerce Bookings plugin: ' . $exception->getMessage());
             }
         }, 10, 2);
+    }
+    /**
+     * Sets up the WooCommerce Blueprint compatibility layer.
+     *
+     * @param ContainerInterface $container The Container.
+     * @return void
+     */
+    private function initialize_blueprint_compat_layer(ContainerInterface $container): void
+    {
+        $is_blueprint_available = $container->get('compat.blueprint.is_available');
+        if (!$is_blueprint_available) {
+            return;
+        }
+        $blueprint_bootstrap = $container->get('compat.blueprint.bootstrap');
+        $blueprint_bootstrap->init();
     }
     /**
      * Responsible to keep the credit card payment configuration backwards
@@ -416,5 +526,86 @@ class CompatModule implements ServiceModule, ExtendingModule, ExecutableModule
                 return $is_acdc;
             }
         });
+    }
+    /**
+     * Returns the total count of active/pending-cancel PayPal Standard subscriptions via WCS.
+     *
+     * Checks both the native WPS gateway ID and the restoration plugin gateway ID.
+     * Returns null when WooCommerce Subscriptions is not installed, so callers can
+     * distinguish "WCS absent" from "WCS present but zero subscriptions".
+     *
+     * @return int|null  null = WCS not installed; int = total active subscription count.
+     */
+    protected function count_wps_active_subscriptions(): ?int
+    {
+        if (!function_exists('wcs_get_subscriptions')) {
+            return null;
+        }
+        $total = 0;
+        foreach (array('paypal', 'restore_paypal_standard') as $gateway_id) {
+            $total += count(wcs_get_subscriptions(array('payment_method' => $gateway_id, 'subscription_status' => array('active', 'pending-cancel'), 'subscriptions_per_page' => -1)));
+        }
+        return $total;
+    }
+    /**
+     * Disables the WC core PayPal Standard gateway when a merchant successfully connects PPCP.
+     *
+     * PayPal Standard has a '_should_load' persistence flag that survives the enabled toggle —
+     * both keys must be set to 'no' for the gateway to fully stop loading. This method also
+     * keeps the IPN handler dormant by clearing _should_load, which prevents residual
+     * WOOTHEMES_CART BN code volume from appearing in PayPal partner reporting.
+     *
+     * When WooCommerce Subscriptions detects active subscriptions billed through PayPal Standard
+     * or the restoration plugin, stores a transient instead of disabling — those renewals
+     * depend on the IPN endpoint and cannot be silently migrated. The notice is rendered on the
+     * next admin page load via maybe_show_wps_subscriptions_notice().
+     */
+    protected function disable_legacy_paypal_standard_on_connect(): void
+    {
+        $sub_count = $this->count_wps_active_subscriptions();
+        if ($sub_count !== null && $sub_count > 0) {
+            // Persist count to a transient so the notice survives the AJAX connect request
+            // and appears on the next admin page load.
+            set_transient('ppcp_wps_standard_subs_notice', $sub_count, 30 * DAY_IN_SECONDS);
+            return;
+        }
+        // Safe to disable — no active PayPal Standard subscriptions detected.
+        $settings = get_option('woocommerce_paypal_settings', array());
+        $settings['enabled'] = 'no';
+        $settings['_should_load'] = 'no';
+        // Clears the permanent latch; enabled=no alone is insufficient.
+        update_option('woocommerce_paypal_settings', $settings);
+        // Also disable restore-paypal-standard-for-woocommerce if installed.
+        // That plugin registers gateway ID `restore_paypal_standard` with option key
+        // `woocommerce_restore_paypal_standard_settings` — a dark pool that sends no BN code.
+        // enable-standard-paypal-for-woocommerce uses the native `woocommerce_paypal_settings` key
+        // above, so it is already covered by the write above.
+        $rpsfw = get_option('woocommerce_restore_paypal_standard_settings', array());
+        if (!empty($rpsfw)) {
+            $rpsfw['enabled'] = 'no';
+            update_option('woocommerce_restore_paypal_standard_settings', $rpsfw);
+        }
+    }
+    /**
+     * Renders an admin notice when disable_legacy_paypal_standard_on_connect() detected active
+     * PayPal Standard subscriptions and stored a transient instead of disabling the gateway.
+     *
+     * Fires on admin_notices. Uses a transient to bridge the AJAX merchant-connect request
+     * and the next admin page load.
+     */
+    protected function maybe_show_wps_subscriptions_notice(): void
+    {
+        $count = get_transient('ppcp_wps_standard_subs_notice');
+        if (\false === $count) {
+            return;
+        }
+        delete_transient('ppcp_wps_standard_subs_notice');
+        $subscriptions_url = admin_url('edit.php?post_type=shop_subscription&payment_method=paypal');
+        printf('<div class="notice notice-warning"><p>%s</p></div>', wp_kses_post(sprintf(
+            /* translators: 1: number of subscriptions, 2: URL to subscription list */
+            _n('PayPal Payments is now your active checkout gateway, but <a href="%2$s">%1$d subscription</a> is still billed through the legacy PayPal Standard gateway. Migrate or cancel these subscriptions before disabling PayPal Standard to avoid missed renewals.', 'PayPal Payments is now your active checkout gateway, but <a href="%2$s">%1$d subscriptions</a> are still billed through the legacy PayPal Standard gateway. Migrate or cancel these subscriptions before disabling PayPal Standard to avoid missed renewals.', (int) $count, 'woocommerce-paypal-payments'),
+            (int) $count,
+            esc_url($subscriptions_url)
+        )));
     }
 }

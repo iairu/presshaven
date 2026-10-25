@@ -6,14 +6,14 @@ use MailPoetVendor\Symfony\Component\Validator\ConstraintValidator;
 use MailPoetVendor\Symfony\Component\Validator\Exception\UnexpectedTypeException;
 class ValidValidator extends ConstraintValidator
 {
- public function validate($value, Constraint $constraint)
- {
- if (!$constraint instanceof Valid) {
- throw new UnexpectedTypeException($constraint, Valid::class);
- }
- if (null === $value) {
- return;
- }
- $this->context->getValidator()->inContext($this->context)->validate($value, null, $this->context->getGroup());
- }
+public function validate($value, Constraint $constraint)
+{
+if (!$constraint instanceof Valid) {
+throw new UnexpectedTypeException($constraint, Valid::class);
+}
+if (null === $value) {
+return;
+}
+$this->context->getValidator()->inContext($this->context)->validate($value, null, $this->context->getGroup());
+}
 }

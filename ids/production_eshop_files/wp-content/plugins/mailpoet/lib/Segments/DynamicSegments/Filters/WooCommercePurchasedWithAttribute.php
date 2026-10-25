@@ -54,6 +54,7 @@ class WooCommercePurchasedWithAttribute implements Filter {
     $attributeTermIds = $filterData->getArrayParam('attribute_term_ids');
     $termIdsParam = $this->filterHelper->getUniqueParameterName('attribute_term_ids');
     $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
+    $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     $productAlias = $this->applyProductJoin($queryBuilder, $orderStatsAlias);
     $attributeAlias = $this->applyTaxonomyAttributeJoin($queryBuilder, $productAlias, $attributeTaxonomySlug);
     $queryBuilder->andWhere("$attributeAlias.term_id IN (:$termIdsParam)");
@@ -71,12 +72,14 @@ class WooCommercePurchasedWithAttribute implements Filter {
   }
 
   private function applyTaxonomyAttributeJoin(QueryBuilder $queryBuilder, string $productAlias, $taxonomySlug, string $alias = 'attribute'): string {
+    $taxonomyParam = $this->filterHelper->getUniqueParameterName('attribute_taxonomy');
     $queryBuilder->innerJoin(
       $productAlias,
       $this->filterHelper->getPrefixedTable('wc_product_attributes_lookup'),
       $alias,
-      "product.product_id = attribute.product_id AND attribute.taxonomy = '$taxonomySlug'"
+      "product.product_id = attribute.product_id AND attribute.taxonomy = :$taxonomyParam"
     );
+    $queryBuilder->setParameter($taxonomyParam, $taxonomySlug);
 
     return $alias;
   }
@@ -196,6 +199,7 @@ class WooCommercePurchasedWithAttribute implements Filter {
     $valuesParam = $this->filterHelper->getUniqueParameterName('attribute_values');
     $keyParam = $this->filterHelper->getUniqueParameterName('attribute_name');
     $orderStatsAlias = $this->wooFilterHelper->applyOrderStatusFilter($queryBuilder);
+    $this->filterHelper->applyDatePeriodFilter($queryBuilder, "$orderStatsAlias.date_created", $filterData, false, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     $productAlias = $this->applyProductJoin($queryBuilder, $orderStatsAlias);
 
     $queryBuilder->innerJoin(

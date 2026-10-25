@@ -73,6 +73,7 @@ class Helper {
     if (!is_array($subscriptions)) {
       return [];
     }
+    /** @var \WC_Subscription[] $subscriptions */
     return $subscriptions;
   }
 }

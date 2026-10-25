@@ -11,6 +11,9 @@ namespace Automattic\WooCommerce\Pinterest;
 
 /**
  * Trait PluginHelper
+ *
+ * @class   PluginHelper
+ * @version 1.6.0
  */
 trait PluginHelper {
 
@@ -57,7 +60,7 @@ trait PluginHelper {
 	/**
 	 * Helper method to return the onboarding page parameters.
 	 *
-	 * @return array The onboarding page parameters.
+	 * @return array<string, string> The onboarding page parameters.
 	 */
 	protected function onboarding_page_parameters(): array {
 
@@ -68,9 +71,9 @@ trait PluginHelper {
 	}
 
 	/**
-	 * Check wether if the current page is the Get Started page.
+	 * Check whether the current page is the Get Started page.
 	 *
-	 * @return bool Wether the current page is the Get Started page.
+	 * @return bool Whether the current page is the Get Started page.
 	 */
 	protected function is_onboarding_page(): bool {
 

@@ -9,46 +9,31 @@ use MailPoet\API\JSON\Endpoint as APIEndpoint;
 use MailPoet\API\JSON\Error as APIError;
 use MailPoet\API\JSON\Response;
 use MailPoet\API\JSON\ResponseBuilders\NewslettersResponseBuilder;
+use MailPoet\Automation\Integrations\MailPoet\Templates\TemplateEmailContent;
 use MailPoet\Config\AccessControl;
-use MailPoet\Cron\CronHelper;
 use MailPoet\Doctrine\Validator\ValidationException;
 use MailPoet\Entities\NewsletterEntity;
-use MailPoet\Entities\NewsletterOptionFieldEntity;
-use MailPoet\Entities\ScheduledTaskEntity;
-use MailPoet\Entities\SendingQueueEntity;
-use MailPoet\InvalidStateException;
-use MailPoet\Listing;
-use MailPoet\Newsletter\Listing\NewsletterListingRepository;
+use MailPoet\Logging\LoggerFactory;
+use MailPoet\Newsletter\ApiDataSanitizer;
 use MailPoet\Newsletter\NewsletterDeleteController;
+use MailPoet\Newsletter\NewsletterResendController;
 use MailPoet\Newsletter\NewsletterSaveController;
 use MailPoet\Newsletter\NewslettersRepository;
-use MailPoet\Newsletter\NewsletterValidator;
 use MailPoet\Newsletter\Preview\SendPreviewController;
 use MailPoet\Newsletter\Preview\SendPreviewException;
-use MailPoet\Newsletter\Scheduler\PostNotificationScheduler;
-use MailPoet\Newsletter\Scheduler\Scheduler;
 use MailPoet\Newsletter\Url as NewsletterUrl;
-use MailPoet\Services\AuthorizedEmailsController;
+use MailPoet\Segments\SegmentsRepository;
 use MailPoet\Settings\SettingsController;
+use MailPoet\Subscribers\ConfirmationEmailCustomizer;
 use MailPoet\UnexpectedValueException;
-use MailPoet\Util\License\Features\Subscribers as SubscribersFeature;
-use MailPoet\WP\Emoji;
 use MailPoet\WP\Functions as WPFunctions;
-use MailPoetVendor\Carbon\Carbon;
+use MailPoetVendor\Doctrine\ORM\EntityManager;
+use Throwable;
 
 class Newsletters extends APIEndpoint {
 
-  /** @var Listing\Handler */
-  private $listingHandler;
-
   /** @var WPFunctions */
   private $wp;
-
-  /** @var SettingsController */
-  private $settings;
-
-  /** @var CronHelper */
-  private $cronHelper;
 
   public $permissions = [
     'global' => AccessControl::PERMISSION_MANAGE_EMAILS,
@@ -57,20 +42,8 @@ class Newsletters extends APIEndpoint {
   /** @var NewslettersRepository */
   private $newslettersRepository;
 
-  /** @var NewsletterListingRepository */
-  private $newsletterListingRepository;
-
   /** @var NewslettersResponseBuilder */
   private $newslettersResponseBuilder;
-
-  /** @var PostNotificationScheduler */
-  private $postNotificationScheduler;
-
-  /** @var Emoji */
-  private $emoji;
-
-  /** @var SubscribersFeature */
-  private $subscribersFeature;
 
   /** @var SendPreviewController */
   private $sendPreviewController;
@@ -80,54 +53,62 @@ class Newsletters extends APIEndpoint {
 
   private NewsletterDeleteController $newsletterDeleteController;
 
+  /** @var NewsletterResendController */
+  private $newsletterResendController;
+
   /** @var NewsletterUrl */
   private $newsletterUrl;
 
-  /** @var NewsletterValidator */
-  private $newsletterValidator;
+  /** @var ConfirmationEmailCustomizer */
+  private $confirmationEmailCustomizer;
 
-  /** @var Scheduler */
-  private $scheduler;
+  /** @var ApiDataSanitizer */
+  private $apiDataSanitizer;
 
-  /** @var AuthorizedEmailsController */
-  private $authorizedEmailsController;
+  /** @var SegmentsRepository */
+  private $segmentsRepository;
+
+  /** @var SettingsController */
+  private $settings;
+
+  private EntityManager $entityManager;
+
+  private TemplateEmailContent $templateEmailContent;
+
+  private LoggerFactory $loggerFactory;
 
   public function __construct(
-    Listing\Handler $listingHandler,
     WPFunctions $wp,
-    SettingsController $settings,
-    CronHelper $cronHelper,
     NewslettersRepository $newslettersRepository,
-    NewsletterListingRepository $newsletterListingRepository,
     NewslettersResponseBuilder $newslettersResponseBuilder,
-    PostNotificationScheduler $postNotificationScheduler,
-    SubscribersFeature $subscribersFeature,
-    Emoji $emoji,
     SendPreviewController $sendPreviewController,
     NewsletterSaveController $newsletterSaveController,
     NewsletterDeleteController $newsletterDeleteController,
+    NewsletterResendController $newsletterResendController,
     NewsletterUrl $newsletterUrl,
-    Scheduler $scheduler,
-    NewsletterValidator $newsletterValidator,
-    AuthorizedEmailsController $authorizedEmailsController
+    ConfirmationEmailCustomizer $confirmationEmailCustomizer,
+    ApiDataSanitizer $apiDataSanitizer,
+    SegmentsRepository $segmentsRepository,
+    SettingsController $settings,
+    EntityManager $entityManager,
+    TemplateEmailContent $templateEmailContent,
+    LoggerFactory $loggerFactory
   ) {
-    $this->listingHandler = $listingHandler;
     $this->wp = $wp;
-    $this->settings = $settings;
-    $this->cronHelper = $cronHelper;
     $this->newslettersRepository = $newslettersRepository;
-    $this->newsletterListingRepository = $newsletterListingRepository;
     $this->newslettersResponseBuilder = $newslettersResponseBuilder;
-    $this->postNotificationScheduler = $postNotificationScheduler;
-    $this->subscribersFeature = $subscribersFeature;
-    $this->emoji = $emoji;
     $this->sendPreviewController = $sendPreviewController;
     $this->newsletterSaveController = $newsletterSaveController;
     $this->newsletterDeleteController = $newsletterDeleteController;
+    $this->newsletterResendController = $newsletterResendController;
     $this->newsletterUrl = $newsletterUrl;
-    $this->scheduler = $scheduler;
-    $this->newsletterValidator = $newsletterValidator;
-    $this->authorizedEmailsController = $authorizedEmailsController;
+    $this->confirmationEmailCustomizer = $confirmationEmailCustomizer;
+    $this->apiDataSanitizer = $apiDataSanitizer;
+    $this->segmentsRepository = $segmentsRepository;
+    $this->settings = $settings;
+    $this->entityManager = $entityManager;
+    $this->templateEmailContent = $templateEmailContent;
+    $this->loggerFactory = $loggerFactory;
   }
 
   public function get($data = []) {
@@ -144,6 +125,9 @@ class Newsletters extends APIEndpoint {
       NewslettersResponseBuilder::RELATION_QUEUE,
     ]);
     $response = $this->wp->applyFilters('mailpoet_api_newsletters_get_after', $response);
+    if (is_array($response)) {
+      $response = $this->sanitizeResponseBody($response);
+    }
     return $this->successResponse($response, ['preview_url' => $this->getViewInBrowserUrl($newsletter)]);
   }
 
@@ -163,12 +147,26 @@ class Newsletters extends APIEndpoint {
         NewslettersResponseBuilder::RELATION_STATISTICS,
     ]);
     $response = $this->wp->applyFilters('mailpoet_api_newsletters_get_after', $response);
+    if (!is_array($response)) {
+      $response = [];
+    }
+    $response = $this->sanitizeResponseBody($response);
     $response['preview_url'] = $this->getViewInBrowserUrl($newsletter);
     return $this->successResponse($response);
   }
 
+  private function sanitizeResponseBody(array $response): array {
+    if (is_array($response['body'] ?? null)) {
+      $response['body'] = $this->apiDataSanitizer->sanitizeBody($response['body']);
+    }
+    return $response;
+  }
+
   public function save($data = []) {
     $data = $this->wp->applyFilters('mailpoet_api_newsletters_save_before', $data);
+    if (!is_array($data)) {
+      $data = [];
+    }
     $newsletter = $this->newsletterSaveController->save($data);
     $response = $this->newslettersResponseBuilder->build($newsletter, [
       NewslettersResponseBuilder::RELATION_SEGMENTS,
@@ -178,87 +176,23 @@ class Newsletters extends APIEndpoint {
     return $this->successResponse($response, ['preview_url' => $previewUrl]);
   }
 
-  public function setStatus($data = []) {
-    $status = (isset($data['status']) ? $data['status'] : null);
-
-    if (!$status) {
+  public function updateShareVisibility($data = []) {
+    if (!is_array($data) || !isset($data['share_visibility']) || !is_string($data['share_visibility'])) {
       return $this->badRequest([
-        APIError::BAD_REQUEST => __('You need to specify a status.', 'mailpoet'),
+        APIError::BAD_REQUEST => __('You need to specify a sharing visibility.', 'mailpoet'),
       ]);
     }
 
-    if ($status === NewsletterEntity::STATUS_ACTIVE && $this->subscribersFeature->check()) {
-      return $this->errorResponse([
-        APIError::FORBIDDEN => __('Subscribers limit reached.', 'mailpoet'),
-      ], [], Response::STATUS_FORBIDDEN);
-    }
-
     $newsletter = $this->getNewsletter($data);
-    if ($newsletter === null) {
+    if (!$newsletter) {
       return $this->errorResponse([
         APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
       ]);
     }
 
-    if ($status === NewsletterEntity::STATUS_ACTIVE && !$this->authorizedEmailsController->isSenderAddressValid($newsletter)) {
-          return $this->errorResponse([
-            APIError::FORBIDDEN => __('The sender address is not an authorized sender domain.', 'mailpoet'),
-          ], [], Response::STATUS_FORBIDDEN);
-    }
-
-    if ($status === NewsletterEntity::STATUS_ACTIVE) {
-      $validationError = $this->newsletterValidator->validate($newsletter);
-      if ($validationError !== null) {
-        return $this->errorResponse([APIError::FORBIDDEN => $validationError], [], Response::STATUS_FORBIDDEN);
-      }
-    }
-
-    $this->newslettersRepository->prefetchOptions([$newsletter]);
-    $newsletter->setStatus($status);
-
-    // if there are paused tasks unpause them
-    if ($newsletter->getStatus() === NewsletterEntity::STATUS_ACTIVE) {
-      $queues = $newsletter->getUnfinishedQueues();
-      foreach ($queues as $queue) {
-        $task = $queue->getTask();
-        if ($task && $task->getStatus() === ScheduledTaskEntity::STATUS_PAUSED) {
-          $task->setStatus(ScheduledTaskEntity::STATUS_SCHEDULED);
-        }
-      }
-    }
-
-    // if there are past due notifications, reschedule them for the next send date
-    if ($newsletter->getType() === NewsletterEntity::TYPE_NOTIFICATION && $status === NewsletterEntity::STATUS_ACTIVE) {
-      $scheduleOption = $newsletter->getOption(NewsletterOptionFieldEntity::NAME_SCHEDULE);
-      if ($scheduleOption === null) {
-        return $this->errorResponse([
-          APIError::BAD_REQUEST => __('This email has incorrect state.', 'mailpoet'),
-        ]);
-      }
-      $nextRunDate = $this->scheduler->getNextRunDate($scheduleOption->getValue());
-      $queues = $newsletter->getQueues();
-      foreach ($queues as $queue) {
-        $task = $queue->getTask();
-        if (
-          $task &&
-          $task->getScheduledAt() <= Carbon::now()->millisecond(0) &&
-          $task->getStatus() === SendingQueueEntity::STATUS_SCHEDULED
-        ) {
-          $nextRunDate = $nextRunDate ? Carbon::createFromFormat('Y-m-d H:i:s', $nextRunDate) : null;
-          if ($nextRunDate === false) {
-            throw InvalidStateException::create()->withMessage('Invalid next run date generated');
-          }
-          $task->setScheduledAt($nextRunDate);
-        }
-      }
-      $this->postNotificationScheduler->createPostNotificationSendingTask($newsletter);
-    }
-
-    $this->newslettersRepository->flush();
-
-    return $this->successResponse(
-      $this->newslettersResponseBuilder->build($newsletter)
-    );
+    $newsletter = $this->newsletterSaveController->updateShareVisibility($newsletter, $data['share_visibility']);
+    $response = $this->newslettersResponseBuilder->build($newsletter);
+    return $this->successResponse($response);
   }
 
   public function restore($data = []) {
@@ -279,53 +213,44 @@ class Newsletters extends APIEndpoint {
 
   public function trash($data = []) {
     $newsletter = $this->getNewsletter($data);
-    if ($newsletter instanceof NewsletterEntity) {
-      $this->newslettersRepository->bulkTrash([$newsletter->getId()]);
-      $this->newslettersRepository->refresh($newsletter);
-      return $this->successResponse(
-        $this->newslettersResponseBuilder->build($newsletter),
-        ['count' => 1]
-      );
-    } else {
+    if (!$newsletter instanceof NewsletterEntity) {
       return $this->errorResponse([
         APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
       ]);
     }
+    if ($newsletter->getType() === NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => __('Confirmation emails can only be deleted from the list settings.', 'mailpoet'),
+      ]);
+    }
+    $this->newslettersRepository->bulkTrash([$newsletter->getId()]);
+    $this->newslettersRepository->refresh($newsletter);
+    return $this->successResponse(
+      $this->newslettersResponseBuilder->build($newsletter),
+      ['count' => 1]
+    );
   }
 
   public function delete($data = []) {
     $newsletter = $this->getNewsletter($data);
-    if ($newsletter instanceof NewsletterEntity) {
-      $this->wp->doAction('mailpoet_api_newsletters_delete_before', [$newsletter->getId()]);
-      $this->newsletterDeleteController->bulkDelete([(int)$newsletter->getId()]);
-      $this->wp->doAction('mailpoet_api_newsletters_delete_after', [$newsletter->getId()]);
-      return $this->successResponse(null, ['count' => 1]);
-    } else {
+    if (!$newsletter instanceof NewsletterEntity) {
       return $this->errorResponse([
         APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
       ]);
     }
-  }
-
-  public function duplicate($data = []) {
-    $newsletter = $this->getNewsletter($data);
-
-    if ($newsletter instanceof NewsletterEntity) {
-      $duplicate = $this->newsletterSaveController->duplicate($newsletter);
-      $this->wp->doAction('mailpoet_api_newsletters_duplicate_after', $newsletter, $duplicate);
-      return $this->successResponse(
-        $this->newslettersResponseBuilder->build($duplicate),
-        ['count' => 1]
-      );
-    } else {
-      return $this->errorResponse([
-        APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
+    if ($newsletter->getType() === NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => __('Confirmation emails can only be deleted from the list settings.', 'mailpoet'),
       ]);
     }
+    $this->wp->doAction('mailpoet_api_newsletters_delete_before', [$newsletter->getId()]);
+    $this->newsletterDeleteController->bulkDelete([(int)$newsletter->getId()]);
+    $this->wp->doAction('mailpoet_api_newsletters_delete_after', [$newsletter->getId()]);
+    return $this->successResponse(null, ['count' => 1]);
   }
 
   public function showPreview($data = []) {
-    if (empty($data['body'])) {
+    if (empty($data['body']) || !is_string($data['body'])) {
       return $this->badRequest([
         APIError::BAD_REQUEST => __('Newsletter data is missing.', 'mailpoet'),
       ]);
@@ -338,10 +263,14 @@ class Newsletters extends APIEndpoint {
       ]);
     }
 
-    $newslettersTableName = $this->newslettersRepository->getTableName();
-    $newsletter->setBody(
-      json_decode($this->emoji->encodeForUTF8Column($newslettersTableName, 'body', $data['body']), true)
-    );
+    $body = $this->newsletterSaveController->decodeAndSanitizeBody($data['body']);
+    if ($body === null) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => __('Invalid newsletter body payload.', 'mailpoet'),
+      ]);
+    }
+
+    $newsletter->setBody($body);
     $this->newslettersRepository->flush();
 
     $response = $this->newslettersResponseBuilder->build($newsletter);
@@ -372,58 +301,66 @@ class Newsletters extends APIEndpoint {
     return $this->successResponse($this->newslettersResponseBuilder->build($newsletter));
   }
 
-  public function listing($data = []) {
-    $definition = $this->listingHandler->getListingDefinition($data);
-    $items = $this->newsletterListingRepository->getData($definition);
-    $count = $this->newsletterListingRepository->getCount($definition);
-    $filters = $this->newsletterListingRepository->getFilters($definition);
-    $groups = $this->newsletterListingRepository->getGroups($definition);
-
-    $data = [];
-    foreach ($this->newslettersResponseBuilder->buildForListing($items) as $newsletterData) {
-      $data[] = $this->wp->applyFilters('mailpoet_api_newsletters_listing_item', $newsletterData);
-    }
-
-    return $this->successResponse($data, [
-      'count' => $count,
-      'filters' => $filters,
-      'groups' => $groups,
-      'mta_log' => $this->settings->get('mta_log'),
-      'mta_method' => $this->settings->get('mta.method'),
-      'cron_accessible' => $this->cronHelper->isDaemonAccessible(),
-      'current_time' => $this->wp->currentTime('mysql'),
-    ]);
-  }
-
-  public function bulkAction($data = []) {
-    $definition = $this->listingHandler->getListingDefinition($data['listing']);
-    $ids = $this->newsletterListingRepository->getActionableIds($definition);
-    if ($data['action'] === 'trash') {
-      $this->newslettersRepository->bulkTrash($ids);
-    } elseif ($data['action'] === 'restore') {
-      $this->newslettersRepository->bulkRestore($ids);
-    } elseif ($data['action'] === 'delete') {
-      $this->wp->doAction('mailpoet_api_newsletters_delete_before', $ids);
-      $this->newsletterDeleteController->bulkDelete($ids);
-      $this->wp->doAction('mailpoet_api_newsletters_delete_after', $ids);
-    } else {
-      throw UnexpectedValueException::create()
-        ->withErrors([APIError::BAD_REQUEST => "Invalid bulk action '{$data['action']}' provided."]);
-    }
-    return $this->successResponse(null, ['count' => count($ids)]);
-  }
-
   public function create($data = []) {
+    $templatePattern = $data['automation_template_pattern'] ?? null;
+    unset($data['automation_template_pattern']);
+    if ($templatePattern !== null && !empty($data['id'])) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => __('A template pattern can only be used when creating a new email.', 'mailpoet'),
+      ]);
+    }
     try {
       $newsletter = $this->newsletterSaveController->save($data);
     } catch (ValidationException $exception) {
       return $this->badRequest(['Please specify a type.']);
     }
+
+    if (is_string($templatePattern) && $templatePattern !== '') {
+      try {
+        $this->applyAutomationTemplateContent($newsletter, $templatePattern);
+      } catch (Throwable $e) {
+        $this->loggerFactory->getLogger(LoggerFactory::TOPIC_NEWSLETTERS)->error(
+          'Could not apply the automation template content: ' . $e->getMessage(),
+          ['newsletter_id' => $newsletter->getId(), 'pattern' => $templatePattern]
+        );
+        $this->newsletterDeleteController->bulkDelete([(int)$newsletter->getId()]);
+        return $this->errorResponse([
+          APIError::UNKNOWN => __('The email could not be created from the template.', 'mailpoet'),
+        ], [], Response::STATUS_UNKNOWN);
+      }
+    }
     $response = $this->newslettersResponseBuilder->build($newsletter);
     return $this->successResponse($response);
   }
 
-  /** @return NewsletterEntity|null */
+  private function applyAutomationTemplateContent(NewsletterEntity $newsletter, string $pattern): void {
+    if ($newsletter->getType() !== NewsletterEntity::TYPE_AUTOMATION) {
+      throw new UnexpectedValueException('Template content can only be applied to automation emails.');
+    }
+    $this->templateEmailContent->apply($newsletter, $pattern);
+  }
+
+  public function resendToNonOpeners($data = []) {
+    $newsletter = $this->getNewsletter($data);
+    if (!$newsletter) {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
+      ]);
+    }
+    $subject = isset($data['subject']) ? (string)$data['subject'] : '';
+    try {
+      $duplicate = $this->newsletterResendController->resendToNonOpeners($newsletter, $subject);
+    } catch (UnexpectedValueException $e) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => $e->getMessage(),
+      ]);
+    }
+    return $this->successResponse(
+      $this->newslettersResponseBuilder->build($duplicate),
+      ['count' => 1]
+    );
+  }
+
   private function getNewsletter(array $data) {
     return isset($data['id'])
       ? $this->newslettersRepository->findOneById((int)$data['id'])
@@ -434,5 +371,88 @@ class Newsletters extends APIEndpoint {
     $url = $this->newsletterUrl->getViewInBrowserUrl($newsletter);
     // strip protocol to avoid mix content error
     return preg_replace('/^https?:/i', '', $url);
+  }
+
+  /**
+   * Get all confirmation email newsletters for use in form editor.
+   * @return Response
+   */
+  public function getConfirmationEmails() {
+    $newsletters = $this->newslettersRepository->findBy([
+      'type' => NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER,
+      'deletedAt' => null,
+    ]);
+
+    $result = [];
+    foreach ($newsletters as $newsletter) {
+      $id = $newsletter->getId();
+      if ($id === null) {
+        continue;
+      }
+      $result[] = [
+        'id' => $id,
+        'subject' => $newsletter->getSubject() ?: __('(no subject)', 'mailpoet'),
+      ];
+    }
+
+    return $this->successResponse($result);
+  }
+
+  /**
+   * Create a new confirmation email from the global default template.
+   * @return Response
+   */
+  public function createConfirmationEmail() {
+    // Get the global default confirmation email as a base
+    $defaultNewsletter = $this->confirmationEmailCustomizer->getNewsletter();
+
+    $newsletterData = [
+      'type' => NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER,
+      'subject' => $defaultNewsletter->getSubject(),
+      'body' => json_encode($defaultNewsletter->getBody()),
+    ];
+
+    $newsletter = $this->newsletterSaveController->save($newsletterData);
+
+    return $this->successResponse([
+      'id' => $newsletter->getId(),
+      'subject' => $newsletter->getSubject(),
+    ]);
+  }
+
+  /**
+   * Delete a per-list confirmation email and unlink it from any segments using it.
+   */
+  public function deleteConfirmationEmail($data = []) {
+    $newsletter = $this->getNewsletter($data);
+    if (
+      !$newsletter instanceof NewsletterEntity
+      || $newsletter->getType() !== NewsletterEntity::TYPE_CONFIRMATION_EMAIL_CUSTOMIZER
+    ) {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This email does not exist.', 'mailpoet'),
+      ]);
+    }
+
+    $defaultEmailId = (int)$this->settings->get(ConfirmationEmailCustomizer::SETTING_EMAIL_ID);
+    $id = (int)$newsletter->getId();
+    if ($id === $defaultEmailId) {
+      return $this->badRequest([
+        APIError::BAD_REQUEST => __('The default confirmation email cannot be deleted.', 'mailpoet'),
+      ]);
+    }
+
+    $this->wp->doAction('mailpoet_api_newsletters_delete_before', [$id]);
+    $this->entityManager->beginTransaction();
+    try {
+      $this->newsletterDeleteController->bulkDelete([$id]);
+      $this->segmentsRepository->resetConfirmationEmailId($id);
+      $this->entityManager->commit();
+    } catch (Throwable $e) {
+      $this->entityManager->rollback();
+      throw $e;
+    }
+    $this->wp->doAction('mailpoet_api_newsletters_delete_after', [$id]);
+    return $this->successResponse(null, ['count' => 1]);
   }
 }

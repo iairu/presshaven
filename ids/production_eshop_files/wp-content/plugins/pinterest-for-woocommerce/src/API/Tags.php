@@ -19,6 +19,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Endpoint handing Pinterest Tags.
+ *
+ * @class   Tags
+ * @version 1.6.0
  */
 class Tags extends VendorAPI {
 
@@ -53,6 +56,11 @@ class Tags extends VendorAPI {
 			try {
 				$tags = APIV5::get_advertiser_tags( $ad_account_id );
 			} catch ( Throwable $th ) {
+				throw new Exception( esc_html__( 'Response error', 'pinterest-for-woocommerce' ), 400 );
+			}
+
+			// Without a readable list, creating a tag could duplicate one the advertiser already has.
+			if ( ! is_array( $tags ) ) {
 				throw new Exception( esc_html__( 'Response error', 'pinterest-for-woocommerce' ), 400 );
 			}
 

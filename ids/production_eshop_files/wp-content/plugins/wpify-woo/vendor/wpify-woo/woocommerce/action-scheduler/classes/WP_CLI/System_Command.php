@@ -4,7 +4,7 @@ namespace Action_Scheduler\WP_CLI;
 
 // phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaping output is not necessary in WP CLI.
 use ActionScheduler_SystemInformation;
-use WP_CLI;
+use WpifyWooDeps\WP_CLI;
 use function WpifyWooDeps\WP_CLI\Utils\get_flag_value;
 /**
  * System info WP-CLI commands for Action Scheduler.
@@ -63,16 +63,16 @@ class System_Command
          * @link https://github.com/woocommerce/action-scheduler-disable-default-runner
          */
         $runner_enabled = has_action('action_scheduler_run_queue', array(\ActionScheduler::runner(), 'run'));
-        \WP_CLI::line(sprintf('Data store: %s', $this->get_current_datastore()));
-        \WP_CLI::line(sprintf('Runner: %s%s', $this->get_current_runner(), $runner_enabled ? '' : ' (disabled)'));
-        \WP_CLI::line(sprintf('Version: %s', $this->get_latest_version()));
+        \WpifyWooDeps\WP_CLI::line(sprintf('Data store: %s', $this->get_current_datastore()));
+        \WpifyWooDeps\WP_CLI::line(sprintf('Runner: %s%s', $this->get_current_runner(), $runner_enabled ? '' : ' (disabled)'));
+        \WpifyWooDeps\WP_CLI::line(sprintf('Version: %s', $this->get_latest_version()));
         $rows = array();
         $action_counts = $this->store->action_counts();
         $oldest_and_newest = $this->get_oldest_and_newest(array_keys($action_counts));
         foreach ($action_counts as $status => $count) {
             $rows[] = array('status' => $status, 'count' => $count, 'oldest' => $oldest_and_newest[$status]['oldest'], 'newest' => $oldest_and_newest[$status]['newest']);
         }
-        $formatter = new \WP_CLI\Formatter($assoc_args, array('status', 'count', 'oldest', 'newest'));
+        $formatter = new \WpifyWooDeps\WP_CLI\Formatter($assoc_args, array('status', 'count', 'oldest', 'newest'));
         $formatter->display_items($rows);
     }
     /**
@@ -93,7 +93,7 @@ class System_Command
         $latest = $this->get_latest_version();
         if (!$all) {
             echo $latest;
-            \WP_CLI::halt(0);
+            \WpifyWooDeps\WP_CLI::halt(0);
         }
         $instance = \ActionScheduler_Versions::instance();
         $versions = $instance->get_versions();
@@ -103,7 +103,7 @@ class System_Command
             $rows[$version] = array('version' => $version, 'callback' => $callback, 'active' => $active ? 'yes' : 'no');
         }
         uksort($rows, 'version_compare');
-        $formatter = new \WP_CLI\Formatter($assoc_args, array('version', 'callback', 'active'));
+        $formatter = new \WpifyWooDeps\WP_CLI\Formatter($assoc_args, array('version', 'callback', 'active'));
         $formatter->display_items($rows);
     }
     /**
@@ -135,7 +135,7 @@ class System_Command
         }
         if (!$all) {
             echo $path;
-            \WP_CLI::halt(0);
+            \WpifyWooDeps\WP_CLI::halt(0);
         }
         $sources = ActionScheduler_SystemInformation::get_sources();
         if (empty($sources)) {
@@ -152,8 +152,8 @@ class System_Command
             $rows[$check_source] = array('source' => $path, 'version' => $version, 'active' => $active ? 'yes' : 'no');
         }
         ksort($rows);
-        \WP_CLI::log(\PHP_EOL . 'Please note there can only be one unique registered instance of Action Scheduler per ' . \PHP_EOL . 'version number, so this list may not include all the currently present copies of ' . \PHP_EOL . 'Action Scheduler.' . \PHP_EOL);
-        $formatter = new \WP_CLI\Formatter($assoc_args, array('source', 'version', 'active'));
+        \WpifyWooDeps\WP_CLI::log(\PHP_EOL . 'Please note there can only be one unique registered instance of Action Scheduler per ' . \PHP_EOL . 'version number, so this list may not include all the currently present copies of ' . \PHP_EOL . 'Action Scheduler.' . \PHP_EOL);
+        $formatter = new \WpifyWooDeps\WP_CLI\Formatter($assoc_args, array('source', 'version', 'active'));
         $formatter->display_items($rows);
     }
     /**

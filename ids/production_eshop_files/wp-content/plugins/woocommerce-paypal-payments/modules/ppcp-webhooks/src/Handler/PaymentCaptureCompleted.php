@@ -9,6 +9,7 @@ declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\Webhooks\Handler;
 
 use Exception;
+use WC_Order;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\OrderEndpoint;
 use WooCommerce\PayPalCommerce\WcGateway\Gateway\PayPalGateway;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
@@ -86,7 +87,7 @@ class PaymentCaptureCompleted implements \WooCommerce\PayPalCommerce\Webhooks\Ha
             return $this->failure_response($message);
         }
         $wc_order = wc_get_order($wc_order_id);
-        if (!is_a($wc_order, \WC_Order::class)) {
+        if (!$wc_order instanceof WC_Order) {
             $message = sprintf('No order for webhook event %s was found.', $webhook_id);
             return $this->failure_response($message);
         }
@@ -95,7 +96,7 @@ class PaymentCaptureCompleted implements \WooCommerce\PayPalCommerce\Webhooks\Ha
          * Allow access to the webhook logic before updating the WC order.
          */
         do_action('woocommerce_paypal_payments_payment_capture_completed_webhook_handler', $wc_order, $order_id);
-        if ($wc_order->get_status() !== 'on-hold') {
+        if (!in_array($wc_order->get_status(), array('pending', 'on-hold'), \true)) {
             return $this->success_response();
         }
         $wc_order->add_order_note(__('Payment successfully captured.', 'woocommerce-paypal-payments'));

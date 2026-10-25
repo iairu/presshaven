@@ -11,8 +11,6 @@ namespace WooCommerce\PayPalCommerce\Settings\Service;
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use WooCommerce\PayPalCommerce\ApiClient\Helper\Cache;
 use WooCommerce\WooCommerce\Logging\Logger\NullLogger;
-// TODO: Replace the OnboardingUrl with a new implementation for this module.
-use WooCommerce\PayPalCommerce\Onboarding\Helper\OnboardingUrl;
 /**
  * Manages (generates, returns) Onboarding URL instances.
  *
@@ -56,9 +54,25 @@ class OnboardingUrlManager
      *
      * @return OnboardingUrl
      */
-    public function get(string $cache_key_prefix, int $user_id): OnboardingUrl
+    public function get(string $cache_key_prefix, int $user_id): \WooCommerce\PayPalCommerce\Settings\Service\OnboardingUrl
     {
-        return new OnboardingUrl($this->cache, $cache_key_prefix, $user_id);
+        return new \WooCommerce\PayPalCommerce\Settings\Service\OnboardingUrl($this->cache, $cache_key_prefix, $user_id);
+    }
+    /**
+     * Returns the seller nonce stored for the given token without deleting the token.
+     *
+     * @param string $token   The token to look up.
+     * @param int    $user_id User ID who generated the token.
+     *
+     * @return string The seller nonce, or empty string if not found.
+     */
+    public function get_seller_nonce_for_token(string $token, int $user_id): string
+    {
+        $onboarding_url = \WooCommerce\PayPalCommerce\Settings\Service\OnboardingUrl::make_from_token($this->cache, $token, $user_id);
+        if ($onboarding_url === \false || !$onboarding_url->load()) {
+            return '';
+        }
+        return $onboarding_url->seller_nonce();
     }
     /**
      * Validates the authentication token; if it's valid, the token is instantly
@@ -76,7 +90,7 @@ class OnboardingUrlManager
         }
         $log_token = (string) substr($token, 0, 2) . '...' . (string) substr($token, -6);
         $this->logger->debug('Validating onboarding ppcpToken: ' . $log_token);
-        if (OnboardingUrl::validate_token_and_delete($this->cache, $token, $user_id)) {
+        if (\WooCommerce\PayPalCommerce\Settings\Service\OnboardingUrl::validate_token_and_delete($this->cache, $token, $user_id)) {
             $this->logger->info('Validated onboarding ppcpToken: ' . $log_token);
             return \true;
         }

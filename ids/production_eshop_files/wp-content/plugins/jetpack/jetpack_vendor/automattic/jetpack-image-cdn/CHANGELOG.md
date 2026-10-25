@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-05
+### Fixed
+- Catch PHP warnings when handling malformed data. [#53064]
+
+## [0.8.0] - 2026-09-01
+### Removed
+- Minimum supported PHP version is now 7.4. [#51515]
+
+## [0.7.29] - 2026-06-15
+### Changed
+- Internal updates.
+
+## [0.7.28] - 2026-06-08
+### Changed
+- Internal updates.
+
+## [0.7.27] - 2026-05-25
+### Fixed
+- Phan: Address `PhanPluginDuplicateConditionalNullCoalescing` violations. [#48887]
+
+## [0.7.26] - 2026-05-19
+### Changed
+- Internal updates.
+
+## [0.7.25] - 2026-05-04
+### Changed
+- Internal: No longer require automattic/jetpack-changelogger as a per-project dev dependency. [#48225]
+
+## [0.7.24] - 2025-11-24
+### Fixed
+- Phan: Address `PhanPossiblyUndeclaredVariable` violations. [#45911]
+
+## [0.7.23] - 2025-11-10
+### Changed
+- Tests: Ensure PHP 8.5 compatibility. [#45769]
+
+## [0.7.22] - 2025-10-20
+### Changed
+- Internal updates.
+
 ## [0.7.21] - 2025-09-19
 ### Changed
 - Internal updates.
@@ -238,6 +278,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add image CDN package. [#29561]
 
+[0.8.1]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.29...v0.8.0
+[0.7.29]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.28...v0.7.29
+[0.7.28]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.27...v0.7.28
+[0.7.27]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.26...v0.7.27
+[0.7.26]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.25...v0.7.26
+[0.7.25]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.24...v0.7.25
+[0.7.24]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.23...v0.7.24
+[0.7.23]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.22...v0.7.23
+[0.7.22]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.21...v0.7.22
 [0.7.21]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.20...v0.7.21
 [0.7.20]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.19...v0.7.20
 [0.7.19]: https://github.com/Automattic/jetpack-image-cdn/compare/v0.7.18...v0.7.19

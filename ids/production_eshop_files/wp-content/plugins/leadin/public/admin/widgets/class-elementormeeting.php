@@ -1,6 +1,7 @@
 <?php
 namespace Leadin\admin\widgets;
 
+use Leadin\utils\ShortcodeRenderUtils;
 use Elementor\Plugin;
 use Elementor\Widget_Base;
 
@@ -105,8 +106,9 @@ class ElementorMeeting extends Widget_Base {
 		$parsed_parameters = array(
 			'url' => isset( $content['url'] ) && filter_var( $content['url'], FILTER_VALIDATE_URL ) ? esc_url_raw( $content['url'] ) : '',
 		);
+		$is_edit_mode      = Plugin::$instance->editor->is_edit_mode();
 
-		if ( Plugin::$instance->editor->is_edit_mode() ) {
+		if ( $is_edit_mode ) {
 
 			?>
 				<div class="hubspot-meeting-edit-mode" data-attributes=<?php echo esc_attr( json_encode( $parsed_parameters ) ); ?>>
@@ -124,7 +126,13 @@ class ElementorMeeting extends Widget_Base {
 		}
 
 		if ( ! empty( $parsed_parameters['url'] ) ) {
-				echo do_shortcode( '[hubspot url="' . $parsed_parameters['url'] . '" type="meeting"]' );
+				$embed = do_shortcode( '[hubspot url="' . $parsed_parameters['url'] . '" type="meeting"]' );
+
+				if ( $is_edit_mode ) {
+					$embed = ShortcodeRenderUtils::wrap_embed_for_elementor_editor( $embed );
+				}
+
+				echo $embed; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- shortcode output.
 		}
 	}
 }

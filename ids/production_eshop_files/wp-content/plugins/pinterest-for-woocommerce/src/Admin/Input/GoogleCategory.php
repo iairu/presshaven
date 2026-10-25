@@ -13,6 +13,9 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Class GoogleCategory
+ *
+ * @class   GoogleCategory
+ * @version 1.6.0
  */
 class GoogleCategory extends Input {
 	/**
@@ -45,7 +48,7 @@ class GoogleCategory extends Input {
 	 *
 	 * @return $this
 	 */
-	public function set_options( array $options ): Select {
+	public function set_options( array $options ): InputInterface {
 		$this->options = $options;
 
 		return $this;

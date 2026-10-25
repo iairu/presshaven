@@ -156,13 +156,15 @@ class WC_Gateway_Cheque extends WC_Payment_Gateway {
 			 */
 			$process_payment_status = apply_filters( 'woocommerce_cheque_process_payment_order_status', OrderStatus::ON_HOLD, $order );
 			// Mark as on-hold (we're awaiting the cheque).
-			$order->update_status( $process_payment_status, _x( 'Awaiting check payment', 'Check payment method', 'woocommerce' ) );
+			$order->update_status( $process_payment_status, _x( 'Awaiting check payment.', 'Check payment method', 'woocommerce' ) );
 		} else {
 			$order->payment_complete();
 		}
 
-		// Remove cart.
-		WC()->cart->empty_cart();
+		// Remove cart if it still matches the order being processed.
+		if ( $order instanceof WC_Order && WC()->cart && $order->has_cart_hash( WC()->cart->get_cart_hash() ) ) {
+			WC()->cart->empty_cart();
+		}
 
 		// Return thankyou redirect.
 		return array(

@@ -116,6 +116,11 @@ abstract class BaseIntegration
             $child_global_id = in_array($item['type'] ?? '', array('columns', 'wrapper'), \true) ? $global_id : $item['global_id'];
             $item['items'] = $this->normalize_items($item['items'], $child_global_id);
         }
+        // Backward-compat: `list_id` was historically used in place of
+        // `options_key` by some integrations (e.g. older wpify-woo-feeds).
+        if (empty($item['options_key']) && !empty($item['list_id'])) {
+            $item['options_key'] = $item['list_id'];
+        }
         if (isset($item['options'])) {
             if (is_callable($item['options']) && isset($item['async']) && \false === $item['async']) {
                 $item['options'] = $this->normalize_options($item['options']());
@@ -242,11 +247,21 @@ abstract class BaseIntegration
     {
         if (!empty($item['options_key'])) {
             $this->custom_fields->api->register_rest_route('options/' . $item['options_key'], WP_REST_Server::READABLE, function (WP_REST_Request $request) use ($item) {
-                $options = $item['options_callback']($request->get_params());
-                if (is_array($options)) {
-                    return $this->normalize_options($options);
+                $params = $request->get_params();
+                $options = $item['options_callback']($params);
+                if (!is_array($options)) {
+                    return array();
                 }
-                return array();
+                $options = $this->normalize_options($options);
+                // Resolve mode: return only the requested value(s)' label
+                // pairs (used to show selected labels without a browse).
+                if (!empty($params['resolve'])) {
+                    $wanted = array_map('strval', (array) ($params['value'] ?? array()));
+                    $options = array_values(array_filter($options, static function ($option) use ($wanted) {
+                        return in_array((string) $option['value'], $wanted, \true);
+                    }));
+                }
+                return $options;
             }, array(), array($this->custom_fields->api, 'cap_edit_posts'));
         } elseif (!empty($item['items'])) {
             $this->register_options_routes($item['items']);

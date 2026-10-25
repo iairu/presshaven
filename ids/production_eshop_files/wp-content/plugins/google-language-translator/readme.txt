@@ -4,28 +4,33 @@ Donate link: https://gtranslate.io/?xyz=3167#pricing
 Author: Translate AI Multilingual Solutions
 Author URI: https://gtranslate.io/?xyz=3167
 Tags: translate wordpress, translate, translator, translation, language, multi language
-Requires at least: 2.9
-Tested up to: 6.8
-Stable tag: 6.0.20
+Requires at least: 4.5
+Tested up to: 7.1
+Stable tag: 7.0.2
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Translate WordPress with Google Language Translator multilanguage plugin which allows to insert Google Translate widget anywhere on your website.
+Translate WordPress with Google Language Translator multilanguage plugin which allows to insert a language selector widget anywhere on your website.
 
 == Description ==
 
 Google Language Translator plugin is now a part of GTranslate family!
 
-GTranslate is a leading website translation services provider since 2008 and powers more than 500.000 multilingual websites worldwide.
+GTranslate is a leading website translation services provider since 2008 and powers more than 1,000,000 multilingual websites worldwide.
 
 Please use [Google Language Translator Support](https://wordpress.org/support/plugin/google-language-translator/) for your questions and support requests! We are multilingual!
 
 Please check our [FAQ](https://gtranslate.io/?xyz=3167#faq) to get quick answers.
 
+**Free translation service: permitted use**
+
+Under the [GTranslate Terms of Service](https://gtranslate.io/terms), the free translation service is available for personal, educational, internal testing, nonprofit and governmental purposes, provided the use does not directly generate revenue from the service. Nonprofit use must further nonprofit activities; governmental use includes public institutions and other public-sector entities. Commercial or revenue-generating use requires an applicable paid subscription. This free-service restriction does not apply to free trials of paid subscriptions.
+
+These service conditions do not change the WordPress plugin code's GPLv2-or-later license.
+
 **Features**
 
-* Free Google automatic machine translation
-* Option to hide "Suggest better translation" pop-up
-* Option to hide Google top frame after translation
-* Google Analytics integration
+* Automatic machine translation
 * Translate the site on the fly
 * Translate posts and pages
 * Translate categories and tags
@@ -61,6 +66,27 @@ Please check our [FAQ](https://gtranslate.io/?xyz=3167#faq) to get quick answers
 * User Dashboard with Analytics
 * Live Chat Support
 
+== External services ==
+This plugin uses external services to load the language selector and obtain automatic translations.
+
+**GTranslate widget delivery**
+
+When the widget loads, the visitor's browser requests its files from `cdn.gtranslate.net` over HTTPS. GTranslate, Inc. provides the widget, which connects the visitor's browser to the translation service.
+
+**Google translation requests**
+
+When page translation is requested, the widget sends page text for translation from the visitor's browser to `translate-pa.googleapis.com` over HTTPS. Google processes these translation requests. The content sent is the page text being translated.
+
+Loading widget files and requesting translations are separate network operations. These requests also expose standard connection and HTTP request information, such as the visitor's IP address and browser headers, to the receiving service. Provider processing and retention practices are described in the applicable policies; browser-based translation does not mean that no data leaves the browser or that providers retain no data.
+
+If you configure a paid translation proxy service, translated versions of your website are processed and served through GTranslate's cloud infrastructure according to your service configuration.
+
+* GTranslate, Inc.: [Terms of Service](https://gtranslate.io/terms), [Privacy Policy](https://gtranslate.io/privacy-policy)
+* Google: [Terms of Service](https://policies.google.com/terms), [Privacy Policy](https://policies.google.com/privacy)
+
+Review these services when updating your website's privacy information and configuring any consent or content-security controls. The plugin requires access to the relevant external services for translation to work.
+
+
 == Installation ==
 1. Download the zip folder named google-language-translator.zip
 2. Unzip the folder and put it in the plugins directory of your wordpress installation. (wp-content/plugins).
@@ -70,11 +96,16 @@ Please check our [FAQ](https://gtranslate.io/?xyz=3167#faq) to get quick answers
 6. Do not use the shortcode twice on a single page - it will not work.
 
 == Frequently Asked Questions ==
+= Why has the translation widget changed? =
+Version 7.0.1 replaces the legacy Google Website Translator widget with the GTranslate widget following Google's announcement that support for its old widget ends on October 1, 2026. You can continue managing this plugin under Settings > Google Language Translator.
+
+Read more [Google Translate Website Widget Is Shutting Down: What to Use Instead](https://gtranslate.io/blog/google-translate-website-widget-discontinued)
+
 = It doesn't translate, what to do? =
 Please check [Google Language Translator Support Forum](https://wordpress.org/support/plugin/google-language-translator/) and feel free to create a new topic if you cannot find answers.
 
 = Is it FREE? =
-Yes! We have free version and paid versions with [advanced features](https://gtranslate.io/?xyz=3167#pricing).
+Yes! Use of the free translation service is subject to the permitted-use conditions in the Description. [Paid subscriptions](https://gtranslate.io/?xyz=3167#pricing) provide additional service features.
 
 = What is the quality of translation? =
 In our free version we use Phrase Based Machine Translations provided by Google Translate, while in our paid versions use Google Translate Neural Translations which are very accurate for popular language pairs.
@@ -82,11 +113,13 @@ In the paid versions you can refine the automatic translations yourself or order
 You can get a translation cost estimate by using our [Website Translation Cost Calculator](https://gtranslate.io/website-translation-quote)
 
 = Are the translations provided free of charge? =
-Yes, we use Google Translate widget for website which provides free phrase based machine translations, which makes it possible to make your wordpress website multilingual instantly upon installation.
-In our paid versions we use Google Translate state of the art Neural Translations which are included in the service price and there are no limits on the word count.
+Eligible use is covered by the free service described above. Otherwise, translation is provided under the applicable subscription. Review the service conditions and current plan details before choosing a service for your website.
 
-Besides we offer cost effective automatic translation proofreading service and also professional translation service.
-You can get an estimate from our [Website Translation Price Calculator](https://gtranslate.io/website-translation-quote)
+= Can I use it on a commercial website or WooCommerce store? =
+Commercial or revenue-generating use of the GTranslate service requires an applicable paid subscription. Technical compatibility with WooCommerce does not remove this requirement.
+
+= Do existing websites need to review the service conditions? =
+Yes. Review the replacement service's terms before updating your live website. If you need clarification about your existing installation or subscription, contact [GTranslate support](https://gtranslate.io/?xyz=3167#contact).
 
 = Can I modify the translations? =
 That feature is available only in our paid version. You will be able to make edits directly on the page without losing the context.
@@ -155,6 +188,14 @@ If you want us to translate your website professionally or provide you a proofre
 Yes! Add the "notranslate" class to the HTML element containing your text. For example, the following text will be excluded from translation: <span class="notranslate">Hello World!</span>
 
 == Changelog ==
+= 7.0.2 =
+* Security: Fixed unauthorized admin notice updates by adding permission checks, nonce verification, and notice-key validation
+* Added request timeouts and error-code reporting for failed requests
+
+= 7.0.1 =
+* Replace the legacy Google Website Translator widget with the GTranslate website translation widget
+* Document the replacement widget's external services and free-service permitted-use conditions
+
 = 6.0.20 =
 * Fix for translation issue from toolbar language selector when layout is set SIMPLE
 * Hide text highlight on translated version
@@ -592,8 +633,12 @@ Corrected display problems associated with CSS styles not being placed correctly
 = 1.1 =
 * The shortcode supplied on the settings page was updated to display '[google-translator]'.
 
+== Upgrade Notice ==
+= 7.0.1 =
+Replaces the legacy translation widget. Review service terms, test language selectors and custom CSS.
+
 == Screenshots ==
-1. Settings include: inline or vertical layout, hide/show Google toolbar, display specific languages, and show/hide Google branding. Add the shortcode to pages, posts, and widgets.
+1. Settings include: inline or vertical layout, display specific languages. Add the shortcode to pages, posts, and widgets.
 2. Floating language selector
 3. Flags and dropdown language selector
 4. Language selector in menu with flags

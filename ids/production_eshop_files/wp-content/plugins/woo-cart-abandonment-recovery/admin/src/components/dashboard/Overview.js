@@ -1,6 +1,7 @@
 /* eslint-disable no-mixed-spaces-and-tabs */
 import parse from 'html-react-parser';
-import { Title, LineChart, Button } from '@bsf/force-ui';
+import PropTypes from 'prop-types';
+import { LineChart, Button, Text } from '@bsf/force-ui';
 import {
 	InformationCircleIcon,
 	XMarkIcon,
@@ -9,10 +10,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { __, sprintf } from '@wordpress/i18n';
 
-import SectionWrapper from '@Components/common/SectionWrapper';
+import DashboardCard from '@Components/dashboard/DashboardCard';
+import { cn } from '@Utils/helper';
 import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
 import DateRange from '@Components/fields/DateRange';
-import AppTooltip from '@Components/common/AppTooltip';
+import InfoTip from '@Components/dashboard/InfoTip';
 
 const formatXAxis = ( tick ) => {
 	// Try to format as 'MMM dd' (e.g., 'Jun 20')
@@ -45,19 +47,34 @@ const formatYAxis = ( value ) => {
 	return value.toString();
 };
 
+// One source for the chart lines and their legend swatches (hex must match the swatch class).
+const CHART_SERIES = [
+	{
+		key: 'recoverable',
+		stroke: '#F06434',
+		swatch: 'bg-flamingo-400',
+	},
+	{
+		key: 'recovered',
+		stroke: '#FBBF24',
+		swatch: 'bg-amber-400',
+	},
+];
+
 const Overview = ( {
 	dashboardData,
 	isDashboardLoading,
 	selectedRange,
 	handleDateRangeChange,
+	isFiltered,
+	onClearFilter,
 } ) => {
 	// Define metrics data structure
-	console.log( dashboardData );
 	const iconUp = (
-		<ArrowTrendingUpIcon className="h-4 w-4 stroke-[3px] text-green-700" />
+		<ArrowTrendingUpIcon className="h-4 w-4 stroke-[3px] text-badge-color-green" />
 	);
 	const iconDown = (
-		<ArrowTrendingDownIcon className="h-4 w-4 stroke-[3px] text-red-600" />
+		<ArrowTrendingDownIcon className="h-4 w-4 stroke-[3px] text-support-error" />
 	);
 	const getPercentValue = ( percentString ) => {
 		// Remove anything that is not a number, dot, or minus
@@ -89,6 +106,21 @@ const Overview = ( {
 		previousRecoveryRate,
 		currentRecoveryRate
 	);
+	const trendIcon =
+		( currentRecoveryRate > previousRecoveryRate && iconUp ) ||
+		( currentRecoveryRate < previousRecoveryRate && iconDown ) ||
+		null;
+	const trendText = sprintf(
+		/* translators: 1: recovery rate change percentage, 2: 'increase' or 'decrease'. */
+		__(
+			'%1$s%% %2$s from previous period',
+			'woo-cart-abandonment-recovery'
+		),
+		Math.abs( recoveryRateChange ).toFixed( 2 ),
+		recoveryRateChange > 0
+			? __( 'increase', 'woo-cart-abandonment-recovery' )
+			: __( 'decrease', 'woo-cart-abandonment-recovery' )
+	);
 	const metricsData = [
 		{
 			label: __( 'Recovered Revenue', 'woo-cart-abandonment-recovery' ),
@@ -101,7 +133,7 @@ const Overview = ( {
 			),
 			color:
 				dashboardData?.recovered_revenue_amount > 0
-					? 'text-green-700'
+					? 'text-badge-color-green'
 					: '',
 		},
 		{
@@ -111,7 +143,7 @@ const Overview = ( {
 				'The number of orders that have been recovered.',
 				'woo-cart-abandonment-recovery'
 			),
-			color: dashboardData?.recovered_orders > 0 ? 'text-green-700' : '',
+			color: dashboardData?.recovered_orders > 0 ? 'text-badge-color-green' : '',
 		},
 		{
 			label: __( 'Recoverable Revenue', 'woo-cart-abandonment-recovery' ),
@@ -148,95 +180,69 @@ const Overview = ( {
 			),
 			color:
 				currentRecoveryRate > previousRecoveryRate
-					? 'text-green-700'
+					? 'text-badge-color-green'
 					: currentRecoveryRate < previousRecoveryRate &&
-					  'text-red-600',
-			icon: (
-				<AppTooltip
-					content={ sprintf(
-						/* translators: 1: recovery rate change percentage, 2: 'increase' or 'decrease'. */
-						__(
-							'%1$s%% %2$s from previous period',
-							'woo-cart-abandonment-recovery'
-						),
-						Math.abs( recoveryRateChange ).toFixed( 2 ),
-						recoveryRateChange > 0
-							? __( 'increase', 'woo-cart-abandonment-recovery' )
-							: __( 'decrease', 'woo-cart-abandonment-recovery' )
-					) }
-					position="top"
-				>
-					{ currentRecoveryRate > previousRecoveryRate
-						? iconUp
-						: currentRecoveryRate < previousRecoveryRate &&
-						  iconDown }
-				</AppTooltip>
+					  'text-support-error',
+			icon: trendIcon && (
+				<InfoTip content={ trendText }>{ trendIcon }</InfoTip>
 			),
 		},
 	];
 
 	const chartData = dashboardData?.revenue_chart_data || [];
 
-	const handleClearFilter = () => {
-		handleDateRangeChange( { from: null, to: null } );
-	};
-
-	const hasActiveFilter = selectedRange?.from && selectedRange?.to;
-
 	return (
-		<SectionWrapper className="flex flex-col gap-2">
-			<div className="p-1 flex gap-2 justify-between flex-wrap relative">
-				<Title
-					description=""
-					icon={ null }
-					iconPosition="right"
-					size="lg"
-					tag="h1"
-					title={ __( 'Overview', 'woo-cart-abandonment-recovery' ) }
-					className="[&>*]:text-gray-900"
-				/>
+		<DashboardCard
+			title={ __( 'Overview', 'woo-cart-abandonment-recovery' ) }
+			action={
 				<div className="flex items-center gap-2">
-					{ hasActiveFilter && (
+					{ isFiltered && (
 						<Button
-							variant="link"
-							size="xs"
-							icon={ <XMarkIcon className="h-4 w-4" /> }
-							onClick={ handleClearFilter }
-							className="text-red-500 no-underline whitespace-nowrap focus:ring-0 [box-shadow:none] focus:[box-shadow:none] hover:no-underline hover:text-red-500"
-							aria-label={ __(
-								'Clear Filter',
-								'woo-cart-abandonment-recovery'
-							) }
+							variant="ghost"
+							size="sm"
+							destructive
+							className="whitespace-nowrap [@media(pointer:coarse)]:min-h-11"
+							icon={ <XMarkIcon /> }
+							onClick={ onClearFilter }
 						>
-							{ __(
-								'Clear Filter',
-								'woo-cart-abandonment-recovery'
-							) }
+							{ __( 'Clear Filter', 'woo-cart-abandonment-recovery' ) }
 						</Button>
 					) }
 					<DateRange
 						selectedRange={ selectedRange }
 						setSelectedRange={ handleDateRangeChange }
 						disabled={ isDashboardLoading }
+						disableFutureDates
 					/>
 				</div>
-			</div>
+			}
+		>
+			<span className="sr-only" role="status">
+				{ isDashboardLoading
+					? __( 'Loading…', 'woo-cart-abandonment-recovery' )
+					: '' }
+			</span>
 			<div className="p-1 rounded-lg flex flex-col gap-2 bg-light-background">
 				<div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-6 gap-2">
 					{ metricsData.map( ( item, index ) => (
 						<div
 							key={ index }
-							className="p-3 rounded-md shadow-sm bg-white flex-1 flex flex-col gap-2"
+							className="p-3 rounded-md shadow-sm bg-background-primary flex-1 flex flex-col gap-2"
 						>
-							<div className="text-sm font-medium text-gray-500 inline-flex items-center">
+							<Text
+								as="div"
+								size={ 14 }
+								weight={ 500 }
+								color="secondary"
+								className="inline-flex items-center"
+							>
 								{ item.label }{ ' ' }
-								<AppTooltip
-									content={ item.tooltip }
-									position="top"
-								>
-									<InformationCircleIcon className="h-3 w-3 ml-1 text-gray-500" />
-								</AppTooltip>
-							</div>
+								<span className="ml-1 inline-flex">
+									<InfoTip content={ item.tooltip }>
+										<InformationCircleIcon className="size-3.5 text-icon-secondary" />
+									</InfoTip>
+								</span>
+							</Text>
 							{ isDashboardLoading ? (
 								<SkeletonLoader
 									height="2rem"
@@ -244,7 +250,10 @@ const Overview = ( {
 								/>
 							) : (
 								<div
-									className={ `flex gap-1 justify-between text-3xl font-semibold text-gray-900 ${ item.color }` }
+									className={ cn(
+										'flex gap-1 justify-between text-3xl font-semibold text-text-primary',
+										item.color
+									) }
 								>
 									{ item.value }
 									{ item.icon && <span>{ item.icon }</span> }
@@ -253,73 +262,113 @@ const Overview = ( {
 						</div>
 					) ) }
 				</div>
-				<div className="p-3 flex flex-col gap-6 rounded-md shadow-sm bg-white">
+				<div className="p-3 flex flex-col gap-6 rounded-md shadow-sm bg-background-primary">
 					{ isDashboardLoading ? (
 						<SkeletonLoader height="300px" />
 					) : (
 						<>
 							<div className="flex gap-2">
-								<div className="p-1 flex gap-2 items-center">
-									<div className="h-3 w-3 bg-flamingo-400"></div>
-									<span className="text-gray-500 text-sm font-medium">
-										{ __(
-											'Recoverable Revenue',
-											'woo-cart-abandonment-recovery'
-										) }
-									</span>
-								</div>
-								<div className="p-1 flex gap-2 items-center">
-									<div className="h-3 w-3 bg-amber-400"></div>
-									<span className="text-gray-500 text-sm font-medium">
-										{ __(
-											'Recovered Revenue',
-											'woo-cart-abandonment-recovery'
-										) }
-									</span>
-								</div>
+								{ [
+									__( 'Recoverable Revenue', 'woo-cart-abandonment-recovery' ),
+									__( 'Recovered Revenue', 'woo-cart-abandonment-recovery' ),
+								].map( ( name, i ) => (
+									<div
+										key={ CHART_SERIES[ i ].key }
+										className="p-1 flex gap-2 items-center"
+									>
+										<div
+											className={ cn( 'h-3 w-3', CHART_SERIES[ i ].swatch ) }
+										></div>
+										<span className="text-text-secondary text-sm font-medium">
+											{ name }
+										</span>
+									</div>
+								) ) }
 							</div>
-							<LineChart
-								data={ chartData }
-								dataKeys={ [
-									__(
-										'recoverable',
+							<div aria-hidden="true">
+								<LineChart
+									data={ chartData }
+									dataKeys={ CHART_SERIES.map( ( line ) => line.key ) }
+									colors={ CHART_SERIES.map( ( line ) => ( {
+										stroke: line.stroke,
+									} ) ) }
+									showXAxis={ true }
+									showYAxis={ true }
+									showTooltip={ true }
+									showCartesianGrid={ true }
+									xAxisDataKey="day"
+									xAxisTickFormatter={ formatXAxis }
+									yAxisTickFormatter={ formatYAxis }
+									chartWidth="100%"
+									chartHeight={ 300 }
+									lineChartWrapperProps={ {
+										margin: {
+											left: -12,
+											right: 0,
+											top: 0,
+											bottom: 0,
+										},
+									} }
+									xAxisFontSize="sm"
+									strokeDasharray="0 0"
+								/>
+							</div>
+							<table className="sr-only">
+								<caption>
+									{ __(
+										'Revenue by day',
 										'woo-cart-abandonment-recovery'
-									),
-									__(
-										'recovered',
-										'woo-cart-abandonment-recovery'
-									),
-								] }
-								colors={ [
-									{ stroke: '#F06434' },
-									{ stroke: '#FBBF24' },
-								] }
-								showXAxis={ true }
-								showYAxis={ true }
-								showTooltip={ true }
-								showCartesianGrid={ true }
-								xAxisDataKey="day"
-								xAxisTickFormatter={ formatXAxis }
-								yAxisTickFormatter={ formatYAxis }
-								chartWidth="100%"
-								chartHeight={ 300 }
-								lineChartWrapperProps={ {
-									margin: {
-										left: -12,
-										right: 0,
-										top: 0,
-										bottom: 0,
-									},
-								} }
-								xAxisFontSize="sm"
-								strokeDasharray="0 0"
-							/>
+									) }
+								</caption>
+								<thead>
+									<tr>
+										<th scope="col">
+											{ __( 'Day', 'woo-cart-abandonment-recovery' ) }
+										</th>
+										<th scope="col">
+											{ __(
+												'Recoverable Revenue',
+												'woo-cart-abandonment-recovery'
+											) }
+										</th>
+										<th scope="col">
+											{ __(
+												'Recovered Revenue',
+												'woo-cart-abandonment-recovery'
+											) }
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{ chartData.map( ( row ) => (
+										<tr key={ row.day }>
+											<th scope="row">
+												{ formatXAxis( row.day ) }
+											</th>
+											<td>{ row.recoverable }</td>
+											<td>{ row.recovered }</td>
+										</tr>
+									) ) }
+								</tbody>
+							</table>
 						</>
 					) }
 				</div>
 			</div>
-		</SectionWrapper>
+		</DashboardCard>
 	);
+};
+
+Overview.propTypes = {
+	dashboardData: PropTypes.object,
+	isDashboardLoading: PropTypes.bool,
+	selectedRange: PropTypes.shape( {
+		from: PropTypes.instanceOf( Date ),
+		to: PropTypes.instanceOf( Date ),
+	} ),
+	handleDateRangeChange: PropTypes.func.isRequired,
+	isFiltered: PropTypes.bool,
+	onClearFilter: PropTypes.func.isRequired,
 };
 
 export default Overview;

@@ -5,6 +5,7 @@ namespace MailPoet\Services\Bridge;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Config\Env;
 use MailPoet\Logging\LoggerFactory;
 use MailPoet\WP\Functions as WPFunctions;
 use WP_Error;
@@ -16,6 +17,10 @@ class API {
   const SENDING_STATUS_SEND_ERROR = 'send_error';
 
   const REQUEST_TIMEOUT = 10; // seconds
+
+  // ISO 8601 in UTC, e.g. 2026-06-15T23:59:59Z. The bounces report endpoint
+  // parses the `from`/`to` parameters with `new DateTime($value, UTC)`.
+  const BOUNCES_REPORT_DATE_FORMAT = 'Y-m-d\TH:i:s\Z';
 
   const RESPONSE_CODE_KEY_INVALID = 401;
   const RESPONSE_CODE_STATS_SAVED = 204;
@@ -58,13 +63,16 @@ class API {
   private $wp;
   /** @var LoggerFactory */
   private $loggerFactory;
-  /** @var mixed|null It is an instance of \CurlHandle in PHP8 and aboove but a resource in PHP7 */
+  /** @var mixed|null It is an instance of \CurlHandle in PHP8 and above but a resource in PHP7 */
   private $curlHandle = null;
 
   public $urlMe = 'https://bridge.mailpoet.com/api/v0/me';
   public $urlPremium = 'https://bridge.mailpoet.com/api/v0/premium';
   public $urlMessages = 'https://bridge.mailpoet.com/api/v0/messages';
-  public $urlBounces = 'https://bridge.mailpoet.com/api/v0/bounces/search';
+  // Registered directly on the WPCOM mailpoet-bridge plugin, not proxied through
+  // bridge.mailpoet.com like the other endpoints. Authenticated with the same
+  // `Basic api:<key>` header that auth() produces.
+  public $urlBouncesReport = 'https://public-api.wordpress.com/wpcom/v2/mailpoet-bridge/v2/bounces/report';
   public $urlStats = 'https://bridge.mailpoet.com/api/v0/stats';
   public $urlAuthorizedEmailAddresses = 'https://bridge.mailpoet.com/api/v1/authorized_email_address';
   public $urlAuthorizedSenderDomains = 'https://bridge.mailpoet.com/api/v1/sender_domain';
@@ -146,7 +154,7 @@ class API {
     );
     remove_action('requests-curl.after_request', [$this, 'logCurlInformation']);
     remove_action('requests-curl.before_request', [$this, 'setCurlHandle']);
-    if (is_wp_error($result)) {
+    if ($this->wp->isWpError($result)) {
       $this->logCurlError($result);
       return [
         'status' => self::SENDING_STATUS_CONNECTION_ERROR,
@@ -164,15 +172,92 @@ class API {
     return ['status' => self::RESPONSE_STATUS_OK];
   }
 
-  public function checkBounces(array $emails) {
-    $result = $this->request(
-      $this->urlBounces,
-      $emails
+  /**
+   * Fetch a single page of bounced recipients reported between $from and $to.
+   *
+   * Mirrors the WordPress-registered `GET bounces/report` endpoint: required
+   * `from`/`to` datetime range, 1-based `p` pagination, and a response of the
+   * shape `{ recipients: array<{email: string, type: string}>, page: int,
+   * has_more: bool }`. The returned `recipients` are flattened to their email
+   * addresses so callers receive a plain list of strings.
+   *
+   * @return array{recipients: string[], page: int, has_more: bool}
+   * @throws BouncesReportException The response status is carried on the
+   *   exception code so callers can distinguish a rejected key (401/403), which
+   *   no amount of retrying will fix, from a transient failure.
+   */
+  public function getBouncesReport(\DateTimeInterface $from, \DateTimeInterface $to, int $page = 1): array {
+    $utc = new \DateTimeZone('UTC');
+    $fromUtc = (new \DateTimeImmutable('@' . $from->getTimestamp()))->setTimezone($utc);
+    $toUtc = (new \DateTimeImmutable('@' . $to->getTimestamp()))->setTimezone($utc);
+
+    $url = $this->wp->addQueryArg(
+      [
+        'from' => $fromUtc->format(self::BOUNCES_REPORT_DATE_FORMAT),
+        'to' => $toUtc->format(self::BOUNCES_REPORT_DATE_FORMAT),
+        'p' => $page,
+      ],
+      $this->urlBouncesReport
     );
-    if ($this->wp->wpRemoteRetrieveResponseCode($result) === 200) {
-      return json_decode($this->wp->wpRemoteRetrieveBody($result), true);
+
+    $result = $this->request($url, null, 'GET');
+    $responseCode = (int)$this->wp->wpRemoteRetrieveResponseCode($result);
+    if ($responseCode !== 200) {
+      $isWpError = $this->wp->isWpError($result);
+      $logData = [
+        'code' => $responseCode,
+        'error' => $isWpError ? $result->get_error_message() : $this->wp->wpRemoteRetrieveBody($result),
+      ];
+      $this->loggerFactory->getLogger(LoggerFactory::TOPIC_BRIDGE)->error('getBouncesReport API call failed.', $logData);
+      // The request never reached the service, so there is no status to report:
+      // say so rather than describing it as "response code 0". The code stays 0
+      // either way, which is what marks the failure as transient for callers.
+      $message = $isWpError
+        ? __('The bounces report request failed without a response', 'mailpoet')
+        // translators: %d is the HTTP response code.
+        : sprintf(__('The bounces report request failed with response code %d', 'mailpoet'), $responseCode);
+      throw BouncesReportException::create()
+        ->withCode($responseCode)
+        ->withMessage($message);
     }
-    return false;
+    $body = $this->wp->wpRemoteRetrieveBody($result);
+    $data = json_decode($body, true);
+    if (!$this->isValidBouncesReport($data)) {
+      // A 200 with a malformed payload must not be treated as a successful empty
+      // page: that would advance the report window and silently skip bounces.
+      $this->logInvalidDataFormat('getBouncesReport', is_string($body) ? $body : null);
+      throw BouncesReportException::create()
+        ->withMessage(__('The bounces report response was not in the expected format', 'mailpoet'));
+    }
+    $data['recipients'] = array_map(
+      function (array $recipient): string {
+        return $recipient['email'];
+      },
+      $data['recipients']
+    );
+    return $data;
+  }
+
+  /**
+   * @param mixed $data
+   * @phpstan-assert-if-true array{recipients: array<array{email: string}>, page: int, has_more: bool} $data
+   */
+  private function isValidBouncesReport($data): bool {
+    if (
+      !is_array($data)
+      || !isset($data['recipients'], $data['page'], $data['has_more'])
+      || !is_array($data['recipients'])
+      || !is_int($data['page'])
+      || !is_bool($data['has_more'])
+    ) {
+      return false;
+    }
+    foreach ($data['recipients'] as $recipient) {
+      if (!is_array($recipient) || !isset($recipient['email']) || !is_string($recipient['email'])) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public function updateSubscriberCount($count): bool {
@@ -186,7 +271,7 @@ class API {
     if (!$isSuccess) {
       $logData = [
         'code' => $code,
-        'error' => is_wp_error($result) ? $result->get_error_message() : null,
+        'error' => $this->wp->isWpError($result) ? $result->get_error_message() : null,
       ];
       $this->loggerFactory->getLogger(LoggerFactory::TOPIC_BRIDGE)->error('Stats API call failed.', $logData);
     }
@@ -225,7 +310,7 @@ class API {
       $errorBody = $this->wp->wpRemoteRetrieveBody($result);
       $logData = [
         'code' => $responseCode,
-        'error' => is_wp_error($result) ? $result->get_error_message() : $errorBody,
+        'error' => $this->wp->isWpError($result) ? $result->get_error_message() : $errorBody,
       ];
       $this->loggerFactory->getLogger(LoggerFactory::TOPIC_BRIDGE)->error('CreateAuthorizedEmailAddress API call failed.', $logData);
 
@@ -233,7 +318,9 @@ class API {
       // translators: %d is the error code.
       $fallbackError = sprintf(__('An error has happened while performing a request, the server has responded with response code %d', 'mailpoet'), $responseCode);
 
-      $error = is_array($errorResponseData) && isset($errorResponseData['error']) ? $errorResponseData['error'] : $fallbackError;
+      $error = is_array($errorResponseData) && isset($errorResponseData['error']) && is_string($errorResponseData['error'])
+        ? $errorResponseData['error']
+        : $fallbackError;
       return $this->createErrorResponse((int)$responseCode, $error);
     }
 
@@ -290,7 +377,9 @@ class API {
       // translators: %d will be replaced by an error code
       $fallbackError = sprintf(__('An error has happened while performing a request, the server has responded with response code %d', 'mailpoet'), $responseCode);
 
-      $error = is_array($responseBody) && isset($responseBody['error']) ? $responseBody['error'] : $fallbackError;
+      $error = is_array($responseBody) && isset($responseBody['error']) && is_string($responseBody['error'])
+        ? $responseBody['error']
+        : $fallbackError;
       return $this->createErrorResponse((int)$responseCode, $error);
     }
 
@@ -324,19 +413,22 @@ class API {
         // we need to return the body as it is, but for consistency we add status and translated error message
         $response = is_array($responseBody) ? $responseBody : [];
         $response['status'] = self::RESPONSE_STATUS_ERROR;
-        $response['message'] = $this->getTranslatedErrorMessage($response['error']);
+        $errorMessage = isset($response['error']) && is_string($response['error']) ? $response['error'] : '';
+        $response['message'] = $this->getTranslatedErrorMessage($errorMessage);
         return $response;
       }
       $logData = [
         'code' => $responseCode,
-        'error' => is_wp_error($result) ? $result->get_error_message() : $rawResponseBody,
+        'error' => $this->wp->isWpError($result) ? $result->get_error_message() : $rawResponseBody,
       ];
       $this->loggerFactory->getLogger(LoggerFactory::TOPIC_BRIDGE)->error('verifyAuthorizedSenderDomain API call failed.', $logData);
 
       // translators: %d will be replaced by an error code
       $fallbackError = sprintf(__('An error has happened while performing a request, the server has responded with response code %d', 'mailpoet'), $responseCode);
 
-      $error = is_array($responseBody) && isset($responseBody['error']) ? $responseBody['error'] : $fallbackError;
+      $error = is_array($responseBody) && isset($responseBody['error']) && is_string($responseBody['error'])
+        ? $responseBody['error']
+        : $fallbackError;
       return $this->createErrorResponse((int)$responseCode, $error);
     }
 
@@ -409,6 +501,7 @@ class API {
       'headers' => [
         'Content-Type' => 'application/json',
         'Authorization' => $this->auth(),
+        'X-MailPoet-Plugin-Version' => (string)Env::$version,
       ],
       'body' => $body !== null ? json_encode($body) : null,
     ];
@@ -416,10 +509,19 @@ class API {
   }
 
   private function logCurlError(WP_Error $error) {
+    // $this->curlHandle is set by setCurlHandle() from a WP Requests action; type is
+    // \CurlHandle on PHP 8+ and resource on PHP 7.4. PHPStan stubs (min PHP 7.4) only
+    // declare `resource` for curl_*(), so the PHP 8 path needs inline ignores.
+    /** @phpstan-ignore-next-line argument.type */
+    $errno = $this->curlHandle ? curl_errno($this->curlHandle) : 'n/a';
+    /** @phpstan-ignore-next-line argument.type */
+    $errMsg = $this->curlHandle ? curl_error($this->curlHandle) : $error->get_error_message();
+    /** @phpstan-ignore-next-line argument.type */
+    $info = $this->curlHandle ? curl_getinfo($this->curlHandle) : 'n/a';
     $logData = [
-      'curl_errno' => $this->curlHandle ? curl_errno($this->curlHandle) : 'n/a',
-      'curl_error' => $this->curlHandle ? curl_error($this->curlHandle) : $error->get_error_message(),
-      'curl_info' => $this->curlHandle ? curl_getinfo($this->curlHandle) : 'n/a',
+      'curl_errno' => $errno,
+      'curl_error' => $errMsg,
+      'curl_info' => $info,
     ];
     $this->loggerFactory->getLogger(LoggerFactory::TOPIC_MSS)->error('requests-curl.failed', $logData);
   }

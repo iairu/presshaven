@@ -21,11 +21,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class adds PinterestTag tracker support.
+ *
+ * @class   Tag
+ * @version 1.6.0
  */
 class Tag extends Tracker {
 
-	private const TAG_ID_SLUG       = '%%TAG_ID%%';
-	private const HASHED_EMAIL_SLUG = '%%HASHED_EMAIL%%';
+	private const TAG_ID_SLUG    = '%%TAG_ID%%';
+	private const USER_DATA_SLUG = '%%USER_DATA%%';
 
 	/**
 	 * The base tracking snippet.
@@ -33,15 +36,7 @@ class Tag extends Tracker {
 	 *
 	 * @var string
 	 */
-	private static $base_tag = "<!-- Pinterest Pixel Base Code -->\n<script type=\"text/javascript\">\n  !function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version=\"3.0\";var t=document.createElement(\"script\");t.async=!0,t.src=e;var r=document.getElementsByTagName(\"script\")[0];r.parentNode.insertBefore(t,r)}}(\"https://s.pinimg.com/ct/core.js\");\n\n  pintrk('load', '" . self::TAG_ID_SLUG . "', { np: \"woocommerce\" } );\n  pintrk('page');\n</script>\n<!-- End Pinterest Pixel Base Code -->\n";
-
-	/**
-	 * The base tracking snippet with Enchanced match support.
-	 * Documentation: https://help.pinterest.com/en/business/article/enhanced-match
-	 *
-	 * @var string
-	 */
-	private static $base_tag_em = "<!-- Pinterest Pixel Base Code -->\n<script type=\"text/javascript\">\n  !function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version=\"3.0\";var t=document.createElement(\"script\");t.async=!0,t.src=e;var r=document.getElementsByTagName(\"script\")[0];r.parentNode.insertBefore(t,r)}}(\"https://s.pinimg.com/ct/core.js\");\n\n pintrk('load', '" . self::TAG_ID_SLUG . "', { em: '" . self::HASHED_EMAIL_SLUG . "', np: \"woocommerce\" });\n  pintrk('page');\n</script>\n<!-- End Pinterest Pixel Base Code -->\n";
+	private static $base_tag = "  !function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version=\"3.0\";var t=document.createElement(\"script\");t.async=!0,t.src=e;var r=document.getElementsByTagName(\"script\")[0];r.parentNode.insertBefore(t,r)}}(\"https://s.pinimg.com/ct/core.js\");\n\n  pintrk('load', '" . self::TAG_ID_SLUG . "', " . self::USER_DATA_SLUG . " );\n  pintrk('page');";
 
 	/**
 	 * The noscript base tracking snippet.
@@ -54,7 +49,7 @@ class Tag extends Tracker {
 	/**
 	 * A list of events that are to be printed out.
 	 *
-	 * @var array
+	 * @var string[]
 	 */
 	private static $events = array();
 
@@ -100,30 +95,42 @@ class Tag extends Tracker {
 	 */
 	public function print_script() {
 		$active_tag = Pinterest_For_Woocommerce()::get_setting( 'tracking_tag' );
-		$email      = Pinterest_For_Woocommerce()::get_setting( 'enhanced_match_support' )
-			? static::maybe_get_hashed_customer_email()
-			: '';
+		if ( ! $active_tag ) {
+			return;
+		}
+		$user_data = array( 'np' => 'woocommerce' );
 
-		$script = ! empty( $email ) ? self::$base_tag_em : self::$base_tag;
+		if ( Pinterest_For_Woocommerce()::get_setting( 'enhanced_match_support' ) ) {
+			$email       = self::maybe_get_hashed_customer_email();
+			$external_id = static::maybe_get_hashed_customer_external_id();
+
+			if ( ! empty( $email ) ) {
+				$user_data['em'] = $email;
+			}
+
+			if ( false !== $external_id ) {
+				$user_data['external_id'] = $external_id;
+			}
+		}
+
 		$script = str_replace(
-			array( self::TAG_ID_SLUG, self::HASHED_EMAIL_SLUG ),
-			array( sanitize_key( $active_tag ), $email ),
-			$script
+			array( self::TAG_ID_SLUG, self::USER_DATA_SLUG ),
+			array( sanitize_key( $active_tag ), wp_json_encode( $user_data, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ),
+			self::$base_tag
 		);
-		//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		echo $script;
+		echo "<!-- Pinterest Pixel Base Code -->\n";
+		wp_print_inline_script_tag( $script, array( 'type' => 'text/javascript' ) );
+		echo "<!-- End Pinterest Pixel Base Code -->\n";
 
 		$events = array_merge(
-			static::$events,
+			self::$events,
 			static::load_deferred_events()
 		);
 		if ( ! empty( $events ) ) {
-			//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			echo '<script>' . implode( PHP_EOL, $events ) . '</script>';
+			wp_print_inline_script_tag( implode( PHP_EOL, $events ) );
 		}
 
-		//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		echo '<script id="pinterest-tag-placeholder"></script>';
+		wp_print_inline_script_tag( '', array( 'id' => 'pinterest-tag-placeholder' ) );
 	}
 
 	/**
@@ -153,7 +160,11 @@ class Tag extends Tracker {
 	 * @return string A generated event call.
 	 */
 	private static function get_event_code( string $event_name, array $data ) {
-		$data_string = empty( $data ) ? null : wp_json_encode( $data );
+		if ( Tracking::EVENT_PAGE_VISIT === $event_name ) {
+			return PageVisit::get_tag_event_code( $data );
+		}
+
+		$data_string = empty( $data ) ? null : wp_json_encode( $data, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES );
 		return sprintf(
 			'pintrk( \'track\', \'%s\' %s);',
 			$event_name,
@@ -169,7 +180,7 @@ class Tag extends Tracker {
 	 * @return array
 	 */
 	public static function load_deferred_events() {
-		$transient_key = static::get_deferred_events_transient_key();
+		$transient_key = self::get_deferred_events_transient_key();
 		if ( ! $transient_key ) {
 			return array();
 		}
@@ -194,7 +205,7 @@ class Tag extends Tracker {
 	 * @return true
 	 */
 	public static function add_deferred_event( string $event_name, array $data ) {
-		static::$deferred_events[] = static::get_event_code( $event_name, $data );
+		self::$deferred_events[] = self::get_event_code( $event_name, $data );
 		return true;
 	}
 
@@ -209,7 +220,7 @@ class Tag extends Tracker {
 	 * @return true
 	 */
 	public static function add_event( string $event_name, array $data ) {
-		static::$events[] = static::get_event_code( $event_name, $data );
+		self::$events[] = self::get_event_code( $event_name, $data );
 		return true;
 	}
 
@@ -221,16 +232,16 @@ class Tag extends Tracker {
 	 * @return void
 	 */
 	public static function save_deferred_events() {
-		$transient_key = static::get_deferred_events_transient_key();
+		$transient_key = self::get_deferred_events_transient_key();
 		if ( ! $transient_key ) {
 			return;
 		}
 
-		$existing_events         = static::load_deferred_events();
-		static::$deferred_events = array_merge( $existing_events, static::$deferred_events );
+		$existing_events       = static::load_deferred_events();
+		self::$deferred_events = array_merge( $existing_events, self::$deferred_events );
 
-		if ( ! empty( static::$deferred_events ) ) {
-			set_transient( $transient_key, static::$deferred_events, DAY_IN_SECONDS );
+		if ( ! empty( self::$deferred_events ) ) {
+			set_transient( $transient_key, self::$deferred_events, DAY_IN_SECONDS );
 		}
 	}
 
@@ -242,12 +253,12 @@ class Tag extends Tracker {
 	 * @param string $event_name Event name. e.g. Checkout, AddToCart, etc.
 	 * @param Data   $data       Corresponding event data object.
 	 *
-	 * @return true
+	 * @return bool
 	 */
 	public function track_event( string $event_name, Data $data ) {
 		$data = $this->prepare_request_data( $event_name, $data );
 		if ( wp_doing_ajax() ) {
-			return static::maybe_add_fragment( $event_name, $data );
+			return self::maybe_add_fragment( $event_name, $data );
 		}
 
 		/**
@@ -437,7 +448,7 @@ class Tag extends Tracker {
 	 *
 	 * @since 1.4.0
 	 *
-	 * @return array The list of installed tags.
+	 * @return array<string, string> The list of installed tags.
 	 */
 	public static function get_third_party_installed_tags() {
 
@@ -499,15 +510,11 @@ class Tag extends Tracker {
 	 */
 	private static function maybe_add_fragment( string $event_name, array $data ) {
 		if ( Tracking::EVENT_ADD_TO_CART === $event_name ) {
-			$event = static::get_event_code( $event_name, $data );
+			$event = self::get_event_code( $event_name, $data );
 			add_filter(
 				'woocommerce_add_to_cart_fragments',
 				function ( $fragments ) use ( $event ) {
-					$fragments['script#pinterest-tag-placeholder'] = <<<JS
-<script id="pinterest-tag-placeholder">
-	{$event}
-</script>
-JS;
+					$fragments['script#pinterest-tag-placeholder'] = wp_get_inline_script_tag( $event, array( 'id' => 'pinterest-tag-placeholder' ) );
 					return $fragments;
 				}
 			);

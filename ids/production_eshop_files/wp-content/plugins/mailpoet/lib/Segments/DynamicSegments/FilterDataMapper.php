@@ -22,6 +22,7 @@ use MailPoet\Segments\DynamicSegments\Filters\SubscriberSegment;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberSubscribedViaForm;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberTag;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberTextField;
+use MailPoet\Segments\DynamicSegments\Filters\SubscriberTrackingConsent;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceAverageSpent;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceCategory;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceCountry;
@@ -31,6 +32,7 @@ use MailPoet\Segments\DynamicSegments\Filters\WooCommerceMembership;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceNumberOfOrders;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceNumberOfReviews;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceProduct;
+use MailPoet\Segments\DynamicSegments\Filters\WooCommerceProductVariation;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommercePurchaseDate;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommercePurchasedWithAttribute;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceSingleOrderValue;
@@ -43,6 +45,25 @@ use MailPoet\Segments\DynamicSegments\Filters\WooCommerceUsedShippingMethod;
 use MailPoet\WP\Functions as WPFunctions;
 
 class FilterDataMapper {
+  public const MAX_GROUPS = 5;
+  public const MAX_FILTERS_PER_GROUP = 10;
+
+  private const ONLY_TRACKABLE_ACTIONS = [
+    DynamicSegmentFilterData::TYPE_EMAIL => [
+      EmailAction::ACTION_OPENED,
+      EmailAction::ACTION_MACHINE_OPENED,
+      EmailAction::ACTION_CLICKED,
+      EmailOpensAbsoluteCountAction::TYPE,
+      EmailOpensAbsoluteCountAction::MACHINE_TYPE,
+      NumberOfClicks::ACTION,
+    ],
+    DynamicSegmentFilterData::TYPE_USER_ROLE => [
+      SubscriberDateField::LAST_OPEN_DATE,
+      SubscriberDateField::LAST_CLICK_DATE,
+      SubscriberDateField::LAST_ENGAGEMENT_DATE,
+    ],
+  ];
+
   private WPFunctions $wp;
 
   private DateFilterHelper $dateFilterHelper;
@@ -83,16 +104,156 @@ class FilterDataMapper {
     if (!isset($data['filters']) || count($data['filters'] ?? []) < 1) {
       throw new InvalidFilterException('Filters are missing', InvalidFilterException::MISSING_FILTER);
     }
+    $this->validateGroups($data['filters'], $data['filters_connect'] ?? null);
     $processFilter = function ($filter, $data) {
       $filter['connect'] = $data['filters_connect'] ?? DynamicSegmentFilterData::CONNECT_TYPE_AND;
-      return $this->createFilter($filter);
+      return $this->withOnlyTrackable(
+        $this->withGroupingParams($this->createFilter($filter), $filter),
+        $filter,
+        $this->getQueryGroupOperator($data['filters'], $filter, $data['filters_connect'] ?? null)
+      );
     };
     $wpFilterName = 'mailpoet_dynamic_segments_filters_map';
     if ($this->wp->hasFilter($wpFilterName)) {
-      return $this->wp->applyFilters($wpFilterName, $data, $processFilter);
+      $filtered = $this->wp->applyFilters($wpFilterName, $data, $processFilter);
+      if (is_array($filtered)) {
+        return array_values(array_filter($filtered, function ($f) {
+          return $f instanceof DynamicSegmentFilterData;
+        }));
+      }
+    }
+    if (count($data['filters']) > 1) {
+      // Keeping only the first filter would delete the others when the segment is saved.
+      throw new InvalidFilterException('Multiple filters require MailPoet Premium', InvalidFilterException::MULTIPLE_FILTERS_REQUIRE_PREMIUM);
     }
     $filter = reset($data['filters']);
     return [$processFilter($filter, $data)];
+  }
+
+  /**
+   * @throws InvalidFilterException
+   */
+  private function validateGroups(array $filters, ?string $filtersConnect): void {
+    $groupCounts = [];
+    foreach ($filters as $filter) {
+      if (!isset($filter['group_id'])) {
+        continue;
+      }
+      $groupId = (int)$filter['group_id'];
+      $groupCounts[$groupId] = ($groupCounts[$groupId] ?? 0) + 1;
+    }
+    if (count($groupCounts) > self::MAX_GROUPS) {
+      throw new InvalidFilterException(
+        'Too many filter groups (max ' . self::MAX_GROUPS . ')',
+        InvalidFilterException::TOO_MANY_GROUPS
+      );
+    }
+    foreach ($groupCounts as $count) {
+      if ($count > self::MAX_FILTERS_PER_GROUP) {
+        throw new InvalidFilterException(
+          'Too many filters in a group (max ' . self::MAX_FILTERS_PER_GROUP . ')',
+          InvalidFilterException::TOO_MANY_FILTERS_PER_GROUP
+        );
+      }
+    }
+    if (count($groupCounts) > 1 && $filtersConnect === DynamicSegmentFilterData::CONNECT_TYPE_NONE) {
+      throw new InvalidFilterException(
+        'Outer connector must be and/or for grouped segments',
+        InvalidFilterException::INVALID_OUTER_CONNECTOR
+      );
+    }
+  }
+
+  /**
+   * Stamps group_id/group_operator from the raw filter row onto the constructed
+   * filter data so the entity can group filters at query time.
+   */
+  private function withGroupingParams(DynamicSegmentFilterData $filterData, array $rawFilter): DynamicSegmentFilterData {
+    if (!isset($rawFilter['group_id'])) {
+      return $filterData;
+    }
+    $existingData = $filterData->getData() ?? [];
+    $existingData['group_id'] = (int)$rawFilter['group_id'];
+    $existingData['group_operator'] = $this->normalizeGroupOperator($rawFilter['group_operator'] ?? null);
+    return new DynamicSegmentFilterData(
+      (string)$filterData->getFilterType(),
+      (string)$filterData->getAction(),
+      $existingData
+    );
+  }
+
+  /**
+   * Keeps the "only subscribers we can track" option on the engagement filters that
+   * support it. Inside a NONE group the filter's result is excluded, so narrowing it
+   * would add untracked subscribers back in; the option is dropped there. On the
+   * single-email filters it only changes "none of", so it is kept only there.
+   */
+  private function withOnlyTrackable(DynamicSegmentFilterData $filterData, array $rawFilter, string $groupOperator): DynamicSegmentFilterData {
+    if (!$this->isTruthy($rawFilter[DynamicSegmentFilterData::ONLY_TRACKABLE] ?? null)) {
+      return $filterData;
+    }
+    if (!in_array($filterData->getAction(), self::ONLY_TRACKABLE_ACTIONS[$filterData->getFilterType()] ?? [], true)) {
+      return $filterData;
+    }
+    if ($groupOperator === DynamicSegmentFilterData::CONNECT_TYPE_NONE) {
+      return $filterData;
+    }
+    $isEmailAction = in_array($filterData->getAction(), [EmailAction::ACTION_OPENED, EmailAction::ACTION_MACHINE_OPENED, EmailAction::ACTION_CLICKED], true);
+    if ($isEmailAction && $filterData->getParam('operator') !== DynamicSegmentFilterData::OPERATOR_NONE) {
+      return $filterData;
+    }
+    $data = $filterData->getData() ?? [];
+    $data[DynamicSegmentFilterData::ONLY_TRACKABLE] = true;
+    return new DynamicSegmentFilterData(
+      (string)$filterData->getFilterType(),
+      (string)$filterData->getAction(),
+      $data
+    );
+  }
+
+  /**
+   * The operator the query will use for this filter's group, following the same
+   * rules as SegmentEntity::getFilterGroups().
+   */
+  private function getQueryGroupOperator(array $filters, array $rawFilter, ?string $filtersConnect): string {
+    $legacyOperator = is_string($filtersConnect) && $filtersConnect !== '' ? $filtersConnect : DynamicSegmentFilterData::CONNECT_TYPE_AND;
+    $groupKey = $this->getGroupKey($rawFilter);
+    foreach ($filters as $filter) {
+      if (!is_array($filter) || $this->getGroupKey($filter) !== $groupKey) {
+        continue;
+      }
+      if (!$this->hasNumericGroupId($filter)) {
+        return $legacyOperator;
+      }
+      return $this->normalizeGroupOperator($filter['group_operator'] ?? null);
+    }
+    return $legacyOperator;
+  }
+
+  private function getGroupKey(array $filter): int {
+    return $this->hasNumericGroupId($filter) ? (int)$filter['group_id'] : 0;
+  }
+
+  private function hasNumericGroupId(array $filter): bool {
+    return isset($filter['group_id']) && is_numeric($filter['group_id']);
+  }
+
+  /**
+   * @param mixed $value
+   */
+  private function isTruthy($value): bool {
+    return in_array($value, [true, 1, '1', 'true'], true);
+  }
+
+  private function normalizeGroupOperator($value): string {
+    if (
+      $value === DynamicSegmentFilterData::CONNECT_TYPE_AND
+      || $value === DynamicSegmentFilterData::CONNECT_TYPE_OR
+      || $value === DynamicSegmentFilterData::CONNECT_TYPE_NONE
+    ) {
+      return $value;
+    }
+    return DynamicSegmentFilterData::CONNECT_TYPE_AND;
   }
 
   private function createFilter(array $filterData): DynamicSegmentFilterData {
@@ -238,6 +399,19 @@ class FilterDataMapper {
         'connect' => $data['connect'],
       ]);
     }
+    if ($data['action'] === SubscriberTrackingConsent::TYPE) {
+      if (!isset($data['value']) || !in_array($data['value'], SubscriberTrackingConsent::VALID_VALUES, true)) {
+        throw new InvalidFilterException('Missing valid tracking consent value', InvalidFilterException::MISSING_VALUE);
+      }
+      if (!isset($data['operator']) || !in_array($data['operator'], SubscriberTrackingConsent::VALID_OPERATORS, true)) {
+        throw new InvalidFilterException('Missing valid operator', InvalidFilterException::MISSING_OPERATOR);
+      }
+      return new DynamicSegmentFilterData(DynamicSegmentFilterData::TYPE_USER_ROLE, $data['action'], [
+        'value' => $data['value'],
+        'operator' => $data['operator'],
+        'connect' => $data['connect'],
+      ]);
+    }
     if (in_array($data['action'], SubscriberTextField::TYPES)) {
       if (empty($data['value'])) {
         throw new InvalidFilterException('Missing value', InvalidFilterException::MISSING_VALUE);
@@ -265,11 +439,33 @@ class FilterDataMapper {
       if (!in_array($data['operator'], $this->dateFilterHelper->getValidOperators())) {
         throw new InvalidFilterException('Invalid operator', InvalidFilterException::MISSING_OPERATOR);
       }
-      return new DynamicSegmentFilterData(DynamicSegmentFilterData::TYPE_USER_ROLE, $data['action'], [
+      $filterData = [
         'value' => $data['value'],
         'operator' => $data['operator'],
         'connect' => $data['connect'],
-      ]);
+      ];
+      if ($data['operator'] === DateFilterHelper::BETWEEN) {
+        $betweenData = [
+          'timeframe' => DynamicSegmentFilterData::TIMEFRAME_BETWEEN,
+          'value' => $filterData['value'],
+          'value2' => $data['value2'] ?? null,
+        ];
+        if (is_string($betweenData['value']) && is_string($betweenData['value2'])) {
+          [$betweenData['value'], $betweenData['value2']] = $this->orderDateRange($betweenData['value'], $betweenData['value2']);
+        }
+        try {
+          $this->filterHelper->validateDaysPeriodData($betweenData);
+        } catch (InvalidFilterException $e) {
+          throw $e;
+        } catch (\Throwable $e) {
+          throw new InvalidFilterException('Invalid date value', InvalidFilterException::INVALID_DATE_VALUE);
+        }
+        $filterData['value'] = $betweenData['value'];
+        $filterData['value2'] = $betweenData['value2'];
+      } elseif (isset($data['value2'])) {
+        $filterData['value2'] = $data['value2'];
+      }
+      return new DynamicSegmentFilterData(DynamicSegmentFilterData::TYPE_USER_ROLE, $data['action'], $filterData);
     }
     if (empty($data['wordpressRole'])) {
       throw new InvalidFilterException('Missing role', InvalidFilterException::MISSING_ROLE);
@@ -309,28 +505,24 @@ class FilterDataMapper {
     ];
 
     if ($data['action'] === EmailsReceived::ACTION) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (!isset($data['emails'])) {
         throw new InvalidFilterException('Missing email count value', InvalidFilterException::MISSING_VALUE);
       }
       $filterData['emails'] = $data['emails'];
       $filterData['operator'] = $data['operator'];
-      $filterData['timeframe'] = $data['timeframe'];
       $filterData['connect'] = $data['connect'];
-      $filterData['days'] = $data['days'] ?? 0;
+      $this->copyDatePeriodData($data, $filterData);
       return new DynamicSegmentFilterData(DynamicSegmentFilterData::TYPE_EMAIL, $data['action'], $filterData);
     }
 
     if ($data['action'] === NumberOfClicks::ACTION) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (!isset($data['clicks'])) {
         throw new InvalidFilterException('Missing click count value', InvalidFilterException::MISSING_VALUE);
       }
       $filterData['clicks'] = $data['clicks'];
       $filterData['operator'] = $data['operator'];
-      $filterData['timeframe'] = $data['timeframe'];
       $filterData['connect'] = $data['connect'];
-      $filterData['days'] = $data['days'] ?? 0;
+      $this->copyDatePeriodData($data, $filterData);
       return new DynamicSegmentFilterData(DynamicSegmentFilterData::TYPE_EMAIL, $data['action'], $filterData);
     }
 
@@ -343,21 +535,44 @@ class FilterDataMapper {
       if (empty($data['newsletters']) || !is_array($data['newsletters'])) {
         throw new InvalidFilterException('Missing newsletter', InvalidFilterException::MISSING_NEWSLETTER_ID);
       }
-      $filterData['newsletters'] = array_map(function ($segmentId) {
-        return intval($segmentId);
-      }, $data['newsletters']);
+      $filterData['newsletters'] = array_values(
+        array_map('intval', array_filter($data['newsletters'], 'is_scalar'))
+      );
     }
 
     $filterType = DynamicSegmentFilterData::TYPE_EMAIL;
     $action = $data['action'];
     if (isset($data['link_ids']) && is_array($data['link_ids'])) {
-      $filterData['link_ids'] = array_map('intval', $data['link_ids']);
+      $filterData['link_ids'] = $this->normalizeEmailLinkIds($data['link_ids']);
       if (!isset($data['operator'])) {
         throw new InvalidFilterException('Missing operator', InvalidFilterException::MISSING_OPERATOR);
       }
       $filterData['operator'] = $data['operator'];
     }
     return new DynamicSegmentFilterData($filterType, $action, $filterData);
+  }
+
+  private function normalizeEmailLinkIds(array $linkIds): array {
+    $normalizedLinkIds = [];
+    foreach ($linkIds as $linkId) {
+      if (is_int($linkId)) {
+        $normalizedLinkIds[] = $linkId;
+        continue;
+      }
+      if (is_float($linkId) && floor($linkId) === $linkId) {
+        $normalizedLinkIds[] = (int)$linkId;
+        continue;
+      }
+      if (!is_string($linkId)) {
+        continue;
+      }
+      $linkId = trim($linkId);
+      if ($linkId === '') {
+        continue;
+      }
+      $normalizedLinkIds[] = ctype_digit($linkId) ? (int)$linkId : $linkId;
+    }
+    return $normalizedLinkIds;
   }
 
   /**
@@ -367,14 +582,12 @@ class FilterDataMapper {
     if (!isset($data['opens'])) {
       throw new InvalidFilterException('Missing number of opens', InvalidFilterException::MISSING_VALUE);
     }
-    $this->filterHelper->validateDaysPeriodData($data);
     $filterData = [
       'opens' => $data['opens'],
-      'days' => $data['days'] ?? 0,
       'operator' => $data['operator'] ?? 'more',
-      'timeframe' => $data['timeframe'] ?? DynamicSegmentFilterData::TIMEFRAME_IN_THE_LAST, // backwards compatibility
       'connect' => $data['connect'],
     ];
+    $this->copyDatePeriodData($data, $filterData);
     $filterType = DynamicSegmentFilterData::TYPE_EMAIL;
     $action = $data['action'];
     return new DynamicSegmentFilterData($filterType, $action, $filterData);
@@ -401,6 +614,7 @@ class FilterDataMapper {
       }
       $filterData['operator'] = $data['operator'];
       $filterData['category_ids'] = $data['category_ids'];
+      $this->copyDatePeriodData($data, $filterData, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     } elseif ($data['action'] === WooCommerceProduct::ACTION_PRODUCT) {
       if (!isset($data['product_ids'])) {
         throw new InvalidFilterException('Missing product', InvalidFilterException::MISSING_PRODUCT_ID);
@@ -410,6 +624,23 @@ class FilterDataMapper {
       }
       $filterData['operator'] = $data['operator'];
       $filterData['product_ids'] = $data['product_ids'];
+      $this->copyDatePeriodData($data, $filterData, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
+    } elseif ($data['action'] === WooCommerceProductVariation::ACTION_PRODUCT_VARIATION) {
+      if (!isset($data['variation_ids']) || !is_array($data['variation_ids']) || count($data['variation_ids']) === 0) {
+        throw new InvalidFilterException('Missing variation', InvalidFilterException::MISSING_VARIATION_ID);
+      }
+      if (
+        !isset($data['operator']) || !in_array($data['operator'], [
+          DynamicSegmentFilterData::OPERATOR_ANY,
+          DynamicSegmentFilterData::OPERATOR_ALL,
+          DynamicSegmentFilterData::OPERATOR_NONE,
+        ], true)
+      ) {
+        throw new InvalidFilterException('Missing operator', InvalidFilterException::MISSING_OPERATOR);
+      }
+      $filterData['operator'] = $data['operator'];
+      $filterData['variation_ids'] = $data['variation_ids'];
+      $this->copyDatePeriodData($data, $filterData, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     } elseif ($data['action'] === WooCommerceCountry::ACTION_CUSTOMER_COUNTRY) {
       if (!isset($data['country_code'])) {
         throw new InvalidFilterException('Missing country', InvalidFilterException::MISSING_COUNTRY);
@@ -417,7 +648,6 @@ class FilterDataMapper {
       $filterData['country_code'] = $data['country_code'];
       $filterData['operator'] = $data['operator'] ?? DynamicSegmentFilterData::OPERATOR_ANY;
     } elseif (in_array($data['action'], WooCommerceNumberOfOrders::ACTIONS)) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (
         !isset($data['number_of_orders_type'])
         || !isset($data['number_of_orders_count']) || $data['number_of_orders_count'] < 0
@@ -426,17 +656,14 @@ class FilterDataMapper {
       }
       $filterData['number_of_orders_type'] = $data['number_of_orders_type'];
       $filterData['number_of_orders_count'] = $data['number_of_orders_count'];
-      $filterData['days'] = $data['days'] ?? 0;
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif ($data['action'] === WooCommerceNumberOfReviews::ACTION) {
       $this->wooCommerceNumberOfReviews->validateFilterData($data);
-      $filterData['days'] = $data['days'];
       $filterData['count_type'] = $data['count_type'];
       $filterData['count'] = $data['count'];
       $filterData['rating'] = $data['rating'];
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif ($data['action'] === WooCommerceTotalSpent::ACTION_TOTAL_SPENT) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (
         !isset($data['total_spent_type'])
         || !isset($data['total_spent_amount']) || $data['total_spent_amount'] < 0
@@ -445,10 +672,8 @@ class FilterDataMapper {
       }
       $filterData['total_spent_type'] = $data['total_spent_type'];
       $filterData['total_spent_amount'] = $data['total_spent_amount'];
-      $filterData['days'] = $data['days'] ?? 0;
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif ($data['action'] === WooCommerceSingleOrderValue::ACTION_SINGLE_ORDER_VALUE) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (
         !isset($data['single_order_value_type'])
         || !isset($data['single_order_value_amount']) || $data['single_order_value_amount'] < 0
@@ -457,21 +682,37 @@ class FilterDataMapper {
       }
       $filterData['single_order_value_type'] = $data['single_order_value_type'];
       $filterData['single_order_value_amount'] = $data['single_order_value_amount'];
-      $filterData['days'] = $data['days'] ?? 0;
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif (in_array($data['action'], [WooCommercePurchaseDate::ACTION, WooCommerceFirstOrder::ACTION])) {
       $filterData['operator'] = $data['operator'];
       $filterData['value'] = $data['value'];
+      if ($data['operator'] === DateFilterHelper::BETWEEN) {
+        $betweenData = [
+          'timeframe' => DynamicSegmentFilterData::TIMEFRAME_BETWEEN,
+          'value' => $filterData['value'],
+          'value2' => $data['value2'] ?? null,
+        ];
+        if (is_string($betweenData['value']) && is_string($betweenData['value2'])) {
+          [$betweenData['value'], $betweenData['value2']] = $this->orderDateRange($betweenData['value'], $betweenData['value2']);
+        }
+        try {
+          $this->filterHelper->validateDaysPeriodData($betweenData);
+        } catch (InvalidFilterException $e) {
+          throw $e;
+        } catch (\Throwable $e) {
+          throw new InvalidFilterException('Invalid date value', InvalidFilterException::INVALID_DATE_VALUE);
+        }
+        $filterData['value'] = $betweenData['value'];
+        $filterData['value2'] = $betweenData['value2'];
+      }
     } elseif ($data['action'] === WooCommerceAverageSpent::ACTION) {
-      $this->filterHelper->validateDaysPeriodData($data);
       if (
         !isset($data['average_spent_type'])
         || !isset($data['average_spent_amount']) || $data['average_spent_amount'] < 0
       ) {
         throw new InvalidFilterException('Missing required fields', InvalidFilterException::MISSING_AVERAGE_SPENT_FIELDS);
       }
-      $filterData['days'] = $data['days'] ?? 0;
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
       $filterData['average_spent_amount'] = $data['average_spent_amount'];
       $filterData['average_spent_type'] = $data['average_spent_type'];
     } elseif ($data['action'] === WooCommerceUsedPaymentMethod::ACTION) {
@@ -481,11 +722,9 @@ class FilterDataMapper {
       if (!isset($data['payment_methods']) || !is_array($data['payment_methods']) || empty($data['payment_methods'])) {
         throw new InvalidFilterException('Missing payment gateways', InvalidFilterException::MISSING_VALUE);
       }
-      $this->filterHelper->validateDaysPeriodData($data);
       $filterData['operator'] = $data['operator'];
       $filterData['payment_methods'] = $data['payment_methods'];
-      $filterData['days'] = intval($data['days'] ?? 0);
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif ($data['action'] === WooCommerceUsedShippingMethod::ACTION) {
       if (!isset($data['operator']) || !in_array($data['operator'], WooCommerceUsedShippingMethod::VALID_OPERATORS, true)) {
         throw new InvalidFilterException('Missing operator', InvalidFilterException::MISSING_OPERATOR);
@@ -493,11 +732,9 @@ class FilterDataMapper {
       if (!isset($data['shipping_methods']) || !is_array($data['shipping_methods']) || empty($data['shipping_methods'])) {
         throw new InvalidFilterException('Missing shipping methods', InvalidFilterException::MISSING_VALUE);
       }
-      $this->filterHelper->validateDaysPeriodData($data);
       $filterData['operator'] = $data['operator'];
       $filterData['shipping_methods'] = $data['shipping_methods'];
-      $filterData['days'] = intval($data['days'] ?? 0);
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif (in_array($data['action'], WooCommerceCustomerTextField::ACTIONS)) {
       if (empty($data['value'])) {
         throw new InvalidFilterException('Missing value', InvalidFilterException::MISSING_VALUE);
@@ -515,8 +752,7 @@ class FilterDataMapper {
       $this->wooCommerceUsedCouponCode->validateFilterData($data);
       $filterData['operator'] = $data['operator'];
       $filterData['coupon_code_ids'] = $data['coupon_code_ids'];
-      $filterData['days'] = $data['days'];
-      $filterData['timeframe'] = $data['timeframe'];
+      $this->copyDatePeriodData($data, $filterData);
     } elseif ($data['action'] === WooCommercePurchasedWithAttribute::ACTION) {
       $this->wooCommercePurchasedWithAttribute->validateFilterData($data);
       $filterData['operator'] = $data['operator'];
@@ -525,14 +761,49 @@ class FilterDataMapper {
       $filterData['attribute_type'] = $data['attribute_type'];
       $filterData['attribute_local_name'] = $data['attribute_local_name'] ?? null;
       $filterData['attribute_local_values'] = $data['attribute_local_values'] ?? null;
+      $this->copyDatePeriodData($data, $filterData, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     } elseif ($data['action'] === WooCommerceTag::ACTION) {
       $this->wooCommerceTag->validateFilterData($data);
       $filterData['operator'] = $data['operator'];
       $filterData['tag_ids'] = $data['tag_ids'];
+      $this->copyDatePeriodData($data, $filterData, DynamicSegmentFilterData::TIMEFRAME_ALL_TIME);
     } else {
       throw new InvalidFilterException("Unknown action " . $data['action'], InvalidFilterException::MISSING_ACTION);
     }
     return new DynamicSegmentFilterData($filterType, $action, $filterData);
+  }
+
+  private function copyDatePeriodData(array $data, array &$filterData, string $defaultTimeframe = DynamicSegmentFilterData::TIMEFRAME_IN_THE_LAST): void {
+    $timeframe = $data['timeframe'] ?? $defaultTimeframe;
+    $datePeriodData = [
+      'timeframe' => $timeframe,
+      'days' => $data['days'] ?? 0,
+    ];
+    if (in_array($timeframe, [DynamicSegmentFilterData::TIMEFRAME_BEFORE, DynamicSegmentFilterData::TIMEFRAME_AFTER, DynamicSegmentFilterData::TIMEFRAME_ON, DynamicSegmentFilterData::TIMEFRAME_BETWEEN], true)) {
+      $datePeriodData['value'] = $data['value'] ?? null;
+    }
+    if ($timeframe === DynamicSegmentFilterData::TIMEFRAME_BETWEEN) {
+      $datePeriodData['value2'] = $data['value2'] ?? null;
+      if (is_string($datePeriodData['value']) && is_string($datePeriodData['value2'])) {
+        [$datePeriodData['value'], $datePeriodData['value2']] = $this->orderDateRange($datePeriodData['value'], $datePeriodData['value2']);
+      }
+    }
+    $this->filterHelper->validateDaysPeriodData($datePeriodData);
+    $filterData['timeframe'] = $datePeriodData['timeframe'];
+    $filterData['days'] = $timeframe === DynamicSegmentFilterData::TIMEFRAME_IN_THE_LAST ? $datePeriodData['days'] : 0;
+    if (isset($datePeriodData['value'])) {
+      $filterData['value'] = $datePeriodData['value'];
+    }
+    if (isset($datePeriodData['value2'])) {
+      $filterData['value2'] = $datePeriodData['value2'];
+    }
+  }
+
+  /**
+   * @return array{0: string, 1: string}
+   */
+  private function orderDateRange(string $value, string $value2): array {
+    return strcmp($value, $value2) <= 0 ? [$value, $value2] : [$value2, $value];
   }
 
   /**

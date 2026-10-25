@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\Form\Util\FieldNameObfuscator;
+use MailPoet\Form\Util\Styles;
 use MailPoet\Services\Validator;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -129,8 +130,10 @@ class BlockRendererHelper {
       $automationId = 'data-automation-id="form_' . $block['id'] . '_label" ';
     }
 
-    if (isset($formSettings['id'])) {
-      $forId = 'for="form_' . $block['id'] . '_' . $formSettings['id'] . '" ';
+    if (!empty($block['params']['input_id']) && is_scalar($block['params']['input_id'])) {
+      $forId = 'for="' . $this->wp->escAttr((string)$block['params']['input_id']) . '" ';
+    } elseif (isset($formSettings['id'])) {
+      $forId = 'for="' . $this->wp->escAttr('form_' . (string)$block['id'] . '_' . (string)$formSettings['id']) . '" ';
     }
 
     if (
@@ -148,7 +151,7 @@ class BlockRendererHelper {
       $html .= static::getFieldLabel($block);
 
       if (static::getFieldIsRequired($block)) {
-        $html .= ' <span class="mailpoet_required" aria-hidden="true">*</span>';
+        $html .= '&nbsp;<span class="mailpoet_required" aria-hidden="true">*</span>';
       }
 
       $html .= '</label>';
@@ -179,7 +182,7 @@ class BlockRendererHelper {
       $html .= static::getFieldLabel($block);
 
       if (static::getFieldIsRequired($block)) {
-        $html .= ' <span class="mailpoet_required" aria-hidden="true">*</span>';
+        $html .= '&nbsp;<span class="mailpoet_required" aria-hidden="true">*</span>';
       }
 
       $html .= '</legend>';
@@ -189,7 +192,7 @@ class BlockRendererHelper {
 
   public function renderFontStyle(array $formSettings, array $styles = []) {
     $rules = [];
-    if (isset($formSettings['fontSize'])) {
+    if (isset($formSettings['fontSize']) && Styles::isSizeValue($formSettings['fontSize'])) {
       $rules[] = 'font-size: ' . $formSettings['fontSize'] . (is_numeric($formSettings['fontSize']) ? "px;" : ";");
       $rules[] = 'line-height: 1.2;';
     }

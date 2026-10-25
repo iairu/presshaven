@@ -9,6 +9,7 @@ use MailPoet\ConflictException;
 use MailPoet\Entities\SegmentEntity;
 use MailPoet\Entities\SubscriberSegmentEntity;
 use MailPoet\NotFoundException;
+use MailPoet\Subscribers\SegmentsCountRecalculator;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 use MailPoetVendor\Doctrine\ORM\ORMException;
 
@@ -19,12 +20,17 @@ class SegmentSaveController {
   /** @var EntityManager */
   private $entityManager;
 
+  /** @var SegmentsCountRecalculator */
+  private $segmentsCountRecalculator;
+
   public function __construct(
     SegmentsRepository $segmentsRepository,
-    EntityManager $entityManager
+    EntityManager $entityManager,
+    SegmentsCountRecalculator $segmentsCountRecalculator
   ) {
     $this->segmentsRepository = $segmentsRepository;
     $this->entityManager = $entityManager;
+    $this->segmentsCountRecalculator = $segmentsCountRecalculator;
   }
 
   /**
@@ -36,9 +42,18 @@ class SegmentSaveController {
     $id = isset($data['id']) ? (int)$data['id'] : null;
     $name = $data['name'] ?? '';
     $description = $data['description'] ?? '';
-    $displayInManageSubPage = isset($data['showInManageSubscriptionPage']) ? (int)$data['showInManageSubscriptionPage'] : false;
+    $displayInManageSubPage = isset($data['show_in_manage_subscription_page']) ? (int)$data['show_in_manage_subscription_page'] : false;
+    $confirmationEmailId = isset($data['confirmation_email_id']) ? (int)$data['confirmation_email_id'] : null;
+    if ($confirmationEmailId === 0) {
+      $confirmationEmailId = null;
+    }
+    $confirmationPageId = isset($data['confirmation_page_id']) ? (int)$data['confirmation_page_id'] : null;
+    if ($confirmationPageId === 0) {
+      $confirmationPageId = null;
+    }
+    $publicDescription = array_key_exists('public_description', $data) ? (string)$data['public_description'] : null;
 
-    return $this->segmentsRepository->createOrUpdate($name, $description, SegmentEntity::TYPE_DEFAULT, [], $id, (bool)$displayInManageSubPage);
+    return $this->segmentsRepository->createOrUpdate($name, $description, SegmentEntity::TYPE_DEFAULT, [], $id, (bool)$displayInManageSubPage, $confirmationEmailId, $confirmationPageId, $publicDescription);
   }
 
   /**
@@ -67,6 +82,11 @@ class SegmentSaveController {
       $stmt->bindValue('segmentId', $segmentEntity->getId());
       $stmt->executeQuery();
     });
+
+    // The bulk INSERT above copies subscribed memberships from the original
+    // segment. Only subscribed members gain a new counted membership, so only
+    // they need their segments_count refreshed.
+    $this->segmentsCountRecalculator->recalculateForSegment((int)$duplicate->getId());
 
     return $duplicate;
   }

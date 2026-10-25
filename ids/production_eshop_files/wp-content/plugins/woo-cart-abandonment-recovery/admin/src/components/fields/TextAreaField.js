@@ -3,6 +3,7 @@ import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import { TextArea } from '@bsf/force-ui';
 import FieldWrapper from '@Components/common/FieldWrapper';
+import { useFieldA11y } from '@Components/common/fieldA11y';
 import { useProAccess } from '@Components/pro/useProAccess';
 
 const TextAreaField = ( {
@@ -39,15 +40,19 @@ const TextAreaField = ( {
 		debouncedUpdate( String( val ) );
 	}
 
+	const a11y = useFieldA11y( { description } );
+
 	return (
 		<FieldWrapper
 			title={ title }
 			description={ description }
+			fieldId={ a11y.id }
 			type="block"
 			isPro={ isPro }
 			proUpgradeMessage={ proUpgradeMessage }
 		>
 			<TextArea
+				{ ...a11y.controlProps }
 				className="w-full focus:[&>input]:ring-focus"
 				type="text"
 				size="md"

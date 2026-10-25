@@ -16,6 +16,8 @@ use WCPay\Internal\DependencyManagement\DelegateContainer\WooContainer;
 use WCPay\Internal\DependencyManagement\ServiceProvider\GenericServiceProvider;
 use WCPay\Internal\DependencyManagement\ServiceProvider\ProxiesServiceProvider;
 
+defined( 'ABSPATH' ) || exit;
+
 // @codeCoverageIgnoreStart
 
 /**
@@ -95,13 +97,6 @@ class Container implements ContainerInterface {
 	 * @param class-string<ID> $id The ID of the class to retrieve.
 	 * @return ID
 	 * @throws ContainerException In case the ID could not be resolved or instantiated.
-	 *
-	 * Psalm expects $id to be a string, based on ContainerInterface.
-	 * @psalm-suppress MoreSpecificImplementedParamType
-	 *
-	 * PSR-11 containers declares to throw an un-throwable interface
-	 * (it does not extend Throwable), and Psalm does not accept it.
-	 * @psalm-suppress MissingThrowsDocblock
 	 */
 	public function get( $id ) {
 		try {

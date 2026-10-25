@@ -8,7 +8,6 @@
 namespace WCPay\Internal\Service;
 
 use WC_Order;
-use WC_Payments_Features;
 use WC_Payments_Order_Service;
 use WCPay\Constants\Payment_Type;
 use WCPay\Exceptions\Order_Not_Found_Exception;
@@ -22,6 +21,15 @@ use WCPay\Internal\Proxy\LegacyProxy;
  * avoiding direct access to the `$order` object witnin `src` (except for this class).
  */
 class OrderService {
+	/**
+	 * Stripe Billing subscription service, loaded by an explicit include rather than autoloaded.
+	 *
+	 * Held as a name because `includes/subscriptions` is excluded from static analysis.
+	 *
+	 * @var string
+	 */
+	private const SUBSCRIPTION_SERVICE_CLASS = 'WC_Payments_Subscription_Service';
+
 	/**
 	 * Legacy proxy.
 	 *
@@ -70,12 +78,12 @@ class OrderService {
 	/**
 	 * Generates payment metadata from order details.
 	 *
-	 * @param int          $order_id     ID of the order.
-	 * @param Payment_Type $payment_type Type of the payment (recurring or not).
-	 * @return array                     The metadat athat will be sent to the server.
+	 * @param int               $order_id     ID of the order.
+	 * @param Payment_Type|null $payment_type Type of the payment (recurring or not).
+	 * @return array                          The metadata that will be sent to the server.
 	 * @throws Order_Not_Found_Exception
 	 */
-	public function get_payment_metadata( int $order_id, ?Payment_Type $payment_type = null ) {
+	public function get_payment_metadata( int $order_id, ?Payment_Type $payment_type = null ): array {
 		$order = $this->get_order( $order_id );
 
 		$name     = sanitize_text_field( $order->get_billing_first_name() ) . ' ' . sanitize_text_field( $order->get_billing_last_name() );
@@ -98,13 +106,30 @@ class OrderService {
 			&& $this->legacy_proxy->call_function( 'function_exists', 'wcs_order_contains_subscription' )
 			&& $this->legacy_proxy->call_function( 'wcs_order_contains_subscription', $order, 'any' )
 		) {
-			$use_stripe_billing = $this->legacy_proxy->call_static( WC_Payments_Features::class, 'should_use_stripe_billing' );
-			$is_renewal         = $this->legacy_proxy->call_function( 'wcs_order_contains_renewal', $order );
+			$is_renewal = $this->legacy_proxy->call_function( 'wcs_order_contains_renewal', $order );
+
+			// The additional Stripe Billing fee follows this value, so a store-level feature check
+			// would surcharge on-site renewals that Stripe Billing never touched.
+			//
+			// Guarded because includes/subscriptions is not autoloaded; where it has not been included
+			// nothing on the store can be Stripe-billed, so false is correct. Named rather than ::class
+			// because that directory is excluded from static analysis.
+			$is_stripe_billed_subscription = $this->legacy_proxy->call_function( 'class_exists', self::SUBSCRIPTION_SERVICE_CLASS )
+				&& $this->legacy_proxy->call_static( self::SUBSCRIPTION_SERVICE_CLASS, 'is_wcpay_subscription_order', $order );
 
 			$metadata['subscription_payment'] = $is_renewal ? 'renewal' : 'initial';
-			$metadata['payment_context']      = $use_stripe_billing ? 'wcpay_subscription' : 'regular_subscription';
+			$metadata['payment_context']      = $is_stripe_billed_subscription ? 'wcpay_subscription' : 'regular_subscription';
 		}
 
+		/**
+		 * Filters the payment metadata generated from an order before it is sent to the server.
+		 *
+		 * @since 3.9.0
+		 *
+		 * @param array             $metadata     The payment metadata generated from the order.
+		 * @param WC_Order          $order        The order the metadata was generated from.
+		 * @param Payment_Type|null $payment_type Type of the payment (recurring or not).
+		 */
 		return $this->hooks_proxy->apply_filters( 'wcpay_metadata_from_order', $metadata, $order, $payment_type );
 	}
 
@@ -117,7 +142,7 @@ class OrderService {
 	 * @throws Order_Not_Found_Exception
 	 */
 	public function set_mode( string $order_id, string $mode ): void {
-		$order = $this->get_order( $order_id );
+		$order = $this->get_order( (int) $order_id );
 		$order->update_meta_data( WC_Payments_Order_Service::WCPAY_MODE_META_KEY, $mode );
 		$order->save_meta_data();
 	}
@@ -131,7 +156,7 @@ class OrderService {
 	 * @throws Order_Not_Found_Exception
 	 */
 	public function get_mode( string $order_id ): string {
-		$order = $this->get_order( $order_id );
+		$order = $this->get_order( (int) $order_id );
 		return $order->get_meta( WC_Payments_Order_Service::WCPAY_MODE_META_KEY, true );
 	}
 

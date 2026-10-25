@@ -154,6 +154,12 @@ class GeneralSettings extends \WooCommerce\PayPalCommerce\Settings\Data\Abstract
     /**
      * Returns the full merchant connection DTO for the current connection.
      *
+     * The `merchant_country` on the returned DTO is the raw value reported by
+     * PayPal, and is empty when PayPal did not provide a country (e.g. the
+     * post-connect enrichment failed). Unlike `self::get_merchant_country()`,
+     * this getter does NOT fall back to the WooCommerce store country, so callers
+     * can tell an unknown PayPal country apart from a known one.
+     *
      * @return MerchantConnectionDTO All connection details.
      */
     public function get_merchant_data(): MerchantConnectionDTO
@@ -208,16 +214,18 @@ class GeneralSettings extends \WooCommerce\PayPalCommerce\Settings\Data\Abstract
         return SellerTypeEnum::BUSINESS === $this->data['seller_type'];
     }
     /**
-     * Whether the merchant is a casual seller using a personal account.
+     * Whether the merchant is a casual seller (i.e., not a confirmed business).
      *
-     * Note: It's possible that the seller type is unknown, and both methods,
-     * `is_casual_seller()` and `is_business_seller()` return false.
+     * Returns true for both explicitly personal accounts and unknown seller
+     * types. This prevents unresolvable UNKNOWN types from triggering
+     * repeated API calls in the seller-type resolution loop, while keeping
+     * the persisted value unchanged.
      *
      * @return bool
      */
     public function is_casual_seller(): bool
     {
-        return SellerTypeEnum::PERSONAL === $this->data['seller_type'];
+        return SellerTypeEnum::BUSINESS !== $this->data['seller_type'];
     }
     /**
      * Gets the currently connected merchant ID.
@@ -238,7 +246,11 @@ class GeneralSettings extends \WooCommerce\PayPalCommerce\Settings\Data\Abstract
         return $this->data['merchant_email'];
     }
     /**
-     * Gets the currently connected merchant's country.
+     * Gets the merchant's country, falling back to the WooCommerce store country.
+     *
+     * This is the "safe" reader that always returns a usable country: when PayPal did not
+     * report a merchant country, it falls back to the configured Woo store country. Use
+     * it for country-based feature gating where a best-effort country is acceptable.
      *
      * @return string
      */

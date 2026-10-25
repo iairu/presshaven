@@ -282,17 +282,17 @@ const RulesRepeater = ( { value = [], onChange, isPro = false } ) => {
 	};
 
 	return (
-		<Container className="py-4" direction="column">
+		<Container className="py-5 gap-4" direction="column">
 			{ rules.map( ( group, groupIndex ) => (
 				<Container.Item key={ group.group_id }>
 					<Container
-						className="p-4 rounded-lg border border-gray-200 border-solid"
+						className="p-5 gap-4 rounded-lg border border-gray-200 border-solid"
 						direction="column"
 					>
 						{ group.rules.map( ( rule, ruleIndex ) => (
 							<Container.Item key={ rule.rule_id }>
 								{ ruleIndex > 0 && (
-									<Container.Item className="mb-5 text-center text-gray-500 text-sm font-medium">
+									<Container.Item className="mb-4 text-center text-gray-500 text-sm font-medium">
 										{ __(
 											'AND',
 											'woo-cart-abandonment-recovery'
@@ -300,7 +300,7 @@ const RulesRepeater = ( { value = [], onChange, isPro = false } ) => {
 									</Container.Item>
 								) }
 
-								<Container className="flex gap-3 mb-3">
+								<Container className="flex gap-3 items-start">
 									<Container.Item className="flex-1">
 										<Container className="gap-3 flex-col sm:flex-row">
 											<Container.Item className="flex-1 min-w-0">

@@ -29,7 +29,9 @@ defined( 'ABSPATH' ) || exit;
  * be sent some time after the plugin installation. There is no retroactive
  * way of figuring out when the plugin was first installed. So we count
  *
- * @since 1.1.0
+ * @class   MarketingNotifications
+ * @since   1.1.0
+ * @version 1.5.2
  */
 class MarketingNotifications {
 
@@ -73,7 +75,11 @@ class MarketingNotifications {
 			$this->set_init_timestamp();
 		}
 
-		/** @var AbstractNote $note */
+		/**
+		 * The notes are class names, and each one is instantiated below.
+		 *
+		 * @var class-string<AbstractNote> $note
+		 */
 		foreach ( self::NOTES as $note ) {
 			if ( ! $note::should_be_added( $this->get_init_timestamp() ) ) {
 				continue;

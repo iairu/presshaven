@@ -13,15 +13,11 @@ defined( 'ABSPATH' ) || exit;
  * @since 10.0.0
  */
 class Sepa_Tokens_For_Other_Methods_Settings_Update {
-	/**
-	 * Sepa_Tokens_For_Other_Methods_Settings_Update constructor.
-	 */
-	public function __construct() {
-		add_action( 'woocommerce_stripe_updated', [ $this, 'maybe_migrate' ] );
-	}
 
 	/**
 	 * Only execute the migration if not applied yet.
+	 *
+	 * @return void
 	 */
 	public function maybe_migrate() {
 		$stripe_gateway = $this->get_gateway();

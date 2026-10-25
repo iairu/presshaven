@@ -6,7 +6,6 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\Config\Localizer;
-use MailPoet\InvalidStateException;
 use MailPoet\WP\Functions as WPFunctions;
 use MailPoetVendor\Twig\Extension\AbstractExtension;
 use MailPoetVendor\Twig\TwigFunction;
@@ -38,13 +37,9 @@ class I18n extends AbstractExtension {
     ];
 
     foreach ($functions as $twigFunction => $function) {
-      $callable = [$this, $function];
-      if (!is_callable($callable)) {
-        throw new InvalidStateException('Trying to register non-existing function to Twig.');
-      }
       $twigFunctions[] = new TwigFunction(
         $twigFunction,
-        $callable,
+        [$this, $function],
         ['is_safe' => ['all']]
       );
     }

@@ -17,8 +17,12 @@ use MailPoet\Entities\StatisticsUnsubscribeEntity;
 use MailPoet\Entities\StatisticsWooCommercePurchaseEntity;
 use MailPoet\Entities\SubscriberEntity;
 use MailPoet\Entities\UserAgentEntity;
+use MailPoet\Logging\LoggerFactory;
 use MailPoet\Settings\TrackingConfig;
 use MailPoet\WooCommerce\Helper as WCHelper;
+use MailPoet\WooCommerce\OrderAttributionRevenueReader;
+use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
+use MailPoetVendor\Doctrine\DBAL\Exception\InvalidFieldNameException;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 use MailPoetVendor\Doctrine\ORM\Query\Expr\Join;
 use MailPoetVendor\Doctrine\ORM\QueryBuilder;
@@ -28,6 +32,18 @@ use MailPoetVendor\Doctrine\ORM\UnexpectedResultException;
  * @extends Repository<NewsletterEntity>
  */
 class NewsletterStatisticsRepository extends Repository {
+  /**
+   * Emails that are sent again for every trigger instead of once as a campaign, so they
+   * keep adding sending queues and scheduled tasks for as long as they stay active.
+   */
+  private const TYPES_SENT_REPEATEDLY = [
+    NewsletterEntity::TYPE_WELCOME,
+    NewsletterEntity::TYPE_AUTOMATIC,
+    NewsletterEntity::TYPE_AUTOMATION,
+    NewsletterEntity::TYPE_AUTOMATION_TRANSACTIONAL,
+    NewsletterEntity::TYPE_AUTOMATION_NOTIFICATION,
+    NewsletterEntity::TYPE_RE_ENGAGEMENT,
+  ];
 
   /** @var WCHelper */
   private $wcHelper;
@@ -35,14 +51,22 @@ class NewsletterStatisticsRepository extends Repository {
   /** @var TrackingConfig */
   private $trackingConfig;
 
+  /** @var OrderAttributionRevenueReader */
+  private $orderAttributionRevenueReader;
+
+  /** @var bool */
+  private $missingTrackingColumnLogged = false;
+
   public function __construct(
     EntityManager $entityManager,
     WCHelper $wcHelper,
-    TrackingConfig $trackingConfig
+    TrackingConfig $trackingConfig,
+    OrderAttributionRevenueReader $orderAttributionRevenueReader
   ) {
     parent::__construct($entityManager);
     $this->wcHelper = $wcHelper;
     $this->trackingConfig = $trackingConfig;
+    $this->orderAttributionRevenueReader = $orderAttributionRevenueReader;
   }
 
   protected function getEntityClassName() {
@@ -59,6 +83,7 @@ class NewsletterStatisticsRepository extends Repository {
       $this->getWooCommerceRevenue($newsletter)
     );
     $stats->setMachineOpenCount($this->getStatisticsMachineOpenCount($newsletter));
+    $stats->setNotTrackedCount($this->getNotTrackedCount($newsletter));
     return $stats;
   }
 
@@ -80,7 +105,12 @@ class NewsletterStatisticsRepository extends Repository {
     ]
   ): array {
 
-    $totalSentCounts = in_array('totals', $include, true) ? $this->getTotalSentCounts($newsletters, $from, $to) : [];
+    $includeTotals = in_array('totals', $include, true);
+    $totalSentCounts = $includeTotals ? $this->getTotalSentCounts($newsletters, $from, $to) : [];
+    // Tied to 'totals' rather than its own include member: trackedSent is
+    // totalSent minus this, so a caller with one but not the other would be
+    // told every recipient was tracked.
+    $notTrackedCounts = $includeTotals ? $this->getNotTrackedCounts($newsletters, $from, $to) : [];
     $clickCounts = in_array(StatisticsClickEntity::class, $include, true) ? $this->getStatisticCounts(StatisticsClickEntity::class, $newsletters, $from, $to) : [];
     $openCounts = in_array(StatisticsOpenEntity::class, $include, true) ? $this->getStatisticCounts(StatisticsOpenEntity::class, $newsletters, $from, $to) : [];
     $unsubscribeCounts = in_array(StatisticsUnsubscribeEntity::class, $include, true) ? $this->getStatisticCounts(StatisticsUnsubscribeEntity::class, $newsletters, $from, $to) : [];
@@ -98,12 +128,18 @@ class NewsletterStatisticsRepository extends Repository {
         $totalSentCounts[$id] ?? 0,
         $wooCommerceRevenues[$id] ?? null
       );
+      $statistics[$id]->setNotTrackedCount($notTrackedCounts[$id] ?? 0);
     }
     return $statistics;
   }
 
   public function getTotalSentCount(NewsletterEntity $newsletter): int {
     $counts = $this->getTotalSentCounts([$newsletter]);
+    return $counts[$newsletter->getId()] ?? 0;
+  }
+
+  public function getNotTrackedCount(NewsletterEntity $newsletter): int {
+    $counts = $this->getNotTrackedCounts([$newsletter]);
     return $counts[$newsletter->getId()] ?? 0;
   }
 
@@ -132,7 +168,7 @@ class NewsletterStatisticsRepository extends Repository {
    * @param SubscriberEntity $subscriber
    * @param int|null $limit
    * @param int|null $offset
-   * @return array(newsletter_id: string, newsletter_rendered_subject: string, opened_at: string|null, sent_at: string)
+   * @return list<array{newsletter_id: mixed, newsletter_rendered_subject: string|null, opened_at: \DateTimeInterface|null, sent_at: \DateTimeInterface}>
    */
   public function getAllForSubscriber(
     SubscriberEntity $subscriber,
@@ -196,6 +232,29 @@ class NewsletterStatisticsRepository extends Repository {
   }
 
   private function getTotalSentCounts(array $newsletters, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): array {
+    $sentRepeatedly = [];
+    $sentAsCampaign = [];
+    foreach ($newsletters as $newsletter) {
+      if (in_array($newsletter->getType(), self::TYPES_SENT_REPEATEDLY, true)) {
+        $sentRepeatedly[] = $newsletter;
+      } else {
+        $sentAsCampaign[] = $newsletter;
+      }
+    }
+
+    // no key collisions, a newsletter belongs to exactly one group
+    return $this->getQueuedSentCounts($sentAsCampaign, $from, $to)
+      + $this->getRecordedSentCounts($sentRepeatedly, $from, $to);
+  }
+
+  /**
+   * Counts sends from the sending queues, which hold one row per sending run.
+   */
+  private function getQueuedSentCounts(array $newsletters, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): array {
+    if (!$newsletters) {
+      return [];
+    }
+
     $query = $this->doctrineRepository
       ->createQueryBuilder('n')
       ->select('n.id, SUM(q.countProcessed) AS cnt')
@@ -214,7 +273,7 @@ class NewsletterStatisticsRepository extends Repository {
     } elseif ($from && $to === null) {
       $query->andWhere('q.createdAt >= :from')
         ->setParameter('from', $from);
-    } elseif ($from === null && $to) {
+    } elseif ($to) {
       $query->andWhere('q.createdAt <= :to')
         ->setParameter('to', $to);
     }
@@ -225,6 +284,197 @@ class NewsletterStatisticsRepository extends Repository {
     $counts = [];
     foreach ($results ?: [] as $result) {
       $counts[(int)$result['id']] = (int)$result['cnt'];
+    }
+    return $counts;
+  }
+
+  /**
+   * Counts sends from the sending statistics, which hold one row per email actually sent.
+   *
+   * Counting a repeatedly sent email through its queues instead would make the total depend
+   * on a chain of rows that grows for the lifetime of the email, while the opens and clicks
+   * measured against that total are only ever removed along with the newsletter itself. The
+   * sending statistics share that same lifecycle, so both sides of a rate stay consistent
+   * even where the queue chain has lost rows.
+   */
+  private function getRecordedSentCounts(array $newsletters, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): array {
+    if (!$newsletters) {
+      return [];
+    }
+
+    $query = $this->entityManager->createQueryBuilder()
+      ->select('IDENTITY(stats.newsletter) AS id, COUNT(stats.id) AS cnt')
+      ->from(StatisticsNewsletterEntity::class, 'stats')
+      ->where('stats.newsletter IN (:newsletters)')
+      ->setParameter('newsletters', $newsletters)
+      ->groupBy('stats.newsletter');
+
+    if ($from && $to) {
+      $query->andWhere('stats.sentAt BETWEEN :from AND :to')
+        ->setParameter('from', $from)
+        ->setParameter('to', $to);
+    } elseif ($from && $to === null) {
+      $query->andWhere('stats.sentAt >= :from')
+        ->setParameter('from', $from);
+    } elseif ($to) {
+      $query->andWhere('stats.sentAt <= :to')
+        ->setParameter('to', $to);
+    }
+
+    $results = $query->getQuery()
+      ->getResult();
+
+    $counts = [];
+    foreach ($results ?: [] as $result) {
+      $counts[(int)$result['id']] = (int)$result['cnt'];
+    }
+    return $counts;
+  }
+
+  /**
+   * Recipients whose email went out without the open pixel and tracked links,
+   * per newsletter.
+   *
+   * Split the same way as getTotalSentCounts(), and it has to stay that way:
+   * trackedSent is totalSent minus this, so each group must be counted over the
+   * very rows its total came from.
+   *
+   * @param NewsletterEntity[] $newsletters
+   * @return array<int, int>
+   */
+  private function getNotTrackedCounts(array $newsletters, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): array {
+    $sentRepeatedly = [];
+    $sentAsCampaign = [];
+    foreach ($newsletters as $newsletter) {
+      if (in_array($newsletter->getType(), self::TYPES_SENT_REPEATEDLY, true)) {
+        $sentRepeatedly[] = $newsletter;
+      } else {
+        $sentAsCampaign[] = $newsletter;
+      }
+    }
+
+    global $wpdb;
+    $suppressErrors = $wpdb->suppress_errors();
+    try {
+      // no key collisions, a newsletter belongs to exactly one group
+      return $this->getQueuedNotTrackedCounts($sentAsCampaign, $from, $to)
+        + $this->getRecordedNotTrackedCounts($sentRepeatedly, $from, $to);
+    } catch (InvalidFieldNameException $e) {
+      // The column may not exist yet during a plugin update. Report everyone as
+      // tracked, which is what stats showed before, until the migration runs.
+      $this->logMissingTrackingColumn($e);
+      return [];
+    } finally {
+      $wpdb->suppress_errors($suppressErrors);
+    }
+  }
+
+  private function logMissingTrackingColumn(InvalidFieldNameException $e): void {
+    if ($this->missingTrackingColumnLogged) {
+      return;
+    }
+    $this->missingTrackingColumnLogged = true;
+    try {
+      LoggerFactory::getInstance()->getLogger(LoggerFactory::TOPIC_NEWSLETTERS)->warning(
+        'Open and click rates use every recipient because statistics_newsletters.sent_with_tracking is missing',
+        ['error' => $e->getMessage()]
+      );
+    } catch (\Throwable $loggingError) {
+      // Stats must still load if the log cannot be written.
+    }
+  }
+
+  /**
+   * The campaign side, matching getQueuedSentCounts(): completed tasks, same
+   * q.created_at window.
+   *
+   * @param NewsletterEntity[] $newsletters
+   * @return array<int, int>
+   */
+  private function getQueuedNotTrackedCounts(array $newsletters, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): array {
+    if (!$newsletters) {
+      return [];
+    }
+
+    $statisticsTable = $this->entityManager->getClassMetadata(StatisticsNewsletterEntity::class)->getTableName();
+    $queuesTable = $this->entityManager->getClassMetadata(SendingQueueEntity::class)->getTableName();
+    $tasksTable = $this->entityManager->getClassMetadata(ScheduledTaskEntity::class)->getTableName();
+    [$window, $windowParameters] = $this->buildWindow('q.created_at', $from, $to);
+
+    return $this->fetchNotTrackedCounts(
+      "SELECT sn.newsletter_id AS id, COUNT(sn.id) AS cnt
+       FROM `{$statisticsTable}` sn
+       INNER JOIN `{$queuesTable}` q ON q.id = sn.queue_id
+       INNER JOIN `{$tasksTable}` t ON t.id = q.task_id
+       WHERE sn.newsletter_id IN (:newsletterIds)
+         AND sn.sent_with_tracking = 0
+         AND t.status = :status{$window}
+       GROUP BY sn.newsletter_id",
+      $newsletters,
+      ['status' => ScheduledTaskEntity::STATUS_COMPLETED] + $windowParameters
+    );
+  }
+
+  /**
+   * The repeatedly sent side, matching getRecordedSentCounts(): every sent row
+   * for the email, same sent_at window, no task status filter.
+   *
+   * @param NewsletterEntity[] $newsletters
+   * @return array<int, int>
+   */
+  private function getRecordedNotTrackedCounts(array $newsletters, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): array {
+    if (!$newsletters) {
+      return [];
+    }
+
+    $statisticsTable = $this->entityManager->getClassMetadata(StatisticsNewsletterEntity::class)->getTableName();
+    [$window, $windowParameters] = $this->buildWindow('sn.sent_at', $from, $to);
+
+    return $this->fetchNotTrackedCounts(
+      "SELECT sn.newsletter_id AS id, COUNT(sn.id) AS cnt
+       FROM `{$statisticsTable}` sn
+       WHERE sn.newsletter_id IN (:newsletterIds)
+         AND sn.sent_with_tracking = 0{$window}
+       GROUP BY sn.newsletter_id",
+      $newsletters,
+      $windowParameters
+    );
+  }
+
+  /**
+   * @return array{0: string, 1: array<string, string>}
+   */
+  private function buildWindow(string $column, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): array {
+    $parameters = [];
+    $conditions = '';
+    if ($from) {
+      $conditions .= " AND {$column} >= :from";
+      $parameters['from'] = $from->format('Y-m-d H:i:s');
+    }
+    if ($to) {
+      $conditions .= " AND {$column} <= :to";
+      $parameters['to'] = $to->format('Y-m-d H:i:s');
+    }
+    return [$conditions, $parameters];
+  }
+
+  /**
+   * @param NewsletterEntity[] $newsletters
+   * @param array<string, string> $parameters
+   * @return array<int, int>
+   */
+  private function fetchNotTrackedCounts(string $sql, array $newsletters, array $parameters): array {
+    $newsletterIds = array_map(fn(NewsletterEntity $newsletter) => (int)$newsletter->getId(), $newsletters);
+    $rows = $this->entityManager->getConnection()->fetchAllAssociative(
+      $sql,
+      ['newsletterIds' => $newsletterIds] + $parameters,
+      ['newsletterIds' => ArrayParameterType::INTEGER]
+    );
+    $counts = [];
+    foreach ($rows as $row) {
+      if (is_numeric($row['id']) && is_numeric($row['cnt'])) {
+        $counts[(int)$row['id']] = (int)$row['cnt'];
+      }
     }
     return $counts;
   }
@@ -245,7 +495,7 @@ class NewsletterStatisticsRepository extends Repository {
     } elseif ($from && $to === null) {
       $qb->andWhere('stats.createdAt >= :from')
         ->setParameter('from', $from);
-    } elseif ($from === null && $to) {
+    } elseif ($to) {
       $qb->andWhere('stats.createdAt <= :to')
         ->setParameter('to', $to);
     }
@@ -275,9 +525,25 @@ class NewsletterStatisticsRepository extends Repository {
       return null;
     }
 
+    $newsletterIds = array_map(function(NewsletterEntity $newsletter): int {
+      return (int)$newsletter->getId();
+    }, $newsletters);
     $revenueStatus = $this->wcHelper->getPurchaseStates();
-
     $currency = $this->wcHelper->getWoocommerceCurrency();
+    $wooBackedRevenues = $this->orderAttributionRevenueReader->getNewsletterRevenues($newsletterIds, $from, $to);
+    if (is_array($wooBackedRevenues)) {
+      $revenues = [];
+      foreach ($wooBackedRevenues as $newsletterId => $result) {
+        $revenues[(int)$newsletterId] = new WooCommerceRevenue(
+          $currency,
+          (float)$result['total'],
+          (int)$result['count'],
+          $this->wcHelper
+        );
+      }
+      return $revenues;
+    }
+
     $query = $this->entityManager
       ->createQueryBuilder()
       ->select('IDENTITY(stats.newsletter) AS id, SUM(stats.orderPriceTotal) AS total, COUNT(stats.id) AS cnt')
@@ -297,7 +563,7 @@ class NewsletterStatisticsRepository extends Repository {
     } elseif ($from && $to === null) {
       $query->andWhere('stats.createdAt >= :from')
         ->setParameter('from', $from);
-    } elseif ($from === null && $to) {
+    } elseif ($to) {
       $query->andWhere('stats.createdAt <= :to')
         ->setParameter('to', $to);
     }

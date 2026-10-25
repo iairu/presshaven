@@ -22,6 +22,7 @@ use MailPoet\Segments\DynamicSegments\Filters\SubscriberSegment;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberSubscribedViaForm;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberTag;
 use MailPoet\Segments\DynamicSegments\Filters\SubscriberTextField;
+use MailPoet\Segments\DynamicSegments\Filters\SubscriberTrackingConsent;
 use MailPoet\Segments\DynamicSegments\Filters\UserRole;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceAverageSpent;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceCategory;
@@ -32,6 +33,7 @@ use MailPoet\Segments\DynamicSegments\Filters\WooCommerceMembership;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceNumberOfOrders;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceNumberOfReviews;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceProduct;
+use MailPoet\Segments\DynamicSegments\Filters\WooCommerceProductVariation;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommercePurchaseDate;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommercePurchasedWithAttribute;
 use MailPoet\Segments\DynamicSegments\Filters\WooCommerceSingleOrderValue;
@@ -54,6 +56,9 @@ class FilterFactory {
 
   /** @var WooCommerceProduct */
   private $wooCommerceProduct;
+
+  /** @var WooCommerceProductVariation */
+  private $wooCommerceProductVariation;
 
   /** @var WooCommerceCategory */
   private $wooCommerceCategory;
@@ -102,6 +107,9 @@ class FilterFactory {
 
   /** @var SubscriberTextField */
   private $subscriberTextField;
+
+  /** @var SubscriberTrackingConsent */
+  private $subscriberTrackingConsent;
 
   /** @var WooCommerceUsedPaymentMethod */
   private $wooCommerceUsedPaymentMethod;
@@ -165,11 +173,13 @@ class FilterFactory {
     WooCommerceUsedPaymentMethod $wooCommerceUsedPaymentMethod,
     WooCommerceUsedShippingMethod $wooCommerceUsedShippingMethod,
     SubscriberTextField $subscriberTextField,
+    SubscriberTrackingConsent $subscriberTrackingConsent,
     SubscriberDateField $subscriberDateField,
     AutomationsEvents $automationsEvents,
     EmailsReceived $emailsReceived,
     NumberOfClicks $numberOfClicks,
-    WooCommercePurchasedWithAttribute $wooCommercePurchasedWithAttribute
+    WooCommercePurchasedWithAttribute $wooCommercePurchasedWithAttribute,
+    WooCommerceProductVariation $wooCommerceProductVariation
   ) {
     $this->emailAction = $emailAction;
     $this->userRole = $userRole;
@@ -190,6 +200,7 @@ class FilterFactory {
     $this->emailActionClickAny = $emailActionClickAny;
     $this->wooCommerceSingleOrderValue = $wooCommerceSingleOrderValue;
     $this->subscriberTextField = $subscriberTextField;
+    $this->subscriberTrackingConsent = $subscriberTrackingConsent;
     $this->subscribedViaForm = $subscribedViaForm;
     $this->wooCommerceAverageSpent = $wooCommerceAverageSpent;
     $this->wooCommerceUsedPaymentMethod = $wooCommerceUsedPaymentMethod;
@@ -203,6 +214,7 @@ class FilterFactory {
     $this->numberOfClicks = $numberOfClicks;
     $this->wooCommercePurchasedWithAttribute = $wooCommercePurchasedWithAttribute;
     $this->wooCommerceTag = $wooCommerceTag;
+    $this->wooCommerceProductVariation = $wooCommerceProductVariation;
   }
 
   public function getFilterForFilterEntity(DynamicSegmentFilterEntity $filter): Filter {
@@ -230,7 +242,7 @@ class FilterFactory {
   /**
    * @param ?string $action
    *
-   * @return MailPoetCustomFields|SubscriberScore|SubscriberSegment|UserRole|SubscriberTag|SubscriberTextField|SubscriberSubscribedViaForm|SubscriberDateField
+   * @return MailPoetCustomFields|SubscriberScore|SubscriberSegment|UserRole|SubscriberTag|SubscriberTextField|SubscriberSubscribedViaForm|SubscriberDateField|SubscriberTrackingConsent
    */
   private function userRole(?string $action) {
     if ($action === SubscriberScore::TYPE) {
@@ -243,6 +255,8 @@ class FilterFactory {
       return $this->subscriberTag;
     } elseif ($action === SubscriberSubscribedViaForm::TYPE) {
       return $this->subscribedViaForm;
+    } elseif ($action === SubscriberTrackingConsent::TYPE) {
+      return $this->subscriberTrackingConsent;
     } elseif (in_array($action, SubscriberTextField::TYPES)) {
       return $this->subscriberTextField;
     } elseif (in_array($action, SubscriberDateField::TYPES)) {
@@ -284,6 +298,8 @@ class FilterFactory {
   private function wooCommerce(?string $action) {
     if ($action === WooCommerceProduct::ACTION_PRODUCT) {
       return $this->wooCommerceProduct;
+    } elseif ($action === WooCommerceProductVariation::ACTION_PRODUCT_VARIATION) {
+      return $this->wooCommerceProductVariation;
     } elseif (in_array($action, WooCommerceNumberOfOrders::ACTIONS)) {
       return $this->wooCommerceNumberOfOrders;
     } elseif ($action === WooCommerceTotalSpent::ACTION_TOTAL_SPENT) {

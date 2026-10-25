@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Automattic\WooCommerce\EmailEditor\Email_Editor_Container;
 use Automattic\WooCommerce\EmailEditor\Engine\Dependency_Check;
+use MailPoet\AdminPages\AssetsController;
 use MailPoet\AdminPages\PageRenderer;
 use MailPoet\AutomaticEmails\AutomaticEmails;
 use MailPoet\Config\Env;
@@ -31,6 +32,8 @@ use MailPoet\WP\DateTime;
 use MailPoet\WP\Functions as WPFunctions;
 
 class Newsletters {
+  private AssetsController $assetsController;
+
   private PageRenderer $pageRenderer;
 
   private PageLimit $listingPageLimit;
@@ -66,6 +69,7 @@ class Newsletters {
   private CapabilitiesManager $capabilitiesManager;
 
   public function __construct(
+    AssetsController $assetsController,
     PageRenderer $pageRenderer,
     PageLimit $listingPageLimit,
     WPFunctions $wp,
@@ -83,6 +87,7 @@ class Newsletters {
     DependencyNotice $dependencyNotice,
     CapabilitiesManager $capabilitiesManager
   ) {
+    $this->assetsController = $assetsController;
     $this->pageRenderer = $pageRenderer;
     $this->listingPageLimit = $listingPageLimit;
     $this->wp = $wp;
@@ -104,6 +109,8 @@ class Newsletters {
 
   public function render() {
     global $wp_roles; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+
+    $this->assetsController->setupDataViewsDependencies();
 
     $data = [];
 
@@ -132,7 +139,7 @@ class Newsletters {
     $data['show_congratulate_after_first_newsletter'] = isset($data['settings']['show_congratulate_after_first_newsletter']) ? $data['settings']['show_congratulate_after_first_newsletter'] : 'false';
 
     $data['is_mailpoet_update_available'] = array_key_exists(Env::$pluginPath, $this->wp->getPluginUpdates());
-    $data['newsletters_count'] = $this->newslettersRepository->countBy([]);
+    $data['newsletters_count'] = $this->newslettersRepository->countUserCreatedNewsletters();
 
     $data['automatic_emails'] = $this->automaticEmails->getAutomaticEmails();
     $data['woocommerce_optin_on_checkout'] = $this->settings->get('woocommerce.optin_on_checkout.enabled', false);
@@ -141,6 +148,10 @@ class Newsletters {
     $data['woocommerce_transactional_email_id'] = $this->settings->get(TransactionalEmails::SETTING_EMAIL_ID);
     $detailedAnalyticsCapability = $this->capabilitiesManager->getCapability('detailedAnalytics');
     $data['display_detailed_stats'] = isset($detailedAnalyticsCapability) && !$detailedAnalyticsCapability->isRestricted;
+    $data['api'] = [
+      'root' => rtrim($this->wp->escUrlRaw($this->wp->restUrl()), '/'),
+      'nonce' => $this->wp->wpCreateNonce('wp_rest'),
+    ];
     $data['newsletters_templates_recently_sent_count'] = $this->newsletterTemplatesRepository->getRecentlySentCount();
 
     $data['product_categories'] = $this->wpPostListLoader->getWooCommerceCategories();
@@ -162,6 +173,7 @@ class Newsletters {
         'lowerLimit' => AuthorizedSenderDomainController::LOWER_LIMIT,
         'isAuthorizedDomainRequiredForNewCampaigns' => $this->senderDomainController->isAuthorizedDomainRequiredForNewCampaigns(),
         'campaignTypes' => NewsletterEntity::CAMPAIGN_TYPES,
+        'skipAuthorization' => $this->senderDomainController->shouldSkipAuthorization(),
       ];
     }
 
@@ -174,6 +186,10 @@ class Newsletters {
     $data['legacy_automatic_emails_notice_dismissed'] = (bool)$this->userFlagsController->get('legacy_automatic_emails_notice_dismissed');
 
     $data['block_email_editor_enabled'] = $this->dependencyCheck->are_dependencies_met(); // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    $rememberEditorChoice = $this->userFlagsController->get('remember_email_editor_choice');
+    $showEditorChoiceModal = $rememberEditorChoice === null ? $this->settings->get('editor_choice_modal.enabled', false) : !(bool)$rememberEditorChoice;
+    $data['editor_choice_modal_enabled'] = $data['block_email_editor_enabled'] && (bool)$showEditorChoiceModal;
+    $data['last_email_editor_choice'] = $this->userFlagsController->get('last_email_editor_choice');
     $this->dependencyNotice->displayMessageIfNeeded();
     $this->pageRenderer->displayPage('newsletters.html', $data);
   }

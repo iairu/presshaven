@@ -94,12 +94,7 @@ class __TwigTemplate_1a7328011b0cf7158e35fc314e7b6993b8417919d1f5ef0a796941a8e33
       </form>
     </script>
 
-    <!-- New custom field logic -->
-    ";
-        // line 40
-        yield from         $this->loadTemplate("form/custom_fields_legacy.html", "subscribers/importExport/import/step_data_manipulation.html", 40)->unwrap()->yield($context);
-        // line 41
-        yield "  </div>
+  </div>
 </div>
 ";
         return; yield '';
@@ -126,7 +121,7 @@ class __TwigTemplate_1a7328011b0cf7158e35fc314e7b6993b8417919d1f5ef0a796941a8e33
      */
     public function getDebugInfo()
     {
-        return array (  99 => 41,  97 => 40,  87 => 33,  83 => 32,  68 => 20,  62 => 17,  56 => 14,  46 => 7,  38 => 1,);
+        return array (  87 => 33,  83 => 32,  68 => 20,  62 => 17,  56 => 14,  46 => 7,  38 => 1,);
     }
 
     public function getSourceContext()

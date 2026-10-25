@@ -46,13 +46,6 @@ class Jetpack_Memberships {
 	public static $post_type_coupon = 'memberships_coupon';
 
 	/**
-	 * Our CPT type for the product (plan).
-	 *
-	 * @var string
-	 */
-	public static $post_type_gift = 'memberships_gift';
-
-	/**
 	 * Tier type for plans
 	 *
 	 * @var string
@@ -93,6 +86,31 @@ class Jetpack_Memberships {
 	 * @var array
 	 */
 	private static $tags_allowed_in_the_button = array( 'br' => array() );
+
+	/**
+	 * Allowed HTML tags for a rendered tier description. Mirrors the wp.com
+	 * subscribe modal's allowlist so the rendered markdown stays consistent
+	 * across surfaces.
+	 *
+	 * @var array
+	 */
+	const TIER_DESCRIPTION_ALLOWED_HTML = array(
+		'p'          => array(),
+		'br'         => array(),
+		'ul'         => array(),
+		'ol'         => array(),
+		'li'         => array(),
+		'strong'     => array(),
+		'em'         => array(),
+		'del'        => array(),
+		'code'       => array(),
+		'blockquote' => array(),
+		'a'          => array(
+			'href'   => true,
+			'rel'    => true,
+			'target' => true,
+		),
+	);
 
 	/**
 	 * The minimum required plan for this Gutenberg block.
@@ -176,6 +194,7 @@ class Jetpack_Memberships {
 		'PHP' => 0,
 		'RUB' => 0,
 		'TRY' => 0,
+		'MYR' => 2.00,
 	);
 
 	/**
@@ -321,25 +340,6 @@ class Jetpack_Memberships {
 			'show_in_rest'        => false,
 		);
 		register_post_type( self::$post_type_coupon, $coupon_args );
-		$gift_args = array(
-			'label'               => esc_html__( 'Gift', 'jetpack' ),
-			'description'         => esc_html__( 'Memberships gifts', 'jetpack' ),
-			'supports'            => array( 'title', 'custom-fields', 'content' ),
-			'hierarchical'        => false,
-			'public'              => false,
-			'show_ui'             => false,
-			'show_in_menu'        => false,
-			'show_in_admin_bar'   => false,
-			'show_in_nav_menus'   => false,
-			'can_export'          => true,
-			'has_archive'         => false,
-			'exclude_from_search' => true,
-			'publicly_queryable'  => false,
-			'rewrite'             => false,
-			'capabilities'        => $capabilities,
-			'show_in_rest'        => false,
-		);
-		register_post_type( self::$post_type_gift, $gift_args );
 	}
 
 	/**
@@ -353,7 +353,6 @@ class Jetpack_Memberships {
 	public function allow_rest_api_types( $post_types ) {
 		$post_types[] = self::$post_type_plan;
 		$post_types[] = self::$post_type_coupon;
-		$post_types[] = self::$post_type_gift;
 
 		return $post_types;
 	}
@@ -390,17 +389,10 @@ class Jetpack_Memberships {
 			$meta_coupons_prefix . 'is_sandboxed',
 		);
 
-		$meta_gifts_prefix = self::$post_type_gift . '_';
-		$meta_keys_gifts   = array(
-			$meta_gifts_prefix . 'user_id',
-			$meta_gifts_prefix . 'plan_id',
-			$meta_gifts_prefix . 'is_deleted',
-		);
 		return array_merge(
 			$post_meta,
 			array_values( $meta_keys_plans ),
-			$meta_keys_coupons,
-			$meta_keys_gifts
+			$meta_keys_coupons
 		);
 	}
 
@@ -549,6 +541,43 @@ class Jetpack_Memberships {
 	}
 
 	/**
+	 * Render email callback.
+	 *
+	 * @param string $block_content The block content.
+	 * @param array  $parsed_block  The parsed block data.
+	 * @param object $rendering_context The email rendering context.
+	 *
+	 * @return string
+	 */
+	public function render_button_email( $block_content, array $parsed_block, $rendering_context ) {
+		// Check for the required renderers.
+		if ( ! function_exists( '\Automattic\Jetpack\Extensions\Button\render_email' ) || ! class_exists( '\Automattic\WooCommerce\EmailEditor\Integrations\Core\Renderer\Blocks\Button' ) ) {
+			return '';
+		}
+
+		// Get the first inner block, which should be the button block.
+		$button_block = $parsed_block['innerBlocks'][0] ?? array();
+
+		// We should only accept button blocks.
+		if ( empty( $button_block['blockName'] ) || 'jetpack/button' !== $button_block['blockName'] ) {
+			return '';
+		}
+
+		// We need attributes.
+		if ( ! isset( $button_block['attrs'] ) || ! is_array( $button_block['attrs'] ) ) {
+			return '';
+		}
+
+		// If the button block is missing text or url, return empty string.
+		if ( empty( $button_block['attrs']['text'] ) || empty( $button_block['attrs']['url'] ) ) {
+			return '';
+		}
+
+		// Reuse the button block's email rendering method.
+		return \Automattic\Jetpack\Extensions\Button\render_email( $block_content, $button_block, $rendering_context );
+	}
+
+	/**
 	 * Builds subscription URL for this membership using the current blog and
 	 * supplied plan IDs.
 	 *
@@ -579,9 +608,7 @@ class Jetpack_Memberships {
 	 * @return string
 	 */
 	public function deprecated_render_button_v1( $attrs, $plan_id ) {
-		$button_label = isset( $attrs['submitButtonText'] )
-			? $attrs['submitButtonText']
-			: __( 'Your contribution', 'jetpack' );
+		$button_label = $attrs['submitButtonText'] ?? __( 'Your contribution', 'jetpack' );
 
 		$button_styles = array();
 		if ( ! empty( $attrs['customBackgroundButtonColor'] ) ) {
@@ -674,8 +701,23 @@ class Jetpack_Memberships {
 		}
 
 		$post_access_level = get_post_meta( $post_id, self::$post_access_level_meta_name, true );
-		if ( empty( $post_access_level ) ) {
+		// Defaults to "everybody" when unset, and also when the stored value is not a
+		// string. Corrupt rows (e.g. a serialized array like a:1:{i:0;s:0:"";}) can be
+		// persisted by non-REST write paths, and an array flows unchanged into the
+		// strict string-typed `earn_user_has_access` callback on WPCOM, fataling the
+		// render. Coercing here keeps this canonical accessor's documented string
+		// contract regardless of how the meta was written.
+		if ( empty( $post_access_level ) || ! is_string( $post_access_level ) ) {
 			$post_access_level = Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_EVERYBODY;
+		}
+
+		// Only the editor switches a Paywall post to subscribers; REST, WP-CLI and importer saves don't.
+		// The block's name constant isn't loaded everywhere this runs, hence the literal.
+		if (
+			Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_EVERYBODY === $post_access_level
+			&& has_block( 'jetpack/paywall', $post_id )
+		) {
+			$post_access_level = Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_SUBSCRIBERS;
 		}
 
 		self::$post_access_level_cache[ $cache_key ] = $post_access_level;
@@ -716,7 +758,6 @@ class Jetpack_Memberships {
 	 */
 	public static function user_can_edit() {
 		$user = wp_get_current_user();
-		// phpcs:ignore ImportDetection.Imports.RequireImports.Symbol
 		return 0 !== $user->ID && current_user_can( 'edit_post', get_the_ID() );
 	}
 
@@ -785,6 +826,29 @@ class Jetpack_Memberships {
 	 * @return bool Whether the post can be viewed
 	 */
 	public static function user_can_view_post( $post_id = null ) {
+		return self::check_post_access( $post_id, true );
+	}
+
+	/**
+	 * Check the post's subscription requirement without granting access for editing it.
+	 *
+	 * @since $$next-version$$
+	 *
+	 * @param int|null $post_id Explicit post ID, or the loop post when omitted.
+	 * @return bool Whether the visitor meets the post's subscription requirement.
+	 */
+	public static function user_has_subscription_access( $post_id = null ) {
+		return self::check_post_access( $post_id, false );
+	}
+
+	/**
+	 * Evaluate and cache post access with or without the editorial exception.
+	 *
+	 * @param int|null $post_id             Post to check.
+	 * @param bool     $allow_editor_access Whether editing the post can grant access.
+	 * @return bool Whether access is granted.
+	 */
+	private static function check_post_access( $post_id, $allow_editor_access ) {
 		$user_id = get_current_user_id();
 		if ( null === $post_id ) {
 			$post_id = get_the_ID();
@@ -794,7 +858,7 @@ class Jetpack_Memberships {
 			$post_id = 0;
 		}
 
-		$cache_key = sprintf( '%d_%d', $user_id, $post_id );
+		$cache_key = sprintf( '%d_%d_%d', $user_id, $post_id, (int) $allow_editor_access );
 		if ( isset( self::$user_can_view_post_cache[ $cache_key ] ) ) {
 			return self::$user_can_view_post_cache[ $cache_key ];
 		}
@@ -806,7 +870,7 @@ class Jetpack_Memberships {
 		}
 
 		// we are sending the post to subscribers so the user is a subscriber
-		if ( defined( 'WPCOM_SENDING_POST_TO_SUBSCRIBERS' ) && WPCOM_SENDING_POST_TO_SUBSCRIBERS && Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_SUBSCRIBERS === $post_access_level ) {
+		if ( $allow_editor_access && defined( 'WPCOM_SENDING_POST_TO_SUBSCRIBERS' ) && WPCOM_SENDING_POST_TO_SUBSCRIBERS && Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_SUBSCRIBERS === $post_access_level ) {
 			self::$user_can_view_post_cache[ $cache_key ] = true;
 			return true;
 		}
@@ -817,15 +881,24 @@ class Jetpack_Memberships {
 		$all_newsletters_plan_ids = self::get_all_newsletter_plan_ids();
 
 		if ( 0 === count( $all_newsletters_plan_ids ) &&
-			Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS === $post_access_level ||
-			Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS_ALL_TIERS === $post_access_level
+			(
+				Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS === $post_access_level ||
+				Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_PAID_SUBSCRIBERS_ALL_TIERS === $post_access_level
+			)
 		) {
 			// The post is paywalled but there is no newsletter plans on the site.
 			// We downgrade the post level to subscribers-only
 			$post_access_level = Abstract_Token_Subscription_Service::POST_ACCESS_LEVEL_SUBSCRIBERS;
 		}
 
-		$can_view_post = $paywall->visitor_can_view_content( $all_newsletters_plan_ids, $post_access_level );
+		// Pass the post explicitly: callers outside the loop have no get_the_ID() to fall back on.
+		if ( $allow_editor_access ) {
+			// @phan-suppress-next-line PhanParamTooMany -- Concrete services accept the optional $post_id; interface omits it on purpose.
+			$can_view_post = $paywall->visitor_can_view_content( $all_newsletters_plan_ids, $post_access_level, $post_id );
+		} else {
+			$can_view_post = is_callable( array( $paywall, 'visitor_has_subscription_access' ) )
+				&& $paywall->visitor_has_subscription_access( $all_newsletters_plan_ids, $post_access_level, $post_id );
+		}
 
 		self::$user_can_view_post_cache[ $cache_key ] = $can_view_post;
 		return $can_view_post;
@@ -987,9 +1060,10 @@ class Jetpack_Memberships {
 			Blocks::jetpack_register_block(
 				'jetpack/recurring-payments',
 				array(
-					'render_callback'  => array( $this, 'render_button' ),
-					'uses_context'     => array( 'isPremiumContentChild' ),
-					'provides_context' => array(
+					'render_callback'       => array( $this, 'render_button' ),
+					'render_email_callback' => array( $this, 'render_button_email' ),
+					'uses_context'          => array( 'isPremiumContentChild' ),
+					'provides_context'      => array(
 						'jetpack/parentBlockWidth' => 'width',
 					),
 				)
@@ -1049,6 +1123,44 @@ class Jetpack_Memberships {
 		require_once JETPACK__PLUGIN_DIR . 'extensions/blocks/premium-content/_inc/subscription-service/include.php';
 		$subscription_service = \Automattic\Jetpack\Extensions\Premium_Content\subscription_service();
 		return $subscription_service->is_current_user_subscribed();
+	}
+
+	/**
+	 * Render a tier description (stored as markdown text) to safe HTML.
+	 *
+	 * Uses Jetpack's markdown parser, restores paragraph structure (the parser
+	 * strips <p> tags expecting wpautop to run later), forces links to open in a
+	 * new tab (descriptions are shown inside the subscribe modal's iframe), and
+	 * finally sanitizes the output to a small tag allowlist.
+	 *
+	 * @param mixed $description Raw tier description (markdown text). Non-scalar
+	 *                          values are treated as empty.
+	 * @return string Sanitized HTML, or an empty string for an empty description.
+	 */
+	public static function render_tier_description_html( $description ) {
+		if ( ! is_scalar( $description ) ) {
+			return '';
+		}
+		$description = (string) $description;
+		if ( '' === trim( $description ) ) {
+			return '';
+		}
+
+		if ( ! class_exists( 'WPCom_Markdown' ) ) {
+			require_once JETPACK__PLUGIN_DIR . 'modules/markdown/easy-markdown.php';
+		}
+
+		$html = WPCom_Markdown::get_instance()->transform(
+			$description,
+			array(
+				'unslash' => false,
+				'id'      => false,
+			)
+		);
+		$html = wpautop( $html );
+		$html = links_add_target( $html, '_blank' );
+
+		return wp_kses( $html, self::TIER_DESCRIPTION_ALLOWED_HTML );
 	}
 }
 Jetpack_Memberships::get_instance();

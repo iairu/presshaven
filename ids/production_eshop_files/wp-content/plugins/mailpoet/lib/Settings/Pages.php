@@ -45,10 +45,12 @@ class Pages {
     return $output;
   }
 
-  public static function createMailPoetPage($postName) {
-    WPFunctions::get()->removeAllActions('pre_post_update');
-    WPFunctions::get()->removeAllActions('save_post');
-    WPFunctions::get()->removeAllActions('wp_insert_post');
+  public static function createMailPoetPage($postName, bool $stripHooks = true) {
+    if ($stripHooks) {
+      WPFunctions::get()->removeAllActions('pre_post_update');
+      WPFunctions::get()->removeAllActions('save_post');
+      WPFunctions::get()->removeAllActions('wp_insert_post');
+    }
 
     $id = WPFunctions::get()->wpInsertPost([
       'post_status' => 'publish',
@@ -120,6 +122,7 @@ class Pages {
 
   public static function getPageData($page) {
     $subscriptionUrlFactory = Subscription\SubscriptionUrlFactory::getInstance();
+    $captchaUrlFactory = \MailPoet\DI\ContainerWrapper::getInstance()->get(\MailPoet\Captcha\CaptchaUrlFactory::class);
     return [
       'id' => $page->ID,
       'title' => $page->post_title, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
@@ -129,6 +132,7 @@ class Pages {
         'confirm' => $subscriptionUrlFactory->getSubscriptionUrl($page, 'confirm'),
         'confirm_unsubscribe' => $subscriptionUrlFactory->getSubscriptionUrl($page, 'confirm_unsubscribe'),
         're_engagement' => $subscriptionUrlFactory->getSubscriptionUrl($page, 're_engagement'),
+        'captcha' => $captchaUrlFactory->getCaptchaPreviewUrl($page),
       ],
     ];
   }

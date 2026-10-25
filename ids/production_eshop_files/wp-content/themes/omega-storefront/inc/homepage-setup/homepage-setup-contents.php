@@ -295,7 +295,7 @@ class Omega_Storefront_Whizzie {
 								<p><?php echo wp_kses_post( 'Get <span>25% OFF</span> on Premium Storefront WordPress Theme Use code <span>"NYTHEMES25"</span> at checkout.' ); ?></p>
 							</div>
 							<div class="homepage-setup-theme-buynow-four">
-								<a target="_blank" href="<?php echo esc_url( OMEGA_STOREFRONT_BUY_NOW ); ?>"><?php echo esc_html__( 'Upgrade To Pro With Just $40', 'omega-storefront' ); ?></a>
+								<a target="_blank" href="<?php echo esc_url( OMEGA_STOREFRONT_BUY_NOW ); ?>"><?php echo esc_html__( 'Upgrade To Pro With Just $39', 'omega-storefront' ); ?></a>
 							</div>
 						</div>
 					</div> <!-- .demo_image -->

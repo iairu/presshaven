@@ -11,6 +11,7 @@ use MailPoet\Cron\Workers\SendingQueue\Tasks\Links;
 use MailPoet\Cron\Workers\SendingQueue\Tasks\Mailer as MailerTask;
 use MailPoet\Cron\Workers\SendingQueue\Tasks\Newsletter as NewsletterTask;
 use MailPoet\Cron\Workers\StatsNotifications\Scheduler as StatsNotificationsScheduler;
+use MailPoet\DI\ContainerWrapper;
 use MailPoet\Entities\NewsletterEntity;
 use MailPoet\Entities\ScheduledTaskEntity;
 use MailPoet\Entities\SubscriberEntity;
@@ -18,9 +19,12 @@ use MailPoet\InvalidStateException;
 use MailPoet\Logging\LoggerFactory;
 use MailPoet\Mailer\MailerLog;
 use MailPoet\Mailer\MetaInfo;
+use MailPoet\Newsletter\Sending\NewsletterReplayMetadata;
 use MailPoet\Newsletter\Sending\ScheduledTasksRepository;
 use MailPoet\Newsletter\Sending\ScheduledTaskSubscribersRepository;
 use MailPoet\Newsletter\Sending\SendingQueuesRepository;
+use MailPoet\Newsletter\Sending\TimeZoneCampaignScheduler;
+use MailPoet\Newsletter\Url as NewsletterUrl;
 use MailPoet\Segments\SegmentsRepository;
 use MailPoet\Segments\SubscribersFinder;
 use MailPoet\Services\AuthorizedEmailsController;
@@ -29,6 +33,9 @@ use MailPoet\Subscribers\SubscribersRepository;
 use MailPoet\Tasks\Subscribers\BatchIterator;
 use MailPoet\WP\Functions as WPFunctions;
 use MailPoetVendor\Carbon\Carbon;
+use MailPoetVendor\Doctrine\DBAL\ArrayParameterType;
+use MailPoetVendor\Doctrine\DBAL\Exception\InvalidFieldNameException;
+use MailPoetVendor\Doctrine\DBAL\Exception\TableNotFoundException;
 use MailPoetVendor\Doctrine\ORM\EntityManager;
 use Throwable;
 
@@ -94,6 +101,12 @@ class SendingQueue {
   /** @var AuthorizedEmailsController */
   private $authorizedEmailsController;
 
+  /** @var TimeZoneCampaignScheduler|null */
+  private $timeZoneCampaignScheduler;
+
+  /** @var NewsletterUrl */
+  private $newsletterUrl;
+
   public function __construct(
     SendingErrorHandler $errorHandler,
     SendingThrottlingHandler $throttlingHandler,
@@ -112,7 +125,9 @@ class SendingQueue {
     EntityManager $entityManager,
     StatisticsNewslettersRepository $statisticsNewslettersRepository,
     AuthorizedEmailsController $authorizedEmailsController,
-    $newsletterTask = false
+    ?TimeZoneCampaignScheduler $timeZoneCampaignScheduler = null,
+    $newsletterTask = false,
+    ?NewsletterUrl $newsletterUrl = null
   ) {
     $this->errorHandler = $errorHandler;
     $this->throttlingHandler = $throttlingHandler;
@@ -133,6 +148,8 @@ class SendingQueue {
     $this->entityManager = $entityManager;
     $this->statisticsNewslettersRepository = $statisticsNewslettersRepository;
     $this->authorizedEmailsController = $authorizedEmailsController;
+    $this->timeZoneCampaignScheduler = $timeZoneCampaignScheduler;
+    $this->newsletterUrl = $newsletterUrl ?? ContainerWrapper::getInstance()->get(NewsletterUrl::class);
   }
 
   public function process($timer = false) {
@@ -158,6 +175,13 @@ class SendingQueue {
       try {
         $this->scheduledTasksRepository->touchAllByIds([$task->getId()]);
         $this->processSending($task, (int)$timer);
+      } catch (InvalidFieldNameException | TableNotFoundException $e) {
+        // The subscribers schema may be mid-migration during a plugin update (e.g. the
+        // tracking_consent column added in STOMAIL-8268). Leave this task for the next
+        // cron run rather than crashing the sending worker; it resumes once the migration
+        // completes.
+        $this->stopProgress($task);
+        continue;
       } catch (\Exception $e) {
         $this->stopProgress($task);
         throw $e;
@@ -217,13 +241,18 @@ class SendingQueue {
       return;
     }
 
-    // Pause task if sender domain requirements are not met
-    if (!$this->authorizedEmailsController->isSenderAddressValid($newsletter, 'sending')) {
+    // Pause task if sender domain requirements are not met.
+    // The fresh check runs only when the cached one fails, so stale cached data can't pause the task.
+    if (
+      !$this->authorizedEmailsController->isSenderAddressValid($newsletter, 'sending')
+      && !$this->authorizedEmailsController->isSenderAddressValid($newsletter, 'recheck')
+    ) {
       $this->loggerFactory->getLogger(LoggerFactory::TOPIC_NEWSLETTERS)->info(
         'pause task in sending queue due to sender domain requirements',
         ['task_id' => $task->getId()]
       );
       $task->setStatus(ScheduledTaskEntity::STATUS_PAUSED);
+      $task->setPauseReason(ScheduledTaskEntity::PAUSE_REASON_SENDER_DOMAIN);
       $this->scheduledTasksRepository->flush();
       return;
     }
@@ -262,7 +291,15 @@ class SendingQueue {
           $this->scheduledTasksRepository->flush();
           return;
         }
-        $foundSubscribers = empty($foundSubscribersIds) ? [] : $this->subscribersRepository->findBy(['id' => $foundSubscribersIds, 'deletedAt' => null]);
+        $foundSubscribers = [];
+        if (!empty($foundSubscribersIds)) {
+          $foundSubscribers = $this->subscribersRepository->createQueryBuilder('s')
+            ->where('s.id IN (:subscriberIds)')
+            ->setParameter('subscriberIds', $foundSubscribersIds, ArrayParameterType::INTEGER)
+            ->andWhere('s.deletedAt IS NULL')
+            ->getQuery()
+            ->getResult();
+        }
       } else {
         // No segments = Welcome emails or some Automatic emails.
         // Welcome emails or some Automatic emails use segments only for scheduling and store them as a newsletter option
@@ -283,10 +320,42 @@ class SendingQueue {
         }
 
         $foundSubscribers = $queryBuilder->getQuery()->getResult();
-        $foundSubscribersIds = array_map(function(SubscriberEntity $subscriber) {
-          return $subscriber->getId();
-        }, $foundSubscribers);
       }
+
+      // Allow extensions to exclude subscribers from this specific send (e.g. custom
+      // frequency capping or cross-newsletter suppression). Excluded subscribers are
+      // dropped below via the same path used for "not found" subscribers, so queue
+      // counts and the scheduled task stay consistent.
+      $resolvedSubscribersById = [];
+      foreach ($foundSubscribers as $subscriber) {
+        $resolvedSubscribersById[$subscriber->getId()] = $subscriber;
+      }
+      $filteredSubscribers = $this->wp->applyFilters(
+        'mailpoet_sending_queue_subscribers_to_process',
+        $foundSubscribers,
+        $newsletter,
+        $task
+      );
+
+      if (is_array($filteredSubscribers)) {
+        $foundSubscribers = [];
+        foreach ($filteredSubscribers as $filteredSubscriber) {
+          if (!$filteredSubscriber instanceof SubscriberEntity) {
+            continue;
+          }
+          $subscriberId = $filteredSubscriber->getId();
+          // Keep only subscribers that were already in the resolved batch (by id), and
+          // use the original entity instance rather than trusting whatever the filter returned.
+          if (isset($resolvedSubscribersById[$subscriberId])) {
+            $foundSubscribers[$subscriberId] = $resolvedSubscribersById[$subscriberId];
+          }
+        }
+        $foundSubscribers = array_values($foundSubscribers);
+      }
+
+      $foundSubscribersIds = array_map(function(SubscriberEntity $subscriber) {
+        return $subscriber->getId();
+      }, $foundSubscribers);
 
       // if some subscribers weren't found, remove them from the processing list
       if (count($foundSubscribersIds) !== count($subscribersToProcessIds)) {
@@ -382,6 +451,8 @@ class SendingQueue {
 
     $sendingQueueMeta = $sendingQueueEntity->getMeta() ?? [];
     $campaignId = $sendingQueueMeta['campaignId'] ?? null;
+    // Anonymous (subscriber-less) link to the sent email, identical for all recipients
+    $previewUrl = $this->newsletterUrl->getViewInBrowserUrl($newsletter, null, $sendingQueueEntity, false);
 
     foreach ($subscribers as $subscriber) {
       // render shortcodes and replace subscriber data in tracked links
@@ -404,6 +475,8 @@ class SendingQueue {
       if ($campaignId) {
         $metasForSubscriber['campaign_id'] = $campaignId;
       }
+      $metasForSubscriber['tracking_consent'] = $subscriber->getTrackingConsent();
+      $metasForSubscriber['preview_url'] = $previewUrl;
       $metas[] = $metasForSubscriber;
 
       // keep track of values for statistics purposes
@@ -411,6 +484,7 @@ class SendingQueue {
         'newsletter_id' => $newsletter->getId(),
         'subscriber_id' => $subscriber->getId(),
         'queue_id' => $sendingQueueEntity->getId(),
+        'sent_with_tracking' => $this->newsletterTask->isSentWithTracking($subscriber),
       ];
       if ($processingMethod === 'individual') {
         $this->sendNewsletter(
@@ -501,7 +575,7 @@ class SendingQueue {
       return true;
     }
     $segmentIds = array_unique($segmentIds);
-    $segments = $this->segmentsRepository->findBy(['id' => $segmentIds]);
+    $segments = $this->segmentsRepository->findByIds($segmentIds);
     // Some segment was deleted from DB
     if (count($segmentIds) > count($segments)) {
       return false;
@@ -679,6 +753,19 @@ class SendingQueue {
         'completed newsletter sending',
         ['newsletter_id' => $newsletter->getId(), 'task_id' => $task->getId()]
       );
+      $queue = $task->getSendingQueue();
+      if (
+        $queue
+        && !NewsletterReplayMetadata::isLatestNewsletterReplayMeta($queue->getMeta())
+        && $this->timeZoneCampaignScheduler
+        && $this->timeZoneCampaignScheduler->isTimeZoneQueue($queue)
+        && $this->timeZoneCampaignScheduler->hasIncompleteCampaignQueues($queue)
+      ) {
+        return;
+      }
+      if ($queue && NewsletterReplayMetadata::isLatestNewsletterReplayMeta($queue->getMeta())) {
+        return;
+      }
       $this->newsletterTask->markNewsletterAsSent($newsletter);
       $this->statsNotificationsScheduler->schedule($newsletter);
     }

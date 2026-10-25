@@ -24,6 +24,11 @@ assets/                     # JS/React source (@ alias in imports)
   helpers/                  # hooks.js, functions.js, validators.js, field-types.js, generators.js
   styles/                   # SCSS with CSS custom properties and container queries
 docs/                       # Markdown documentation (field-types/, integrations/, features/)
+tests/
+  php/                      # PHP integration tests (wp-phpunit) — suites in Core/ and WooCommerce/
+  js/                       # Jest unit tests — helpers, shared components, field mount-sweep
+  e2e/                      # Playwright smoke specs (fixed 8-spec set)
+  fixtures/wcf-demo/        # Demo plugin: all field types + surfaces; shared E2E/dev fixture
 build/                      # Webpack output (generated)
 ```
 
@@ -34,6 +39,9 @@ build/                      # Webpack output (generated)
 - Bundle analysis: `npm run build:analyze`
 - PHP code standards: `composer run phpcs`
 - PHP auto-fix: `composer run phpcbf`
+- PHP integration tests: `composer test` (core), `composer test:wc` (WooCommerce), `composer test:all` — run via `ddev exec` locally; see `tests/php/README.md`
+- JS unit tests: `npm run test:unit`
+- E2E smoke tests: `npm run build && npm run wp-env start && npm run test:e2e` — see `tests/e2e/README.md`
 
 ## Architecture
 
@@ -72,7 +80,7 @@ BaseIntegration (abstract)
 
 1. **Normalize** — `normalize_items()` adds IDs, global_ids, resolves type aliases, registers async option endpoints
 2. **Prepare** — `prepare_items_for_js()` builds input names, fetches current values from DB
-3. **Render** — `print_app()` outputs a `.wpifycf-app-instance` container with all field data in `data-fields` JSON attribute
+3. **Render** — `print_app()` outputs a `.wpifycf-app-instance` container with all field data in `data-fields` JSON attribute (plus `data-preresolved-options`: a per-`options_key` value→label map so async selects show their selected label without a value-bound request)
 4. **Bootstrap** — JS entry reads `data-fields`, creates React root with `AppContextProvider`
 5. **Render tree** — `App` → `RootFields` → `Field` (dispatcher) → specific field component
 6. **Submit** — Hidden `<input>` elements carry values; PHP `set_fields_from_post_request()` sanitizes and saves
@@ -131,6 +139,19 @@ Conditions array with operators (`==`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `c
 ### Validation
 Field components export static `checkValidity(value, field)` → array of error strings. Form submission blocked if errors. Validators in `assets/helpers/validators.js`. Full docs: `docs/features/validation.md`
 
+### Lazy Data Loading
+Fields fetch remote data only once visible: viewport intersection (200px preload margin, 200ms dwell) + visible browser tab; focus loads immediately; once loaded, latched forever. Central gate: sentinel in `Field.js` + `LoadableContext` (`assets/helpers/visibility.js`) consumed by the data hooks in `helpers/hooks.js`. Gutenberg render-block is continuously gated instead (no renders off-canvas). Full docs: `docs/features/lazy-loading.md`, rationale: `docs/adr/0001-viewport-gated-data-loading.md`
+
+## Testing
+
+Two-axis strategy (see `docs/adr/0002-two-axis-test-strategy.md` and the Testing glossary in `CONTEXT.md`): the field-type axis is tested once through the canonical Options integration; the integration axis with a small representative field set per surface; cross-axis couplings (Gutenberg controlled mode, `multi_*`/`group` nesting, WC variation input names) are named exceptions with dedicated tests.
+
+- **PHP integration** (`tests/php/`) — wp-phpunit against real WordPress; two suites: `core` (multisite, no WooCommerce, includes graceful-degradation checks) and `woocommerce` (single-site, WC loaded)
+- **JS unit** (`tests/js/`) — Jest via wp-scripts: helper logic, `Field`/`MultiField`/`AppContext`, per-type `checkValidity`, and a mount-sweep rendering every field type in jsdom
+- **E2E** (`tests/e2e/`) — Playwright + wp-env, a fixed 8-spec smoke set; growth requires removing or justifying a spec, not appending
+
+CI (`.github/workflows/tests.yml`) runs phpcs, both PHP suites, JS unit, build, and E2E on every push/PR — all blocking.
+
 ## Documentation
 
 When writing or updating docs in `docs/`:
@@ -149,3 +170,17 @@ When your changes invalidate or create gaps in this file, update it as part of t
 - File/directory structure changes
 
 Keep updates minimal, match existing style, do not add session-specific or speculative content.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues (`wpify/custom-fields`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout — `CONTEXT.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.

@@ -122,7 +122,7 @@ log() { echo "[SEED] $(now_iso) $*"; }
 # "TLS/SSL error: Certificate verification failure", unrelated to
 # credentials: this image's bundled mysql CLI client (MariaDB 15.2)
 # defaults to verifying certs and rejects the self-signed one a
-# mysql:5.7 server presents, the same class of issue backup.sh already
+# mysql server presents, the same class of issue backup.sh already
 # works around for mysqldump with --skip-ssl. `wp core install` itself,
 # just below, does NOT go through that CLI binary at all --
 # WordPress/wpdb connects via PHP's mysqli extension directly, which

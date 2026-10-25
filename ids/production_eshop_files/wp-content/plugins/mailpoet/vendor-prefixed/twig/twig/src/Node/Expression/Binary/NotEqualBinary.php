@@ -4,16 +4,16 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Twig\Compiler;
 class NotEqualBinary extends AbstractBinary
 {
- public function compile(Compiler $compiler) : void
- {
- if (\PHP_VERSION_ID >= 80000) {
- parent::compile($compiler);
- return;
- }
- $compiler->raw('(0 !== CoreExtension::compare(')->subcompile($this->getNode('left'))->raw(', ')->subcompile($this->getNode('right'))->raw('))');
- }
- public function operator(Compiler $compiler) : Compiler
- {
- return $compiler->raw('!=');
- }
+public function compile(Compiler $compiler): void
+{
+if (\PHP_VERSION_ID >= 80000) {
+parent::compile($compiler);
+return;
+}
+$compiler->raw('(0 !== CoreExtension::compare(')->subcompile($this->getNode('left'))->raw(', ')->subcompile($this->getNode('right'))->raw('))');
+}
+public function operator(Compiler $compiler): Compiler
+{
+return $compiler->raw('!=');
+}
 }

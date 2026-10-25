@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * WCAR Rollback. handler class is responsible for rolling back UAG to
  * previous version.
  *
- * @since x.x.x
+ * @since 2.0.6
  */
 class Cartflows_Ca_Rollback {
 
@@ -24,7 +24,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Holds the package URL.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 *
 	 * @var string Package URL.
@@ -36,7 +36,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Holds the version.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 *
 	 * @var string Package URL.
@@ -48,7 +48,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Holds the plugin name.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 *
 	 * @var string Plugin name.
@@ -60,7 +60,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Holds the plugin slug.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 *
 	 * @var string Plugin slug.
@@ -72,7 +72,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Initializing WCAR Rollback.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access public
 	 *
 	 * @param array $args Optional. WCAR Rollback arguments. Default is an empty array.
@@ -88,7 +88,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Add an inline CSS to the WCAR Rollback page.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access private
 	 * @return void
 	 */
@@ -127,7 +127,7 @@ class Cartflows_Ca_Rollback {
 	 * modifies package data to update the plugin from a specific URL containing
 	 * the version package.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 * @return void
 	 */
@@ -152,7 +152,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Run WordPress upgrade to CartFlows Rollback to previous version.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access protected
 	 * @return void
 	 */
@@ -178,7 +178,7 @@ class Cartflows_Ca_Rollback {
 	 *
 	 * Rollback WCAR to previous versions.
 	 *
-	 * @since x.x.x
+	 * @since 2.0.6
 	 * @access public
 	 * @return void
 	 */

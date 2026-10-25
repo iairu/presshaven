@@ -907,7 +907,7 @@ class ActionScheduler_wpPostStore extends \ActionScheduler_Store
                 $wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND CHAR_LENGTH(post_content) > %d LIMIT 1", $maximum_args_length, self::POST_TYPE)
             );
             $dependencies_met = $found_action ? 'no' : 'yes';
-            \set_transient(self::DEPENDENCIES_MET, $dependencies_met, \WpifyWooDeps\DAY_IN_SECONDS);
+            \set_transient(self::DEPENDENCIES_MET, $dependencies_met, \DAY_IN_SECONDS);
         }
         return 'yes' === $dependencies_met ? $setting : \false;
     }

@@ -1,16 +1,30 @@
 import { Table, Title } from '@bsf/force-ui';
 import parse from 'html-react-parser';
+import { __ } from '@wordpress/i18n';
 
 import SectionWrapper from '@Components/common/SectionWrapper';
 import SkeletonLoader from '@Components/common/skeletons/SkeletonLoader';
+import ScrollableTable from '@Components/common/ScrollableTable';
 
 const UserOrderDetails = ( { orderDetails, isLoading } ) => {
+	const items = orderDetails?.items ?? [];
+	const summary = orderDetails?.summary ?? {};
+	const summaryRows = [
+		[ __( 'Discount:', 'woo-cart-abandonment-recovery' ), summary.discount ],
+		[ __( 'Others:', 'woo-cart-abandonment-recovery' ), summary.others ],
+		[ __( 'Shipping:', 'woo-cart-abandonment-recovery' ), summary.shipping ],
+		[ __( 'Cart Total:', 'woo-cart-abandonment-recovery' ), summary.cartTotal ],
+	];
+
 	return (
 		<SectionWrapper className="flex flex-col gap-4">
 			<Title
 				size="sm"
 				tag="h2"
-				title="User Order Details"
+				title={ __(
+					'User Order Details',
+					'woo-cart-abandonment-recovery'
+				) }
 				className="[&_h2]:text-gray-900"
 			/>
 			{ isLoading ? (
@@ -34,75 +48,79 @@ const UserOrderDetails = ( { orderDetails, isLoading } ) => {
 					</div>
 				</div>
 			) : (
-				<Table>
-					<Table.Head>
-						<Table.HeadCell>Items</Table.HeadCell>
-						<Table.HeadCell>Quantity</Table.HeadCell>
-						<Table.HeadCell>Price</Table.HeadCell>
-						<Table.HeadCell>Subtotal</Table.HeadCell>
-					</Table.Head>
-					<Table.Body>
-						{ orderDetails.items.map( ( item, index ) => (
-							<Table.Row key={ index }>
-								<Table.Cell>
-									<div className="flex items-center gap-4 text-gray-900">
-										<img
-											src={ item.imageUrl }
-											alt=""
-											className="w-12 h-12 object-cover rounded-md border border-solid border-gray-200"
-										/>
-										{ parse( item.name ) }
-									</div>
-								</Table.Cell>
-								<Table.Cell className="font-medium">
-									{ item.quantity }
-								</Table.Cell>
-								<Table.Cell className="font-medium">
-									{ item.price }
-								</Table.Cell>
-								<Table.Cell className="font-medium">
-									{ item.subtotal }
-								</Table.Cell>
-							</Table.Row>
+				<>
+					<ScrollableTable
+						label={ __(
+							'Items in the cart',
+							'woo-cart-abandonment-recovery'
+						) }
+					>
+						<Table
+							className="whitespace-nowrap"
+							aria-label={ __(
+								'Items in the cart',
+								'woo-cart-abandonment-recovery'
+							) }
+						>
+							<Table.Head>
+								<Table.HeadCell>
+									{ __( 'Items', 'woo-cart-abandonment-recovery' ) }
+								</Table.HeadCell>
+								<Table.HeadCell>
+									{ __( 'Quantity', 'woo-cart-abandonment-recovery' ) }
+								</Table.HeadCell>
+								<Table.HeadCell>
+									{ __( 'Price', 'woo-cart-abandonment-recovery' ) }
+								</Table.HeadCell>
+								<Table.HeadCell>
+									{ __( 'Subtotal', 'woo-cart-abandonment-recovery' ) }
+								</Table.HeadCell>
+							</Table.Head>
+							<Table.Body>
+								{ items.map( ( item, index ) => (
+									<Table.Row key={ index }>
+										<Table.Cell>
+											<div className="flex items-center gap-4 text-gray-900">
+												<img
+													loading="lazy"
+													src={ item.imageUrl }
+													alt=""
+													className="w-12 h-12 shrink-0 object-cover rounded-md border border-solid border-gray-200"
+												/>
+												{ parse( item.name || '' ) }
+											</div>
+										</Table.Cell>
+										<Table.Cell className="font-medium">
+											{ item.quantity }
+										</Table.Cell>
+										<Table.Cell className="font-medium">
+											{ item.price }
+										</Table.Cell>
+										<Table.Cell className="font-medium">
+											{ item.subtotal }
+										</Table.Cell>
+									</Table.Row>
+								) ) }
+							</Table.Body>
+						</Table>
+					</ScrollableTable>
+					{ /* A list of its own, so the labels stay readable on narrow screens. */ }
+					<dl className="m-0 ml-auto box-border flex w-full max-w-sm flex-col gap-3 rounded-md bg-background-secondary p-4">
+						{ summaryRows.map( ( [ label, value ] ) => (
+							<div
+								key={ label }
+								className="flex items-center justify-between gap-6"
+							>
+								<dt className="font-medium text-gray-900">
+									{ label }
+								</dt>
+								<dd className="m-0 font-medium">
+									{ value || '—' }
+								</dd>
+							</div>
 						) ) }
-						<Table.Row className="bg-background-secondary">
-							<Table.Cell></Table.Cell>
-							<Table.Cell></Table.Cell>
-							<Table.Cell>
-								<div className="flex flex-col gap-3">
-									<span className="text-gray-900 font-medium">
-										Discount:
-									</span>
-									<span className="text-gray-900 font-medium">
-										Others:
-									</span>
-									<span className="text-gray-900 font-medium">
-										Shipping:
-									</span>
-									<span className="text-gray-900 font-medium">
-										Cart Total:
-									</span>
-								</div>
-							</Table.Cell>
-							<Table.Cell>
-								<div className="flex flex-col gap-3">
-									<span className="font-medium">
-										{ orderDetails.summary.discount }
-									</span>
-									<span className="font-medium">
-										{ orderDetails.summary.others }
-									</span>
-									<span className="font-medium">
-										{ orderDetails.summary.shipping }
-									</span>
-									<span className="font-medium">
-										{ orderDetails.summary.cartTotal }
-									</span>
-								</div>
-							</Table.Cell>
-						</Table.Row>
-					</Table.Body>
-				</Table>
+					</dl>
+				</>
 			) }
 		</SectionWrapper>
 	);

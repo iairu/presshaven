@@ -2,7 +2,7 @@
 
 Needs a Redis reachable at $REDIS_TEST_HOST (password $REDIS_TEST_PASSWORD, or
 none); skipped otherwise. Example:
-  docker run -d --rm --name r -p 6390:6379 redis:7-alpine
+  docker run -d --rm --name r -p 6390:6379 redis:8.10.2-alpine
   REDIS_TEST_HOST=127.0.0.1 REDIS_TEST_PORT=6390 python -m unittest test_manager_reconcile
 """
 import os

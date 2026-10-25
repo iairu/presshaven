@@ -146,7 +146,7 @@ class ActionScheduler_AdminView extends \ActionScheduler_AdminView_Deprecated
     protected function check_pastdue_actions()
     {
         // Set thresholds.
-        $threshold_seconds = (int) \apply_filters('action_scheduler_pastdue_actions_seconds', \WpifyWooDeps\DAY_IN_SECONDS);
+        $threshold_seconds = (int) \apply_filters('action_scheduler_pastdue_actions_seconds', \DAY_IN_SECONDS);
         $threshold_min = (int) \apply_filters('action_scheduler_pastdue_actions_min', 1);
         // Set fallback value for past-due actions count.
         $num_pastdue_actions = 0;

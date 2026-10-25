@@ -25,28 +25,69 @@ class MetaInformationManager {
       $text = [];
 
       if (isset($args['showAuthor']) && $args['showAuthor'] === $positionField) {
-        $text[] = self::getPostAuthor(
-          $postAuthor,
-          $args['authorPrecededBy']
+        /**
+         * Filters the author line shown with a post in an email.
+         *
+         * @param string      $author     The author line, including the label set in the block.
+         * @param int         $postId     ID of the post being rendered.
+         * @param string|null $postAuthor ID of the post author. Null for WooCommerce products, which show no author.
+         * @return string The author line to render. A return that is not a string or a number is ignored.
+         */
+        $text[] = self::applyMetaFilter(
+          'mailpoet_newsletter_post_author',
+          self::getPostAuthor($postAuthor, $args['authorPrecededBy']),
+          [$postId, $postAuthor]
         );
       }
 
       if (isset($args['showCategories']) && $args['showCategories'] === $positionField) {
-        $text[] = self::getPostCategories(
-          $postId,
-          $postType,
-          $args['categoriesPrecededBy']
+        /**
+         * Filters the categories line shown with a post in an email.
+         *
+         * @param string $categories The categories line, including the label set in the block. Empty when the post has no categories.
+         * @param int    $postId     ID of the post being rendered.
+         * @param string $postType   Post type being rendered, 'product' for WooCommerce products.
+         * @return string The categories line to render. A return that is not a string or a number is ignored.
+         */
+        $text[] = self::applyMetaFilter(
+          'mailpoet_newsletter_post_categories',
+          self::getPostCategories($postId, $postType, $args['categoriesPrecededBy']),
+          [$postId, $postType]
         );
       }
 
       if (!empty($text)) {
         $text = '<p>' . implode('<br />', $text) . '</p>';
         if ($position === 'above') $content = $text . $content;
-        else if ($position === 'below') $content .= $text;
+        else $content .= $text;
       }
     }
 
     return $content;
+  }
+
+  /**
+   * Applies a meta information filter and keeps the unfiltered value when a
+   * callback returns something that cannot be rendered as text.
+   *
+   * @param string $filterName
+   * @param string $value
+   * @param array $args
+   * @return string
+   */
+  private static function applyMetaFilter($filterName, $value, array $args) {
+    $filtered = WPFunctions::get()->applyFilters($filterName, $value, ...$args);
+
+    if (is_string($filtered)) {
+      return $filtered;
+    }
+
+    if (is_int($filtered) || is_float($filtered)) {
+      return (string)$filtered;
+    }
+
+    // An array or object here would fatal in the implode() that joins these lines.
+    return $value;
   }
 
   private static function getPostCategories($postId, $postType, $precededBy) {

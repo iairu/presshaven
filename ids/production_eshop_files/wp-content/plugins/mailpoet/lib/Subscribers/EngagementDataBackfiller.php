@@ -61,6 +61,7 @@ class EngagementDataBackfiller {
     if (!is_array($subscribers)) {
       return [];
     }
+    /** @var SubscriberEntity[] $subscribers */
     return $subscribers;
   }
 

@@ -165,12 +165,16 @@ MIN_FREE_DISK_GB = float(os.environ.get("POOL_MIN_FREE_DISK_GB", "5"))
 # room); 0 = always hand the used pool to the next user as it is.
 RECYCLE_IDLE = os.environ.get("POOL_RECYCLE_IDLE", "1") != "0"
 
-MYSQL_IMAGE = "mysql:5.7"
+# Same server flags as docker-compose.yml's databases (see the comment on
+# production_database there): the MariaDB-based wp-cli client has no
+# caching_sha2_password plugin.
+MYSQL_IMAGE = "mysql:8.4.13"
+MYSQLD_ARGS = "--mysql-native-password=ON --authentication-policy=mysql_native_password"
 # Built by docker-compose.yml (images/wordpress_hardened): the same WordPress
 # and PHP as the compose pools, with the PHP2Shell mitigations, so a runtime
 # pool is never softer than pools 1-3.
-WORDPRESS_IMAGE = os.environ.get("POOL_WORDPRESS_IMAGE", "presshaven/wordpress:6.8.3-php8.1-hardened")
-WPCLI_IMAGE = "wordpress:cli-php8.1"
+WORDPRESS_IMAGE = os.environ.get("POOL_WORDPRESS_IMAGE", "presshaven/wordpress:7.1.3-php8.4-hardened")
+WPCLI_IMAGE = "wordpress:cli-2.12.0-php8.4"
 DB_NAME = "production_database"
 DB_USER = "production_user"
 
@@ -757,7 +761,7 @@ class Manager:
     def _create_database_container(self, name, volume, password, labels):
         return self.docker.containers.create(
             MYSQL_IMAGE, name=name, labels=labels, detach=True,
-            command=["bash", "-c", "rm -f /var/lib/mysql/placeholder; docker-entrypoint.sh mysqld"],
+            command=["bash", "-c", f"rm -f /var/lib/mysql/placeholder; docker-entrypoint.sh mysqld {MYSQLD_ARGS}"],
             environment={"MYSQL_DATABASE": DB_NAME, "MYSQL_USER": DB_USER,
                          "MYSQL_PASSWORD": password,
                          "MYSQL_ROOT_PASSWORD": env_required("MYSQL_ROOT_PASSWORD")},

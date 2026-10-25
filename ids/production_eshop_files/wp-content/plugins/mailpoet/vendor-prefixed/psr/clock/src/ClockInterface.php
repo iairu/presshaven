@@ -4,5 +4,5 @@ if (!defined('ABSPATH')) exit;
 use DateTimeImmutable;
 interface ClockInterface
 {
- public function now() : DateTimeImmutable;
+public function now(): DateTimeImmutable;
 }

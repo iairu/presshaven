@@ -41,7 +41,7 @@ class Unsubscribes {
     ?int $queueId = null,
     ?string $meta = null,
     string $method = StatisticsUnsubscribeEntity::METHOD_UNKNOWN
-  ) {
+  ): ?StatisticsUnsubscribeEntity {
     $queue = null;
     $statistics = null;
     if ($queueId) {
@@ -49,18 +49,12 @@ class Unsubscribes {
     }
     $subscriber = $this->subscribersRepository->findOneById($subscriberId);
     if (!$subscriber instanceof SubscriberEntity) {
-      return;
+      return null;
     }
     if (($queue instanceof SendingQueueEntity)) {
       $newsletter = $queue->getNewsletter();
       if ($newsletter instanceof NewsletterEntity) {
-        $statistics = $this->statisticsUnsubscribesRepository->findOneBy(
-          [
-            'queue' => $queue,
-            'newsletter' => $newsletter,
-            'subscriber' => $subscriber,
-          ]
-        );
+        $statistics = $this->statisticsUnsubscribesRepository->findOneBySubscriberAndQueue($subscriber, $queue, $newsletter);
         if (!$statistics) {
           $statistics = new StatisticsUnsubscribeEntity($newsletter, $queue, $subscriber);
         }
@@ -77,5 +71,14 @@ class Unsubscribes {
     $statistics->setMethod($method);
     $this->statisticsUnsubscribesRepository->persist($statistics);
     $this->statisticsUnsubscribesRepository->flush();
+    return $statistics;
+  }
+
+  /**
+   * @param int[] $subscriberIds
+   * @return int Number of tracked subscribers
+   */
+  public function trackBulk(array $subscriberIds, string $source): int {
+    return $this->statisticsUnsubscribesRepository->trackBulk($subscriberIds, $source);
   }
 }

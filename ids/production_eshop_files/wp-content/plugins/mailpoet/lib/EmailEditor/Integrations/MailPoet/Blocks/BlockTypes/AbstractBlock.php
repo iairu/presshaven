@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 
 use MailPoet\Config\Env;
+use MailPoet\EmailEditor\Integrations\MailPoet\EmailEditor;
 use WP_Style_Engine;
 
 abstract class AbstractBlock {
@@ -15,6 +16,27 @@ abstract class AbstractBlock {
   public function initialize() {
     $this->registerAssets();
     $this->registerBlockType();
+    add_action('enqueue_block_editor_assets', [$this, 'markEmailEditorScreen']);
+  }
+
+  /**
+   * WordPress loads the editor script of every registered block in every editor,
+   * and the blocks must stay registered so emails can render when they are sent.
+   * The script therefore runs everywhere and decides for itself whether to offer
+   * the block in the inserter, so it needs to know which editor it is in.
+   */
+  public function markEmailEditorScreen(): void {
+    $handle = $this->getEditorScript('handle');
+    if ($handle === null) {
+      return;
+    }
+    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+    $isEmailEditor = $screen && $screen->post_type === EmailEditor::MAILPOET_EMAIL_POST_TYPE; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+    wp_add_inline_script(
+      $handle,
+      'window.mailpoet_is_email_editor = ' . ($isEmailEditor ? 'true' : 'false') . ';',
+      'before'
+    );
   }
 
   protected function getBlockType(): string {

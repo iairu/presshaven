@@ -1,6 +1,6 @@
 <?php
 /**
- * Breadcrumb Trail - A breadcrumb menu script for WordPress.
+ * Breadcrumb Trail - A breadcrumb menu script for wordpress.
  *
  * Breadcrumb Trail is a script for showing a breadcrumb trail for any type of page.  It tries to
  * anticipate any type of structure and display the best possible trail that matches your site's

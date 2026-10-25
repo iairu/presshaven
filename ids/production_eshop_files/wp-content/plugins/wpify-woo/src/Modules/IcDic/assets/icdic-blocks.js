@@ -647,6 +647,10 @@ const App = () => {
 		return null;
 	}
 
+	const viesFieldWrap = customer.billingAddress.country === 'SK'
+		? dicDphFieldWrap
+		: dicFieldWrap;
+
 	return (
 		<div>
 			{icFieldWrap && createPortal(
@@ -689,7 +693,7 @@ const App = () => {
 				return null;
 			})()}
 
-			{createPortal(
+			{viesFieldWrap && createPortal(
 				<>
 					<StatusIndicator
 						isLoading={isViesLoading}
@@ -699,7 +703,7 @@ const App = () => {
 					/>
 					{viesError && (customer.billingAddress.country === 'SK' ? additionalFields['wpify/dic-dph'] : additionalFields['wpify/dic']) && <p style={{color: '#dc3232', fontSize: '14px', marginTop: '4px'}}>{viesError}</p>}
 				</>,
-				customer.billingAddress.country === 'SK' ? dicDphFieldWrap : dicFieldWrap
+				viesFieldWrap
 			)}
 		</div>
 	);
@@ -709,7 +713,6 @@ document.querySelectorAll('[data-app="wpify-ic-dic"]').forEach(function (el) {
 	const root = createRoot(el)
 	root.render(<App/>);
 });
-
 
 
 

@@ -5,6 +5,7 @@ namespace MailPoet\Form\Block;
 if (!defined('ABSPATH')) exit;
 
 
+use MailPoet\Form\Util\Styles;
 use MailPoet\WP\Functions as WPFunctions;
 
 class Columns {
@@ -23,21 +24,24 @@ class Columns {
 
   private function getStyles(array $params): string {
     $styles = [];
-    if (!empty($params['text_color'])) {
+    if (!empty($params['text_color']) && Styles::isColorValue($params['text_color'])) {
       $styles[] = "color:{$params['text_color']};";
     }
-    if (!empty($params['background_color'])) {
+    if (!empty($params['background_color']) && Styles::isColorValue($params['background_color'])) {
       $styles[] = "background-color:{$params['background_color']};";
     }
-    if (!empty($params['gradient'])) {
+    if (!empty($params['gradient']) && Styles::isColorValue($params['gradient'])) {
       $styles[] = "background:{$params['gradient']};";
     }
     if (!empty($params['padding']) && is_array($params['padding'])) {
-      $top = $params['padding']['top'] ?? 0;
-      $right = $params['padding']['right'] ?? 0;
-      $bottom = $params['padding']['bottom'] ?? 0;
-      $left = $params['padding']['left'] ?? 0;
-      $styles[] = "padding:{$top} {$right} {$bottom} {$left};";
+      $top = is_scalar($params['padding']['top'] ?? null) ? (string)$params['padding']['top'] : '0';
+      $right = is_scalar($params['padding']['right'] ?? null) ? (string)$params['padding']['right'] : '0';
+      $bottom = is_scalar($params['padding']['bottom'] ?? null) ? (string)$params['padding']['bottom'] : '0';
+      $left = is_scalar($params['padding']['left'] ?? null) ? (string)$params['padding']['left'] : '0';
+      $padding = "{$top} {$right} {$bottom} {$left}";
+      if (Styles::isSizeValue($padding)) {
+        $styles[] = "padding:{$padding};";
+      }
     }
     if (count($styles)) {
       return ' style="' . $this->wp->escAttr(implode('', $styles)) . '"';
@@ -53,7 +57,7 @@ class Columns {
     if (!empty($params['background_color']) || !empty($params['gradient'])) {
       $classes[] = "mailpoet_column_with_background";
     }
-    if (!empty($params['text_color'])) {
+    if (!empty($params['text_color']) && Styles::isColorValue($params['text_color'])) {
       $classes[] = "has-{$params['text_color']}-color";
     }
     // BC !isset for older forms that were saved without the flag

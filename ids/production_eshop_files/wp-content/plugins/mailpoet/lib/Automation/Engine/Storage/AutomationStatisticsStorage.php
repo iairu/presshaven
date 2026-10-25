@@ -126,7 +126,7 @@ class AutomationStatisticsStorage {
           SELECT steps
           FROM %i
           WHERE automation_id = %d
-          AND version_id = %d
+          AND id = %d
         ',
         [$versionsTable, $automationId, $versionId]
       );
@@ -151,7 +151,14 @@ class AutomationStatisticsStorage {
       }
 
       foreach ($steps as $step) {
-        if (isset($step['key']) && $step['key'] === 'mailpoet:send-email' && isset($step['args']['email_id'])) {
+        if (
+          is_array($step)
+          && isset($step['key'], $step['args'])
+          && $step['key'] === 'mailpoet:send-email'
+          && is_array($step['args'])
+          && isset($step['args']['email_id'])
+          && is_numeric($step['args']['email_id'])
+        ) {
           $emailIds[] = (int)$step['args']['email_id'];
         }
       }
@@ -173,7 +180,7 @@ class AutomationStatisticsStorage {
     } elseif ($after && $before === null) {
       $dateCondition = 'AND created_at >= %s';
       $dateParams = [$after->format('Y-m-d H:i:s')];
-    } elseif ($after === null && $before) {
+    } elseif ($before) {
       $dateCondition = 'AND created_at <= %s';
       $dateParams = [$before->format('Y-m-d H:i:s')];
     }

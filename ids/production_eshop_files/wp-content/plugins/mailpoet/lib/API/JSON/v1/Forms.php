@@ -11,20 +11,16 @@ use MailPoet\API\JSON\Error;
 use MailPoet\API\JSON\Error as APIError;
 use MailPoet\API\JSON\Response;
 use MailPoet\API\JSON\ResponseBuilders\FormsResponseBuilder;
-use MailPoet\API\JSON\SuccessResponse;
 use MailPoet\Config\AccessControl;
 use MailPoet\Entities\FormEntity;
 use MailPoet\Form\ApiDataSanitizer;
 use MailPoet\Form\DisplayFormInWPContent;
 use MailPoet\Form\FormSaveController;
 use MailPoet\Form\FormsRepository;
-use MailPoet\Form\Listing\FormListingRepository;
 use MailPoet\Form\PreviewPage;
 use MailPoet\Form\Templates\TemplateRepository;
-use MailPoet\Listing;
 use MailPoet\Settings\UserFlagsController;
 use MailPoet\Tags\TagRepository;
-use MailPoet\UnexpectedValueException;
 use MailPoet\WP\Emoji;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -32,9 +28,6 @@ class Forms extends APIEndpoint {
   public $permissions = [
     'global' => AccessControl::PERMISSION_MANAGE_FORMS,
   ];
-
-  /** @var Listing\Handler */
-  private $listingHandler;
 
   /** @var UserFlagsController */
   private $userFlags;
@@ -51,9 +44,6 @@ class Forms extends APIEndpoint {
   /** @var TemplateRepository */
   private $templateRepository;
 
-  /** @var FormListingRepository */
-  private $formListingRepository;
-
   /** @var Emoji */
   private $emoji;
 
@@ -67,11 +57,9 @@ class Forms extends APIEndpoint {
   private $formSaveController;
 
   public function __construct(
-    Listing\Handler $listingHandler,
     UserFlagsController $userFlags,
     FormsRepository $formsRepository,
     TemplateRepository $templateRepository,
-    FormListingRepository $formListingRepository,
     FormsResponseBuilder $formsResponseBuilder,
     WPFunctions $wp,
     Emoji $emoji,
@@ -79,12 +67,10 @@ class Forms extends APIEndpoint {
     TagRepository $tagRepository,
     FormSaveController $formSaveController
   ) {
-    $this->listingHandler = $listingHandler;
     $this->userFlags = $userFlags;
     $this->wp = $wp;
     $this->formsRepository = $formsRepository;
     $this->templateRepository = $templateRepository;
-    $this->formListingRepository = $formListingRepository;
     $this->formsResponseBuilder = $formsResponseBuilder;
     $this->emoji = $emoji;
     $this->dataSanitizer = $dataSanitizer;
@@ -125,7 +111,7 @@ class Forms extends APIEndpoint {
       return $this->badRequest([
         APIError::BAD_REQUEST =>
           sprintf(
-          // translators: %1$s is a comma-seperated list of allowed values, %2$s the status the user specified.
+          // translators: %1$s is a comma-separated list of allowed values, %2$s the status the user specified.
             __('Invalid status. Allowed values are (%1$s), you specified %2$s', 'mailpoet'),
             join(', ', [FormEntity::STATUS_ENABLED, FormEntity::STATUS_DISABLED]),
             $status
@@ -147,26 +133,17 @@ class Forms extends APIEndpoint {
     );
   }
 
-  public function listing($data = []) {
-    $data['sort_order'] = $data['sort_order'] ?? 'desc';
-    $data['sort_by'] = $data['sort_by'] ?? 'updatedAt';
-
-    $definition = $this->listingHandler->getListingDefinition($data);
-    $items = $this->formListingRepository->getData($definition);
-    $count = $this->formListingRepository->getCount($definition);
-    $filters = $this->formListingRepository->getFilters($definition);
-    $groups = $this->formListingRepository->getGroups($definition);
-
-    return $this->successResponse($this->formsResponseBuilder->buildForListing($items), [
-      'count' => $count,
-      'filters' => $filters,
-      'groups' => $groups,
-    ]);
-  }
-
   public function previewEditor($data = []) {
     // We want to allow preview for unsaved forms
     $formId = $data['id'] ?? 0;
+    if (isset($data['body']) && is_array($data['body'])) {
+      $data['body'] = $this->dataSanitizer->sanitizeBody($data['body']);
+      $formEntity = new FormEntity('');
+      $formEntity->setBody($data['body']);
+      if (!$this->canEditCustomHtml($formEntity)) {
+        return $this->customHtmlForbiddenResponse();
+      }
+    }
     $this->wp->setTransient(PreviewPage::PREVIEW_DATA_TRANSIENT_PREFIX . $formId, $data, PreviewPage::PREVIEW_DATA_EXPIRATION);
     return $this->successResponse();
   }
@@ -215,12 +192,8 @@ class Forms extends APIEndpoint {
       $this->createTagsIfDoNotExist($settings['tags']);
     }
 
-    // Check Custom HTML block permissions
-    $customHtmlBlocks = $formEntity->getBlocksByTypes([FormEntity::HTML_BLOCK_TYPE]);
-    if (count($customHtmlBlocks) && !$this->wp->currentUserCan('administrator')) {
-      return $this->errorResponse([
-        Error::FORBIDDEN => __('Only administrator can edit forms containing Custom HTML block.', 'mailpoet'),
-      ], [], Response::STATUS_FORBIDDEN);
+    if (!$this->canEditCustomHtml($formEntity)) {
+      return $this->customHtmlForbiddenResponse();
     }
 
     if ($body !== null) {
@@ -325,20 +298,15 @@ class Forms extends APIEndpoint {
     }
   }
 
-  public function bulkAction($data = []): SuccessResponse {
-    $definition = $this->listingHandler->getListingDefinition($data['listing']);
-    $ids = $this->formListingRepository->getActionableIds($definition);
-    if ($data['action'] === 'trash') {
-      $this->formsRepository->bulkTrash($ids);
-    } elseif ($data['action'] === 'restore') {
-      $this->formsRepository->bulkRestore($ids);
-    } elseif ($data['action'] === 'delete') {
-      $this->formsRepository->bulkDelete($ids);
-    } else {
-      throw UnexpectedValueException::create()
-        ->withErrors([APIError::BAD_REQUEST => "Invalid bulk action '{$data['action']}' provided."]);
-    }
-    return $this->successResponse(null, ['count' => count($ids)]);
+  private function canEditCustomHtml(FormEntity $form): bool {
+    $customHtmlBlocks = $form->getBlocksByTypes([FormEntity::HTML_BLOCK_TYPE]);
+    return !count($customHtmlBlocks) || $this->wp->currentUserCan('administrator');
+  }
+
+  private function customHtmlForbiddenResponse(): Response {
+    return $this->errorResponse([
+      Error::FORBIDDEN => __('Only administrator can edit forms containing Custom HTML block.', 'mailpoet'),
+    ], [], Response::STATUS_FORBIDDEN);
   }
 
   private function getForm(array $data): ?FormEntity {

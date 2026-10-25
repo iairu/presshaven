@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStateValue } from '@Store';
 import useDebounceDispatch from '@Utils/debounceDispatch';
 import { Input, Select } from '@bsf/force-ui';
+import { __, sprintf } from '@wordpress/i18n';
 import FieldWrapper from '../common/FieldWrapper';
 import RenderFields from '../RenderFields';
 import { useProAccess } from '@Components/pro/useProAccess';
@@ -82,6 +83,34 @@ const TimeField = ( {
 							if ( fieldData.type === 'number' ) {
 								fieldDataWithClass.className = 'w-20';
 							}
+							// A percentage of a row that is only as wide as its contents comes out
+							// narrower than the longest unit ("Minute(s)"), so give the unit select
+							// a width of its own, the same as the single-input time field below.
+							if ( fieldData.type === 'select' ) {
+								fieldDataWithClass.className = 'w-32 shrink-0';
+							}
+
+							// These controls have no label of their own: the group's title names
+							// them, and the part they control tells them apart.
+							if ( title ) {
+								fieldDataWithClass.ariaLabel = sprintf(
+									/* translators: 1: field title, 2: the part of the value this control sets (amount or unit) */
+									__(
+										'%1$s: %2$s',
+										'woo-cart-abandonment-recovery'
+									),
+									title,
+									fieldData.type === 'number'
+										? __(
+											'amount',
+											'woo-cart-abandonment-recovery'
+										)
+										: __(
+											'unit',
+											'woo-cart-abandonment-recovery'
+										)
+								);
+							}
 
 							const isAutoSave = fieldData?.autoSave || false;
 
@@ -146,22 +175,28 @@ const TimeField = ( {
 					onChange={ handleValueChange }
 					disabled={ isPro && isFeatureBlocked }
 				/>
-				<Select
-					name={ `${ name }-unit` }
-					value={ selectedUnit.name }
-					onChange={ handleUnitChange }
-					size="md"
-					disabled={ isPro && isFeatureBlocked }
-				>
-					<Select.Button />
-					<Select.Options>
-						{ unitOptions.map( ( option ) => (
-							<Select.Option key={ option.id } value={ option }>
-								{ option.name }
-							</Select.Option>
-						) ) }
-					</Select.Options>
-				</Select>
+				{ /* Fixed width so the unit does not resize the field when it changes. */ }
+				<div className="w-32">
+					<Select
+						name={ `${ name }-unit` }
+						value={ selectedUnit.name }
+						onChange={ handleUnitChange }
+						size="md"
+						disabled={ isPro && isFeatureBlocked }
+					>
+						<Select.Button />
+						<Select.Options>
+							{ unitOptions.map( ( option ) => (
+								<Select.Option
+									key={ option.id }
+									value={ option }
+								>
+									{ option.name }
+								</Select.Option>
+							) ) }
+						</Select.Options>
+					</Select>
+				</div>
 			</div>
 		</FieldWrapper>
 	);

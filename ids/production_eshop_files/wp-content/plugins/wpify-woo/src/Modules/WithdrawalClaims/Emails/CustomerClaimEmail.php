@@ -35,4 +35,13 @@ class CustomerClaimEmail extends AbstractRequestEmail {
 	public function get_default_heading(): string {
 		return __( 'Your claim has been received', 'wpify-woo' );
 	}
+
+	/**
+	 * Claims are governed by national warranty law, not Directive (EU) 2023/2673
+	 * (which covers the online withdrawal function), so the shared default text
+	 * would be misleading here.
+	 */
+	public function get_default_intro_content(): string {
+		return __( 'We have received your claim. Please keep this email as a record of its receipt.', 'wpify-woo' );
+	}
 }

@@ -1,0 +1,517 @@
+# Agentic Commerce Product Feed Generator
+
+Streaming CSV feed implementation for Stripe's Agentic Commerce feature. Handles large product catalogs (100k+ products, 200MB+ files) without memory issues.
+
+## Architecture
+
+Follows WooCommerce's `FeedInterface` pattern (similar to `JsonFileFeed`):
+- Base name passed to constructor (not configuration)
+- Columns configured via `set_columns()` method
+- Two-stage storage: temp dir → uploads directory
+- File naming: `{base-name}-{YYYY-MM-DD}-{hash}.csv`
+
+## Usage
+
+```php
+$feed = new WC_Stripe_Agentic_Commerce_Csv_Feed( 'stripe-agentic-commerce' );
+$feed->set_columns( ['id', 'title', 'description', 'price', 'image_url'] );
+
+$feed->start();
+
+foreach ( $products as $product ) {
+    $feed->add_entry( [
+        $product->get_id(),
+        $product->get_title(),
+        $product->get_description(),
+        $product->get_price(),
+        $product->get_image_url(),
+    ] );
+}
+
+$feed->end();
+$url = $feed->get_file_url(); // Triggers move from temp to uploads
+```
+
+## Data Format Requirements
+
+### Scalar Values Only
+All entry values must be scalars (`string`, `int`, `float`, `bool`) or `null`:
+
+```php
+// ✅ Correct
+$feed->add_entry( ['123', 'Product Name', '19.99 USD', true, null] );
+
+// ❌ Wrong - throws exception
+$feed->add_entry( ['123', ['url1.jpg', 'url2.jpg']] );
+```
+
+**Type Handling:**
+- **Booleans**: Converted to `"true"` or `"false"` (required by Stripe spec)
+- **Null**: Converted to empty string `""` (for optional fields)
+- **Numbers**: Cast to strings (e.g., `123` → `"123"`, `3.14` → `"3.14"`)
+- **Strings**: Passed through as-is
+
+**Important**: For Stripe fields with units (price, weight, dimensions), you must format them as strings yourself:
+```php
+$feed->add_entry( [
+    'id'     => '123',
+    'price'  => '15.00 USD',  // Not just 15.00
+    'weight' => '2.5 lb',     // Not just 2.5
+] );
+```
+
+### Complex Data Formatting
+Format arrays/objects as strings **before** passing to `add_entry()`:
+
+**Multiple values** - Comma-separated:
+```php
+$images = ['url1.jpg', 'url2.jpg', 'url3.jpg'];
+$feed->add_entry( [
+    'id' => '123',
+    'images' => implode( ',', $images ), // "url1.jpg,url2.jpg,url3.jpg"
+] );
+```
+
+**Structured data** - Colon-delimited (per Stripe spec):
+```php
+// Shipping: Country:State:Method:Time:Cost
+$feed->add_entry( [
+    'id' => '123',
+    'shipping' => 'US:CA:Express:1-2:12.99 USD',
+] );
+```
+
+See [Stripe Agentic Commerce documentation](https://docs.stripe.com/agentic-commerce/product-catalog) for full specification.
+
+## Key Features
+
+### Streaming I/O
+- Direct `fputcsv()` writes - no memory buffering
+- Handles 100k+ products efficiently
+- Progress logging every 10k entries
+
+### Two-Stage Storage
+1. **Write phase:** Creates file in `get_temp_dir()` (fast, no permission issues)
+2. **Finalize phase:** Moves to uploads on `get_file_url()` call
+
+```php
+$feed->start();     // Creates file in temp dir
+$feed->add_entry(); // Writes to temp
+$feed->end();       // Closes file handle
+$url = $feed->get_file_url(); // Moves temp → uploads, returns URL
+```
+
+### UTF-8 Encoding
+- Standard UTF-8 encoding (no BOM)
+- Automatic encoding validation and conversion
+- Handles emoji, accents, CJK characters
+
+### Error Handling
+- Automatic cleanup on exceptions
+- Destructor removes incomplete files
+- Logging via `WC_Stripe_Logger`
+
+## File Storage
+
+**Temporary:** `get_temp_dir()` (system temp directory)
+**Final:** `wp-content/uploads/stripe-agentic-commerce/product-feeds/`
+
+**File naming:** `{base-name}-{YYYY-MM-DD}-{hash}.csv`
+- Uses `wp_hash()` for uniqueness (like `JsonFileFeed`)
+
+**Security:**
+- `.htaccess` and `index.html` created automatically via `FilesystemUtil::mkdir_p_not_indexable()`
+- Prevents directory listing
+- Files accessible via direct URL only
+
+## API Reference
+
+### Constructor
+
+```php
+__construct( string $base_name )
+```
+
+Creates feed with base name identifier. Does not initialize storage.
+
+### set_columns()
+
+```php
+set_columns( array $headers ): self
+```
+
+Configures CSV column headers. Returns `$this` for chaining.
+
+**Parameters:**
+- `$headers` - Array of column names (e.g., `['id', 'title', 'price']`)
+
+**Returns:** `self` (for method chaining)
+
+**Example:**
+```php
+$feed = new WC_Stripe_Agentic_Commerce_Csv_Feed( 'my-feed' );
+$feed->set_columns( ['id', 'name'] );
+```
+
+### start()
+
+```php
+start(): void
+```
+
+Initializes feed generation:
+1. Validates headers are set
+2. Creates file in temp directory (or uploads fallback)
+3. Writes CSV header row
+
+**Throws:** `Exception` if headers not set or file cannot be created
+
+### add_entry()
+
+```php
+add_entry( array $entry ): void
+```
+
+Streams one product entry to CSV file.
+
+**Parameters:**
+- `$entry` - Array of values matching column count (must be scalars or null)
+
+**Throws:**
+- `Exception` if not started or already finalized
+- `Exception` if column count mismatch
+- `Exception` if entry contains arrays/objects
+
+**Example:**
+```php
+$feed->add_entry( ['123', 'Product Name', '19.99'] );
+```
+
+### end()
+
+```php
+end(): void
+```
+
+Finalizes feed generation:
+1. Closes file handle
+2. Marks feed as complete
+3. Logs statistics (entries, file size)
+
+File remains in temp directory until `get_file_url()` is called.
+
+### get_file_path()
+
+```php
+get_file_path(): ?string
+```
+
+Returns absolute file path (temp or uploads location).
+
+**Returns:** File path if finalized, `null` otherwise
+
+### get_file_url()
+
+```php
+get_file_url(): ?string
+```
+
+Moves file from temp to uploads directory and returns public URL.
+
+**Returns:** Public URL if finalized, `null` otherwise
+
+**Throws:** `Exception` if file cannot be moved
+
+**Note:** Only call after `end()`. Triggers file relocation on first call.
+
+### get_stats()
+
+```php
+get_stats(): array
+```
+
+Returns feed generation statistics.
+
+**Returns:**
+```php
+[
+    'started'         => bool,
+    'finalized'       => bool,
+    'entry_count'     => int,
+    'file_size_bytes' => int,    // Only if finalized
+    'file_size_human' => string, // Only if finalized (e.g., "2.3 MB")
+    'file_path'       => string, // Only if finalized
+    'file_url'        => string, // Only if finalized
+]
+```
+
+### set_headers()
+
+```php
+set_headers(): void
+```
+
+Sets HTTP headers for CSV download (not part of FeedInterface).
+
+Use when serving file directly:
+```php
+$feed->set_headers();
+readfile( $feed->get_file_path() );
+```
+
+## Integration Example
+
+```php
+class My_Integration implements IntegrationInterface {
+    public function create_feed(): FeedInterface {
+        return new WC_Stripe_Agentic_Commerce_Csv_Feed( 'my-integration' );
+    }
+
+    public function get_product_mapper(): ProductMapperInterface {
+        return new class implements ProductMapperInterface {
+            public function map_product( $product ): array {
+                return [
+                    $product->get_id(),
+                    $product->get_name(),
+                    $product->get_price(),
+                ];
+            }
+        };
+    }
+}
+
+// Usage with ProductWalker
+$integration = new My_Integration();
+$feed = $integration->create_feed();
+$feed->set_columns( ['id', 'name', 'price'] );
+
+$walker = ProductWalker::from_integration( $integration, $feed );
+$walker->walk();
+```
+
+## Performance Characteristics
+
+- **Memory:** O(1) - constant memory usage regardless of catalog size
+- **Disk I/O:** Linear writes only - no seeks
+- **CPU:** Minimal - just CSV escaping
+- **Time:** ~10k products/second on typical hardware
+
+**Benchmarks** (approximate):
+- 10k products: ~1 second, ~2 MB file
+- 100k products: ~10 seconds, ~20 MB file
+- 1M products: ~100 seconds, ~200 MB file
+
+## Error Scenarios
+
+### File System Issues
+```php
+try {
+    $feed->start();
+} catch ( Exception $e ) {
+    // Cannot create temp file or uploads directory
+    WC_Stripe_Logger::error( 'Feed start failed: ' . $e->getMessage() );
+}
+```
+
+### Invalid Data
+```php
+try {
+    $feed->add_entry( ['id' => 1, 'images' => ['a.jpg', 'b.jpg']] );
+} catch ( Exception $e ) {
+    // "CSV entry at index 1 contains an array or object"
+}
+```
+
+### Cleanup on Failure
+```php
+$feed = new WC_Stripe_Agentic_Commerce_Csv_Feed( 'test' );
+$feed->set_columns( ['id', 'name'] );
+$feed->start();
+// Exception thrown - the temporary file is automatically cleaned up.
+unset( $feed );
+```
+
+## Stripe Agentic Commerce Specification
+
+For complete field specifications and data formatting requirements, see:
+https://docs.stripe.com/agentic-commerce/product-catalog
+
+Common patterns:
+- **Images:** `image1.jpg,image2.jpg,image3.jpg`
+- **Categories:** `Electronics > Computers > Laptops`
+- **Variants:** `Size:Large,Color:Blue`
+- **Shipping:** `US:CA:Express:1-2:12.99 USD`
+
+## Checkout Mode (embedded vs. redirect)
+
+Stripe's feed supports two checkout behaviors per product via the `disable_checkout` field — the same feed and Files API delivery serve both, so this is not a separate ingestion path:
+
+- **Embedded / delegated checkout** (`disable_checkout=false`, the default): the shopper completes the purchase inside the AI agent.
+- **Feed-only / redirect** (`disable_checkout=true`): the product is still syndicated for discovery, but the agent sends the shopper to the product's `link` URL to check out on the store.
+
+The store-wide default is set in **Stripe settings → Agentic commerce → "Redirect shoppers to my store to check out"** (option `wc_stripe_agentic_commerce_disable_checkout`). Per-product overrides go through a filter:
+
+```php
+add_filter(
+    'wc_stripe_agentic_commerce_disable_checkout',
+    function ( bool $disabled, WC_Product $product, ?WC_Product $parent ): bool {
+        // e.g. redirect only for a specific category.
+        return has_term( 'made-to-order', 'product_cat', $product->get_id() ) ? true : $disabled;
+    },
+    10,
+    3
+);
+```
+
+> The `woocommerce_agentic_commerce_disable_checkout` filter is **deprecated since 11.1.0** in favour of the Stripe-prefixed `wc_stripe_agentic_commerce_disable_checkout` filter.
+
+## Product sync eligibility
+
+The feed query selects published simple products and variations, so grouped, external/affiliate, private, draft and trashed products never reach it. On top of that, `WC_Stripe_Agentic_Commerce_Product_Mapper::should_sync_product()` excludes by default:
+
+| Excluded | Why |
+| --- | --- |
+| Subscription product types | They fail feed validation and downgrade the whole sync to a partial success. |
+| Password-protected products | The password gate states who may view the product, and the exported `link` would only render a password prompt. |
+| Products hidden from catalog **and** search | `hidden` is the strongest "do not surface this" signal WooCommerce offers. |
+| Products with the per-product exclude flag | The merchant opted the product out explicitly. |
+
+Catalog visibility values that hide a product from only one surface (`catalog`, `search`) are **not** treated as exclusions — the product is still meant to be reachable by the other route.
+
+A variation inherits its parent's catalog visibility but **not** its `post_password` (it is a separate post with its own empty value), so the password check resolves to the parent. Variations are what the feed actually exports, so skipping that lookup would leak every variation of a password-protected variable product.
+
+All of these are defaults rather than hard blocks: `wc_stripe_agentic_commerce_should_sync_product` can return `true` to opt a product back in.
+
+Because the filter only governs what is *sent*, a product that was already exported and later becomes ineligible stays in Stripe's catalog until a full feed replacement. `WC_Stripe_Agentic_Commerce_Product_Visibility` watches product saves and per-product exclude-flag writes, and fires `wc_stripe_agentic_commerce_schedule_full_resync` when a product crosses that boundary — adapters whose own filter verdict changes must fire the same action.
+
+## Shipping diagnostics
+
+Only methods with a static numeric cost (flat rate, free shipping) are written
+to the feed's `shipping` column. Live-rate, calculated, and most third-party
+methods price at checkout and are omitted. When that leaves a zone with no
+shipping in the feed, agents see no shipping for that destination.
+
+This is discoverable two ways:
+
+- **Logs** (WooCommerce → Status → Logs, `woocommerce-gateway-stripe` source),
+  written only while Stripe logging (**Stripe settings → Settings → Log error
+  messages**) or verbose debug mode is enabled:
+  - *warning* — "some shipping zones have no flat-rate method and contribute no
+    shipping options to the feed" (with the list of zone names), logged once per
+    sync so a store with many live-rate-only zones does not swamp the log.
+- **Feed preview** (**Stripe settings → Agentic commerce → Preview feed**): the
+  `shipping_warnings` array names every zone with no flat-rate fallback, each
+  linking to that zone's shipping settings.
+
+**Recommended fix:** add a low-cost or representative flat-rate method to each
+live-rate-only zone so the catalog advertises a shipping price. That method is
+not feed-only: WooCommerce offers it at checkout next to the live rate, so pick
+a cost the merchant is willing to honour.
+
+## Coupons and discounts
+
+WooCommerce coupons do not participate in delegated (in-agent) checkout. Prices come from the synced product feed and are computed by Stripe, the shopper pays inside the AI agent, and the WooCommerce order is only created afterwards from the completed session. Consequences merchants should be aware of:
+
+- No WooCommerce coupon is ever applied to an agentic order — agentic shoppers pay the feed price.
+- WooCommerce coupon **usage limits are neither enforced nor consumed** by agentic sales. A limited-use coupon promotion does not cap, count, or discount purchases completed inside an agent.
+- Stripe-side discounts are rejected at order creation: a session whose `total_details.amount_discount` is non-zero fails with an explicit error (WooCommerce recalculates full catalog prices, so such an order could never pass total verification). Because Stripe captures payment before the webhook fires, the failure surfaces in logs for manual resolution.
+
+This limitation only affects delegated (in-agent) purchases. In feed-only / redirect mode (see [Checkout Mode](#checkout-mode-embedded-vs-redirect) above) the shopper completes checkout on the store, where WooCommerce coupons and their usage limits apply as usual.
+
+Whether to support promotions in delegated checkout (mapping Stripe discounts to WooCommerce coupons and enforcing usage limits at `finalize_checkout`) is an open product decision, tracked in STRIPE-1257.
+
+## Merchant configuration cookbook
+
+Recipes for onboarding catalogs that mix standard SKUs with configurator
+products (WooCommerce Product Add-Ons, TM Extra Product Options, Composite
+Products, individually-priced Bundles).
+For live-rate shipping, see [Shipping diagnostics](#shipping-diagnostics) above.
+
+### Prerequisites (two-step enablement)
+
+Agentic Commerce is gated twice:
+
+1. **Developer feature flag** — `_wcstripe_feature_agentic_commerce` (default
+   **off**); also filterable via `wc_stripe_is_agentic_commerce_enabled`. The
+   feed, REST endpoints, and settings UI do not exist until this is on.
+2. **Merchant toggle** — **Stripe settings → Agentic commerce → "Enable agentic
+   commerce"** (option `wc_stripe_agentic_commerce_enabled`). Required for the
+   catalog to sync.
+
+The merchant's Stripe account must also be on API version **`2025-12-15.preview`**
+or higher (the agentic webhooks use it; see `class-wc-stripe-api.php`).
+
+### Configurator / add-on products: exclude or redirect
+
+Configurator products carry runtime-variable pricing the static feed can't
+represent, and the order-creation path rejects any line whose live price drifts
+from what Stripe charged. Two toggles handle them without code, under
+**Stripe settings → Agentic commerce**:
+
+| Toggle | Option key | Default | Effect |
+| --- | --- | --- | --- |
+| **Exclude products with add-ons or configurators from the feed** | `wc_stripe_agentic_commerce_auto_exclude_addons` | **on** | Detected products never enter the catalog. On by default so a shopper-priced product never reaches an agent at a wrong price; turn off to let these SKUs appear in agents. |
+| **Redirect shoppers to my store for products with add-ons or configurators** | `wc_stripe_agentic_commerce_auto_redirect_checkout_addons` | off | Detected products stay discoverable but agents send shoppers to the store to configure and buy (`disable_checkout=true`). Use to keep discoverability while moving the actual purchase on-site. |
+
+Exclude wins over redirect (an excluded product is never in the feed, so its
+checkout mode is moot). Both only set **defaults** — a custom filter still wins.
+
+Detection is per-product postmeta (resolved on the parent for variations).
+Out of the box it covers `_product_addons`, `tm_meta_cpf_options`,
+`composite_data`, and `_wc_pb_priced_individually=yes`. It deliberately does not
+key off `class_exists()` of the plugins, since an active plugin says nothing
+about whether a given product is configured. Extend the detected set without
+The default detection includes the following checks:
+ - WooCommerce Product Add-Ons - `_product_addons`
+ - TM Extra Product Options - `tm_meta_cpf_options`
+ - Composite Products - `composite_data`
+ - WooCommerce Bundles that are individually priced - `_wc_pb_priced_individually=yes`
+
+Additional meta fields can be added using the `wc_stripe_agentic_commerce_addon_detection_meta_keys` filter:
+
+```php
+add_filter(
+    'wc_stripe_agentic_commerce_addon_detection_meta_keys',
+    function ( array $meta_keys, WC_Product $product ): array {
+        $meta_keys[] = '_my_configurator_meta';
+        return $meta_keys;
+    },
+    10,
+    2
+);
+```
+
+In cases where more nuanced checks are required, or when the meta keys to check are not consistent,
+use the `wc_stripe_agentic_commerce_product_has_addon` filter:
+
+```php
+add_filter(
+    'wc_stripe_agentic_commerce_product_has_addon',
+    function ( bool $has_addons, WC_Product $product ): bool {
+        return $product->is_type( 'my_configurator' ) ? true : $has_addons;
+    },
+    10,
+    2
+);
+```
+
+### Per-product redirect without the toggles
+
+To redirect specific products regardless of the toggles, hook the
+`wc_stripe_agentic_commerce_disable_checkout` filter shown above. To exclude
+specific products from the feed, hook `wc_stripe_agentic_commerce_should_sync_product`:
+
+```php
+add_filter(
+    'wc_stripe_agentic_commerce_should_sync_product',
+    function ( bool $should_sync, WC_Product $product ): bool {
+        return $product->get_meta( '_hide_from_agents' ) ? false : $should_sync;
+    },
+    10,
+    2
+);
+```
+
+The feed preview's per-product `advisories` list flags excluded products (with
+the branch that excluded them), redirect-only products (with the source), and
+SKU-less products, so these decisions are self-diagnosable in WooCommerce.

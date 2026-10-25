@@ -162,6 +162,16 @@ class ShortcodeRenderUtils {
 	}
 
 	/**
+	 * Wraps an embed in a pointer-events:none container for the Elementor editor,
+	 * so the iframe cannot swallow the click Elementor needs to select the widget.
+	 *
+	 * @param string $embed The embed HTML to wrap.
+	 */
+	public static function wrap_embed_for_elementor_editor( $embed ) {
+		return '<div class="hubspot-embed-editor-preview" style="pointer-events:none;">' . $embed . '</div>';
+	}
+
+	/**
 	 * Generates 10 characters long string with random values
 	 */
 	private static function get_random_number_string() {

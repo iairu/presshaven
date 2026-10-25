@@ -14,6 +14,7 @@ use MailPoet\Newsletter\Shortcodes\Categories\Link;
 use MailPoet\Newsletter\Shortcodes\Categories\Newsletter;
 use MailPoet\Newsletter\Shortcodes\Categories\Site;
 use MailPoet\Newsletter\Shortcodes\Categories\Subscriber;
+use MailPoet\Util\Helpers;
 use MailPoet\WP\Functions as WPFunctions;
 
 class Shortcodes {
@@ -80,7 +81,18 @@ class Shortcodes {
   }
 
   public function extract($content, $categories = false) {
-    $categories = (is_array($categories)) ? implode('|', $categories) : false;
+    if (is_array($categories)) {
+      $normalizedCategories = array_values(array_filter(
+        array_map(
+          static fn($v): string => is_scalar($v) ? preg_quote((string)$v, '/') : '',
+          $categories
+        ),
+        static fn(string $v): bool => $v !== ''
+      ));
+      $categories = $normalizedCategories ? implode('|', $normalizedCategories) : false;
+    } else {
+      $categories = false;
+    }
     // match: [category:shortcode] or [category|category|...:shortcode]
     // dot not match: [category://shortcode] - avoids matching http/ftp links
     $regex = sprintf(
@@ -116,6 +128,9 @@ class Shortcodes {
    * The syntax is [category:action arg1="value1" arg2="value2"], it can have multiple arguments.
    */
   public function matchWPShortcode($shortcode) {
+    // Decode HTML entities in case the shortcode came from HTML content (e.g., &quot; -> ")
+    $shortcode = html_entity_decode($shortcode, ENT_QUOTES, 'UTF-8');
+
     $atts = $this->wp->shortcodeParseAtts(trim($shortcode, '[]/'));
     if (empty($atts[0])) {
       return [];
@@ -130,11 +145,13 @@ class Shortcodes {
       if (is_numeric($attrName)) {
         continue; // Skip unnamed attributes
       }
-      $shortcodeDetails['arguments'][$attrName] = $attrValue;
+      // Strip surrounding quotes from attribute values
+      $cleanValue = trim($attrValue, '"\' ');
+      $shortcodeDetails['arguments'][$attrName] = $cleanValue;
       // Make a shortcut to the first argument
       if (!isset($shortcodeDetails['argument'])) {
         $shortcodeDetails['argument'] = $attrName;
-        $shortcodeDetails['argument_value'] = $attrValue;
+        $shortcodeDetails['argument_value'] = $cleanValue;
       }
     }
     return $shortcodeDetails;
@@ -195,7 +212,11 @@ class Shortcodes {
     return $processedShortcodes;
   }
 
-  public function replace($content, $contentSource = null, $categories = null) {
+  /**
+   * @param bool $isPlainText Content that is never parsed as HTML, such as a subject line,
+   *   so values are inserted as they are even where the text looks like a tag.
+   */
+  public function replace($content, $contentSource = null, $categories = null, bool $isPlainText = false) {
     $shortcodes = $this->extract($content, $categories);
     if (!$shortcodes) {
       return $content;
@@ -207,7 +228,125 @@ class Shortcodes {
       $shortcodes,
       ($contentSource) ? $contentSource : $content
     );
-    return str_replace($shortcodes, $processedShortcodes, $content);
+    $content = (string)$content;
+    $shortcodesInsideTags = $isPlainText ? [] : $this->findShortcodesInsideTags($content, $shortcodes);
+    if (!$shortcodesInsideTags) {
+      return str_replace($shortcodes, $processedShortcodes, $content);
+    }
+    // Text around the tagged positions is replaced chunk by chunk, so shortcode-like
+    // text inside an encoded value is never replaced a second time.
+    $result = '';
+    $cursor = 0;
+    foreach ($shortcodesInsideTags as $position => $index) {
+      if ($position < $cursor) {
+        continue;
+      }
+      $result .= str_replace($shortcodes, $processedShortcodes, substr($content, $cursor, $position - $cursor));
+      $result .= $this->encodeForAttribute((string)$processedShortcodes[$index]);
+      $cursor = $position + strlen($shortcodes[$index]);
+    }
+    return $result . str_replace($shortcodes, $processedShortcodes, substr($content, $cursor));
+  }
+
+  /**
+   * @param string[] $shortcodes
+   * @return array<int, int> shortcode index by its position in $content, in position order
+   */
+  private function findShortcodesInsideTags(string $content, array $shortcodes): array {
+    $occurrences = [];
+    foreach ($shortcodes as $index => $shortcode) {
+      $position = strpos($content, $shortcode);
+      while ($position !== false) {
+        $occurrences[$position] = $index;
+        $position = strpos($content, $shortcode, $position + strlen($shortcode));
+      }
+    }
+    ksort($occurrences);
+    $tags = $this->findTags($content, (int)array_key_last($occurrences));
+    $tagIndex = 0;
+    $found = [];
+    foreach ($occurrences as $position => $index) {
+      while (isset($tags[$tagIndex]) && $tags[$tagIndex][1] < $position) {
+        $tagIndex++;
+      }
+      if (isset($tags[$tagIndex]) && $tags[$tagIndex][0] < $position) {
+        $found[$position] = $index;
+      }
+    }
+    return $found;
+  }
+
+  /**
+   * Lists start tags beginning before $until as [offset of "<", offset of ">"] pairs,
+   * scanning from the start the way a browser does. A start tag is "<" followed by a
+   * letter, so text such as "<3" or "< $50" is not one. Sending joins the subject,
+   * HTML and plain-text body with Helpers::DIVIDER, so each part is scanned on its
+   * own and a stray "<" in the subject cannot shift where tags are found in the HTML.
+   *
+   * @return array<int, array{int, int}>
+   */
+  private function findTags(string $content, int $until): array {
+    $tags = [];
+    $offset = 0;
+    foreach (explode(Helpers::DIVIDER, $content) as $part) {
+      $lastGreaterThan = strrpos($part, '>');
+      $start = strpos($part, '<');
+      while ($start !== false && $start < $lastGreaterThan && $offset + $start < $until) {
+        $end = ctype_alpha(substr($part, $start + 1, 1)) ? $this->findTagEnd($part, $start + 1) : null;
+        if ($end !== null) {
+          $tags[] = [$offset + $start, $offset + $end];
+        }
+        $start = strpos($part, '<', $end ?? $start + 1);
+      }
+      $offset += strlen($part) + strlen(Helpers::DIVIDER);
+      if ($offset > $until) {
+        break;
+      }
+    }
+    return $tags;
+  }
+
+  /**
+   * Returns the offset of the ">" that closes the tag, or null when the tag is never
+   * closed. As in a browser, a quote opens an attribute value only right after "=",
+   * and a ">" inside a quoted value does not close the tag.
+   */
+  private function findTagEnd(string $content, int $cursor): ?int {
+    $length = strlen($content);
+    while ($cursor < $length) {
+      $cursor += strcspn($content, '"\'>', $cursor);
+      if ($cursor >= $length) {
+        return null;
+      }
+      if ($content[$cursor] === '>') {
+        return $cursor;
+      }
+      $beforeQuote = $cursor - 1;
+      while (ctype_space($content[$beforeQuote])) {
+        $beforeQuote--;
+      }
+      if ($content[$beforeQuote] !== '=') {
+        $cursor++;
+        continue;
+      }
+      $closingQuote = strpos($content, $content[$cursor], $cursor + 1);
+      if ($closingQuote === false) {
+        return null;
+      }
+      $cursor = $closingQuote + 1;
+    }
+    return null;
+  }
+
+  private function encodeForAttribute(string $value): string {
+    // Ampersands are left alone: values such as URLs must stay byte-identical, and
+    // an ampersand cannot end an attribute value.
+    return strtr($value, [
+      '"' => '&quot;',
+      "'" => '&#039;',
+      '<' => '&lt;',
+      '>' => '&gt;',
+    ]);
   }
 
   private function getCategoryObject($category): ?CategoryInterface {

@@ -131,7 +131,7 @@ class wfDiagnostic
 				'tests' => array(
 					'connectToServer2' => __('Connecting to Wordfence servers (https)', 'wordfence'),
 					'connectToSelf' => __('Connecting back to this site', 'wordfence'),
-					'connectToSelfIpv6' => array('raw' => true, 'value' => wp_kses(sprintf(/* translators: Support URL */ __('Connecting back to this site via IPv6 (Not required; this may not be an issue on some sites. <a href="%s" target="_blank" rel="noopener noreferrer" class="wfhelp"><span class="wfhelpextra">Click here to learn whether this is an issue</span></a>)', 'wordfence'), wfSupportController::esc_supportURL(wfSupportController::ITEM_DIAGNOSTICS_IPV6)), array('a'=>array('href'=>array(), 'target'=>array(), 'rel'=>array(), 'class'=>array()), 'span'=>array('class'=>array())))),
+					'connectToSelfIpv6' => array('raw' => true, 'value' => wp_kses(sprintf(/* translators: Support URL */ __('Connecting back to this site via IPv6 (Not required; if your scans run completely, IPv6 connectivity is not an issue. <a href="%s" target="_blank" rel="noopener noreferrer" class="wfhelp"><span class="wfhelpextra">Click here to learn whether this is an issue</span></a>)', 'wordfence'), wfSupportController::esc_supportURL(wfSupportController::ITEM_DIAGNOSTICS_IPV6)), array('a'=>array('href'=>array(), 'target'=>array(), 'rel'=>array(), 'class'=>array()), 'span'=>array('class'=>array())))),
 					'serverIP' => __('IP(s) used by this server', 'wordfence'),
 				)
 			),
@@ -178,6 +178,89 @@ class wfDiagnostic
 	public function getResults()
 	{
 		return $this->results;
+	}
+
+	/**
+	 * Returns the WordPress hooks shown in diagnostics.
+	 *
+	 * @return array
+	 */
+	public static function getWordPressDiagnosticHooks() {
+		return array(
+			'authenticate',
+			'wp_authenticate',
+			'wp_login',
+		);
+	}
+
+	public static function getWordPressHookListeners($hookName) {
+		global $wp_filter;
+
+		if (!is_string($hookName) || $hookName === '' || !function_exists('has_filter') || has_filter($hookName) === false) {
+			return array();
+		}
+
+		if (!isset($wp_filter[$hookName]) || !($wp_filter[$hookName] instanceof WP_Hook) || !is_array($wp_filter[$hookName]->callbacks)) {
+			return array();
+		}
+
+		$listeners = array();
+		foreach ($wp_filter[$hookName]->callbacks as $priority => $callbacks) {
+			if (!is_array($callbacks)) {
+				continue;
+			}
+
+			foreach ($callbacks as $callback) {
+				if (!is_array($callback) || !isset($callback['function'])) {
+					continue;
+				}
+
+				$parsed = wfUtils::parseCallable($callback['function']);
+				$className = '';
+				$functionName = '';
+				if (is_array($parsed)) {
+					$className = isset($parsed[wfUtils::CALLABLE_CLASS]) && is_string($parsed[wfUtils::CALLABLE_CLASS]) ? $parsed[wfUtils::CALLABLE_CLASS] : '';
+					if (!empty($parsed[wfUtils::CALLABLE_IS_CLOSURE])) {
+						$functionName = 'Closure';
+					}
+					else {
+						$functionName = isset($parsed[wfUtils::CALLABLE_FUNCTION]) && is_string($parsed[wfUtils::CALLABLE_FUNCTION]) ? $parsed[wfUtils::CALLABLE_FUNCTION] : '';
+					}
+				}
+
+				if ($className === '' && is_array($callback['function']) && isset($callback['function'][0]) && is_object($callback['function'][0])) {
+					$className = get_class($callback['function'][0]);
+				}
+
+				if ($className === '' && is_object($callback['function']) && !($callback['function'] instanceof Closure)) {
+					$className = get_class($callback['function']);
+				}
+
+				if ($functionName === '') {
+					if (is_string($callback['function'])) {
+						$functionName = $callback['function'];
+					}
+					else if (is_array($callback['function']) && isset($callback['function'][1]) && is_string($callback['function'][1])) {
+						$functionName = $callback['function'][1];
+					}
+					else if ($callback['function'] instanceof Closure) {
+						$functionName = 'Closure';
+					}
+					else if (is_object($callback['function']) && method_exists($callback['function'], '__invoke')) {
+						$functionName = '__invoke';
+					}
+				}
+
+				$listeners[] = array(
+					'hook' => $hookName,
+					'priority' => (int) $priority,
+					'class' => $className,
+					'function' => $functionName,
+				);
+			}
+		}
+
+		return $listeners;
 	}
 	
 	public function wfVersion() {
@@ -800,26 +883,29 @@ class wfDiagnostic
 						
 						return array(
 							'test' => false,
-							'warn' => true,
 							'infoOnly' => true,
 							'message' => __('IPv6 DNS resolution failed', 'wordfence'),
 							'detail' => array('escaped' => $detail, 'textonly' => $detailTextOnly),
 						);
 					}
 				}
+				if (is_bool($result)) {
+					$result = array('test' => $result, 'message' => $result ? 'OK' : 'FAIL');
+				}
+				$result['infoOnly'] = true;
 				return $result;
 			}
 			catch (wfCurlInterceptionFailedException $e) {
 				return array(
 					'test' => false,
-					'warn' => true,
+					'infoOnly' => true,
 					'message' => __('This diagnostic is unavailable as cURL appears to be supported, but was not used by WordPress for this request', 'wordfence')
 				);
 			}
 		}
 		return array(
 			'test' => false,
-			'warn' => true,
+			'infoOnly' => true,
 			'message' => __('This diagnostic requires cURL', 'wordfence')
 		);
 	}

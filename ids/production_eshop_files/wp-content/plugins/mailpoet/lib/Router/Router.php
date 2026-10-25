@@ -59,10 +59,15 @@ class Router {
 
     $endpoint = $this->container->get($endpointClass);
 
-    if (!method_exists($endpoint, $this->endpointAction) || !in_array($this->endpointAction, $endpoint->allowedActions)) {
+    if (!is_object($endpoint) || !method_exists($endpoint, $this->endpointAction)) {
       return $this->terminateRequest(self::RESPONSE_ERROR, __('Invalid router endpoint action', 'mailpoet'));
     }
-    if (!$this->validatePermissions($this->endpointAction, $endpoint->permissions)) {
+    $allowedActions = property_exists($endpoint, 'allowedActions') && is_array($endpoint->allowedActions) ? $endpoint->allowedActions : [];
+    if (!in_array($this->endpointAction, $allowedActions)) {
+      return $this->terminateRequest(self::RESPONSE_ERROR, __('Invalid router endpoint action', 'mailpoet'));
+    }
+    $permissions = property_exists($endpoint, 'permissions') && is_array($endpoint->permissions) ? $endpoint->permissions : [];
+    if (!$this->validatePermissions($this->endpointAction, $permissions)) {
       return $this->terminateRequest(self::RESPONE_FORBIDDEN, __('You do not have the required permissions.', 'mailpoet'));
     }
     WPFunctions::get()->doAction('mailpoet_conflict_resolver_router_url_query_parameters');
@@ -109,9 +114,16 @@ class Router {
   }
 
   public function validatePermissions($endpointAction, $permissions) {
-    // validate action permission if defined, otherwise validate global permission
-    return(!empty($permissions['actions'][$endpointAction])) ?
-      $this->accessControl->validatePermission($permissions['actions'][$endpointAction]) :
-      $this->accessControl->validatePermission($permissions['global']);
+    if (!is_array($permissions)) {
+      return false;
+    }
+    $actionPermissions = $permissions['actions'] ?? null;
+    if (is_array($actionPermissions) && !empty($actionPermissions[$endpointAction])) {
+      return $this->accessControl->validatePermission($actionPermissions[$endpointAction]);
+    }
+    if (!isset($permissions['global'])) {
+      return false;
+    }
+    return $this->accessControl->validatePermission($permissions['global']);
   }
 }

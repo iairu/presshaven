@@ -4,8 +4,8 @@ if (!defined('ABSPATH')) exit;
 use MailPoetVendor\Twig\Compiler;
 class DivBinary extends AbstractBinary
 {
- public function operator(Compiler $compiler) : Compiler
- {
- return $compiler->raw('/');
- }
+public function operator(Compiler $compiler): Compiler
+{
+return $compiler->raw('/');
+}
 }

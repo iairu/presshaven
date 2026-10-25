@@ -10,15 +10,23 @@ use Automattic\WooCommerce\EmailEditor\Engine\Settings_Controller;
 use Automattic\WooCommerce\EmailEditor\Engine\Theme_Controller;
 use Automattic\WooCommerce\EmailEditor\Engine\User_Theme;
 use MailPoet\Analytics\Analytics;
+use MailPoet\Config\AccessControl;
 use MailPoet\Config\Env;
 use MailPoet\Config\Installer;
 use MailPoet\Config\ServicesChecker;
 use MailPoet\EmailEditor\Integrations\MailPoet\EmailEditor as EditorInitController;
 use MailPoet\Entities\NewsletterEntity;
+use MailPoet\Features\FeaturesController;
 use MailPoet\Newsletter\NewslettersRepository;
+use MailPoet\Services\AuthorizedEmailsController;
+use MailPoet\Services\AuthorizedSenderDomainController;
+use MailPoet\Services\Bridge;
 use MailPoet\Settings\SettingsController as MailPoetSettings;
 use MailPoet\Settings\UserFlagsController;
+use MailPoet\Subscribers\TrackingConsentController;
 use MailPoet\Util\CdnAssetUrl;
+use MailPoet\Util\FreeDomains;
+use MailPoet\Util\License\Features\CapabilitiesManager;
 use MailPoet\Util\License\Features\Subscribers as SubscribersFeature;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -47,6 +55,18 @@ class EditorPageRenderer {
 
   private Analytics $analytics;
 
+  private Bridge $bridge;
+
+  private AuthorizedEmailsController $authorizedEmailsController;
+
+  private AuthorizedSenderDomainController $senderDomainController;
+
+  private FeaturesController $featuresController;
+
+  private CapabilitiesManager $capabilitiesManager;
+
+  private TrackingConsentController $trackingConsentController;
+
   public function __construct(
     WPFunctions $wp,
     CdnAssetUrl $cdnAssetUrl,
@@ -56,7 +76,13 @@ class EditorPageRenderer {
     MailPoetSettings $mailpoetSettings,
     NewslettersRepository $newslettersRepository,
     UserFlagsController $userFlagsController,
-    Analytics $analytics
+    Analytics $analytics,
+    Bridge $bridge,
+    AuthorizedEmailsController $authorizedEmailsController,
+    AuthorizedSenderDomainController $senderDomainController,
+    FeaturesController $featuresController,
+    CapabilitiesManager $capabilitiesManager,
+    TrackingConsentController $trackingConsentController
   ) {
     $this->wp = $wp;
     $this->settingsController = Email_Editor_Container::container()->get(Settings_Controller::class);
@@ -70,16 +96,23 @@ class EditorPageRenderer {
     $this->newslettersRepository = $newslettersRepository;
     $this->userFlagsController = $userFlagsController;
     $this->analytics = $analytics;
+    $this->bridge = $bridge;
+    $this->authorizedEmailsController = $authorizedEmailsController;
+    $this->senderDomainController = $senderDomainController;
+    $this->featuresController = $featuresController;
+    $this->capabilitiesManager = $capabilitiesManager;
+    $this->trackingConsentController = $trackingConsentController;
   }
 
   public function render() {
-    $postId = isset($_GET['post']) ? intval($_GET['post']) : 0;
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- is_numeric guard plus int cast is the sanitization
+    $rawPostId = $_GET['post'] ?? null;
+    $postId = is_numeric($rawPostId) ? intval($rawPostId) : 0;
     $post = $this->wp->getPost($postId);
-    $currentPostType = $post->post_type; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-
-    if (!$post instanceof \WP_Post || $currentPostType !== EditorInitController::MAILPOET_EMAIL_POST_TYPE) {
+    if (!$post instanceof \WP_Post || $post->post_type !== EditorInitController::MAILPOET_EMAIL_POST_TYPE) { // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
       return;
     }
+    $currentPostType = $post->post_type; // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
     $newsletter = $this->newslettersRepository->findOneBy(['wpPost' => $postId]);
     if (!$newsletter instanceof NewsletterEntity) {
       return;
@@ -100,25 +133,14 @@ class EditorPageRenderer {
       $editorIntegrationAssetsParams['version'],
       true
     );
+    $this->wp->wpSetScriptTranslations('email_editor_integration', 'mailpoet');
     $this->wp->wpEnqueueStyle(
       'email_editor_integration',
       Env::$assetsUrl . '/dist/js/email_editor_integration/email_editor_integration.css',
-      [],
+      ['wp-components'],
       $editorIntegrationAssetsParams['version']
     );
 
-    // Email editor rich text JS - Because we Personalization Tags depend on Gutenberg 19.8.0 and higher
-    // the following code replaces used Rich Text for the version containing the necessary changes.
-    $assetsParams = require Env::$assetsPath . '/dist/js/email-editor/assets/rich-text.asset.php';
-    $this->wp->wpDeregisterScript('wp-rich-text');
-    $this->wp->wpEnqueueScript(
-      'wp-rich-text',
-      Env::$assetsUrl . '/dist/js/email-editor/assets/rich-text.js',
-      $assetsParams['dependencies'],
-      $assetsParams['version'],
-      true
-    );
-    // End of replacing Rich Text package.
     $styleParams = require Env::$assetsPath . '/dist/js/email-editor/style/style.asset.php';
     $this->wp->wpEnqueueStyle(
       'mailpoet_email_editor',
@@ -131,7 +153,7 @@ class EditorPageRenderer {
     // See: https://github.com/WordPress/WordPress/blob/753817d462955eb4e40a89034b7b7c375a1e43f3/wp-admin/edit-form-blocks.php#L116-L120.
     wp_add_inline_script(
       'wp-blocks',
-      sprintf('wp.blocks.setCategories( %s );', wp_json_encode(get_block_categories($post))),
+      sprintf('wp.blocks.setCategories( %s );', wp_json_encode(get_block_categories($post), JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)),
       'after'
     );
 
@@ -139,7 +161,7 @@ class EditorPageRenderer {
     // See: https://github.com/WordPress/WordPress/blob/753817d462955eb4e40a89034b7b7c375a1e43f3/wp-admin/edit-form-blocks.php#L144C1-L148C3.
     wp_add_inline_script(
       'wp-blocks',
-      sprintf('wp.blocks.unstable__bootstrapServerSideBlockDefinitions( %s );', wp_json_encode(get_block_editor_server_block_settings()))
+      sprintf('wp.blocks.unstable__bootstrapServerSideBlockDefinitions( %s );', wp_json_encode(get_block_editor_server_block_settings(), JSON_HEX_TAG | JSON_UNESCAPED_SLASHES))
     );
 
     $editorSettings = $this->settingsController->get_settings();
@@ -164,9 +186,9 @@ class EditorPageRenderer {
       'email_editor_integration',
       'WooCommerceEmailEditor',
       [
-        'current_post_type' => esc_js($currentPostType),
+        'current_post_type' => $currentPostType,
         'current_post_id' => $post->ID,
-        'current_wp_user_email' => esc_js($currentUserEmail),
+        'current_wp_user_email' => $currentUserEmail,
         'editor_settings' => $editorSettings,
         'editor_theme' => $this->themeController->get_base_theme()->get_raw_data(),
         'user_theme_post_id' => $this->userTheme->get_user_theme_post()->ID,
@@ -178,7 +200,7 @@ class EditorPageRenderer {
       ]
     );
 
-    $installedAtDiff = (new \DateTime($this->mailpoetSettings->get('installed_at')))->diff(new \DateTime());
+    $installedAtDiff = (new \DateTime((string)$this->mailpoetSettings->get('installed_at')))->diff(new \DateTime());
     // Survey should be displayed only if there are 2 and more emails and the user hasn't seen it yet
     $displaySurvey = ($this->newslettersRepository->getCountOfEmailsWithWPPost() > 1) && !$this->userFlagsController->get(UserFlagsController::EMAIL_EDITOR_SURVEY);
 
@@ -189,11 +211,18 @@ class EditorPageRenderer {
     $inline_script_data = [
       'mailpoet_premium_plugin_installed' => Installer::isPluginInstalled(Installer::PREMIUM_PLUGIN_SLUG),
       'mailpoet_premium_active' => $this->servicesChecker->isPremiumPluginActive(),
-      'mailpoet_premium_plugin_download_url' => $this->subscribersFeature->hasValidPremiumKey() ? $installer->generatePluginDownloadUrl() : null,
       'mailpoet_premium_plugin_activation_url' => $installer->generatePluginActivationUrl(Installer::PREMIUM_PLUGIN_PATH),
       'mailpoet_has_valid_api_key' => $this->subscribersFeature->hasValidApiKey(),
       'mailpoet_has_valid_premium_key' => $this->subscribersFeature->hasValidPremiumKey(),
       'mailpoet_has_premium_support' => $this->subscribersFeature->hasPremiumSupport(),
+      'mailpoet_mta_method' => $this->mailpoetSettings->get('mta.method'),
+      'mailpoet_mss_active' => $this->bridge->isMailpoetSendingServiceEnabled(),
+      'mailpoet_authorized_emails' => [],
+      'mailpoet_verified_sender_domains' => [],
+      'mailpoet_partially_verified_sender_domains' => [],
+      'mailpoet_all_sender_domains' => [],
+      'mailpoet_sender_restrictions' => [],
+      'mailpoet_free_domains' => FreeDomains::FREE_DOMAINS,
       'mailpoet_plugin_partial_key' => $this->servicesChecker->generatePartialApiKey(),
       'mailpoet_subscribers_count' => $this->subscribersFeature->getSubscribersCount(),
       'mailpoet_subscribers_limit' => $this->subscribersFeature->getSubscribersLimit(),
@@ -208,12 +237,47 @@ class EditorPageRenderer {
       'mailpoet_site_url' => $this->wp->siteUrl(),
       'mailpoet_review_request_illustration_url' => $this->cdnAssetUrl->generateCdnUrl('review-request/review-request-illustration.20190815-1427.svg'),
       'mailpoet_installed_days_ago' => (int)$installedAtDiff->format('%a'),
+      'mailpoet_segments_api' => [
+        'root' => rtrim($this->wp->escUrlRaw($this->wp->restUrl()), '/'),
+        'nonce' => $this->wp->wpCreateNonce('wp_rest'),
+      ],
       'mailpoet_is_automation_newsletter' => $isAutomationNewsletter,
+      // Only a site that asks EVERY subscriber for consent needs an opt-out
+      // link in its emails, so only then does content validation ask for one.
+      'mailpoet_tracking_consent_ask_all' => $this->trackingConsentController->getSubscriberChoice() === TrackingConsentController::CHOICE_ASK_ALL,
       'mailpoet_automation_id' => $automationId,
+      'mailpoet_feature_flags' => $this->featuresController->getAllFlags(),
+      'mailpoet_capabilities' => $this->capabilitiesManager->getCapabilities(),
+      'mailpoet_ai_text_generation_available' => $this->wp->currentUserCan(AccessControl::PERMISSION_MANAGE_EMAILS)
+        && function_exists('wp_ai_client_prompt')
+        && wp_ai_client_prompt('test')->is_supported_for_text_generation(),
     ];
-    $this->wp->wpAddInlineScript('email_editor_integration', implode('', array_map(function ($key) use ($inline_script_data) {
-      return sprintf("var %s=%s;", $key, wp_json_encode($inline_script_data[$key]));
-    }, array_keys($inline_script_data))), 'before');
+    if ($this->bridge->isMailpoetSendingServiceEnabled()) {
+      $inline_script_data['mailpoet_authorized_emails'] = $this->authorizedEmailsController->getAuthorizedEmailAddresses();
+      $inline_script_data['mailpoet_verified_sender_domains'] = $this->senderDomainController->getFullyVerifiedSenderDomains(true);
+      $inline_script_data['mailpoet_partially_verified_sender_domains'] = $this->senderDomainController->getPartiallyVerifiedSenderDomains(true);
+      $inline_script_data['mailpoet_all_sender_domains'] = $this->senderDomainController->getAllSenderDomains();
+      $inline_script_data['mailpoet_sender_restrictions'] = [
+        'lowerLimit' => AuthorizedSenderDomainController::LOWER_LIMIT,
+        'isAuthorizedDomainRequiredForNewCampaigns' => $this->senderDomainController->isAuthorizedDomainRequiredForNewCampaigns(),
+        'campaignTypes' => NewsletterEntity::CAMPAIGN_TYPES,
+        'skipAuthorization' => $this->senderDomainController->shouldSkipAuthorization(),
+      ];
+    }
+    $emailRegexScript = <<<'JS'
+var mailpoet_email_regex = /(?=^[+a-zA-Z0-9_.!#$%&'*\/=?^`{|}~-]+@([a-zA-Z0-9-]+\.)+[a-zA-Z0-9]{2,63}$)(?=^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,})))/;
+JS;
+    $inlineScript = implode('', array_map(function ($key) use ($inline_script_data) {
+      return sprintf("var %s=%s;", $key, wp_json_encode($inline_script_data[$key], JSON_HEX_TAG | JSON_UNESCAPED_SLASHES));
+    }, array_keys($inline_script_data)));
+    $inlineScript = $emailRegexScript . $inlineScript;
+    $scriptHandles = [
+      'email_editor_integration',
+      'mailpoet-powered-by-mailpoet-block',
+    ];
+    foreach ($scriptHandles as $scriptHandle) {
+      $this->wp->wpAddInlineScript($scriptHandle, $inlineScript, 'before');
+    }
 
     // Load CSS from Post Editor
     $this->wp->wpEnqueueStyle('wp-edit-post');
@@ -244,10 +308,21 @@ class EditorPageRenderer {
       '/wp/v2/taxonomies?context=view',
     ];
 
-    if ($templateSlug) {
+    if (is_string($templateSlug) && $templateSlug !== '') {
       $routes[] = '/wp/v2/templates/lookup?slug=' . $templateSlug;
     } else {
-      $routes[] = '/wp/v2/mailpoet_email?context=edit&per_page=30&status=publish,sent';
+      // Keep the query in sync with the woocommerce_email_editor_recent_emails_query filter
+      // in assets/js/src/mailpoet-email-editor-integration/index.ts. If the two differ,
+      // the editor asks for a different path and the preloaded data is not used.
+      $routes[] = '/wp/v2/mailpoet_email?context=edit&per_page=30&status=publish,sent,draft';
+    }
+
+    // Preload personalization tags for automation emails
+    // Note: The registry is already extended in render() before preloading.
+    // We include post_id to match the WooCommerce Email Editor's request URL.
+    $newsletter = $this->newslettersRepository->findOneBy(['wpPost' => $post->ID]);
+    if ($newsletter && ($newsletter->isAutomation() || $newsletter->isAutomationTransactional())) {
+      $routes[] = '/woocommerce-email-editor/v1/personalization_tags?context=view&per_page=-1&post_id=' . intval($post->ID);
     }
 
     // Preload the data for the specified routes
@@ -262,7 +337,7 @@ class EditorPageRenderer {
       'wp-blocks',
       sprintf(
         'wp.apiFetch.use( wp.apiFetch.createPreloadingMiddleware( %s ) );',
-        wp_json_encode($preloadData)
+        wp_json_encode($preloadData, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
       )
     );
   }
@@ -278,8 +353,8 @@ class EditorPageRenderer {
       <script type="text/javascript"> <?php // phpcs:ignore ?>
         window.mailpoet_analytics_enabled = true;
         window.mailpoet_analytics_public_id = '<?php echo esc_js($publicId); ?>';
-        window.mailpoet_analytics_new_public_id = <?php echo wp_json_encode($isPublicIdNew); ?>;
-        window.mailpoet_3rd_party_libs_enabled = <?php echo wp_json_encode($libs3rdPartyEnabled); ?>;
+        window.mailpoet_analytics_new_public_id = <?php echo wp_json_encode($isPublicIdNew, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES); ?>;
+        window.mailpoet_3rd_party_libs_enabled = <?php echo wp_json_encode($libs3rdPartyEnabled, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES); ?>;
         window.mailpoet_version = '<?php echo esc_js(MAILPOET_VERSION); ?>';
         window.mailpoet_premium_version = '<?php echo esc_js((defined('MAILPOET_PREMIUM_VERSION')) ? MAILPOET_PREMIUM_VERSION : ''); ?>';
       </script>

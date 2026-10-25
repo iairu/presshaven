@@ -1,88 +1,121 @@
-import { Button } from '@bsf/force-ui';
+import { useState } from '@wordpress/element';
+import { Button, Loader, toast } from '@bsf/force-ui';
 import { CloudArrowDownIcon } from '@heroicons/react/24/outline';
 import { __ } from '@wordpress/i18n';
 
+// Makes Excel read the file as UTF-8, so accented and non-Latin names survive.
+const UTF8_BOM = '\uFEFF';
+
+// How long the file's temporary address stays valid. Some browsers read it after the click returns.
+const REVOKE_DELAY_MS = 10000;
+
+// A cell that starts with one of these is run as a formula by Excel and Sheets. Customers type
+// their own names at checkout, so a leading quote keeps such a value as plain text.
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+const escapeCell = ( value ) => {
+	let text = value === null || value === undefined ? '' : String( value );
+
+	if ( FORMULA_START.test( text ) ) {
+		text = `'${ text }`;
+	}
+	if ( /[",\r\n]/.test( text ) ) {
+		text = '"' + text.replace( /"/g, '""' ) + '"';
+	}
+	return text;
+};
+
+/**
+ * Turn rows into CSV text.
+ *
+ * @param {Object[]} rows    The rows to write.
+ * @param {Object[]} columns Which fields to write, in order: `{ key, label, format? }`. The label
+ *                           is the header; `format( value, row )` turns the stored value into
+ *                           what the file shows.
+ * @return {string} CSV text.
+ */
+const convertToCSV = ( rows, columns ) => {
+	const lines = [ columns.map( ( column ) => escapeCell( column.label ) ) ];
+
+	rows.forEach( ( row ) => {
+		lines.push(
+			columns.map( ( column ) =>
+				escapeCell(
+					column.format
+						? column.format( row[ column.key ], row )
+						: row[ column.key ]
+				)
+			)
+		);
+	} );
+
+	return lines.map( ( line ) => line.join( ',' ) ).join( '\r\n' ) + '\r\n';
+};
+
+const downloadCSV = ( csv, fileName ) => {
+	const blob = new Blob( [ UTF8_BOM + csv ], {
+		type: 'text/csv;charset=utf-8;',
+	} );
+	const url = URL.createObjectURL( blob );
+	const link = document.createElement( 'a' );
+
+	link.setAttribute( 'href', url );
+	link.setAttribute( 'download', fileName );
+	link.style.visibility = 'hidden';
+	document.body.appendChild( link );
+	link.click();
+	document.body.removeChild( link );
+	setTimeout( () => URL.revokeObjectURL( url ), REVOKE_DELAY_MS );
+};
+
+/**
+ * Button that downloads rows as a CSV file.
+ *
+ * @param {Object}   props
+ * @param {Object[]} props.columns     Fields to write: `{ key, label, format? }`.
+ * @param {Object[]} [props.data]      Rows to export, when they are already in the browser.
+ * @param {Function} [props.fetchData] Returns a promise of the rows instead, for lists the server
+ *                                     pages. Called when the button is pressed.
+ * @param {string}   [props.filename]  File name, without the date or extension.
+ * @param {string}   [props.className]
+ * @param {boolean}  [props.disabled]
+ * @return {JSX.Element} The button.
+ */
 const ExportToExcel = ( {
+	columns,
 	data,
+	fetchData,
 	filename = 'export',
 	className = '',
 	disabled = false,
 } ) => {
-	const today = new Date();
-	const day = String( today.getDate() ).padStart( 2, '0' );
-	const month = String( today.getMonth() + 1 ).padStart( 2, '0' ); // Months are 0-indexed
-	const year = today.getFullYear();
+	const [ isExporting, setIsExporting ] = useState( false );
 
-	const formattedDate = `${ day }-${ month }-${ year }`;
+	const handleExport = async () => {
+		setIsExporting( true );
+		try {
+			const rows = fetchData ? await fetchData() : data;
+			if ( ! rows || ! rows.length ) {
+				toast.error(
+					__( 'Nothing to export', 'woo-cart-abandonment-recovery' )
+				);
+				return;
+			}
 
-	// Converts array of objects to CSV string.
-	const convertToCSV = ( dataArray ) => {
-		if ( ! dataArray || ! dataArray.length ) {
-			return '';
+			const today = new Date();
+			const stamp = [
+				String( today.getDate() ).padStart( 2, '0' ),
+				String( today.getMonth() + 1 ).padStart( 2, '0' ),
+				today.getFullYear(),
+			].join( '-' );
+			downloadCSV( convertToCSV( rows, columns ), `${ filename }_${ stamp }.csv` );
+		} catch ( error ) {
+			toast.error(
+				__( 'Export failed', 'woo-cart-abandonment-recovery' )
+			);
+		} finally {
+			setIsExporting( false );
 		}
-
-		// Get headers from the first object's keys
-		const headers = Object.keys( dataArray[ 0 ] );
-
-		// Create CSV header row
-		let csvContent = headers.join( ',' ) + '\r\n';
-
-		// Add data rows
-		dataArray.forEach( ( item ) => {
-			const row = headers.map( ( header ) => {
-				// Handle values that need quotes (contain commas, quotes, or newlines)
-				let value =
-					item[ header ] === null || item[ header ] === undefined
-						? ''
-						: item[ header ];
-				value = String( value );
-
-				// Escape quotes by doubling them and wrap in quotes if needed
-				if (
-					value.includes( ',' ) ||
-					value.includes( '"' ) ||
-					value.includes( '\n' )
-				) {
-					value = '"' + value.replace( /"/g, '""' ) + '"';
-				}
-
-				return value;
-			} );
-
-			csvContent += row.join( ',' ) + '\r\n';
-		} );
-
-		return csvContent;
-	};
-
-	// Handles the export button click.
-	const handleExport = () => {
-		if ( ! data || ! data.length ) {
-			return;
-		}
-
-		const csvContent = convertToCSV( data );
-
-		// Create a Blob with the CSV content
-		const blob = new Blob( [ csvContent ], {
-			type: 'text/csv;charset=utf-8;',
-		} );
-
-		// Create a download link
-		const link = document.createElement( 'a' );
-
-		// Create a URL for the blob
-		const url = URL.createObjectURL( blob );
-
-		// Set link properties
-		link.setAttribute( 'href', url );
-		link.setAttribute( 'download', `${ filename }_${ formattedDate }.csv` );
-		link.style.visibility = 'hidden';
-
-		// Append link to document, trigger click, and remove
-		document.body.appendChild( link );
-		link.click();
-		document.body.removeChild( link );
 	};
 
 	return (
@@ -94,8 +127,16 @@ const ExportToExcel = ( {
 			type="button"
 			variant="primary"
 			onClick={ handleExport }
-			disabled={ disabled || ! data || data.length === 0 }
-			icon={ <CloudArrowDownIcon aria-label="icon" /> }
+			disabled={
+				disabled || isExporting || ( ! fetchData && ! data?.length )
+			}
+			icon={
+				isExporting ? (
+					<Loader className="p-0" icon={ null } size="sm" />
+				) : (
+					<CloudArrowDownIcon aria-hidden="true" />
+				)
+			}
 		>
 			{ __( 'Export', 'woo-cart-abandonment-recovery' ) }
 		</Button>

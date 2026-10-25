@@ -19,7 +19,7 @@ class Router {
 
   public function checkRedirects(): void {
     $url = null;
-    if (isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'mailpoet-newsletters') {
+    if (isset($_GET['page']) && is_string($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'mailpoet-newsletters') {
       $url = $this->checkNewslettersRedirect();
     }
     if (!$url) return;
@@ -28,7 +28,7 @@ class Router {
   }
 
   private function checkNewslettersRedirect(): ?string {
-    if (isset($_GET['stats'])) {
+    if (isset($_GET['stats']) && is_string($_GET['stats'])) {
       return '/wp-admin/admin.php?page=mailpoet-newsletters#/stats/' . sanitize_text_field(wp_unslash($_GET['stats']));
     }
 

@@ -122,6 +122,6 @@ class ProgressBar
      */
     protected function setup_progress_bar()
     {
-        $this->progress_bar = \WP_CLI\Utils\make_progress_bar($this->message, $this->count, $this->interval);
+        $this->progress_bar = \WpifyWooDeps\WP_CLI\Utils\make_progress_bar($this->message, $this->count, $this->interval);
     }
 }

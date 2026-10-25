@@ -1,52 +1,86 @@
 import { __ } from '@wordpress/i18n';
-
-import { useStateValue } from '@Store';
-import Heading from '@Components/onboarding/Heading';
+import ErrorBanner from '@Components/onboarding/ErrorBanner';
+import Header from '@Components/onboarding/Header';
 import NavigationButtons from '@Components/onboarding/NavigationButtons';
-import ConditionsHelper from '@Utils/conditions';
 import RenderFields from '@Components/RenderFields';
+import {
+	useOnboardingFieldsStep,
+	useOnboardingNavigation,
+} from '../hooks';
 
 const FollowUpChannels = () => {
-	const [ state ] = useStateValue();
-	const settingsData = state?.settingsData || {};
-	const fieldSettings =
-		settingsData?.fields?.onboarding[ 'follow-up-channels' ] || {};
-	const settingsValues = settingsData?.values || {};
-	const conditions = new ConditionsHelper();
+	const {
+		fieldSettings,
+		settingsValues,
+		conditions,
+		valueFor,
+		handleChange,
+		saveAndAdvance,
+		isSaving,
+		saveError,
+		fieldErrors,
+		handleValidity,
+	} = useOnboardingFieldsStep( 'follow-up-channels' );
+	const { navigateToNextRoute } = useOnboardingNavigation();
+
 	return (
-		<div className="flex flex-col gap-2">
-			<Heading
-				title={ __(
+		<>
+			<Header
+				heading={ __(
 					'Select Your Follow Up Sequence Channels',
 					'woo-cart-abandonment-recovery'
 				) }
-				description={ __(
-					'Set up cart settings to match your store’s needs in just a few clicks.',
+				subHeading={ __(
+					'Choose how you reach shoppers who leave items in their cart.',
 					'woo-cart-abandonment-recovery'
 				) }
 			/>
-			<div>
+
+			{ saveError && (
+				<ErrorBanner
+					title={ __(
+						'Could not save your changes',
+						'woo-cart-abandonment-recovery'
+					) }
+					content={ saveError }
+				/>
+			) }
+
+			<div className="-mt-6">
 				{ fieldSettings.fields &&
 					Object.keys( fieldSettings.fields ).map( ( field ) => {
 						const data = fieldSettings.fields[ field ];
-						const value =
-							settingsValues[ data?.name ] ?? data.value ?? '';
 						const isActive = conditions.isActiveControl(
 							data,
 							settingsValues
 						);
+
 						return (
 							<RenderFields
 								key={ data?.name || field }
 								data={ data }
-								value={ value }
+								value={ valueFor( data ) }
 								isActive={ isActive }
+								handleChange={ handleChange }
+								errors={ fieldErrors }
+								onValidityChange={ handleValidity }
+								autoSave={ false }
+								size="sm"
 							/>
 						);
 					} ) }
 			</div>
-			<NavigationButtons />
-		</div>
+
+			<NavigationButtons
+				nextLoading={ isSaving }
+				nextLabel={
+					isSaving
+						? __( 'Saving…', 'woo-cart-abandonment-recovery' )
+						: undefined
+				}
+				onNext={ () => saveAndAdvance( navigateToNextRoute ) }
+			/>
+		</>
 	);
 };
 

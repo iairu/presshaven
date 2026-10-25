@@ -47,7 +47,7 @@ class DaemonHttpRunner {
   public function ping() {
     // if Tracy enabled & called by 'MailPoet Cron' user agent, disable Tracy Bar
     // (happens in CronHelperTest because it's not a real integration test - calls other WP instance)
-    $userAgent = isset($_SERVER['HTTP_USER_AGENT']) ?
+    $userAgent = isset($_SERVER['HTTP_USER_AGENT']) && is_string($_SERVER['HTTP_USER_AGENT']) ?
       sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT']))
       : null;
     if (class_exists(Debugger::class) && $userAgent === 'MailPoet Cron') {
@@ -68,8 +68,9 @@ class DaemonHttpRunner {
         $error = __('Daemon does not exist.', 'mailpoet');
       } else {
         if (
-          !isset($requestData['token']) ||
-          $requestData['token'] !== $this->settingsDaemonData['token']
+          !isset($requestData['token'], $this->settingsDaemonData['token']) ||
+          !is_scalar($requestData['token']) ||
+          !hash_equals((string)$this->settingsDaemonData['token'], (string)$requestData['token'])
         ) {
           $error = 'Invalid or missing token.';
         }

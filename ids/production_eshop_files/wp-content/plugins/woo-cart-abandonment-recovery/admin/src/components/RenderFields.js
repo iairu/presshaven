@@ -18,7 +18,6 @@ import TestMessage from '@Components/fields/TestMessage';
 import TextareaDropdownField from '@Components/fields/TextareaDropdownField';
 import PasswordField from '@Components/fields/PasswordField';
 import DynamicSelectField from '@Components/fields/DynamicSelectField';
-import SelectSearchField from '@Components/fields/SelectSearchField';
 import RollbackField from '@Components/fields/RollbackField';
 
 const RenderFields = ( {
@@ -29,6 +28,9 @@ const RenderFields = ( {
 	errors,
 	autoSave = true,
 	disableStyle = false,
+	size,
+	initDelay,
+	onValidityChange,
 } ) => {
 	if ( ! isActive ) {
 		return null;
@@ -48,12 +50,14 @@ const RenderFields = ( {
 					{ ...( handleChange && { handleChange } ) }
 					{ ...( autoSave !== undefined && { autoSave } ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
+					{ ...( size !== undefined && { size } ) }
 				/>
 			);
 		case 'text':
 			return (
 				<TextField
 					title={ data.label }
+					placeholder={ data?.placeholder }
 					description={ data.desc }
 					name={ data.name }
 					value={ value }
@@ -73,6 +77,7 @@ const RenderFields = ( {
 			return (
 				<SubjectField
 					title={ data.label }
+					placeholder={ data?.placeholder }
 					description={ data.desc }
 					name={ data.name }
 					value={ value }
@@ -116,6 +121,7 @@ const RenderFields = ( {
 						error: errors[ data.name ],
 					} ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
+					{ ...( initDelay !== undefined && { initDelay } ) }
 				/>
 			);
 		case 'number':
@@ -126,13 +132,22 @@ const RenderFields = ( {
 					name={ data.name }
 					value={ value }
 					min={ data.min }
+					max={ data.max }
 					after={ data.after }
+					suffix={ data.suffix }
 					isPro={ data?.is_pro }
 					proUpgradeMessage={ data?.pro_upgrade_message }
 					{ ...( handleChange && { handleChange } ) }
 					{ ...( autoSave !== undefined && { autoSave } ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
 					{ ...( data.className && { className: data.className } ) }
+					{ ...( size !== undefined && { size } ) }
+					{ ...( data.ariaLabel && { ariaLabel: data.ariaLabel } ) }
+					{ ...( errors &&
+						errors[ data.name ] && {
+						error: errors[ data.name ],
+					} ) }
+					{ ...( onValidityChange && { onValidityChange } ) }
 				/>
 			);
 		case 'select':
@@ -148,6 +163,8 @@ const RenderFields = ( {
 					{ ...( handleChange && { handleChange } ) }
 					{ ...( autoSave !== undefined && { autoSave } ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
+					{ ...( data.ariaLabel && { ariaLabel: data.ariaLabel } ) }
+					{ ...( data.className && { className: data.className } ) }
 				/>
 			);
 		case 'dynamic-select':
@@ -163,23 +180,10 @@ const RenderFields = ( {
 					isPro={ data?.is_pro }
 					proUpgradeMessage={ data?.pro_upgrade_message }
 					{ ...( handleChange && { handleChange } ) }
-					{ ...( autoSave !== undefined && { autoSave } ) }
-					{ ...( disableStyle !== undefined && { disableStyle } ) }
-				/>
-			);
-		case 'select-search':
-			return (
-				<SelectSearchField
-					title={ data.label }
-					description={ data.desc }
-					name={ data.name }
-					value={ value }
-					placeholder={ data.placeholder }
-					action={ data.action }
-					actionNonce={ data.action_nonce }
-					isPro={ data?.is_pro }
-					proUpgradeMessage={ data?.pro_upgrade_message }
-					{ ...( handleChange && { handleChange } ) }
+					{ ...( errors &&
+						errors[ data.name ] && {
+						error: errors[ data.name ],
+					} ) }
 					{ ...( autoSave !== undefined && { autoSave } ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
 				/>
@@ -198,6 +202,7 @@ const RenderFields = ( {
 					{ ...( handleChange && { handleChange } ) }
 					{ ...( autoSave !== undefined && { autoSave } ) }
 					{ ...( disableStyle !== undefined && { disableStyle } ) }
+					{ ...( size !== undefined && { size } ) }
 				/>
 			);
 		case 'webhook-url':

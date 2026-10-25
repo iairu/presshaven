@@ -1,30 +1,22 @@
 <?php
 
-/**
- * The Capture Card Payment endpoint.
- *
- * @package WooCommerce\PayPalCommerce\ApiClient\Endpoint
- */
 declare (strict_types=1);
 namespace WooCommerce\PayPalCommerce\WcGateway\Endpoint;
 
 use WooCommerce\PayPalCommerce\Vendor\Psr\Log\LoggerInterface;
 use RuntimeException;
-use stdClass;
+use WC_AJAX;
 use WC_Order;
 use WooCommerce\PayPalCommerce\ApiClient\Authentication\Bearer;
-use WooCommerce\PayPalCommerce\ApiClient\Endpoint\OrderEndpoint;
 use WooCommerce\PayPalCommerce\ApiClient\Endpoint\RequestTrait;
+use WooCommerce\PayPalCommerce\ApiClient\Entity\Order;
 use WooCommerce\PayPalCommerce\ApiClient\Entity\PurchaseUnit;
+use WooCommerce\PayPalCommerce\ApiClient\Exception\PayPalApiException;
+use WooCommerce\PayPalCommerce\ApiClient\Factory\ExperienceContextBuilder;
 use WooCommerce\PayPalCommerce\ApiClient\Factory\OrderFactory;
 use WooCommerce\PayPalCommerce\ApiClient\Factory\PurchaseUnitFactory;
-use WooCommerce\PayPalCommerce\Session\SessionHandler;
-use WooCommerce\PayPalCommerce\WcGateway\Settings\Settings;
-use WooCommerce\PayPalCommerce\WcSubscriptions\Helper\RealTimeAccountUpdaterHelper;
+use WooCommerce\PayPalCommerce\Settings\Data\SettingsProvider;
 use WP_Error;
-/**
- * Class CaptureCardPayment
- */
 class CaptureCardPayment
 {
     use RequestTrait;
@@ -52,96 +44,98 @@ class CaptureCardPayment
      * @var PurchaseUnitFactory
      */
     private $purchase_unit_factory;
-    /**
-     * The order endpoint.
-     *
-     * @var OrderEndpoint
-     */
-    private $order_endpoint;
-    /**
-     * The session handler.
-     *
-     * @var SessionHandler
-     */
-    private $session_handler;
-    /**
-     * Real Time Account Updater helper.
-     *
-     * @var RealTimeAccountUpdaterHelper
-     */
-    private $real_time_account_updater_helper;
-    /**
-     * The settings.
-     *
-     * @var Settings
-     */
-    private $settings;
+    private SettingsProvider $settings_provider;
+    private ExperienceContextBuilder $experience_context_builder;
     /**
      * The logger.
      *
      * @var LoggerInterface
      */
     private $logger;
-    /**
-     * CaptureCardPayment constructor.
-     *
-     * @param string                       $host The host.
-     * @param Bearer                       $bearer The bearer.
-     * @param OrderFactory                 $order_factory The order factory.
-     * @param PurchaseUnitFactory          $purchase_unit_factory The purchase unit factory.
-     * @param OrderEndpoint                $order_endpoint The order endpoint.
-     * @param SessionHandler               $session_handler The session handler.
-     * @param RealTimeAccountUpdaterHelper $real_time_account_updater_helper Real Time Account Updater helper.
-     * @param Settings                     $settings The settings.
-     * @param LoggerInterface              $logger The logger.
-     */
-    public function __construct(string $host, Bearer $bearer, OrderFactory $order_factory, PurchaseUnitFactory $purchase_unit_factory, OrderEndpoint $order_endpoint, SessionHandler $session_handler, RealTimeAccountUpdaterHelper $real_time_account_updater_helper, Settings $settings, LoggerInterface $logger)
+    public function __construct(string $host, Bearer $bearer, OrderFactory $order_factory, PurchaseUnitFactory $purchase_unit_factory, SettingsProvider $settings_provider, ExperienceContextBuilder $experience_context_builder, LoggerInterface $logger)
     {
         $this->host = $host;
         $this->bearer = $bearer;
         $this->order_factory = $order_factory;
         $this->purchase_unit_factory = $purchase_unit_factory;
-        $this->order_endpoint = $order_endpoint;
-        $this->session_handler = $session_handler;
-        $this->real_time_account_updater_helper = $real_time_account_updater_helper;
-        $this->settings = $settings;
+        $this->settings_provider = $settings_provider;
+        $this->experience_context_builder = $experience_context_builder;
         $this->logger = $logger;
     }
     /**
      * Creates PayPal order from the given card vault id.
      *
-     * @param string   $vault_id Vault id.
-     * @param string   $custom_id Custom id.
-     * @param string   $invoice_id Invoice id.
-     * @param WC_Order $wc_order The WC order.
-     * @return stdClass
      * @throws RuntimeException When request fails.
      */
-    public function create_order(string $vault_id, string $custom_id, string $invoice_id, WC_Order $wc_order): stdClass
+    public function create_order(string $vault_id, WC_Order $wc_order, string $resume_nonce = ''): Order
     {
-        $intent = $this->settings->has('intent') && strtoupper((string) $this->settings->get('intent')) === 'AUTHORIZE' ? 'AUTHORIZE' : 'CAPTURE';
-        $items = array($this->purchase_unit_factory->from_wc_cart());
-        // phpcs:disable WordPress.Security.NonceVerification
-        $pay_for_order = wc_clean(wp_unslash($_GET['pay_for_order'] ?? ''));
-        $order_key = wc_clean(wp_unslash($_GET['key'] ?? ''));
-        // phpcs:enable
-        if ($pay_for_order && $order_key === $wc_order->get_order_key()) {
-            $items = array($this->purchase_unit_factory->from_wc_order($wc_order));
+        $intent = strtoupper($this->settings_provider->payment_intent()) === 'AUTHORIZE' ? 'AUTHORIZE' : 'CAPTURE';
+        $items = array($this->purchase_unit_factory->from_wc_order($wc_order));
+        /**
+         * PayPal's vaulted-card 3D Secure return hits the return URL WITHOUT the
+         * order token (it appends liability_shift/code/state instead), so
+         * ReturnUrlEndpoint cannot identify the order by token. Encode the WC order
+         * id plus a per-order resume nonce in the return URL so the return handler
+         * can locate and authenticate the order.
+         */
+        $card_3ds_return_url = add_query_arg(array('ppcp_resume_wc_order' => $wc_order->get_id(), 'ppcp_resume_nonce' => $resume_nonce), home_url(WC_AJAX::get_endpoint(\WooCommerce\PayPalCommerce\WcGateway\Endpoint\ReturnUrlEndpoint::ENDPOINT)));
+        $card = array('vault_id' => $vault_id, 'stored_credential' => array('payment_initiator' => 'CUSTOMER', 'payment_type' => 'UNSCHEDULED', 'usage' => 'SUBSEQUENT'), 'experience_context' => $this->experience_context_builder->with_current_locale()->with_current_brand_name()->with_custom_return_url($card_3ds_return_url)->with_custom_cancel_url(wc_get_checkout_url())->build()->to_array());
+        /**
+         * Request 3D Secure for the vaulted card charge so cards whose issuer
+         * mandates Strong Customer Authentication can authenticate and produce a
+         * liability shift. Without it such captures are rejected. Mirrors the
+         * contingency the fresh-card flow applies via
+         * `ppcp_create_order_request_body_data`.
+         */
+        $three_d_secure_contingency = $this->settings_provider->three_d_secure_enum() ? apply_filters('woocommerce_paypal_payments_three_d_secure_contingency', $this->settings_provider->three_d_secure_enum()) : '';
+        if (in_array($three_d_secure_contingency, array('SCA_ALWAYS', 'SCA_WHEN_REQUIRED'), \true)) {
+            $card['attributes'] = array('verification' => array('method' => $three_d_secure_contingency));
         }
         $data = array('intent' => $intent, 'purchase_units' => array_map(static function (PurchaseUnit $item): array {
             return $item->to_array();
-        }, $items), 'payment_source' => array('card' => array('vault_id' => $vault_id, 'stored_credential' => array('payment_initiator' => 'CUSTOMER', 'payment_type' => 'UNSCHEDULED', 'usage' => 'SUBSEQUENT'))), 'custom_id' => $custom_id, 'invoice_id' => $invoice_id);
+        }, $items), 'payment_source' => array('card' => $card));
         $bearer = $this->bearer->bearer();
         $url = trailingslashit($this->host) . 'v2/checkout/orders';
         $args = array('method' => 'POST', 'headers' => array('Authorization' => 'Bearer ' . $bearer->token(), 'Content-Type' => 'application/json', 'PayPal-Request-Id' => uniqid('ppcp-', \true)), 'body' => wp_json_encode($data));
-        $response = $this->request($url, $args);
-        if ($response instanceof WP_Error) {
-            throw new RuntimeException($response->get_error_message());
+        $json = $this->execute_order_request($url, $args);
+        return $this->order_factory->from_paypal_response($json);
+    }
+    /**
+     * Executes the order creation request, retrying once on an incomplete response.
+     *
+     * PayPal's v2/checkout/orders endpoint intermittently returns a success status
+     * with a response body missing the required id field. A single retry with a new
+     * idempotency key recovers from this transient issue.
+     *
+     * @param string $url  The request URL.
+     * @param array  $args The request arguments.
+     * @return \stdClass Decoded response with a valid id.
+     *
+     * @throws RuntimeException When the response is incomplete after retry or PayPal returns a non-success status.
+     */
+    private function execute_order_request(string $url, array $args): \stdClass
+    {
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            if ($attempt > 0) {
+                $this->logger->info('Retrying PayPal order creation after incomplete response.');
+                $args['headers']['PayPal-Request-Id'] = uniqid('ppcp-', \true);
+            }
+            $response = $this->request($url, $args);
+            if ($response instanceof WP_Error) {
+                throw new RuntimeException($response->get_error_message());
+            }
+            $json = json_decode($response['body']);
+            $status_code = (int) wp_remote_retrieve_response_code($response);
+            if (!in_array($status_code, array(200, 201), \true)) {
+                $error = new PayPalApiException($json, $status_code);
+                $this->logger->warning($error->getMessage());
+                throw $error;
+            }
+            if ($json instanceof \stdClass && isset($json->id)) {
+                return $json;
+            }
+            $this->logger->warning('PayPal order response missing id.', array('status_code' => $status_code, 'response_body' => $response['body']));
         }
-        $decoded_response = json_decode($response['body']);
-        if (!isset($decoded_response->invoice_id)) {
-            $decoded_response->invoice_id = $invoice_id;
-        }
-        return $decoded_response;
+        throw new RuntimeException('PayPal order response missing id after retry.');
     }
 }

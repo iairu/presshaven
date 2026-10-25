@@ -23,7 +23,7 @@ class List_Command extends \ActionScheduler_WPCLI_Command
         if (!empty($this->assoc_args['fields'])) {
             $fields = $this->assoc_args['fields'];
         }
-        $formatter = new \WP_CLI\Formatter($this->assoc_args, $fields);
+        $formatter = new \WpifyWooDeps\WP_CLI\Formatter($this->assoc_args, $fields);
         $query_args = $this->assoc_args;
         /**
          * The `claimed` parameter expects a boolean or integer:
@@ -41,7 +41,7 @@ class List_Command extends \ActionScheduler_WPCLI_Command
         if (empty($query_args)) {
             $params = 'array()';
         }
-        \WP_CLI::debug(sprintf('as_get_scheduled_actions( %s, %s )', $params, $return_format));
+        \WpifyWooDeps\WP_CLI::debug(sprintf('as_get_scheduled_actions( %s, %s )', $params, $return_format));
         if (!empty($query_args['args'])) {
             $query_args['args'] = json_decode($query_args['args'], \true);
         }

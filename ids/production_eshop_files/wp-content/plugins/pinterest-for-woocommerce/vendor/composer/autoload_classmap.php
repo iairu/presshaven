@@ -7,5 +7,7 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Automattic\\Jetpack\\Autoloader\\AutoloadGenerator' => $vendorDir . '/automattic/jetpack-autoloader/src/AutoloadGenerator.php',
+    'Automattic\\Jetpack\\Device_Detection' => $vendorDir . '/automattic/jetpack-device-detection/src/class-device-detection.php',
+    'Automattic\\Jetpack\\Device_Detection\\User_Agent_Info' => $vendorDir . '/automattic/jetpack-device-detection/src/class-user-agent-info.php',
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
 );

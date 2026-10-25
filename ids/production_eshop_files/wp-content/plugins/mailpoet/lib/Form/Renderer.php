@@ -46,7 +46,7 @@ class Renderer {
 
   public function renderHTML(?FormEntity $form = null): string {
     if (($form instanceof FormEntity) && !empty($form->getBody()) && is_array($form->getSettings())) {
-      return $this->renderBlocks($form->getBody(), $form->getSettings() ?? [], $form->getId());
+      return $this->renderBlocks($form->getBody(), $form->getSettings(), $form->getId());
     }
     return '';
   }
@@ -72,9 +72,8 @@ class Renderer {
       if (
         $captchaEnabled
         && $block['type'] === FormEntity::SUBMIT_BLOCK_TYPE
-        && CaptchaConstants::isRecaptcha($this->settings->get('captcha.type'))
       ) {
-        $html .= $this->renderReCaptcha();
+        $html .= $this->renderCaptcha();
       }
       if (in_array($block['type'], [FormEntity::COLUMN_BLOCK_TYPE, FormEntity::COLUMNS_BLOCK_TYPE])) {
         $blocks = $block['body'] ?? [];
@@ -90,22 +89,35 @@ class Renderer {
     return '<label class="mailpoet_hp_email_label" style="display: none !important;">' . __('Please leave this field empty', 'mailpoet') . '<input type="email" name="data[email]"/></label>';
   }
 
+  private function renderCaptcha(): string {
+    $type = $this->settings->get('captcha.type');
+    if (CaptchaConstants::isReCaptcha($type)) {
+      return $this->renderReCaptcha();
+    }
+    if (CaptchaConstants::isTurnstile($type)) {
+      return $this->renderTurnstile();
+    }
+    return '';
+  }
+
   private function renderReCaptcha(): string {
     if ($this->settings->get('captcha.type') === CaptchaConstants::TYPE_RECAPTCHA) {
-      $siteKey = $this->settings->get('captcha.recaptcha_site_token');
+      $siteKey = (string)$this->settings->get('captcha.recaptcha_site_token');
       $size = '';
     } else {
-      $siteKey = $this->settings->get('captcha.recaptcha_invisible_site_token');
+      $siteKey = (string)$this->settings->get('captcha.recaptcha_invisible_site_token');
       $size = 'invisible';
     }
+    $siteKeyAttr = esc_attr($siteKey);
+    $fallbackUrl = esc_url('https://www.google.com/recaptcha/api/fallback?k=' . $siteKey);
 
-    $html = '<div class="mailpoet_recaptcha" data-sitekey="' . $siteKey . '" ' . ($size === 'invisible' ? 'data-size="invisible"' : '') . '>
+    $html = '<div class="mailpoet_recaptcha" data-sitekey="' . $siteKeyAttr . '" ' . ($size === 'invisible' ? 'data-size="invisible"' : '') . '>
       <div class="mailpoet_recaptcha_container"></div>
       <noscript>
         <div>
           <div class="mailpoet_recaptcha_noscript_container">
             <div>
-              <iframe src="https://www.google.com/recaptcha/api/fallback?k=' . $siteKey . '" frameborder="0" scrolling="no">
+              <iframe src="' . $fallbackUrl . '" frameborder="0" scrolling="no">
               </iframe>
             </div>
           </div>
@@ -122,5 +134,14 @@ class Renderer {
     }
 
     return $html;
+  }
+
+  private function renderTurnstile(): string {
+    $siteKey = esc_attr((string)$this->settings->get('captcha.turnstile_site_token'));
+
+    return '<div class="mailpoet_turnstile" data-sitekey="' . $siteKey . '">
+      <div class="mailpoet_turnstile_container"></div>
+      <input class="mailpoet_turnstile_field" type="hidden" name="turnstileWidgetId">
+    </div>';
   }
 }

@@ -14,6 +14,7 @@ use MailPoet\Logging\LoggerFactory;
 use MailPoet\Newsletter\AutomaticEmailsRepository;
 use MailPoet\Newsletter\Scheduler\AutomaticEmailScheduler;
 use MailPoet\Subscribers\SubscribersRepository;
+use MailPoet\Util\Helpers;
 use MailPoet\WooCommerce\Helper as WCHelper;
 use MailPoet\WP\Functions as WPFunctions;
 
@@ -63,8 +64,14 @@ class FirstPurchase {
 
     // We have to use a set of states because an order state after checkout differs for different payment methods
     $acceptedOrderStates = WPFunctions::get()->applyFilters('mailpoet_first_purchase_order_states', ['completed', 'processing']);
+    if (!is_array($acceptedOrderStates)) {
+      $acceptedOrderStates = ['completed', 'processing'];
+    }
 
     foreach ($acceptedOrderStates as $state) {
+      if (!is_string($state)) {
+        continue;
+      }
       WPFunctions::get()->addAction('woocommerce_order_status_' . $state, [
         $this,
         'scheduleEmailWhenOrderIsPlaced',
@@ -185,7 +192,7 @@ class FirstPurchase {
         'Email not scheduled because this is not the first order of the customer',
         [
           'order_id' => $orderId,
-          'customer_email' => $customerEmail,
+          'customer_email' => Helpers::maskEmail($customerEmail),
           'order_count' => $customerOrderCount,
         ]
       );
@@ -203,7 +210,7 @@ class FirstPurchase {
     if (!$subscriber instanceof SubscriberEntity) {
       $this->loggerFactory->getLogger(self::SLUG)->info(
         'Email not scheduled because the customer was not found as WooCommerce list subscriber',
-        ['order_id' => $orderId, 'customer_email' => $customerEmail]
+        ['order_id' => $orderId, 'customer_email' => Helpers::maskEmail($customerEmail)]
       );
       return;
     }
@@ -216,7 +223,7 @@ class FirstPurchase {
       'Email scheduled',
       [
         'order_id' => $orderId,
-        'customer_email' => $customerEmail,
+        'customer_email' => Helpers::maskEmail($customerEmail),
         'subscriber_id' => $subscriber->getId(),
       ]
     );

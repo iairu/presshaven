@@ -6,7 +6,10 @@ window.addEventListener('load', function () {
         action: "woocs_get_products_price_html",
         products_ids: ''
     }, function (data) {
-        data=JSON.parse(data);
+        // The server answers with wp_send_json, so jQuery may have parsed it already.
+        if (typeof data === 'string') {
+            data = JSON.parse(data);
+        }
         document.dispatchEvent(new CustomEvent('set_selectron23_value', {detail: {
                 value: data.current_currency,
                 selects: 'all'

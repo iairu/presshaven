@@ -1,5 +1,7 @@
 <?php
 
+use Automattic\WooCommerce\Enums\OrderStatus;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -72,11 +74,147 @@ class WC_Stripe_Order_Helper {
 	private const META_STRIPE_SETUP_INTENT = '_stripe_setup_intent';
 
 	/**
+	 * Meta key for Stripe checkout session ID.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_CHECKOUT_SESSION_ID = '_stripe_checkout_session_id';
+
+	/**
+	 * Meta key for whether the payment method should be saved to the store after checkout session payment.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_SHOULD_SAVE_PAYMENT_METHOD = '_stripe_should_save_payment_method_to_store';
+
+	/**
+	 * Meta key for Stripe presentment currency.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_PRESENTMENT_CURRENCY = '_stripe_presentment_currency';
+
+	/**
+	 * Meta key for Stripe presentment amount.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_PRESENTMENT_AMOUNT = '_stripe_presentment_amount';
+
+	/**
+	 * Meta key for Stripe customer ID.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_CUSTOMER_ID = '_stripe_customer_id';
+
+	/**
+	 * Meta key for Stripe card ID.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_CARD_ID = '_stripe_card_id';
+
+	/**
+	 * Meta key for Stripe mandate ID.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_MANDATE_ID = '_stripe_mandate_id';
+
+	/**
+	 * Meta key for the Stripe Multibanco data.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_MULTIBANCO_DATA = '_stripe_multibanco';
+
+	/**
+	 * Meta key for the Stripe refund status.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_REFUND_STATUS = '_stripe_refund_status';
+
+	/**
+	 * Meta key for the Stripe card brand.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_CARD_BRAND = '_stripe_card_brand';
+
+	/**
+	 * Meta key for Stripe charge captured.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_CHARGE_CAPTURED = '_stripe_charge_captured';
+
+	/**
+	 * Meta key for Stripe status final.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_STATUS_FINAL = '_stripe_status_final';
+
+	/**
+	 * Meta key for Stripe refund failure reason.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_REFUND_FAILURE_REASON = '_stripe_refund_failure_reason';
+
+	/**
+	 * Meta key for Stripe UPE payment type.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_UPE_PAYMENT_TYPE = '_stripe_upe_payment_type';
+
+	/**
+	 * Meta key for Stripe UPE waiting for redirect.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_UPE_WAITING_FOR_REDIRECT = '_stripe_upe_waiting_for_redirect';
+
+	/**
+	 * Meta key for Stripe UPE redirect processed.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_UPE_REDIRECT_PROCESSED = '_stripe_upe_redirect_processed';
+
+	/**
 	 * Meta key for payment awaiting action.
 	 *
 	 * @var string
 	 */
 	private const META_STRIPE_PAYMENT_AWAITING_ACTION = '_stripe_payment_awaiting_action';
+
+	/**
+	 * Meta key for lock payment to prevent multiple simultaneous payment attempts.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_LOCK_PAYMENT = '_stripe_lock_payment';
+
+	/**
+	 * Meta key for lock refund to prevent multiple simultaneous refund attempts.
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_LOCK_REFUND = '_stripe_lock_refund';
+
+	/**
+	 * Meta key for the In-Person Payments channel.
+	 *
+	 * Stores the ipp_channel value from Stripe PaymentIntent metadata.
+	 * Used to identify POS terminal payments (e.g. 'mobile_pos', 'mobile_store_management').
+	 *
+	 * @var string
+	 */
+	private const META_STRIPE_IPP_CHANNEL = '_stripe_ipp_channel';
 
 	/**
 	 * Singleton instance of the class.
@@ -90,7 +228,7 @@ class WC_Stripe_Order_Helper {
 	 *
 	 * @return WC_Stripe_Order_Helper
 	 */
-	public static function get_instance(): ?self {
+	public static function get_instance(): self {
 		if ( is_null( self::$instance ) ) {
 			self::$instance = new self();
 		}
@@ -117,11 +255,7 @@ class WC_Stripe_Order_Helper {
 	 * @return string $currency
 	 */
 	public function get_stripe_currency( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		return $order->get_meta( self::META_STRIPE_CURRENCY, true );
+		return $this->get_order_meta( $order, self::META_STRIPE_CURRENCY );
 	}
 
 	/**
@@ -133,11 +267,7 @@ class WC_Stripe_Order_Helper {
 	 * @param string $currency
 	 */
 	public function update_stripe_currency( WC_Order $order, string $currency ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_CURRENCY, $currency );
+		return $this->update_order_meta( $order, self::META_STRIPE_CURRENCY, $currency );
 	}
 
 	/**
@@ -149,15 +279,11 @@ class WC_Stripe_Order_Helper {
 	 * @return string $amount
 	 */
 	public function get_stripe_fee( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$amount = $order->get_meta( self::META_STRIPE_FEE, true );
+		$amount = $this->get_order_meta( $order, self::META_STRIPE_FEE );
 
 		// If not found let's check for legacy name.
 		if ( empty( $amount ) ) {
-			$amount = $order->get_meta( self::LEGACY_META_STRIPE_FEE, true );
+			$amount = $this->get_order_meta( $order, self::LEGACY_META_STRIPE_FEE );
 
 			// If found update to new name.
 			if ( $amount ) {
@@ -177,11 +303,7 @@ class WC_Stripe_Order_Helper {
 	 * @param float $amount
 	 */
 	public function update_stripe_fee( ?WC_Order $order = null, float $amount = 0.0 ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_FEE, $amount );
+		return $this->update_order_meta( $order, self::META_STRIPE_FEE, $amount );
 	}
 
 	/**
@@ -209,15 +331,11 @@ class WC_Stripe_Order_Helper {
 	 * @return string $amount
 	 */
 	public function get_stripe_net( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$amount = $order->get_meta( self::META_STRIPE_NET, true );
+		$amount = $this->get_order_meta( $order, self::META_STRIPE_NET );
 
 		// If not found let's check for legacy name.
 		if ( empty( $amount ) ) {
-			$amount = $order->get_meta( self::LEGACY_META_STRIPE_NET, true );
+			$amount = $this->get_order_meta( $order, self::LEGACY_META_STRIPE_NET );
 
 			// If found update to new name.
 			if ( $amount ) {
@@ -237,11 +355,7 @@ class WC_Stripe_Order_Helper {
 	 * @param float $amount
 	 */
 	public function update_stripe_net( ?WC_Order $order = null, float $amount = 0.0 ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_NET, $amount );
+		return $this->update_order_meta( $order, self::META_STRIPE_NET, $amount );
 	}
 
 	/**
@@ -268,12 +382,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|string|null
 	 */
-	public function get_stripe_source( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		return $order->get_meta( self::META_STRIPE_SOURCE_ID, true );
+	public function get_stripe_source_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_SOURCE_ID );
 	}
 
 	/**
@@ -285,12 +395,8 @@ class WC_Stripe_Order_Helper {
 	 * @param string $source_id
 	 * @return false|void
 	 */
-	public function update_stripe_source( ?WC_Order $order = null, string $source_id = '' ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_SOURCE_ID, $source_id );
+	public function update_stripe_source_id( ?WC_Order $order = null, string $source_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_SOURCE_ID, $source_id );
 	}
 
 	/**
@@ -301,12 +407,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|void
 	 */
-	public function delete_stripe_source( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->delete_meta_data( self::META_STRIPE_SOURCE_ID );
+	public function delete_stripe_source_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_SOURCE_ID );
 	}
 
 	/**
@@ -317,12 +419,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|string|null
 	 */
-	public function get_stripe_refund( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		return $order->get_meta( self::META_STRIPE_REFUND_ID, true );
+	public function get_stripe_refund_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_REFUND_ID );
 	}
 
 	/**
@@ -334,12 +432,8 @@ class WC_Stripe_Order_Helper {
 	 * @param string $refund_id
 	 * @return false|void
 	 */
-	public function update_stripe_refund( ?WC_Order $order = null, string $refund_id = '' ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_REFUND_ID, $refund_id );
+	public function update_stripe_refund_id( ?WC_Order $order = null, string $refund_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_REFUND_ID, $refund_id );
 	}
 
 	/**
@@ -350,12 +444,100 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|void
 	 */
-	public function delete_stripe_refund( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
+	public function delete_stripe_refund_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_REFUND_ID );
+	}
+
+	/**
+	 * Gets the Stripe refund ID stored on a refund record.
+	 *
+	 * The parent order's `_stripe_refund_id` only tracks the most recent refund, so
+	 * per-refund reconciliation must read the ID from the refund record itself.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order_Refund|null $refund
+	 * @return false|string|null
+	 */
+	public function get_stripe_refund_id_for_refund( ?WC_Order_Refund $refund = null ) {
+		if ( null === $refund ) {
 			return false;
 		}
 
-		$order->delete_meta_data( self::META_STRIPE_REFUND_ID );
+		return $refund->get_meta( self::META_STRIPE_REFUND_ID, true );
+	}
+
+	/**
+	 * Stores the Stripe refund ID on a refund record.
+	 *
+	 * Does not persist; callers must save the refund. `WC_Order_Refund` has no
+	 * `transaction_id` in WooCommerce core, so meta is the only portable storage.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order_Refund|null $refund
+	 * @param string $refund_id
+	 * @return false|void
+	 */
+	public function update_stripe_refund_id_for_refund( ?WC_Order_Refund $refund = null, string $refund_id = '' ) {
+		if ( null === $refund ) {
+			return false;
+		}
+
+		$refund->update_meta_data( self::META_STRIPE_REFUND_ID, $refund_id );
+	}
+
+	/**
+	 * Deletes the Stripe refund ID from a refund record.
+	 *
+	 * Does not persist; callers must save the refund.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order_Refund|null $refund
+	 * @return false|void
+	 */
+	public function delete_stripe_refund_id_for_refund( ?WC_Order_Refund $refund = null ) {
+		if ( null === $refund ) {
+			return false;
+		}
+
+		$refund->delete_meta_data( self::META_STRIPE_REFUND_ID );
+	}
+
+	/**
+	 * Returns the order's refund records that carry their own Stripe refund ID.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order $order
+	 * @return WC_Order_Refund[]
+	 */
+	public function get_refunds_with_stripe_refund_ids( WC_Order $order ): array {
+		return array_filter(
+			$order->get_refunds(),
+			function ( $refund ) {
+				return ! empty( $this->get_stripe_refund_id_for_refund( $refund ) );
+			}
+		);
+	}
+
+	/**
+	 * Deletes the Stripe refund ID from each of the order's refund records.
+	 *
+	 * Unlike the single-record methods, this persists each deletion — as a bulk
+	 * operation over records it looked up itself, callers have nothing to save.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order $order
+	 * @return void
+	 */
+	public function delete_stripe_refund_ids_from_refunds( WC_Order $order ): void {
+		foreach ( $this->get_refunds_with_stripe_refund_ids( $order ) as $refund ) {
+			$this->delete_stripe_refund_id_for_refund( $refund );
+			$refund->save_meta_data();
+		}
 	}
 
 	/**
@@ -366,12 +548,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|string|null
 	 */
-	public function get_stripe_intent( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		return $order->get_meta( self::META_STRIPE_INTENT_ID, true );
+	public function get_stripe_intent_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_INTENT_ID );
 	}
 
 	/**
@@ -383,12 +561,8 @@ class WC_Stripe_Order_Helper {
 	 * @param string $intent_id
 	 * @return false|void
 	 */
-	public function update_stripe_intent( ?WC_Order $order = null, string $intent_id = '' ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->update_meta_data( self::META_STRIPE_INTENT_ID, $intent_id );
+	public function update_stripe_intent_id( ?WC_Order $order = null, string $intent_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_INTENT_ID, $intent_id );
 	}
 
 	/**
@@ -399,12 +573,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|void
 	 */
-	public function delete_stripe_intent( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		$order->delete_meta_data( self::META_STRIPE_INTENT_ID );
+	public function delete_stripe_intent_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_INTENT_ID );
 	}
 
 	/**
@@ -415,12 +585,8 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order|null $order
 	 * @return false|string|null
 	 */
-	public function get_stripe_setup_intent( ?WC_Order $order = null ) {
-		if ( is_null( $order ) ) {
-			return false;
-		}
-
-		return $order->get_meta( self::META_STRIPE_SETUP_INTENT, true );
+	public function get_stripe_setup_intent_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_SETUP_INTENT );
 	}
 
 	/**
@@ -432,12 +598,536 @@ class WC_Stripe_Order_Helper {
 	 * @param string $intent_id
 	 * @return false|void
 	 */
-	public function update_stripe_setup_intent( ?WC_Order $order = null, string $intent_id = '' ) {
-		if ( is_null( $order ) ) {
-			return false;
+	public function update_stripe_setup_intent_id( ?WC_Order $order = null, string $intent_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_SETUP_INTENT, $intent_id );
+	}
+
+	/**
+	 * Gets the Stripe checkout session ID for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_checkout_session_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_CHECKOUT_SESSION_ID );
+	}
+
+	/**
+	 * Updates the Stripe checkout session ID for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $checkout_session_id
+	 * @return false|void
+	 */
+	public function update_stripe_checkout_session_id( ?WC_Order $order = null, string $checkout_session_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_CHECKOUT_SESSION_ID, $checkout_session_id );
+	}
+
+	/**
+	 * Deletes the Stripe checkout session ID for an order.
+	 *
+	 * @since 11.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|void
+	 */
+	public function delete_stripe_checkout_session_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_CHECKOUT_SESSION_ID );
+	}
+
+	/**
+	 * Gets whether the payment method should be saved to the store after a checkout session payment.
+	 *
+	 * @param WC_Order|null $order
+	 * @return bool
+	 */
+	public function get_should_save_stripe_payment_method( ?WC_Order $order = null ): bool {
+		return wc_string_to_bool( $this->get_order_meta( $order, self::META_STRIPE_SHOULD_SAVE_PAYMENT_METHOD ) );
+	}
+
+	/**
+	 * Sets the flag indicating the payment method should be saved to the store after a checkout session payment.
+	 *
+	 * @param WC_Order|null $order
+	 */
+	public function update_should_save_stripe_payment_method( ?WC_Order $order = null, bool $value = false ): void {
+		$this->update_order_meta( $order, self::META_STRIPE_SHOULD_SAVE_PAYMENT_METHOD, wc_bool_to_string( $value ) );
+	}
+
+	/**
+	 * Clears the flag indicating the payment method should be saved to the store after a checkout session payment.
+	 *
+	 * @param WC_Order|null $order
+	 */
+	public function delete_should_save_stripe_payment_method( ?WC_Order $order = null ): void {
+		$this->delete_order_meta( $order, self::META_STRIPE_SHOULD_SAVE_PAYMENT_METHOD );
+	}
+
+	/**
+	 * Gets the Stripe presentment currency for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_presentment_currency( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_PRESENTMENT_CURRENCY );
+	}
+
+	/**
+	 * Updates the Stripe presentment currency for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $presentment_currency
+	 * @return false|void
+	 */
+	public function update_stripe_presentment_currency( ?WC_Order $order = null, string $presentment_currency = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_PRESENTMENT_CURRENCY, strtolower( $presentment_currency ) );
+	}
+
+	/**
+	 * Gets the Stripe presentment amount for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_presentment_amount( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_PRESENTMENT_AMOUNT );
+	}
+
+	/**
+	 * Updates the Stripe presentment amount for order.
+	 *
+	 * @since 10.5.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param int           $presentment_amount Stripe minor-unit integer (e.g. 7800 for $78.00)
+	 * @return false|void
+	 */
+	public function update_stripe_presentment_amount( ?WC_Order $order = null, int $presentment_amount = 0 ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_PRESENTMENT_AMOUNT, $presentment_amount );
+	}
+
+	/**
+	 * Gets the Stripe customer ID for an order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_customer_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_CUSTOMER_ID );
+	}
+
+	/**
+	 * Updates the Stripe customer ID for an order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $customer_id
+	 * @return false|void
+	 */
+	public function update_stripe_customer_id( ?WC_Order $order = null, string $customer_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_CUSTOMER_ID, $customer_id );
+	}
+
+	/**
+	 * Deletes the Stripe customer ID for an order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|void
+	 */
+	public function delete_stripe_customer_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_CUSTOMER_ID );
+	}
+
+	/**
+	 * Gets the Stripe card for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_card_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_CARD_ID );
+	}
+
+	/**
+	 * Deletes the Stripe card for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|void
+	 */
+	public function delete_stripe_card_id( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_CARD_ID );
+	}
+
+	/**
+	 * Gets the Stripe mandate ID for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_mandate_id( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_MANDATE_ID );
+	}
+
+	/**
+	 * Updates the Stripe mandate ID for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $mandate_id
+	 * @return false|void
+	 */
+	public function update_stripe_mandate_id( ?WC_Order $order = null, string $mandate_id = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_MANDATE_ID, $mandate_id );
+	}
+
+	/**
+	 * Gets the Stripe Multibanco data for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_multibanco_data( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_MULTIBANCO_DATA );
+	}
+
+	/**
+	 * Updates the Stripe Multibanco data for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param array $multibanco_data
+	 * @return false|void
+	 */
+	public function update_stripe_multibanco_data( ?WC_Order $order = null, array $multibanco_data = [] ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_MULTIBANCO_DATA, $multibanco_data );
+	}
+
+	/**
+	 * Updates the Stripe refund status for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $status
+	 * @return false|void
+	 */
+	public function update_stripe_refund_status( ?WC_Order $order = null, string $status = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_REFUND_STATUS, $status );
+	}
+
+	/**
+	 * Updates the Stripe card brand for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $brand
+	 * @return false|void
+	 */
+	public function update_stripe_card_brand( ?WC_Order $order = null, string $brand = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_CARD_BRAND, $brand );
+	}
+
+	/**
+	 * Gets the Stripe refund failure reason for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_refund_failure_reason( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_REFUND_FAILURE_REASON );
+	}
+
+	/**
+	 * Updates the Stripe mandate ID for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $failure_reason
+	 * @return false|void
+	 */
+	public function update_stripe_refund_failure_reason( ?WC_Order $order = null, string $failure_reason = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_REFUND_FAILURE_REASON, $failure_reason );
+	}
+
+	/**
+	 * Deletes the Stripe refund failure reason for an order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|void
+	 */
+	public function delete_stripe_refund_failure_reason( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_REFUND_FAILURE_REASON );
+	}
+
+	/**
+	 * Gets whether charge was captured for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order The order to get the meta from.
+	 * @return false|string|null
+	 */
+	public function get_stripe_charge_captured( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_CHARGE_CAPTURED );
+	}
+
+	/**
+	 * Checks if charge was captured for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return bool
+	 */
+	public function is_stripe_charge_captured( ?WC_Order $order = null ): bool {
+		return wc_string_to_bool( $this->get_stripe_charge_captured( $order ) );
+	}
+
+	/**
+	 * Checks whether the order's charge was explicitly recorded as authorize-only ('no').
+	 *
+	 * Deliberately false when the flag was never recorded (''): capture and void flows act on
+	 * this state by moving or releasing money, so an unknown state must not qualify — only a
+	 * charge Stripe was seen to leave uncaptured. Contrast is_stripe_charge_captured(), which
+	 * folds missing into false.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order|null $order The order to check.
+	 * @return bool
+	 */
+	public function is_stripe_charge_authorized_only( ?WC_Order $order = null ): bool {
+		return 'no' === $this->get_stripe_charge_captured( $order );
+	}
+
+	/**
+	 * Sets whether charge was captured for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order $order The order to add the metadata to.
+	 * @param bool $captured  Whether the charge was captured.
+	 *
+	 * @return void
+	 */
+	public function set_stripe_charge_captured( WC_Order $order, bool $captured = true ): void {
+		$this->update_order_meta( $order, self::META_STRIPE_CHARGE_CAPTURED, wc_bool_to_string( $captured ) );
+	}
+
+	/**
+	 * Records the captured state carried by a Stripe charge on the order.
+	 *
+	 * This is the single writer of the captured flag for every code path that receives a
+	 * charge object — a checkout response (process_response()), a webhook payload
+	 * (payment_intent.processing, charge.succeeded, charge.captured, charge.refunded), or
+	 * an on-demand API fetch (refund-time resolution, charge ID recovery). Refund and
+	 * capture flows read the flag to tell a refundable charge from a voidable
+	 * pre-authorization.
+	 *
+	 * Some payment methods create their charge only after checkout, so a webhook payload or
+	 * an API fetch may be the first — and only — chance to record the flag.
+	 *
+	 * Does not persist the order; callers decide when to save.
+	 *
+	 * @since 10.9.0
+	 *
+	 * @param WC_Order $order The order to record the captured state on.
+	 * @param object|string|null $charge The received Stripe charge (or charge-shaped webhook payload).
+	 * @return bool|null The recorded captured state, or null when the charge carries none.
+	 */
+	public function sync_stripe_charge_captured( WC_Order $order, $charge ): ?bool {
+		if ( ! is_object( $charge ) || ! isset( $charge->captured ) ) {
+			return null;
 		}
 
-		$order->update_meta_data( self::META_STRIPE_SETUP_INTENT, $intent_id );
+		$captured = (bool) $charge->captured;
+		$this->set_stripe_charge_captured( $order, $captured );
+
+		return $captured;
+	}
+
+	/**
+	 * Checks if stripe status is final for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return bool
+	 */
+	public function is_stripe_status_final( ?WC_Order $order = null ): bool {
+		return wc_string_to_bool( $this->get_order_meta( $order, self::META_STRIPE_STATUS_FINAL ) );
+	}
+
+	/**
+	 * Sets whether stripe status is final for order.
+	 *
+	 * @since 10.1.0
+	 *
+	 * @param WC_Order $order The order to add the metadata to.
+	 * @param bool $is_final  Whether the stripe status is final.
+	 *
+	 * @return void
+	 */
+	public function set_stripe_status_final( WC_Order $order, bool $is_final = true ): void {
+		$this->update_order_meta( $order, self::META_STRIPE_STATUS_FINAL, wc_bool_to_string( $is_final ) );
+	}
+
+	/**
+	 * Gets the Stripe UPE payment type for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_upe_payment_type( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_UPE_PAYMENT_TYPE );
+	}
+
+	/**
+	 * Updates the Stripe UPE payment type for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $payment_type
+	 * @return false|void
+	 */
+	public function update_stripe_upe_payment_type( ?WC_Order $order = null, string $payment_type = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_UPE_PAYMENT_TYPE, $payment_type );
+	}
+
+	/**
+	 * Gets the Stripe UPE waiting for redirect for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return bool|null
+	 */
+	public function get_stripe_upe_waiting_for_redirect( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_UPE_WAITING_FOR_REDIRECT );
+	}
+
+	/**
+	 * Updates the Stripe UPE waiting for redirect for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param bool $waiting_for_redirect
+	 * @return false|void
+	 */
+	public function update_stripe_upe_waiting_for_redirect( ?WC_Order $order = null, bool $waiting_for_redirect = false ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_UPE_WAITING_FOR_REDIRECT, $waiting_for_redirect );
+	}
+
+	/**
+	 * Deletes the Stripe UPE waiting for redirect for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|void
+	 */
+	public function delete_stripe_upe_waiting_for_redirect( ?WC_Order $order = null ) {
+		return $this->delete_order_meta( $order, self::META_STRIPE_UPE_WAITING_FOR_REDIRECT );
+	}
+
+	/**
+	 * Gets the Stripe UPE redirect processed for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return bool|null
+	 */
+	public function get_stripe_upe_redirect_processed( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_UPE_REDIRECT_PROCESSED );
+	}
+
+	/**
+	 * Whether a settlement path has already finished with this order.
+	 *
+	 * A paid status covers the webhook and redirect paths; the redirect-processed flag
+	 * covers a confirmed intent whose status transition is still pending.
+	 *
+	 * @param WC_Order $order The order.
+	 * @return bool
+	 */
+	public function is_order_payment_settled( WC_Order $order ): bool {
+		return $order->has_status( [ OrderStatus::PROCESSING, OrderStatus::COMPLETED, OrderStatus::ON_HOLD ] )
+			|| (bool) $this->get_stripe_upe_redirect_processed( $order );
+	}
+
+	/**
+	 * Updates the Stripe UPE redirect processed for order.
+	 *
+	 * @since 10.0.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param bool $redirect_processed
+	 * @return false|void
+	 */
+	public function update_stripe_upe_redirect_processed( ?WC_Order $order = null, bool $redirect_processed = false ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_UPE_REDIRECT_PROCESSED, $redirect_processed );
+	}
+
+	/**
+	 * Gets the In-Person Payments channel for the order.
+	 *
+	 * @since 10.6.0
+	 *
+	 * @param WC_Order|null $order
+	 * @return false|string|null
+	 */
+	public function get_stripe_ipp_channel( ?WC_Order $order = null ) {
+		return $this->get_order_meta( $order, self::META_STRIPE_IPP_CHANNEL );
+	}
+
+	/**
+	 * Updates the In-Person Payments channel for the order.
+	 *
+	 * @since 10.6.0
+	 *
+	 * @param WC_Order|null $order
+	 * @param string $channel The IPP channel value (e.g. 'mobile_pos', 'mobile_store_management').
+	 * @return false|void
+	 */
+	public function update_stripe_ipp_channel( ?WC_Order $order = null, string $channel = '' ) {
+		return $this->update_order_meta( $order, self::META_STRIPE_IPP_CHANNEL, $channel );
 	}
 
 	/**
@@ -480,7 +1170,7 @@ class WC_Stripe_Order_Helper {
 	 * @return void
 	 */
 	public function set_payment_awaiting_action( WC_Order $order, bool $save = true ): void {
-		$order->update_meta_data( self::META_STRIPE_PAYMENT_AWAITING_ACTION, wc_bool_to_string( true ) );
+		$this->update_order_meta( $order, self::META_STRIPE_PAYMENT_AWAITING_ACTION, wc_bool_to_string( true ) );
 
 		if ( $save ) {
 			$order->save();
@@ -573,6 +1263,7 @@ class WC_Stripe_Order_Helper {
 		$details['address']['postal_code'] = $order->get_billing_postcode();
 		$details['address']['country']     = $order->get_billing_country();
 
+		/** This filter is documented in includes/abstracts/abstract-wc-stripe-payment-gateway.php. */
 		return (object) apply_filters( 'wc_stripe_owner_details', $details, $order );
 	}
 
@@ -592,7 +1283,7 @@ class WC_Stripe_Order_Helper {
 	public function validate_intent_for_order( WC_Order $order, $intent, ?string $selected_payment_type = null ): void {
 		$intent_id = null;
 		if ( is_string( $intent ) ) {
-			$intent_id = $intent;
+			$intent_id       = $intent;
 			$is_setup_intent = substr( $intent_id, 0, 4 ) === 'seti';
 			if ( $is_setup_intent ) {
 				$intent = WC_Stripe_API::retrieve( 'setup_intents/' . $intent_id . '?expand[]=payment_method' );
@@ -602,7 +1293,7 @@ class WC_Stripe_Order_Helper {
 		}
 
 		if ( ! is_object( $intent ) ) {
-			throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) );
+			throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
 		if ( null === $intent_id ) {
@@ -618,11 +1309,11 @@ class WC_Stripe_Order_Helper {
 					'error'     => $intent->error,
 				]
 			);
-			throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) );
+			throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 
 		if ( null === $selected_payment_type ) {
-			$selected_payment_type = $order->get_meta( '_stripe_upe_payment_type', true );
+			$selected_payment_type = $this->get_stripe_upe_payment_type( $order );
 		}
 
 		// If we don't have a selected payment type, that implies we have no stored value and a new payment type is permitted.
@@ -662,7 +1353,7 @@ class WC_Stripe_Order_Helper {
 			]
 		);
 
-		throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) );
+		throw new Exception( __( "We're not able to process this request. Please try again later.", 'woocommerce-gateway-stripe' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 	}
 
 	/**
@@ -674,7 +1365,7 @@ class WC_Stripe_Order_Helper {
 	 * @return bool
 	 */
 	public function is_stripe_gateway_order( WC_Order $order ): bool {
-		return WC_Gateway_Stripe::ID === substr( (string) $order->get_payment_method(), 0, 6 );
+		return WC_Stripe_UPE_Payment_Gateway::ID === substr( (string) $order->get_payment_method(), 0, 6 );
 	}
 
 	/**
@@ -687,7 +1378,7 @@ class WC_Stripe_Order_Helper {
 	public function validate_minimum_order_amount( WC_Order $order ): void {
 		if ( $order->get_total() * 100 < WC_Stripe_Helper::get_minimum_amount() ) {
 			/* translators: 1) amount (including currency symbol) */
-			throw new WC_Stripe_Exception( 'Did not meet minimum amount', sprintf( __( 'Sorry, the minimum allowed order total is %1$s to use this payment method.', 'woocommerce-gateway-stripe' ), wc_price( WC_Stripe_Helper::get_minimum_amount() / 100 ) ) );
+			throw new WC_Stripe_Exception( 'Did not meet minimum amount', sprintf( __( 'Sorry, the minimum allowed order total is %1$s to use this payment method.', 'woocommerce-gateway-stripe' ), wc_price( WC_Stripe_Helper::get_minimum_amount() / 100 ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 		}
 	}
 
@@ -707,7 +1398,7 @@ class WC_Stripe_Order_Helper {
 
 		$new_lock = ( time() + 5 * MINUTE_IN_SECONDS );
 
-		$order->update_meta_data( '_stripe_lock_payment', $new_lock );
+		$order->update_meta_data( self::META_STRIPE_LOCK_PAYMENT, $new_lock );
 		$order->save_meta_data();
 
 		return false;
@@ -721,7 +1412,7 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order $order The order that is being unlocked.
 	 */
 	public function unlock_order_payment( WC_Order $order ): void {
-		$order->delete_meta_data( '_stripe_lock_payment' );
+		$order->delete_meta_data( self::META_STRIPE_LOCK_PAYMENT );
 		$order->save_meta_data();
 	}
 
@@ -735,7 +1426,7 @@ class WC_Stripe_Order_Helper {
 	 */
 	public function get_order_existing_payment_lock( WC_Order $order ) {
 		$order->read_meta_data( true );
-		return $order->get_meta( '_stripe_lock_payment', true );
+		return $order->get_meta( self::META_STRIPE_LOCK_PAYMENT, true );
 	}
 
 	/**
@@ -754,7 +1445,7 @@ class WC_Stripe_Order_Helper {
 
 		$new_lock = time() + 5 * MINUTE_IN_SECONDS;
 
-		$order->update_meta_data( '_stripe_lock_refund', $new_lock );
+		$order->update_meta_data( self::META_STRIPE_LOCK_REFUND, $new_lock );
 		$order->save_meta_data();
 
 		return false;
@@ -770,7 +1461,7 @@ class WC_Stripe_Order_Helper {
 	 */
 	public function get_order_existing_refund_lock( WC_Order $order ) {
 		$order->read_meta_data( true );
-		return $order->get_meta( '_stripe_lock_refund', true );
+		return $order->get_meta( self::META_STRIPE_LOCK_REFUND, true );
 	}
 
 	/**
@@ -781,7 +1472,7 @@ class WC_Stripe_Order_Helper {
 	 * @param WC_Order $order The order that is being unlocked.
 	 */
 	public function unlock_order_refund( WC_Order $order ): void {
-		$order->delete_meta_data( '_stripe_lock_refund' );
+		$order->delete_meta_data( self::META_STRIPE_LOCK_REFUND );
 		$order->save_meta_data();
 	}
 
@@ -828,5 +1519,51 @@ class WC_Stripe_Order_Helper {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Helper function to get order meta data. The goal of the function is to reduce boilerplate in the helper due to `null` checks everywhere.
+	 *
+	 * @param WC_Order|null $order The order to get meta for.
+	 * @param string $key The meta key to get.
+	 * @return false|string|null
+	 */
+	protected function get_order_meta( ?WC_Order $order, string $key ) {
+		if ( null === $order ) {
+			return false;
+		}
+
+		return $order->get_meta( $key, true );
+	}
+
+	/**
+	 * Helper function to update order meta data. The goal of the function is to reduce boilerplate in the helper due to `null` checks everywhere.
+	 *
+	 * @param WC_Order|null $order The order to update meta for.
+	 * @param string $key The meta key to update.
+	 * @param mixed $value The meta value to set.
+	 * @return false|void
+	 */
+	protected function update_order_meta( ?WC_Order $order, string $key, $value ) {
+		if ( null === $order ) {
+			return false;
+		}
+
+		$order->update_meta_data( $key, $value );
+	}
+
+	/**
+	 * Helper function to delete an order meta data. The goal of the function is to reduce boilerplate in the helper due to `null` checks everywhere.
+	 *
+	 * @param WC_Order|null $order The order to delete meta for.
+	 * @param string $key The meta key to delete.
+	 * @return false|void
+	 */
+	protected function delete_order_meta( ?WC_Order $order, string $key ) {
+		if ( null === $order ) {
+			return false;
+		}
+
+		$order->delete_meta_data( $key );
 	}
 }

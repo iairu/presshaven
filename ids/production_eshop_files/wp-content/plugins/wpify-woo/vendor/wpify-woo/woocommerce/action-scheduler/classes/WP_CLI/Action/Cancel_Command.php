@@ -42,7 +42,7 @@ class Cancel_Command extends \ActionScheduler_WPCLI_Command
     protected function cancel_single($hook, $callback_args, $group)
     {
         if (empty($hook)) {
-            \WP_CLI::error(__('Please specify hook of action to cancel.', 'action-scheduler'));
+            \WpifyWooDeps\WP_CLI::error(__('Please specify hook of action to cancel.', 'action-scheduler'));
         }
         try {
             $result = as_unschedule_action($hook, $callback_args, $group);
@@ -66,7 +66,7 @@ class Cancel_Command extends \ActionScheduler_WPCLI_Command
     protected function cancel_all($hook, $callback_args, $group)
     {
         if (empty($hook) && empty($group)) {
-            \WP_CLI::error(__('Please specify hook and/or group of actions to cancel.', 'action-scheduler'));
+            \WpifyWooDeps\WP_CLI::error(__('Please specify hook and/or group of actions to cancel.', 'action-scheduler'));
         }
         try {
             $result = as_unschedule_all_actions($hook, $callback_args, $group);
@@ -77,7 +77,7 @@ class Cancel_Command extends \ActionScheduler_WPCLI_Command
          * Because as_unschedule_all_actions() does not provide a result,
          * neither confirm or deny actions cancelled.
          */
-        \WP_CLI::success(__('Request to cancel scheduled actions completed.', 'action-scheduler'));
+        \WpifyWooDeps\WP_CLI::success(__('Request to cancel scheduled actions completed.', 'action-scheduler'));
     }
     /**
      * Print a success message.
@@ -86,7 +86,7 @@ class Cancel_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_success()
     {
-        \WP_CLI::success(__('Scheduled action cancelled.', 'action-scheduler'));
+        \WpifyWooDeps\WP_CLI::success(__('Scheduled action cancelled.', 'action-scheduler'));
     }
     /**
      * Convert an exception into a WP CLI error.
@@ -98,7 +98,7 @@ class Cancel_Command extends \ActionScheduler_WPCLI_Command
      */
     protected function print_error(\Exception $e, $multiple)
     {
-        \WP_CLI::error(sprintf(
+        \WpifyWooDeps\WP_CLI::error(sprintf(
             /* translators: %1$s: singular or plural %2$s: refers to the exception error message. */
             __('There was an error cancelling the %1$s: %2$s', 'action-scheduler'),
             $multiple ? __('scheduled actions', 'action-scheduler') : __('scheduled action', 'action-scheduler'),

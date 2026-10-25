@@ -49,7 +49,7 @@ class Posts {
       return false;
     }
     foreach ($matchedPostsIds as $postId) {
-      $newsletterPost = new NewsletterPostEntity($parent, $postId);
+      $newsletterPost = new NewsletterPostEntity($parent, (int)$postId);
       $this->newsletterPostRepository->persist($newsletterPost);
     }
     $this->newsletterPostRepository->flush();
