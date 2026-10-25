@@ -166,7 +166,10 @@ MIN_FREE_DISK_GB = float(os.environ.get("POOL_MIN_FREE_DISK_GB", "5"))
 RECYCLE_IDLE = os.environ.get("POOL_RECYCLE_IDLE", "1") != "0"
 
 MYSQL_IMAGE = "mysql:5.7"
-WORDPRESS_IMAGE = "wordpress:6.8.3-php8.1"
+# Built by docker-compose.yml (images/wordpress_hardened): the same WordPress
+# and PHP as the compose pools, with the PHP2Shell mitigations, so a runtime
+# pool is never softer than pools 1-3.
+WORDPRESS_IMAGE = os.environ.get("POOL_WORDPRESS_IMAGE", "presshaven/wordpress:6.8.3-php8.1-hardened")
 WPCLI_IMAGE = "wordpress:cli-php8.1"
 DB_NAME = "production_database"
 DB_USER = "production_user"

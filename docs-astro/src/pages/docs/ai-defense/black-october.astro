@@ -18,8 +18,8 @@ const toc = [
   { id: 'gaps', text: 'What Does Not Help', level: 2 },
   { id: 'now', text: 'Do This Now', level: 2 },
   { id: 'old', text: 'If You Must Stay on Old PHP or Node', level: 2 },
-  { id: 'guard', text: 'New Layer: Request Body Guard (Proposed)', level: 2 },
-  { id: 'quarantine', text: 'Parser-Exploit Quarantine (Proposed)', level: 2 },
+  { id: 'guard', text: 'New Layer: Request Body Guard', level: 2 },
+  { id: 'quarantine', text: 'Parser-Exploit Quarantine', level: 2 },
   { id: 'kibana', text: 'Protecting Kibana (Node2Shell)', level: 2 },
   { id: 'detect', text: 'Detection Signals', level: 2 },
   { id: 'supply', text: 'Supply-Chain Lessons', level: 2 },
@@ -38,11 +38,13 @@ const toc = [
 
   <div class="admonition warning">
     <div class="admonition-title">Short version</div>
-    <p>The shipped images are affected. Every WordPress container (production, every decoy pool and wp-cli)
-    runs <code>wordpress:6.8.3-php8.1</code>, which is PHP 8.1.33 under Apache <code>mod_php</code>. PHP 8.1 is
-    end of life and gets no binary fix. Kibana 8.17.3 bundles Node 20.18.2, which is also end of life and gets
-    no Brotli fix. The edge (OpenResty) isn't affected. <a href="#now">Upgrade the images</a>. Until you can,
-    apply the <a href="#old">interim PHP settings</a> and the <a href="#guard">body guard</a>.</p>
+    <p>PressHaven still runs the affected runtimes <em>on purpose</em>: every WordPress container is WordPress
+    6.8.3 on PHP 8.1.33 under Apache <code>mod_php</code>. PHP 8.1 is end of life and gets no binary fix. Kibana
+    8.17.3 bundles Node 20.18.2, also end of life. Instead of upgrading, the project ships three interim layers:
+    a <a href="#old">hardened WordPress image</a> (<code>presshaven/wordpress:6.8.3-php8.1-hardened</code>), a
+    <a href="#guard">request body guard</a> at the edge and a <a href="#quarantine">parser-exploit
+    quarantine</a>. Kibana was checked and doesn't decode Brotli request bodies. <a href="#now">Upgrading</a> is
+    still the real fix.</p>
   </div>
 
   <h2 id="summary">What Happened</h2>
@@ -73,18 +75,18 @@ const toc = [
   <table>
     <tr><th>Component</th><th>Image / runtime</th><th>PHP2Shell</th><th>Node2Shell</th></tr>
     <tr><td>Edge (<code>openresty/openresty:alpine</code>)</td><td>OpenResty 1.31.1.1, OpenSSL 3.5.8</td><td>Not affected: no PHP</td><td>Not affected: no Node, no Brotli module, nginx doesn't decompress request bodies</td></tr>
-    <tr><td>Production storefront</td><td><code>wordpress:6.8.3-php8.1</code>: PHP 8.1.33, Apache 2.4.65, <code>mod_php</code> prefork</td><td><strong>Vulnerable</strong>, EOL branch</td><td>n/a</td></tr>
-    <tr><td>Decoy pools (<code>honeypot_eshop_N</code>)</td><td>Same image as production</td><td><strong>Vulnerable</strong></td><td>n/a</td></tr>
-    <tr><td>wp-cli sidecars</td><td><code>wordpress:cli-php8.1</code></td><td>Vulnerable binary, but not reachable over HTTP</td><td>n/a</td></tr>
-    <tr><td>Kibana (SIEM host)</td><td><code>kibana:8.17.3</code>, bundled Node 20.18.2</td><td>n/a</td><td><strong>Vulnerable runtime</strong>, EOL branch. Reachability: <a href="#kibana">see below</a></td></tr>
+    <tr><td>Production storefront</td><td><code>presshaven/wordpress:6.8.3-php8.1-hardened</code> (built from <code>wordpress:6.8.3-php8.1</code> by digest): PHP 8.1.33, Apache 2.4.65, <code>mod_php</code> prefork</td><td><strong>Vulnerable binary</strong>, EOL branch. Mitigated by the <a href="#old">hardened image</a> and the <a href="#guard">body guard</a></td><td>n/a</td></tr>
+    <tr><td>Decoy pools (<code>honeypot_eshop_N</code> and pool_manager's runtime pools)</td><td>Same hardened image as production</td><td><strong>Vulnerable binary</strong>, mitigated the same way</td><td>n/a</td></tr>
+    <tr><td>wp-cli sidecars</td><td><code>wordpress:cli-php8.1</code> (unchanged)</td><td>Vulnerable binary, but not reachable over HTTP</td><td>n/a</td></tr>
+    <tr><td>Kibana (SIEM host)</td><td><code>kibana:8.17.3</code>, bundled Node 20.18.2</td><td>n/a</td><td><strong>Vulnerable runtime</strong>, but Brotli request bodies are not decoded (<a href="#kibana">verified</a>)</td></tr>
     <tr><td>Pool manager, dashboard</td><td>Python 3.12</td><td>n/a</td><td>No Python <code>brotli</code> package installed</td></tr>
     <tr><td>Database</td><td><code>mysql:5.7</code></td><td>n/a</td><td>n/a (EOL, but only on internal networks)</td></tr>
   </table>
-  <p>The stock PHP settings make it worse. <code>memory_limit=128M</code> is easy to reach while parsing, and
-  <code>session.upload_progress.enabled=1</code> exposes the upload-progress path. <code>disable_functions</code>
-  is empty, so a working exploit gets a shell immediately. Also, the edge keeps up to 512 idle keepalive
-  connections to production. That means requests from different clients are served one after another by the
-  same Apache worker, which is exactly the worker reuse the 109619 path needs.</p>
+  <p>The stock PHP settings made it worse, which is what the hardened image changes. <code>memory_limit=128M</code>
+  is easy to reach while parsing, and <code>session.upload_progress.enabled=1</code> exposes the upload-progress
+  path. <code>disable_functions</code> is empty, so a working exploit gets a shell immediately. And the edge keeps
+  up to 512 idle keepalive connections to production, so requests from different clients are served one after
+  another by the same Apache worker: exactly the worker reuse the 109619 path needs.</p>
 
   <h2 id="already">What Already Helps</h2>
   <ul>
@@ -112,14 +114,14 @@ const toc = [
     before WordPress, its login, its nonces or any plugin runs. Admin gating, <code>DISALLOW_FILE_*</code> and
     the route manifest don't protect anything if the request still reaches PHP. (The manifest helps only if it
     also restricts which routes may receive multipart.)</li>
-    <li><strong>First-request exploits aren't diverted.</strong> A single multipart POST from a clean IP to
-    <code>/</code> has no signal for stages 3–10 to act on today. It goes straight to vulnerable production PHP.</li>
-    <li><strong>Diversion sends the exploit to vulnerable PHP too.</strong> The pools run the same PHP, so a
-    diverted PHP2Shell <em>succeeds</em> there. That's a real RCE inside a decoy on the flat pool network.
-    The <a href="/docs/engine">Honeypot Engine</a> is designed to recover from that, but the recommendation
-    below is to <a href="#quarantine">stop forwarding parser exploits to any PHP</a>.</li>
-    <li><strong>The seeded CVE table doesn't match it.</strong> There's no fixed URL or parameter to sign. The
-    shape lives in the body's structure, which no current rule parses.</li>
+    <li><strong>Behavioural diversion alone misses first-request exploits.</strong> A single multipart POST from
+    a clean IP to <code>/</code> gives stages 3–10 nothing to act on. Before the <a href="#guard">body guard</a>,
+    it went straight to vulnerable production PHP.</li>
+    <li><strong>Diversion alone sends the exploit to vulnerable PHP too.</strong> The pools run the same PHP, so
+    a diverted PHP2Shell would <em>succeed</em> there: a real RCE inside a decoy on the flat pool network. That
+    is why parser-shaped bodies are <a href="#quarantine">quarantined</a> rather than diverted.</li>
+    <li><strong>The seeded CVE table can't match it.</strong> There's no fixed URL or parameter to sign. The
+    shape lives in the body's structure, which only the body guard parses.</li>
   </ul>
 
   <h2 id="now">Do This Now</h2>
@@ -135,177 +137,146 @@ const toc = [
     Elastic release whose bundled Node is at least 22.23.4. Check with
     <code>docker run --rm --entrypoint /usr/share/kibana/node/bin/node &lt;image&gt; -v</code>. Elasticsearch
     and Kibana must stay on the same version.</li>
-    <li><strong>Apply the interim settings anyway.</strong> The <a href="#old">PHP settings</a> and the
-    <a href="#guard">body guard</a> also cover the next parser bug, not just this one.</li>
+    <li><strong>Keep the interim layers after upgrading.</strong> The <a href="#old">hardened image</a>'s
+    settings and the <a href="#guard">body guard</a> also cover the next parser bug, not just this one. Rebase
+    <code>images/wordpress_hardened/Dockerfile</code> onto the new tag rather than dropping it.</li>
   </ol>
 
   <h2 id="old">If You Must Stay on Old PHP or Node</h2>
-  <p>Sometimes an image can't move immediately: a plugin that breaks on 8.3, a change freeze, a Kibana upgrade
-  waiting on Elasticsearch. These settings narrow the bug for both CVEs without a patched binary. Mount them
-  into <strong>every</strong> WordPress container, pools included:</p>
-  <pre><code>; /usr/local/etc/php/conf.d/zz-black-october.ini  (interim, PHP2Shell)
-; 109618: the parser can no longer hit memory_limit mid-parse.
-; The container mem_limit (1024m) is the real cap, so the worst case
-; becomes an OOM-killed container (DoS) instead of a corrupted heap (RCE).
-memory_limit = -1
-; 109619: close the upload-progress path
-session.upload_progress.enabled = 0
-; Shrink what the parser has to build
-max_input_vars = 200
-max_input_nesting_level = 8
-post_max_size = 8M
-upload_max_filesize = 2M
-max_file_uploads = 5
-; Make a successful exploit worth less
-disable_functions = exec,system,passthru,shell_exec,proc_open,popen,pcntl_exec
+  <p>PressHaven stays on PHP 8.1 deliberately, to show how far mitigation goes without a patched binary. All
+  WordPress services in both compose files, and pool_manager's runtime pools (<code>POOL_WORDPRESS_IMAGE</code>),
+  run <code>presshaven/wordpress:6.8.3-php8.1-hardened</code>, built from
+  <code>ids/images/wordpress_hardened/</code>. It is the official image, pinned by digest, plus three files:</p>
+  <pre><code># /etc/apache2/conf-available/php-black-october.conf  (enabled)
+# php_admin_*: web SAPI only, and neither .htaccess nor ini_set() can undo it
+&lt;IfModule mod_php.c&gt;
+    # 109618: parsing can't stop half-way at memory_limit. The container's
+    # cgroup mem_limit (1024m) is the real cap: an OOM-killed child, not a
+    # corrupted heap.
+    php_admin_value memory_limit -1
+    # 109619: close the upload-progress path
+    php_admin_flag session.upload_progress.enabled off
+    # Shrink what the parser builds (max_input_vars stays 1000 for product screens)
+    php_admin_value max_input_nesting_level 16
+    php_admin_value max_file_uploads 20
+    # Make a successful exploit worth less
+    php_admin_value disable_functions exec,system,passthru,shell_exec,proc_open,popen,pcntl_exec
+&lt;/IfModule&gt;
+LimitRequestBody 16777216</code></pre>
+  <pre><code># /etc/apache2/conf-available/mpm-black-october.conf  (enabled)
+# 109619 needs a worker that served an earlier request. One request per child:
+KeepAlive Off
+&lt;IfModule mpm_prefork_module&gt;
+    MaxConnectionsPerChild 1
+    StartServers 10
+    MinSpareServers 10
+    MaxSpareServers 20
+&lt;/IfModule&gt;
+
+; /usr/local/etc/php/conf.d/zz-black-october.ini
 expose_php = Off</code></pre>
-  <pre><code># /etc/apache2/conf-enabled/zz-black-october.conf  (interim)
-# Stale per-worker state needs worker reuse: recycle prefork children often.
-# Pools: 1 (one connection per child). Production: low, e.g. 50.
-MaxConnectionsPerChild 50
-LimitRequestBody 8388608
-LimitRequestFieldSize 8190
-LimitRequestFields 100</code></pre>
   <ul>
+    <li><strong>Verified on the running containers.</strong> Through Apache, PHP reports
+    <code>memory_limit=-1</code>, upload progress off and nesting 16; <code>ini_set()</code> can't change them;
+    every request gets a new child PID; responses carry <code>Connection: close</code> and no
+    <code>X-Powered-By</code>. The PHP CLI (WP-Cron, wp-cli) keeps the stock settings.</li>
+    <li><strong>One request per child closes the cross-request window.</strong> The parent never serves a
+    request, so no request can find state a previous one left behind. Opcache is shared memory, so compiled
+    scripts survive. Measured cost: a storefront page through the edge still answers in about 120 ms.</li>
     <li><strong>Do not use <code>RLIMIT_AS</code> or <code>RLIMIT_DATA</code></strong> (<code>ulimit -v</code>)
     as the memory cap. Out-of-memory then happens inside the allocator, mid-parse, which brings back the state
-    the fix is avoiding. Keep using Docker's cgroup <code>mem_limit</code>, which is already set.</li>
-    <li><strong>Check the side effects.</strong> <code>memory_limit = -1</code> lets one request use the
-    container's whole memory, and WordPress respects <code>-1</code>. Keep <code>mem_limit</code> and
-    <code>pids_limit</code> on the container and the edge's rate limits in place. Lower
-    <code>max_input_vars</code> only after confirming that no admin screen you use posts more fields than
-    that. Large WooCommerce variation forms can.</li>
-    <li><strong>Treat <code>MaxConnectionsPerChild</code> as a mitigation, not a fix.</strong> It shrinks the
-    window for cross-request state but doesn't remove it within one keepalive connection. For pools the
-    <a href="#quarantine">quarantine</a> is the stronger control.</li>
-    <li><strong>The source backport is an option.</strong> For 8.1, rebuilding from the upstream source
-    backport into your own image works, but you then own that image's patch stream. Upgrading the branch is
-    usually less work.</li>
-    <li><strong>Node.</strong> There's no setting that makes Node 20's Brotli decoder safe. The interim control
-    is <em>reachability</em>: no untrusted Brotli may reach Kibana (see <a href="#kibana">Protecting
+    the fix avoids. Keep Docker's cgroup <code>mem_limit</code> and <code>pids_limit</code>.</li>
+    <li><strong>The tag is local-only.</strong> <code>production_eshop</code> builds it with
+    <code>pull_policy: build</code> and every other service uses <code>pull_policy: never</code>, so a Docker
+    Hub image squatting the same name is never pulled. pool_manager uses <code>containers.create()</code>,
+    which fails instead of pulling.</li>
+    <li><strong>Node.</strong> No setting makes Node 20's Brotli decoder safe. The interim control is
+    <em>reachability</em>: no untrusted Brotli may reach Kibana (see <a href="#kibana">Protecting
     Kibana</a>).</li>
   </ul>
 
-  <h2 id="guard">New Layer: Request Body Guard (Proposed)</h2>
+  <h2 id="guard">New Layer: Request Body Guard</h2>
   <p>
-    The reverse proxy already reads every request. It doesn't yet read the <em>structure</em> of request
-    bodies. A body guard adds that as a new stage that runs before routing. It's a positive model for bodies,
-    in the same spirit as the <a href="/docs/ai-defense/allowlisting#params">parameter shapes</a>: describe what
-    a legitimate storefront body looks like, and treat parser-stressing bodies as hostile whatever CVE they're
-    for. It follows the project's split: a pure <code>body_guard_rules.lua</code> that can be unit-tested with
-    plain <code>lua</code>, and a thin <code>body_guard.lua</code> adapter.
+    The reverse proxy now reads the <em>structure</em> of every request body before anything is proxied. It is a
+    positive model, in the spirit of the <a href="/docs/ai-defense/allowlisting#params">parameter shapes</a>:
+    describe what a legitimate storefront body looks like, and treat parser-stressing bodies as hostile whatever
+    CVE they're for. It follows the project's split: <code>lua/body_guard_rules.lua</code> is pure and unit-tested
+    with plain <code>lua</code> (<code>tests/test_body_guard_rules.lua</code>), and <code>lua/body_guard.lua</code>
+    is the adapter.
   </p>
   <table>
-    <tr><th>Check</th><th>Default limit</th><th>Why</th></tr>
-    <tr><td>Request <code>Content-Encoding</code> other than absent/<code>identity</code></td><td>Reject (415)</td><td>No browser compresses form posts. This removes compressed-body parser bugs (Brotli, gzip bombs) for every backend</td></tr>
-    <tr><td><code>multipart/form-data</code> on a route not on the upload list</td><td>Quarantine</td><td>Every known PHP2Shell trigger is multipart. A storefront takes uploads on a handful of routes at most</td></tr>
-    <tr><td>Number of parts / form fields</td><td>≤ 50</td><td>Hash-table pressure during parsing</td></tr>
-    <tr><td>Field-name length / bracket depth (<code>a[b][c]…</code>)</td><td>≤ 128 bytes / ≤ 4 levels</td><td>Nested arrays are how 109618 reaches <code>memory_limit</code></td></tr>
-    <tr><td>Field named <code>PHP_SESSION_UPLOAD_PROGRESS</code> or <code>PHPSESSID</code></td><td>Quarantine</td><td>The 109619 upload-progress path. No storefront form sends these</td></tr>
-    <tr><td>NUL or control bytes in a part's headers or field name</td><td>Quarantine</td><td>Malformed boundaries and part headers are parser probes</td></tr>
-    <tr><td>Upload <code>filename</code> containing <code>&lt;?php</code> or <code>|O:</code></td><td>Quarantine</td><td>PHP code or serialized-object payloads in a name field</td></tr>
-    <tr><td>Single non-file field larger than 64 KiB</td><td>Score +40</td><td>Large text fields on a storefront are rare, and large fields are used to groom memory</td></tr>
-    <tr><td>Body larger than the route's limit</td><td>413</td><td>Today's global <code>client_max_body_size 128M</code> is far more than a storefront needs</td></tr>
+    <tr><th>Check</th><th>Limit</th><th>Why</th></tr>
+    <tr><td>Request <code>Content-Encoding</code> other than absent/<code>identity</code>, or repeated</td><td>Quarantine, score +40</td><td>No browser compresses request bodies. Removes Brotli and gzip-bomb paths for every backend</td></tr>
+    <tr><td>Number of multipart parts / urlencoded fields</td><td>≤ 1200</td><td>PHP stops at <code>max_input_vars</code> (1000) anyway; more is hash-table pressure</td></tr>
+    <tr><td>Field-name length / bracket depth (<code>a[b][c]…</code>, also <code>%5B</code>-encoded)</td><td>≤ 256 bytes / ≤ 8 levels</td><td>Nested arrays are how 109618 reaches <code>memory_limit</code></td></tr>
+    <tr><td>Field named <code>PHP_SESSION_UPLOAD_PROGRESS</code> or <code>PHPSESSID</code> (after PHP's dot/space mangling)</td><td>Quarantine</td><td>The 109619 upload-progress path. No storefront form sends these</td></tr>
+    <tr><td>Missing, repeated or non-RFC 2046 boundary; part header without an end; NUL in a part header</td><td>Quarantine</td><td>Anything PHP might split differently from the guard is a parser differential, so it isn't guessed at</td></tr>
+    <tr><td>Control bytes in a field name or file name</td><td>Quarantine</td><td>Parser probes</td></tr>
+    <tr><td>Upload <code>filename</code> containing <code>&lt;?php</code>, <code>&lt;?=</code> or a serialized object</td><td>Quarantine</td><td>Code or object payloads in a name field</td></tr>
+    <tr><td>Multipart/urlencoded body over 16 MiB</td><td>Quarantine</td><td>Too large to inspect, and Apache refuses it anyway (<code>LimitRequestBody</code>)</td></tr>
+    <tr><td>The same name checks on the query string</td><td>Query stripped, score +40</td><td>PHP builds <code>$_GET</code> with the same code</td></tr>
   </table>
-  <pre><code># nginx.conf (proposed): make the body available to Lua before proxying
-client_max_body_size     8m;     # per-location overrides for real upload routes
-client_body_buffer_size  1m;     # most bodies stay in memory; larger spill to file
-proxy_request_buffering  on;     # already the default; never disable it
-client_body_timeout      15s;    # stalled large uploads are a signal, not a customer
+  <p>Every <code>name=</code> and <code>filename=</code> parameter in a part header is checked, not just the
+  first, and <code>name</code> never matches the tail of <code>filename</code>. Part headers may end with CRLF or
+  bare LF, as PHP accepts both. JSON and other bodies PHP doesn't parse into <code>$_POST</code> pass.</p>
+  <pre><code># nginx.conf (443 server)
+client_body_buffer_size 1m;      # ordinary posts stay in memory
 
-access_by_lua_block &#123;
-    require("body_guard").check()   -- before router.lua
-    ...
+# Server level, rewrite phase: inherited by EVERY location, including those
+# with their own access_by_lua_block (which replaces the server-level one),
+# and run before anything proxies the body.
+rewrite_by_lua_block &#123;
+    require("body_guard").check()
 &#125;</code></pre>
-  <pre><code>-- body_guard_rules.lua (proposed) — pure, no ngx.*, unit-testable
-local _M = &#123;&#125;
-
-_M.LIMITS = &#123; max_parts = 50, max_name_len = 128, max_depth = 4,
-              max_field_bytes = 65536 &#125;
-local POISON = &#123; PHP_SESSION_UPLOAD_PROGRESS = true, PHPSESSID = true &#125;
-
-local function depth(name)
-  local _, n = string.gsub(name, "%[", "")
-  return n
-end
-
--- Inspect one field name; returns a reason string or nil
-function _M.check_name(name, L)
-  L = L or _M.LIMITS
-  local base = string.match(name, "^[^%[]*")
-  if POISON[base] then return "upload_progress_field" end
-  if #name > L.max_name_len then return "field_name_too_long" end
-  if depth(name) > L.max_depth then return "field_nesting_too_deep" end
-  if string.find(name, "[%z\1-\31]") then return "control_bytes_in_name" end
-  return nil
-end
-
--- Scan a buffered multipart body: (body, boundary) -> verdict table
-function _M.scan_multipart(body, boundary, L)
-  L = L or _M.LIMITS
-  local parts, delim = 0, "--" .. boundary
-  local pos = 1
-  while true do
-    local s, e = string.find(body, delim, pos, true)
-    if not s then break end
-    local hdr_end = string.find(body, "\r\n\r\n", e, true)
-    if not hdr_end then break end
-    parts = parts + 1
-    if parts > L.max_parts then
-      return &#123; action = "quarantine", reason = "too_many_parts" &#125;
-    end
-    local hdr = string.sub(body, e + 1, hdr_end)
-    local name = string.match(hdr, 'name="([^"]*)"')
-    local reason = name and _M.check_name(name, L)
-    if reason then return &#123; action = "quarantine", reason = reason &#125; end
-    local fname = string.match(hdr, 'filename="([^"]*)"')
-    if fname and (string.find(fname, "&lt;?php", 1, true)
-                  or string.find(fname, "|O:", 1, true)) then
-      return &#123; action = "quarantine", reason = "payload_in_filename" &#125;
-    end
-    pos = hdr_end + 4
-  end
-  return &#123; action = "pass", parts = parts &#125;
-end
-
-return _M</code></pre>
   <ul>
-    <li><strong>Read the buffered body. Don't stream it with <code>resty.upload</code>.</strong> In the access
-    phase, <code>resty.upload</code> consumes the request socket, so nothing would be left to proxy. The adapter
-    calls <code>ngx.req.read_body()</code>, then scans <code>ngx.req.get_body_data()</code>. If that returns nil
-    because the body spilled to a file, it reads <code>ngx.req.get_body_file()</code> in chunks.</li>
-    <li><strong>Apply the same depth and count limits to <code>application/x-www-form-urlencoded</code></strong>
-    bodies and to query strings. Nested keys are just as expensive for PHP there.</li>
-    <li><strong>Roll it out like the manifest:</strong> <code>observe</code> (log a <code>body_guard</code>
-    security event), then enforce once a week of production traffic shows no false positives.</li>
+    <li><strong>Buffered body, not <code>resty.upload</code>.</strong> <code>resty.upload</code> consumes the
+    request socket and would leave nothing to proxy. The adapter calls <code>ngx.req.read_body()</code> and
+    scans <code>get_body_data()</code>, or the temp file from <code>get_body_file()</code> when the body spilled.
+    <code>proxy_request_buffering</code> stays on (the default), so the guard sees the bytes PHP will see.</li>
+    <li><strong>Mode.</strong> <code>BODY_GUARD_MODE</code> in compose: <code>enforce</code> (default),
+    <code>observe</code> (log only, no change, no score) or <code>off</code>. Limits and scores live in
+    <code>_G.config.body_guard</code> in <code>init.lua</code>.</li>
+    <li><strong>Fails open.</strong> An error in the guard is logged and the request continues unchanged; the
+    hardened image still applies behind it.</li>
   </ul>
 
-  <h2 id="quarantine">Parser-Exploit Quarantine (Proposed)</h2>
+  <h2 id="quarantine">Parser-Exploit Quarantine</h2>
   <p>
     PressHaven's normal response to an attack is to <a href="/docs/ai-defense/allowlisting#divert">divert, not
-    block</a>. Parser exploits need an exception, because the decoy is built from the same vulnerable runtime.
-    Forwarding a PHP2Shell body to a pool means running a real exploit against real PHP. A
-    <strong>quarantine</strong> verdict keeps the deception without the execution:
+    block</a>. Parser exploits need an exception, because the decoy runs the same vulnerable runtime: forwarding
+    a PHP2Shell body to a pool runs a real exploit against real PHP. A <strong>quarantine</strong> verdict keeps the
+    deception without the execution:
   </p>
   <ol>
-    <li>The request body is <strong>never forwarded to any PHP backend</strong>, production or pool.</li>
-    <li>The edge returns a plausible response itself, such as the shop's normal page for that route or a
-    generic <code>200</code>. The client then can't tell it was caught, so there's still no oracle.</li>
-    <li>The full body is written to the SIEM as an evidence event (<code>parser_exploit_quarantined</code>,
-    capped and hashed), with the verdict reason.</li>
-    <li>The client's IP and device signature get the CVE-match risk score, so its <em>later</em>, ordinary
-    requests are diverted to a pool as usual and the rest of its session is still observed.</li>
+    <li>The body and its framing headers (<code>Content-Type</code>, <code>Content-Encoding</code>,
+    <code>Transfer-Encoding</code>) are dropped and the method becomes <code>GET</code>. A hostile query string is
+    emptied instead. <strong>No PHP backend, production or pool, ever receives the hostile bytes.</strong></li>
+    <li>The request then continues through normal routing, so the client gets the shop's ordinary page for that
+    URL. There's no 4xx and no oracle telling it what matched.</li>
+    <li>A <code>parser_exploit_quarantined</code> security event goes to the SIEM with the reason, method, URI,
+    content type, body size and the body's SHA-256.</li>
+    <li>The guard's score (100 for parser-shaped bodies, 40 for the weaker signals) joins the request's risk
+    score as <code>body_guard:&lt;reason&gt;</code>. At 100 the request and the rest of the session go to a
+    pool, where they're observed as usual, but as harmless GETs.</li>
   </ol>
-  <p>This turns "the decoy got popped" into "the exploit was recorded, the attacker was tagged, and nothing
-  executed", whatever PHP version the containers run.</p>
+  <p>Checked live through the edge: a normal multipart post reached production unchanged, while an
+  upload-progress field, 30-level <code>%5B</code> nesting, a Brotli body, a nested query string and a
+  <code>&lt;?php</code> file name each arrived at a pool as a bodyless <code>GET</code>, answered with an
+  ordinary 200 page. That turns "the decoy got popped" into "the attempt was recorded, the attacker was tagged,
+  and nothing executed", whatever PHP version the containers run.</p>
 
   <h2 id="kibana">Protecting Kibana (Node2Shell)</h2>
   <p>
     Kibana is less exposed than the storefront. It runs on the SIEM host, behind the firewall, and only analysts
-    should reach it. Whether its HTTP server decodes <code>Content-Encoding: br</code> request bodies hasn't been
-    verified for 8.17.3, so assume it might. Until <code>STACK_VERSION</code> is upgraded:
+    should reach it. It was also checked directly on 8.17.3: Kibana's HTTP server registers its Brotli decoder
+    only when <code>server.compression.brotli.enabled</code> is set (default off), and even then doesn't
+    decompress request bodies. A <code>Content-Encoding: br</code> body is parsed raw, while the same body with
+    <code>gzip</code> is decompressed and rejected, so attacker Brotli never reaches the vulnerable decoder. The
+    SIEM VM has no internet route and <code>TELEMETRY_ENABLED=false</code>, which removes Brotli
+    <em>responses</em> too. Keep it that way until <code>STACK_VERSION</code> is upgraded:
   </p>
   <ul>
+    <li><strong>Don't enable Brotli.</strong> Leave <code>server.compression.brotli.enabled</code> unset.</li>
     <li><strong>Don't expose the published port.</strong> Bind <code>KIBANA_PORT</code> to the analyst VPN or
     loopback interface (<code>"127.0.0.1:$&#123;KIBANA_PORT&#125;:$&#123;KIBANA_PORT&#125;"</code>) instead
     of all interfaces, and reach it over a tunnel.</li>
@@ -326,7 +297,7 @@ return _M</code></pre>
     <tr><td><code>Allowed memory size … exhausted … Unknown on line 0</code></td><td>Apache/PHP error log</td><td>Memory ran out during parsing, before any script ran. That is the 109618 trigger, attempted</td></tr>
     <tr><td><code>child pid … exit signal Segmentation fault</code></td><td>Apache error log</td><td>Heap corruption, a failed or partly successful attempt</td></tr>
     <tr><td><code>sh</code>/<code>bash</code>/<code>curl</code> spawned by an <code>apache2</code> process</td><td>Container process audit</td><td>Successful RCE. On a pool this is a capture; on production it's an incident</td></tr>
-    <tr><td><code>body_guard</code> / <code>parser_exploit_quarantined</code> events</td><td>Edge (proposed)</td><td>Attempts, with the full body for analysis</td></tr>
+    <tr><td><code>parser_exploit_quarantined</code> events, <code>body_guard:*</code> patterns</td><td>Edge (<code>body_guard.lua</code>)</td><td>Attempts: reason, size and SHA-256 of the dropped body</td></tr>
     <tr><td>Unexpected <code>Set-Cookie: PHPSESSID</code> from the storefront</td><td>Edge response headers</td><td>WordPress doesn't use PHP sessions, so a session cookie points at the upload-progress path</td></tr>
     <tr><td>Large uploads that stall until <code>client_body_timeout</code></td><td>nginx access log</td><td>Memory-grooming or timing attempts</td></tr>
     <tr><td>Any request with <code>Content-Encoding: br</code></td><td>Edge, Kibana proxy</td><td>Node2Shell probing (legitimate clients don't send it)</td></tr>
@@ -350,16 +321,15 @@ return _M</code></pre>
   </ul>
 
   <h2 id="honest">Honest Assessment</h2>
-  <p><strong>Strengths:</strong> The edge itself isn't affected and already buffers whole bodies, so a body guard
-  can be added without architectural change. The interim PHP settings cover both CVEs without a patched binary.
-  Quarantine keeps deception's benefits without running the exploit. The guard's checks describe legitimate
-  storefront bodies rather than this one CVE, so they also cover the next parser bug.</p>
-  <p><strong>Limitations:</strong> As shipped, production and every pool run vulnerable, end-of-life PHP, and
-  Kibana runs end-of-life Node. Until the images are upgraded, the protection is only as good as the interim
-  settings, and the body guard and quarantine are proposals, not code. A legitimate upload route on the
-  allowlist still passes multipart to PHP, so it relies on the per-part limits. The guard parses bodies the way
-  PHP <em>should</em> parse them, and a parser differential between the two could be used to evade it.
-  <code>memory_limit=-1</code> trades RCE for possible memory-exhaustion DoS.
-  <code>MaxConnectionsPerChild</code> narrows the 109619 window but doesn't close it. None of this replaces
-  upgrading.</p>
+  <p><strong>Strengths:</strong> The edge itself isn't affected and already buffered whole bodies, so the body
+  guard needed no architectural change. The hardened image covers both CVEs without a patched binary, and its
+  settings can't be undone from <code>.htaccess</code> or plugin code. Quarantine keeps deception's benefits
+  without running the exploit. The guard's checks describe legitimate storefront bodies rather than this one
+  CVE, so they also cover the next parser bug.</p>
+  <p><strong>Limitations:</strong> Production and every pool still run a vulnerable, end-of-life PHP binary, and
+  Kibana runs end-of-life Node. Legitimate multipart (media uploads, checkout file fields) still reaches PHP and
+  relies on the per-part limits. The guard parses bodies the way PHP <em>should</em> parse them, and a parser
+  differential between the two could evade it. <code>memory_limit=-1</code> trades RCE for possible
+  memory-exhaustion DoS, bounded by the container's <code>mem_limit</code>. A route-based multipart allowlist
+  would narrow it further but isn't implemented. None of this replaces upgrading.</p>
 </DocsLayout>

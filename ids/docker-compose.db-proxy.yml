@@ -374,7 +374,14 @@ services:
   # Production WordPress instance (clean, secure)
   production_eshop:
     logging: *default-logging
-    image: wordpress:6.8.3-php8.1
+    # Same WordPress 6.8.3 / PHP 8.1.33, plus interim PHP2Shell mitigations
+    # (see images/wordpress_hardened/Dockerfile). Built here only: the
+    # honeypot pools and pool_manager's runtime pools reuse this local tag.
+    # pull_policy build: the tag must never be pulled from Docker Hub, where
+    # anyone can publish under that name.
+    image: presshaven/wordpress:6.8.3-php8.1-hardened
+    build: ./images/wordpress_hardened
+    pull_policy: build
     depends_on:
       production_database:
         condition: service_healthy
@@ -1079,6 +1086,8 @@ services:
       # scores persist indefinitely (no decay); half-life tunes the fade rate.
       - THREAT_DECAY_ENABLED=${THREAT_DECAY_ENABLED:-true}
       - SCORE_DECAY_HALF_LIFE_SECONDS=${SCORE_DECAY_HALF_LIFE_SECONDS:-300}
+      # Request body guard (PHP2Shell interim layer): enforce | observe | off
+      - BODY_GUARD_MODE=${BODY_GUARD_MODE:-enforce}
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
     #   interval: 30s

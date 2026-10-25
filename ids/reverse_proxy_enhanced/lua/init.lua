@@ -368,6 +368,25 @@ _G.config = {
         blacklist_refresh_hours = tonumber(os.getenv("ABUSEIPDB_BLACKLIST_REFRESH_HOURS")) or 24
     },
 
+    -- -----------------------------------------------------------------------
+    -- body_guard: request body guard (body_guard.lua), the edge layer of the
+    -- PHP2Shell / Node2Shell interim mitigations.
+    --
+    --   mode       – "enforce" (strip hostile bodies, add score), "observe"
+    --                (log only) or "off". BODY_GUARD_MODE env var.
+    --   score      – Added to the request's risk score for a parser-shaped
+    --                body. 100 = straight to the honeypot.
+    --   soft_score – For weaker evidence: a compressed request body or a
+    --                hostile query string.
+    --   limits     – See body_guard_rules.DEFAULT_LIMITS.
+    -- -----------------------------------------------------------------------
+    body_guard = {
+        mode = (os.getenv("BODY_GUARD_MODE") or "enforce"):lower(),
+        score = 100,
+        soft_score = 40,
+        limits = require("body_guard_rules").DEFAULT_LIMITS,
+    },
+
     -- internal_test_secret: shared secret gating the X-Route-Target /
     -- X-Risk-Score response headers (see nginx.conf's two
     -- header_filter_by_lua_block sites). Those headers exist so the
