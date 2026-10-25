@@ -9,6 +9,7 @@ const sidebar = [
   { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
   { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
   { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+  { title: 'Case Study: Black October', href: '/docs/ai-defense/black-october' },
 ];
 const toc = [
   { id: 'why', text: 'Why Allowlisting Beats Signatures', level: 2 },
@@ -126,7 +127,9 @@ return &#123;
     <li><strong>Content types</strong>: storefront routes accept form or JSON bodies only. A
     <code>multipart/form-data</code> body outside the upload routes you list is diverted, which covers the
     file-upload RCE class without knowing the plugin. This extends today's
-    <a href="/docs/detection/capabilities"><code>upload_rules.lua</code></a>.</li>
+    <a href="/docs/detection/capabilities"><code>upload_rules.lua</code></a>. It is also the main pre-patch
+    control for parser-level bugs like <a href="/docs/ai-defense/black-october#guard">PHP2Shell</a>, whose
+    triggers are all multipart.</li>
   </ul>
 
   <h2 id="learn">Learning the Manifest</h2>

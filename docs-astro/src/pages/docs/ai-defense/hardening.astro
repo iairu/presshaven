@@ -9,6 +9,7 @@ const sidebar = [
   { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening', active: true },
   { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
   { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+  { title: 'Case Study: Black October', href: '/docs/ai-defense/black-october' },
 ];
 const toc = [
   { id: 'idea', text: 'Unreachable Bugs Need No Patch', level: 2 },
@@ -61,7 +62,7 @@ const toc = [
     <tr><td>XML-RPC off (or manifest-excluded)</td><td>Credential amplification and pingback abuse; already scored by <code>GENERIC-WP-004</code></td></tr>
     <tr><td>REST <code>/wp/v2/users</code> restricted to authenticated users</td><td>User enumeration, the usual first step of an agent's reconnaissance; already scored by <code>GENERIC-WP-003</code></td></tr>
     <tr><td>No PHP execution in <code>wp-content/uploads/</code></td><td>The second half of almost every file-upload RCE: the file is written but can't run</td></tr>
-    <tr><td>PHP <code>disable_functions</code> for <code>exec</code>, <code>system</code>, <code>passthru</code>, <code>shell_exec</code>, <code>proc_open</code>, <code>popen</code></td><td>Turning a code-execution bug into shell access</td></tr>
+    <tr><td>PHP <code>disable_functions</code> for <code>exec</code>, <code>system</code>, <code>passthru</code>, <code>shell_exec</code>, <code>proc_open</code>, <code>popen</code></td><td>Turning a code-execution bug into shell access, including runtime bugs such as <a href="/docs/ai-defense/black-october#old">PHP2Shell</a></td></tr>
   </table>
 
   <h2 id="containment">Post-Exploit Containment</h2>
@@ -103,6 +104,9 @@ const toc = [
     individual plugins, so an AI-era advisory for one plugin can be rolled out in minutes with a tested
     rollback (the engine's <a href="/docs/engine#backups">backups</a>), not deferred for weeks.</li>
   </ol>
+  <p>The same applies to the runtime under WordPress. Images pin a PHP branch (<code>-php8.1</code>) and Kibana
+  bundles its own Node, and both can reach end of life while the tag still looks current. The
+  <a href="/docs/ai-defense/black-october">Black October case study</a> shows what that costs.</p>
   <p>Hardening and allowlisting decide <em>whether</em> a shop survives the gap between disclosure and
   patch. Pool-first updates shrink the gap.</p>
 

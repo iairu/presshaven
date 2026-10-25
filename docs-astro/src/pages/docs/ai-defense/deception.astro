@@ -9,6 +9,7 @@ const sidebar = [
   { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
   { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception', active: true },
   { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+  { title: 'Case Study: Black October', href: '/docs/ai-defense/black-october' },
 ];
 const toc = [
   { id: 'sensor', text: 'A Decoy That Catches the Unknown', level: 2 },
@@ -143,5 +144,8 @@ end</code></pre>
   exploit from a clean IP to an allowed route reaches production. Deception only helps once something has
   diverted the session. Honey-endpoints and decoy fingerprints are proposals. The sophistication classifier is
   rule-based and can be fooled by an agent that mimics browser headers and human timing. Pool capacity is finite
-  under mass exploitation (see <a href="/docs/engine#pools">pool limits</a>).</p>
+  under mass exploitation (see <a href="/docs/engine#pools">pool limits</a>). Pools run the same PHP as
+  production, so a runtime-level exploit such as PHP2Shell really executes inside the decoy. Exploits of that
+  class should be <a href="/docs/ai-defense/black-october#quarantine">quarantined at the edge</a>, not
+  diverted.</p>
 </DocsLayout>

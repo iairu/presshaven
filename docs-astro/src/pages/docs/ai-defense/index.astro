@@ -9,6 +9,7 @@ const sidebar = [
   { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
   { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
   { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+  { title: 'Case Study: Black October', href: '/docs/ai-defense/black-october' },
 ];
 const toc = [
   { id: 'threat', text: 'The Threat Model', level: 2 },
@@ -91,6 +92,8 @@ const toc = [
     <DocCard title="Deception as a 0-day sensor" href="/docs/ai-defense/deception" icon="crosshair" tag="Layer 3" description="Behaviour-triggered diversion, honey-endpoints that only an enumerating agent hits, honeytokens, and AI-assisted session classification." meta="catch the unknown" />
     <DocCard title="Capture to virtual patch" href="/docs/ai-defense/response" icon="zap" tag="Layer 4" description="Turn what a decoy captured into a narrow, tested Lua rule and Suricata signature, then roll fixes through the pools before production." meta="minutes, not advisories" />
   </CardGrid>
+  <p>For the layers applied to a real incident, including what they <em>don't</em> cover, see the
+  <a href="/docs/ai-defense/black-october">Black October case study</a> (PHP2Shell and Node2Shell).</p>
 
   <h2 id="status">Today vs Proposed</h2>
   <p>Each page separates what the code does now from what it proposes. In summary:</p>
@@ -108,6 +111,7 @@ const toc = [
     <tr><td>Honey-endpoints and decoy plugin fingerprints</td><td>Proposed</td><td><a href="/docs/ai-defense/deception">Deception</a></td></tr>
     <tr><td>Pool filesystem/database diff after a session</td><td>Proposed</td><td><a href="/docs/ai-defense/response">Response</a></td></tr>
     <tr><td>Egress-deny for storefront containers</td><td>Proposed</td><td><a href="/docs/ai-defense/hardening">Hardening</a></td></tr>
+    <tr><td>Request body guard and parser-exploit quarantine</td><td>Proposed</td><td><a href="/docs/ai-defense/black-october#guard">Black October</a></td></tr>
   </table>
 
   <h2 id="honest">Honest Assessment</h2>
