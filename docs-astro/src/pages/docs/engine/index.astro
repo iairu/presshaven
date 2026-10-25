@@ -131,6 +131,13 @@ cp site/* ../production_eshop_files/wp-content/themes/omega-storefront/assets/fe
     <li>Do not copy a live MySQL data directory while the container is running; use the backup service or a dump.</li>
   </ul>
 
+  <p><code>backups/manage_backups.sh</code> (needs <code>jq</code>) lists, labels, moves and restores snapshots:</p>
+  <pre><code>./backups/manage_backups.sh list
+./backups/manage_backups.sh label 2026-08-09_02-00-03_production_database.sql.gz "before WooCommerce 9 upgrade"
+./backups/manage_backups.sh export 2026-08-09_02-00-03_production_database.sql.gz ~/offsite/
+./backups/manage_backups.sh import ~/offsite/2026-08-09_02-00-03_production_eshop.tar.gz wp
+./backups/manage_backups.sh delete 2026-08-09_02-00-03_production_eshop.tar.gz --yes</code></pre>
+
   <h2 id="config">Pool Configuration</h2>
   <table>
     <tr><th>Variable</th><th>Default</th><th>Effect</th></tr>

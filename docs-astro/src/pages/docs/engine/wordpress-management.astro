@@ -116,6 +116,12 @@ const toc = [
     weighted progress bar and per-stage status.
   </p>
 
+  <p>The check is <code>scripts/update_wordpress.sh --check</code>, run in a one-shot wp-cli seed
+  service; it prints one JSON object that <code>core/wp_update.py</code> parses (versions here are illustrative):</p>
+  <pre><code>docker compose run --rm --no-deps production_db_seed sh /update_wordpress.sh --check</code></pre>
+  <pre><code>&#123;"ok":true,"wordpress":&#123;"installed":"6.6.2","latest":"6.7","update_available":true&#125;,
+ "woocommerce":&#123;"installed":"9.3.3","latest":"9.3.3","update_available":false&#125;,"errors":""&#125;</code></pre>
+
   <h3 id="update-stages">Update Stages</h3>
   <p>The update follows an <em>update-production-then-re-sync</em> model, so core and WooCommerce are downloaded
   once and every instance ends up byte-identical:</p>

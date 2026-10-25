@@ -72,6 +72,20 @@ const toc = [
     <li><strong>Log window</strong> — the matching Nginx security events and the SIEM documents they became.</li>
   </ul>
 
+  <p>Commands that gather most of it, run from <code>ids/</code>:</p>
+  <pre><code># decision trace and security events for one client
+docker compose logs --since 1h reverse_proxy | grep SECURITY_EVENT | grep '"ip":"203.0.113.7"'
+docker compose exec reverse_proxy grep 203.0.113.7 /var/log/nginx/security.log | tail -20
+
+# session and pool state
+REDIS_PW="$(grep ^REDIS_PASSWORD= .env | cut -d= -f2-)"
+docker compose exec -T session_store redis-cli -a "$REDIS_PW" --no-auth-warning GET honeypot_pool_session:&lt;SID&gt;
+docker compose exec -T session_store redis-cli -a "$REDIS_PW" --no-auth-warning SMEMBERS honeypot_pool:ready
+docker compose ps
+
+# full research export (sessions, honeytokens, logs) as NDJSON/CSV
+./scripts/collect_data.sh --compress</code></pre>
+
   <h2 id="escalation">Escalation</h2>
   <p>Escalate to repository maintainers with logs, dashboard state, and alert context.</p>
 </DocsLayout>

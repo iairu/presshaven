@@ -73,6 +73,19 @@ const toc = [
     <li>Past <code>permaflag_offenses</code> offenses, OR once the stored peak has ever reached <code>permaflag_score</code>, decay stops entirely (permaflag).</li>
     <li>Default: <code>decay_offense_slowdown = 0.75</code>, <code>permaflag_offenses = 5</code>, <code>permaflag_score = 100</code>.</li>
   </ul>
+  <p>The core of <code>decay_policy.lua</code>:</p>
+  <pre><code>function _M.half_life_multiplier(offenses, slowdown)
+    offenses = tonumber(offenses) or 0
+    slowdown = tonumber(slowdown) or 0
+    if offenses &lt;= 0 or slowdown &lt;= 0 then return 1 end
+    return 1 + slowdown * offenses
+end
+
+-- in decay(), after the peak &lt;= 0, no-elapsed-time and permaflag early returns:
+local eff_half_life = base_half_life * _M.half_life_multiplier(offenses, cfg.decay_offense_slowdown)
+return peak * (0.5 ^ (elapsed / eff_half_life))</code></pre>
+  <p>With the defaults, a session with two prior offenses decays with a 2.5&times; longer half-life
+  (750&nbsp;s instead of 300&nbsp;s).</p>
   <div class="admonition note">
     <div class="admonition-title">Measured vs configured half-life</div>
     <p>The configured half-life is 300&nbsp;s, but a recorded exploit test-scenario run measured the effective

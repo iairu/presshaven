@@ -84,6 +84,31 @@ const toc = [
     <li><strong>Regenerate the catalogue.</strong> Rebuild <code>patterns/patterns.json</code> so the new CVE appears in the dashboard and on the <a href="/docs/detection/patterns">Pattern Database</a> page without the two lists drifting apart.</li>
   </ol>
 
+  <p>A rule in <code>vulnerability_rules.lua</code> returns the fields the reporters and the dashboard expect:</p>
+  <pre><code>-- CVE-2023-2986: Abandoned Cart Lite Hardcoded Encryption Key
+if string.find(combined, "wcal_action=checkout_link") and
+   string.find(combined, "validate=") then
+    return &#123;
+        cve = "CVE-2023-2986",
+        severity = "HIGH",
+        description = "Abandoned Cart Lite exploitation using hardcoded encryption key",
+        plugin = "abandoned-cart-lite",
+        attack_vector = "encryption_bypass"
+    &#125;
+end</code></pre>
+  <p>The quick-match table in <code>init.lua</code> takes one Lua pattern per CVE (escape <code>-</code> and <code>.</code>):</p>
+  <pre><code>cve_patterns = &#123;
+    ["CVE-2023-28121"] = "X%-WCPAY%-PLATFORM%-CHECKOUT%-USER",
+    ["CVE-2023-2986"] = "wcal_action=checkout_link",
+    ["CVE-2024-25600"] = "bricks/v1/render_element",
+    -- ...</code></pre>
+  <p>And the matching test in <code>tests/test_vulnerability_rules.lua</code>, with its negative case:</p>
+  <pre><code>local cve2 = rules.detect_vulnerability_pattern("/", "wcal_action=checkout_link&amp;validate=x", nil)
+check("CVE-2023-2986 detected", cve2 ~= nil and cve2.cve == "CVE-2023-2986")
+
+local clean = rules.detect_vulnerability_pattern("/shop/product/red-shirt", nil, nil)
+check("clean uri returns nil", clean == nil)</code></pre>
+
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> 13 seeded CVEs across multiple exploit vectors, severity-graded Suricata integration, AbuseIPDB reportability for 6 reason types.</p>
   <p><strong>Limitations:</strong> Coverage limited to seeded CVEs (manual addition required), Suricata same-host testing gap, generic patterns may need tuning for new WordPress versions.</p>

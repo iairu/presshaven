@@ -63,6 +63,17 @@ const toc = [
       </ul>
     </li>
   </ol>
+  <p>The encryption in <code>gdpr_client.js</code>:</p>
+  <pre><code>function buildToken() &#123;
+  if (!publicKey) return Promise.reject(new Error("no public key"));
+  var payload = collectCharacteristics();          // &#123; s: screen.width + "x" + screen.height &#125;
+  payload.t = Math.floor(Date.now() / 1000);       // fresh timestamp each time
+  var data = new TextEncoder().encode(JSON.stringify(payload));
+  return window.crypto.subtle
+    .encrypt(&#123; name: "RSA-OAEP" &#125;, publicKey, data)
+    .then(function (cipher) &#123; return bytesToB64(cipher); &#125;);
+&#125;</code></pre>
+
   <h3>Server half (reverse proxy, per request, in memory only)</h3>
   <ol>
     <li>Decrypt: <code>plaintext = RSA-OAEP-SHA256-decrypt( gdpr_token, PRIVATE key )</code>. The
@@ -77,6 +88,15 @@ const toc = [
     session-token routing.</li>
     <li>The plaintext and characteristics are discarded immediately; only the hash may persist.</li>
   </ol>
+  <p>And the one-way hash in <code>gdpr_handler.lua</code>:</p>
+  <pre><code>local function compute_signature(canonical)
+    local h = sha256:new()
+    h:update(_sig_secret)
+    h:update("|")
+    h:update(canonical)
+    return str.to_hex(h:final())
+end</code></pre>
+
   <div class="admonition note">
     <div class="admonition-title">Binding the signature</div>
     <p>Whenever a request that carried a valid signature is routed to the honeypot for <em>any</em>

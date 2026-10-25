@@ -194,9 +194,9 @@ docker compose up -d</code></pre>
     <tr><td>Start the edge stack</td><td><code>cd ids &amp;&amp; docker compose up -d</code></td></tr>
     <tr><td>Rebuild after changes</td><td><code>docker compose up -d --build</code></td></tr>
     <tr><td>Follow proxy logs</td><td><code>docker compose logs -f reverse_proxy</code></td></tr>
-    <tr><td>Open a Redis shell</td><td><code>docker compose exec session_store redis-cli</code></td></tr>
+    <tr><td>Open a Redis shell</td><td><code>docker compose exec session_store redis-cli -a "$(grep ^REDIS_PASSWORD= .env | cut -d= -f2-)" --no-auth-warning</code></td></tr>
     <tr><td>Run all scenarios</td><td><code>bash testing/run_all_scenarios.sh</code></td></tr>
-    <tr><td>Run Lua unit tests</td><td><code>cd reverse_proxy_enhanced/lua &amp;&amp; lua tests/test_pattern_rules.lua</code></td></tr>
+    <tr><td>Run Lua unit tests</td><td><code>reverse_proxy_enhanced/lua/tests/run_all.sh</code></td></tr>
     <tr><td>Run dashboard tests</td><td><code>cd dashboard &amp;&amp; python3 -m unittest discover -s tests -v</code></td></tr>
     <tr><td>Regenerate Kibana objects</td><td><code>python3 siem/kibana/build_dashboards.py --ndjson</code></td></tr>
     <tr><td>Export live dashboards</td><td><code>python3 siem/kibana/export_dashboards.py</code></td></tr>

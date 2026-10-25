@@ -77,6 +77,23 @@ const toc = [
   blocking the edge) are the <a href="/docs/observability/siem#contracts">Pipeline Contracts</a>. The shared
   dictionaries that cache state between requests are listed in
   <a href="/docs/architecture/lua-internals#globals">Lua Internals</a>.</p>
+  <p>The logger (<code>init.lua</code>) and a typical call from <code>router.lua</code>:</p>
+  <pre><code>local log_entry = &#123;
+    timestamp = ngx.time(),
+    event_type = event_type,
+    details = details,
+    server_time = os.date("%Y-%m-%d %H:%M:%S")
+&#125;
+ngx.log(ngx.WARN, "SECURITY_EVENT: ", cjson.encode(log_entry))</code></pre>
+  <pre><code>_G.utils.log_security_event("routing_to_honeypot", &#123;
+    reason = "high_risk_score",
+    score = pattern_result.score,
+    ip = remote_ip,
+    pool = routing_decision.session_data.honeypot_pool,
+    session_id = session_data.id
+&#125;)</code></pre>
+  <p>To watch them live: <code>docker compose logs -f reverse_proxy | grep SECURITY_EVENT</code>.</p>
+
   <h2 id="suricata">Suricata Log Ingestion</h2>
   <p><code>init_worker.lua</code> reads new <code>eve.json</code> alerts every 30 seconds, drops private and
   loopback sources, and stores a severity-graded score per IP in <code>threat_ips</code>, decayed when read. The

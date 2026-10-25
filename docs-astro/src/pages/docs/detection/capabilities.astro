@@ -100,6 +100,30 @@ const toc = [
     <li><strong>HTTP Basic Authentication probe</strong>: +5.</li>
   </ul>
 
+  <p>Layer-1 entries in <code>pattern_rules.lua</code> name their match kind explicitly instead of
+  relying on bare Lua patterns, where <code>.</code> and <code>-</code> are operators and once made
+  <code>per_page=100</code> score +65:</p>
+  <pre><code>local function plain(s) return &#123; kind = "plain", match = s, name = s &#125; end
+local function ext(e) return &#123; kind = "ext", match = e, name = e &#125; end
+local function param(n) return &#123; kind = "param", match = n, name = n .. "=" &#125; end
+local function segment(s) return &#123; kind = "segment", match = s, name = s &#125; end
+local function pat(p, name) return &#123; kind = "pattern", match = p, name = name &#125; end
+
+_M.SUSPICIOUS_PATTERNS = &#123;
+    -- WSTG-INPV-01: Directory traversal
+    plain("../"), plain("..\\"),
+
+    -- WSTG-INPV-05: SQL injection (real syntax, word boundaries)
+    pat("union[^%a].-select[^%a]", "union.*select"),
+    pat("sleep%s*%(", "sleep"),
+
+    -- WSTG-INPV-12: Command injection
+    pat(";%s*cat[%s%+]", ";cat"),
+
+    -- WSTG-CONF: Sensitive file access
+    plain("wp-config.php"), ext(".env"), segment("/backup"),
+    -- ...</code></pre>
+
   <h2 id="cve">CVE Pattern Matching</h2>
   <p><code>pattern_rules.analyze_cve_patterns()</code> checks URI, query string, and headers against <code>_G.config.vulnerability.cve_patterns</code>. Each match scores +40. See <a href="/docs/detection/cves">Seeded CVEs</a> for the full list.</p>
 

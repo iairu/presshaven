@@ -13,6 +13,7 @@ const toc = [
   { id: 'dataflow', text: 'Data Flow', level: 2 },
   { id: 'transport', text: 'Transport & mTLS', level: 2 },
   { id: 'contracts', text: 'Pipeline Contracts', level: 2 },
+  { id: 'access-log', text: 'Security Access Log', level: 2 },
 ];
 ---
 <DocsLayout title="SIEM & Log Pipeline" description="How logs are processed and analyzed using SIEM tools" section="Observability" sidebar={sidebar} toc={toc}>
@@ -69,4 +70,18 @@ Kibana dashboards (honeypot-* data view)</code></pre>
     <li><strong>Dashboards are code.</strong> Saved objects are generated from Python and committed as NDJSON, which makes reviews and rollbacks possible.</li>
     <li><strong>Exports preserve manual work.</strong> If a panel was edited live, export it back to NDJSON instead of rebuilding over it (see <a href="/docs/observability/kibana#building">Building and Exporting</a>).</li>
   </ul>
+
+  <h2 id="access-log">Security Access Log</h2>
+  <p>Besides the JSON events, every request is written to <code>/var/log/nginx/security.log</code> with the
+  routing decision attached. The format in <code>nginx.conf</code>:</p>
+  <pre><code>log_format security '$remote_addr - $remote_user [$time_local] "$request" '
+                   '$status $body_bytes_sent "$http_referer" '
+                   '"$http_user_agent" "$http_x_forwarded_for" '
+                   'session_id="$session_id" route="$route_decision" '
+                   'risk_score="$risk_score" suspicious="$suspicious_activity" '
+                   'request_score="$request_score" decayed_score="$decayed_score" '
+                   'offenses="$offenses" decay_state="$decay_state" '
+                   'uri_class="$uri_class" patterns="$threat_patterns" '
+                   'reason="$route_reason" cache_status="$upstream_cache_status"';
+access_log /var/log/nginx/security.log security;</code></pre>
 </DocsLayout>

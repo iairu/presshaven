@@ -116,6 +116,18 @@ const toc = [
   names <code>honeypot_eshop_N</code>, <code>honeypot_database_N</code> and <code>honeypot_backend_N</code> must match
   Compose exactly.</p>
 
+  <p>To inspect these keys on a running stack, pass the password from <code>.env</code> (the
+  <code>session_store</code> container does not have it in its environment):</p>
+  <pre><code>cd ids
+REDIS_PW="$(grep ^REDIS_PASSWORD= .env | cut -d= -f2-)"
+rcli() &#123; docker compose exec -T session_store redis-cli -a "$REDIS_PW" --no-auth-warning "$@"; &#125;
+
+rcli SMEMBERS honeypot_pool:ready              # healthy pools
+rcli ZRANGE honeypot_pool:free 0 -1            # unowned spares
+rcli ZRANGE honeypot_pool:waiting 0 -1 WITHSCORES
+rcli GET honeypot_pool_session:&lt;SID&gt;           # one session's pool
+rcli GET threat_ips                            # per-IP reputation (JSON)</code></pre>
+
   <h2 id="assign">Pool Assignment</h2>
   <p><code>ASSIGN_SCRIPT</code> runs inside Redis with <code>EVAL</code>, so two nginx workers can never hand one free pool
   to two sessions. It returns a pool number and a mode:</p>
@@ -128,6 +140,37 @@ const toc = [
     <li><strong>shared</strong> — growth is capped: share a ready pool round-robin for good (case B).</li>
     <li><strong>none</strong> — no ready pool at all.</li>
   </ol>
+  <p>The free-pool and fallback part of the script (<code>pool_router_rules.lua</code>); <code>KEYS[2]</code> is
+  the free set, <code>KEYS[3]</code> the ready set, <code>KEYS[4]</code> the counter, <code>KEYS[6]</code> the cap
+  flag and <code>KEYS[7]</code> the waiting queue:</p>
+  <pre><code>while true do
+  local popped = redis.call('ZPOPMIN', KEYS[2])
+  if not popped or #popped == 0 then break end
+  if redis.call('SISMEMBER', KEYS[3], popped[1]) == 1 then
+    pool = tonumber(popped[1])
+    mode = 'exclusive'
+    break
+  end
+end
+if not pool then
+  local ready = redis.call('SMEMBERS', KEYS[3])
+  if #ready == 0 then
+    return &#123;0, 'none'&#125;
+  end
+  local nums = &#123;&#125;
+  for i, v in ipairs(ready) do nums[i] = tonumber(v) end
+  table.sort(nums)
+  local c = redis.call('INCR', KEYS[4])
+  pool = nums[((c - 1) % #nums) + 1]
+  if redis.call('EXISTS', KEYS[6]) == 1 then
+    mode = 'shared'
+  else
+    mode = 'pending'
+    redis.call('ZADD', KEYS[7], tonumber(ARGV[4]) or c, ARGV[1])
+    -- ... trimmed to max_waiting (200), oldest dropped
+  end
+end</code></pre>
+
   <p>Assignments are cached in <code>honeypot_routes</code> for 300&nbsp;s, but a pending one for only 3&nbsp;s, so the
   move to a session's own pool takes effect quickly. A cached pool that is no longer in the ready list is a
   cache miss (this fixed the 502s after scale-down). If the assigned pool is unhealthy or being replicated,
@@ -187,6 +230,18 @@ const toc = [
   serves a 503 page with <code>Retry-After: 120</code> to production and honeypot alike. Only an explicit
   <code>"1"</code> counts as on, and the TTL brings the site back on its own if the dashboard dies mid-update. See
   <a href="/docs/engine/wordpress-management">WordPress Management</a>.</p>
+  <p>The gate at the top of the access phase in <code>nginx.conf</code>:</p>
+  <pre><code>local threat_intel = ngx.shared.threat_intel
+local maintenance = require "maintenance"
+if threat_intel and maintenance.should_serve_maintenance(threat_intel:get("maintenance")) then
+    ngx.status = 503
+    ngx.header["Content-Type"] = "text/html; charset=utf-8"
+    ngx.header["Retry-After"] = maintenance.RETRY_AFTER
+    ngx.header["Cache-Control"] = "no-store"
+    ngx.say(maintenance.page_html(maintenance.RETRY_AFTER))
+    return ngx.exit(503)
+end</code></pre>
+
   <p><strong>Install state</strong> (<code>wp_install_state.lua</code>): <code>install.php</code> is normally scored
   hard, but it is legitimate before the first-run wizard. Nginx has no MySQL driver, so the probe looks for
   WordPress's own "already installed" text. Only production is probed, since pool databases are copies of it. Any
@@ -207,6 +262,16 @@ const toc = [
   <p>Values are SHA-1 derivations of a per-deployment salt, so they are the same across workers and restarts and
   need no per-variant storage. Detection runs before routing; a hit sets the request's score to 100, logs to ELK and Redis,
   and records time-to-use from the injection timestamp.</p>
+
+  <p>In the access phase, a honeytoken hit overrides whatever the pattern analyser scored:</p>
+  <pre><code>local ht_result = honeytoken_handler.analyze_request_for_tokens()
+-- ...
+local pattern_result = pattern_analyzer.analyze_request(ngx.var.request_uri, request_headers, ngx.var.remote_addr)
+if ht_result then
+    pattern_result.score = 100
+    pattern_result.suspicious = true
+    table.insert(pattern_result.patterns_matched, "honeytoken_reuse:" .. ht_result.token_id)
+end</code></pre>
 
   <h2 id="classifiers">Content Classifiers</h2>
   <p><strong>Prompt-injection filter</strong>: not wired to any LLM yet (the LLM response feature is planned), but
@@ -245,4 +310,15 @@ const toc = [
     filter feeding scores today, and upload analysis folded into the session score instead of its own location,
     where detections never outlived the request.</li>
   </ul>
+  <p>Because the rules modules are pure, a test is a plain Lua file with no OpenResty. Each suite sets
+  <code>package.path = "../?.lua;"</code>, so it runs from the <code>tests/</code> directory:</p>
+  <pre><code>-- tests/test_decay_policy.lua
+check("1 offense @0.75 -&gt; 1.75x", approx(dp.half_life_multiplier(1, 0.75), 1.75))
+check("one half-life halves it (no offenses)", approx(dp.decay(100, HL, HL, 0, &#123;&#125;), 50))
+check("maxed score never decays (permaflag)", dp.decay(100, 10 * HL, HL, 1, cfg) == 100)</code></pre>
+  <pre><code># every suite (exits non-zero if any fails)
+ids/reverse_proxy_enhanced/lua/tests/run_all.sh
+
+# one suite
+cd ids/reverse_proxy_enhanced/lua/tests &amp;&amp; lua test_decay_policy.lua</code></pre>
 </DocsLayout>
