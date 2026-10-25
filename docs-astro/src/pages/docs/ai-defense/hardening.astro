@@ -1,0 +1,130 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'AI-Era Defense Overview', href: '/docs/ai-defense' },
+  { title: 'Allowlisting', href: '/docs/ai-defense/allowlisting' },
+  { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening', active: true },
+  { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
+  { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+];
+const toc = [
+  { id: 'idea', text: 'Unreachable Bugs Need No Patch', level: 2 },
+  { id: 'plugins', text: 'Plugin Minimisation', level: 2 },
+  { id: 'wordpress', text: 'WordPress Configuration', level: 2 },
+  { id: 'containment', text: 'Post-Exploit Containment', level: 2 },
+  { id: 'updates', text: 'Updates Without the Gamble', level: 2 },
+  { id: 'checklist', text: 'Checklist', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Attack-Surface Hardening" description="Reduce how much vulnerable code is reachable, and limit what a successful exploit can do, without knowing which bug will be found next" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+  <p>
+    AI-assisted discovery multiplies the bugs found in code you <em>run</em>. It can't find a bug in code you
+    removed, can't exploit one behind an endpoint that doesn't answer, and gains little from one it can't turn
+    into persistence or data. Hardening is the layer that holds even when the
+    <a href="/docs/ai-defense/allowlisting">allowlist</a> is bypassed.
+  </p>
+
+  <h2 id="idea">Unreachable Bugs Need No Patch</h2>
+  <CardGrid columns={3}>
+    <DocCard title="Remove" icon="archive" tag="Less code" description="Every plugin, theme and endpoint you delete takes all of its future CVEs with it." meta="smallest surface" />
+    <DocCard title="Disable" icon="lock" tag="Less reach" description="Features you keep but don't expose (file editors, XML-RPC, user enumeration) stop being entry points." meta="config, not code" />
+    <DocCard title="Contain" icon="box" tag="Less impact" description="Assume one exploit lands. Deny it outbound network, writable code paths and reusable credentials." meta="foothold ≠ control" />
+  </CardGrid>
+
+  <h2 id="plugins">Plugin Minimisation</h2>
+  <p>Most WordPress CVEs are in plugins, and AI-assisted auditing makes the long tail of small, rarely
+  reviewed plugins the most productive target.</p>
+  <ul>
+    <li><strong>Audit with the dashboard.</strong> <a href="/docs/engine/wordpress-management">WordPress Studio</a>
+    shows what the production shop runs. Every installed but inactive plugin is still reachable through its PHP
+    files. Delete it, don't just deactivate it.</li>
+    <li><strong>Prefer fewer, larger plugins.</strong> One well-maintained plugin with an active security
+    process beats three single-purpose ones from volunteers.</li>
+    <li><strong>Watch for abandoned plugins.</strong> No release in 12 months means the next AI-found bug may never
+    be fixed. Replace those plugins, or cover them with a narrow manifest entry so only the routes you use are
+    reachable.</li>
+    <li><strong>Use the route manifest as an audit.</strong> In <code>observe</code> mode,
+    <a href="/docs/ai-defense/allowlisting#learn">manifest learning</a> lists every public endpoint real customers
+    use. A plugin with zero legitimate hits is a removal candidate.</li>
+  </ul>
+
+  <h2 id="wordpress">WordPress Configuration</h2>
+  <p>Settings that close whole bug classes regardless of which plugin has the bug:</p>
+  <table>
+    <tr><th>Setting</th><th>Closes</th></tr>
+    <tr><td><code>define('DISALLOW_FILE_EDIT', true);</code></td><td>Admin theme/plugin editor as an RCE path after an admin-takeover bug</td></tr>
+    <tr><td><code>define('DISALLOW_FILE_MODS', true);</code></td><td>Installing a malicious plugin from a hijacked admin session. Do updates through the dashboard's <a href="/docs/engine/wordpress-management">WordPress Update</a> flow instead</td></tr>
+    <tr><td>XML-RPC off (or manifest-excluded)</td><td>Credential amplification and pingback abuse; already scored by <code>GENERIC-WP-004</code></td></tr>
+    <tr><td>REST <code>/wp/v2/users</code> restricted to authenticated users</td><td>User enumeration, the usual first step of an agent's reconnaissance; already scored by <code>GENERIC-WP-003</code></td></tr>
+    <tr><td>No PHP execution in <code>wp-content/uploads/</code></td><td>The second half of almost every file-upload RCE: the file is written but can't run</td></tr>
+    <tr><td>PHP <code>disable_functions</code> for <code>exec</code>, <code>system</code>, <code>passthru</code>, <code>shell_exec</code>, <code>proc_open</code>, <code>popen</code></td><td>Turning a code-execution bug into shell access</td></tr>
+  </table>
+
+  <h2 id="containment">Post-Exploit Containment</h2>
+  <p>The project's container topology gives containment controls a natural home. Some are shipped, some
+  proposed:</p>
+  <ul>
+    <li><strong>Egress deny for the storefront (proposed).</strong> The production WordPress container needs to
+    reach its database and, during updates, wordpress.org. It shouldn't open arbitrary outbound connections.
+    Putting it on an <code>internal: true</code> Docker network, with an explicit egress proxy only for update
+    windows, stops reverse shells, second-stage downloads and data exfiltration over HTTP. That is most of what
+    an AI-written post-exploitation script does next.</li>
+    <li><strong>Read-only code (proposed).</strong> Mount WordPress core, plugins and themes read-only in
+    production, with only <code>uploads/</code> writable (and non-executable). A webshell drop then fails,
+    whatever bug delivered it.</li>
+    <li><strong>Dropped privileges (partly shipped).</strong> Services in the database-proxy layer already run with
+    <code>no-new-privileges</code> and <code>cap_drop</code>. Extending the same profile to every storefront
+    container limits container-escape follow-ups.</li>
+    <li><strong>Separate database credentials (shipped).</strong> Every pool has its own database user and password
+    (see <a href="/docs/operations/hardening">Production Hardening</a>), so credentials stolen from a decoy are
+    worthless against production. Applying least privilege to the production DB user (no <code>FILE</code>, no
+    <code>SUPER</code>) blocks SQL-injection-to-file-write chains.</li>
+    <li><strong>Two-host split (shipped).</strong> In the <a href="/docs/operations/two-host">two-host
+    topology</a> the SIEM accepts telemetry over an outbound-only mTLS channel, so a compromised edge can't
+    rewrite the evidence of its own compromise.</li>
+  </ul>
+
+  <h2 id="updates">Updates Without the Gamble</h2>
+  <p>
+    Fast patching still matters. It closes the window an attacker's agent is racing through. The usual reason
+    shops delay is fear of breaking checkout. The project's
+    <a href="/docs/engine/wordpress-management">WordPress Update</a> page already upgrades core and WooCommerce
+    across production and every pool behind a maintenance page. Two proposed extensions turn that into a fast,
+    low-risk patch path:
+  </p>
+  <ol>
+    <li><strong>Pool-first canary.</strong> Apply the update to one decoy pool first and run the dashboard's
+    existing scenario tests (browse, cart, checkout) against it. Promote to production only if they pass.</li>
+    <li><strong>Plugin updates through the same flow.</strong> Extend the updater from core and WooCommerce to
+    individual plugins, so an AI-era advisory for one plugin can be rolled out in minutes with a tested
+    rollback (the engine's <a href="/docs/engine#backups">backups</a>), not deferred for weeks.</li>
+  </ol>
+  <p>Hardening and allowlisting decide <em>whether</em> a shop survives the gap between disclosure and
+  patch. Pool-first updates shrink the gap.</p>
+
+  <h2 id="checklist">Checklist</h2>
+  <table>
+    <tr><th>Step</th><th>Effort</th><th>Status in project</th></tr>
+    <tr><td>Admin origin allowlist (<code>ip_whitelist</code> + VPN)</td><td>Low</td><td>Supported today</td></tr>
+    <tr><td>Delete inactive plugins and themes</td><td>Low</td><td>Operator action</td></tr>
+    <tr><td><code>DISALLOW_FILE_EDIT</code> / <code>DISALLOW_FILE_MODS</code></td><td>Low</td><td>Operator action</td></tr>
+    <tr><td>No PHP in uploads, <code>disable_functions</code></td><td>Low</td><td>Operator action</td></tr>
+    <tr><td>Unique pool DB credentials</td><td>Low</td><td>Shipped, verified by <code>test_pool_isolation.sh</code></td></tr>
+    <tr><td>Route manifest in <code>observe</code> mode</td><td>Medium</td><td>Proposed</td></tr>
+    <tr><td>Egress-deny storefront network</td><td>Medium</td><td>Proposed</td></tr>
+    <tr><td>Read-only code mounts</td><td>Medium</td><td>Proposed</td></tr>
+    <tr><td>Pool-first plugin updates</td><td>Medium</td><td>Proposed (core/WooCommerce shipped)</td></tr>
+  </table>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Every control is independent of which vulnerability is found next, and most are
+  configuration rather than code. Containment turns "AI found an RCE" into "AI found a sandbox with no network".</p>
+  <p><strong>Limitations:</strong> Egress deny, read-only mounts and plugin-level pool-first updates are not yet
+  shipped. Some plugins legitimately need outbound access (payment gateways, shipping APIs), which must be
+  allowlisted per destination. Hardening reduces impact but doesn't stop a data-reading bug (for example SQL
+  injection that only reads) from reading what the DB user can see.</p>
+</DocsLayout>

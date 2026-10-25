@@ -1,0 +1,123 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'AI-Era Defense Overview', href: '/docs/ai-defense', active: true },
+  { title: 'Allowlisting', href: '/docs/ai-defense/allowlisting' },
+  { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
+  { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
+  { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+];
+const toc = [
+  { id: 'threat', text: 'The Threat Model', level: 2 },
+  { id: 'race', text: 'Why the Patch Race Is Lost', level: 2 },
+  { id: 'strategy', text: 'Control, Not Prediction', level: 2 },
+  { id: 'layers', text: 'Defence Layers', level: 2 },
+  { id: 'status', text: 'Today vs Proposed', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="AI-Era Defense" description="Keeping control of a WordPress + WooCommerce instance when frontier AI models find new vulnerabilities in open-source software faster than patches ship" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+  <p>
+    Publicly available frontier LLMs can now read an open-source codebase, spot a new vulnerability, and write a
+    working exploit for it. A motivated sixteen-year-old with an agentic coding tool can do the same, without
+    knowing what a taint sink is. WordPress and its plugin ecosystem are an ideal target: the source is public,
+    there are tens of thousands of plugins, many maintainers are volunteers, and shops leave sites unpatched for
+    weeks.
+  </p>
+  <p>
+    This section explains how PressHaven helps a company <strong>keep control of its own instance without
+    entering that race</strong>. You don't need to run a stronger model than the attacker's to find CVEs first,
+    and you don't need to wait for a CVSS 10.0 advisory before you're protected. The approach is
+    <strong>allowlist what the shop actually does, harden away what it doesn't, divert everything else into a
+    decoy, and learn from what the decoy catches.</strong>
+  </p>
+
+  <div class="admonition note">
+    <div class="admonition-title">Strictly defensive</div>
+    <p>Like the rest of the project, everything here acts only on the defender's own instances. Nothing in this
+    section scans third-party software, hunts for vulnerabilities to disclose, or acts against an adversary's
+    machines.</p>
+  </div>
+
+  <h2 id="threat">The Threat Model</h2>
+  <CardGrid columns={2}>
+    <DocCard title="Discovery at scale" icon="search" tag="Supply side" description="A model can audit thousands of plugins overnight. Bugs that once needed an expert's week now cost a few dollars of inference, so the number of exploitable, still-unpublished bugs keeps growing." meta="more 0-days, sooner" />
+    <DocCard title="Low skill floor" icon="terminal" tag="Who attacks" description="'Vibe-coded' exploitation: an operator describes the goal, the agent writes and iterates on the exploit. Attacker skill no longer predicts how capable the attack is." meta="skill ≠ capability" />
+    <DocCard title="Collapsed patch window" icon="clock" tag="Timing" description="Diffing a security release and weaponising it takes minutes. The time between a fix being published and mass exploitation is now shorter than most shops' update cycle." meta="n-day ≈ 0-day" />
+    <DocCard title="Novel request shapes" icon="code" tag="Detection" description="A freshly found bug has no signature. Its exploit request can look nothing like anything in a CVE feed, a WAF ruleset or the pattern database." meta="signatures lag" />
+  </CardGrid>
+  <p>
+    The useful observation is what these attacks <em>still have in common</em>. However the bug was found, the
+    exploit has to reach a code path that legitimate customers never use. It usually needs reconnaissance first:
+    enumerating plugins, versions, users and endpoints. And after it succeeds, it tries to <em>do</em> something:
+    write a file, call home, read credentials, create an admin. None of that depends on knowing the CVE in
+    advance, and every one of them is something PressHaven already observes or can constrain.
+  </p>
+
+  <h2 id="race">Why the Patch Race Is Lost</h2>
+  <p>A defence that relies on knowing the vulnerability first has three losing options:</p>
+  <ol>
+    <li><strong>Wait for advisories.</strong> By the time a CVE is published and signed into a ruleset, AI-assisted
+    attackers have had the fix diff for hours.</li>
+    <li><strong>Find the bugs yourself first.</strong> This needs a model at least as capable as the frontier
+    one, pointed at every plugin you run, continuously, and better at it than every attacker. It is expensive and
+    still not guaranteed.</li>
+    <li><strong>Patch instantly.</strong> Even when a fix exists, auto-updating a production shop without testing
+    is its own outage risk, and plugin abandonment means some fixes never arrive.</li>
+  </ol>
+  <p>
+    PressHaven changes which question has to be answered. Instead of <em>"which requests exploit a bug we don't
+    know about?"</em>, which can't be answered in advance, the edge asks <em>"is this request something our shop
+    is supposed to receive?"</em> The shop's owner can answer that today, from their own traffic, without any AI.
+  </p>
+
+  <h2 id="strategy">Control, Not Prediction</h2>
+  <table>
+    <tr><th>Principle</th><th>What it means here</th></tr>
+    <tr><td>Positive security</td><td>Define the shop's legitimate surface (routes, methods, parameters, admin origins) and treat everything outside it as suspect by default.</td></tr>
+    <tr><td>Divert, don't just block</td><td>Suspect traffic goes to an isolated, cloned decoy shop instead of a 403. The attacker keeps going, and the defender sees the exploit.</td></tr>
+    <tr><td>Shrink the reachable code</td><td>A bug in a plugin that isn't installed, or an endpoint that can't be reached, doesn't need a patch.</td></tr>
+    <tr><td>Contain the post-exploit step</td><td>Assume some exploit lands. Deny egress, file writes and credential reuse so a foothold can't become control.</td></tr>
+    <tr><td>Learn from captures</td><td>A 0-day caught in a decoy becomes an explainable rule that protects production within minutes, long before a CVE ID exists.</td></tr>
+  </table>
+
+  <h2 id="layers">Defence Layers</h2>
+  <CardGrid columns={2}>
+    <DocCard title="Allowlisting" href="/docs/ai-defense/allowlisting" icon="check" tag="Layer 1" description="Admin plane gated by origin, a route manifest of what the storefront serves, and per-endpoint parameter shapes. Unknown endpoints are diverted, not trusted." meta="positive security model" />
+    <DocCard title="Attack-surface hardening" href="/docs/ai-defense/hardening" icon="lock" tag="Layer 2" description="Plugin minimisation, disabled file editors and endpoints, egress-denied containers and least-privilege databases. Fewer reachable bugs, and less to gain from the ones left." meta="no patch needed" />
+    <DocCard title="Deception as a 0-day sensor" href="/docs/ai-defense/deception" icon="crosshair" tag="Layer 3" description="Behaviour-triggered diversion, honey-endpoints that only an enumerating agent hits, honeytokens, and AI-assisted session classification." meta="catch the unknown" />
+    <DocCard title="Capture to virtual patch" href="/docs/ai-defense/response" icon="zap" tag="Layer 4" description="Turn what a decoy captured into a narrow, tested Lua rule and Suricata signature, then roll fixes through the pools before production." meta="minutes, not advisories" />
+  </CardGrid>
+
+  <h2 id="status">Today vs Proposed</h2>
+  <p>Each page separates what the code does now from what it proposes. In summary:</p>
+  <table>
+    <tr><th>Capability</th><th>Status</th><th>Where</th></tr>
+    <tr><td>IP allowlist (CIDR) that is never diverted</td><td>Shipped</td><td><code>ip_rules.lua</code>, <code>threat.ip_whitelist</code></td></tr>
+    <tr><td>Admin-area probing from non-allowlisted IPs diverted (stage 7)</td><td>Shipped</td><td><code>router.lua</code></td></tr>
+    <tr><td>Vulnerable-plugin endpoint diversion (stage 5)</td><td>Shipped</td><td><code>vulnerability_rules.lua</code></td></tr>
+    <tr><td>Per-adversary isolated decoy shop</td><td>Shipped</td><td><a href="/docs/engine">Honeypot Engine</a></td></tr>
+    <tr><td>Honeytokens (5 types)</td><td>Shipped</td><td><code>honeytoken_handler.lua</code></td></tr>
+    <tr><td><code>ai_assisted</code> session classification</td><td>Shipped</td><td><code>sophistication_analyzer.lua</code></td></tr>
+    <tr><td>Prompt-injection probe (scoring only)</td><td>Shipped</td><td><code>prompt_injection_filter.lua</code></td></tr>
+    <tr><td>Fleet-wide core/WooCommerce updates through pools first</td><td>Shipped</td><td><a href="/docs/engine/wordpress-management">WordPress Management</a></td></tr>
+    <tr><td>Route manifest / parameter-shape allowlist</td><td>Proposed</td><td><a href="/docs/ai-defense/allowlisting">Allowlisting</a></td></tr>
+    <tr><td>Honey-endpoints and decoy plugin fingerprints</td><td>Proposed</td><td><a href="/docs/ai-defense/deception">Deception</a></td></tr>
+    <tr><td>Pool filesystem/database diff after a session</td><td>Proposed</td><td><a href="/docs/ai-defense/response">Response</a></td></tr>
+    <tr><td>Egress-deny for storefront containers</td><td>Proposed</td><td><a href="/docs/ai-defense/hardening">Hardening</a></td></tr>
+  </table>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Works without knowing the vulnerability. Every decision is an explainable rule
+  the operator can read, with no defender-side model needed. Diversion turns attacker effort into captured
+  exploits instead of log noise. Isolated pools mean a successful exploit lands on a disposable clone.</p>
+  <p><strong>Limitations:</strong> An exploit that uses a fully allowlisted route with legitimate-looking
+  parameters, from a clean IP, in a single request, can still reach production. Allowlisting and hardening
+  shrink that window but can't close it, which is why containment (Layer 2) matters. A route manifest needs
+  maintenance whenever the shop adds features. An AI agent can imitate browser headers and human timing, so the
+  <code>ai_assisted</code> classifier is a signal, not proof. None of this replaces patching. It buys the time
+  to patch safely.</p>
+</DocsLayout>

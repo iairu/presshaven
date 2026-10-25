@@ -1,0 +1,153 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'AI-Era Defense Overview', href: '/docs/ai-defense' },
+  { title: 'Allowlisting', href: '/docs/ai-defense/allowlisting' },
+  { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
+  { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
+  { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response', active: true },
+];
+const toc = [
+  { id: 'loop', text: 'The Defender’s Loop', level: 2 },
+  { id: 'triage', text: '1. Triage the Capture', level: 2 },
+  { id: 'diff', text: '2. Diff the Pool (Proposed)', level: 2 },
+  { id: 'rule', text: '3. Write the Virtual Patch', level: 2 },
+  { id: 'rollout', text: '4. Roll Out and Retire', level: 2 },
+  { id: 'nomodel', text: 'Why No Defender-Side Model Is Needed', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Capture to Virtual Patch" description="Turn an exploit caught in a decoy pool into an explainable, tested rule that protects production long before a CVE is published" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+  <p>
+    The attacker's model found the bug. The defender doesn't need to find it again. They need to recognise the
+    exploit once it shows up, and the decoy has just shown it to them. This page is the playbook from "something
+    new happened in a pool" to "production is protected", using the project's existing rule workflow.
+  </p>
+
+  <h2 id="loop">The Defender’s Loop</h2>
+  <CardGrid columns={4}>
+    <DocCard title="Capture" icon="crosshair" tag="Minutes 0–5" description="A diverted session sends a request no seeded CVE or known pattern explains." meta="pool + SIEM" />
+    <DocCard title="Understand" icon="search" tag="Minutes 5–30" description="Read the request sequence, then see what changed in the pool." meta="Kibana timeline" />
+    <DocCard title="Patch virtually" icon="code" tag="Minutes 30–60" description="A narrow Lua pattern and Suricata signature, each with positive and negative tests." meta="pure rules" />
+    <DocCard title="Retire" icon="check" tag="Days later" description="When the vendor ships a fix, update through the pools and keep or drop the rule." meta="WordPress Update" />
+  </CardGrid>
+
+  <h2 id="triage">1. Triage the Capture</h2>
+  <p>Start from sessions that were diverted <em>without</em> a <code>cve_pattern_match</code> reason. Those are
+  the ones the rule set didn't already explain.</p>
+  <ul>
+    <li>In <a href="/docs/observability/kibana">Kibana</a>, filter honeypot-routed events by reason
+    (<code>multiple_admin_attempts</code>, <code>rapid_automation_detected</code>,
+    <code>suspicious_file_upload</code>, cumulative suspicion) and sort by sophistication class, with
+    <code>ai_assisted</code> first.</li>
+    <li>In the dashboard, <strong>Adversary Sessions</strong> and <strong>Forensics Analysis</strong> show the
+    full request sequence for a session. Look for the request where the attacker stops enumerating and starts
+    sending a structured payload to one specific plugin path or action.</li>
+    <li>A later honeytoken hit from the same session or device signature confirms the exploit <em>worked</em>
+    against the decoy, which is strong evidence of a real, possibly undisclosed vulnerability in the plugin
+    involved.</li>
+  </ul>
+
+  <h2 id="diff">2. Diff the Pool (Proposed)</h2>
+  <p>
+    Every pool starts as a known clone of production. That makes it possible to compute <em>exactly</em> what an
+    exploit changed, which is the most direct evidence of what a new bug can do. The proposal adds a step to pool
+    retirement: before a used pool is destroyed, the pool manager records a diff against its seed and ships it
+    to the SIEM:
+  </p>
+  <ul>
+    <li><strong>Filesystem</strong>: new or modified files under <code>wp-content/</code> (webshells, modified
+    plugin files, <code>.htaccess</code> changes).</li>
+    <li><strong>Database</strong>: new admin users, changed <code>wp_options</code> (<code>siteurl</code>,
+    <code>active_plugins</code>, cron hooks), injected posts or scripts.</li>
+    <li><strong>Outbound attempts</strong>: connections the pool tried to open. With
+    <a href="/docs/ai-defense/hardening#containment">egress deny</a> these fail, but they are logged, revealing
+    the attacker's second-stage infrastructure without ever contacting it.</li>
+  </ul>
+  <p>A pool diff answers "was this exploit real, and what does it give the attacker?" in seconds, with no
+  reverse engineering and no model.</p>
+
+  <h2 id="rule">3. Write the Virtual Patch</h2>
+  <p>
+    A virtual patch is a rule at the edge that diverts the exploit's request shape until the real fix is
+    installed. PressHaven's detection is plain, explainable Lua, so this follows the existing
+    <a href="/docs/detection/cves#adding">Adding a CVE</a> workflow even though there's no CVE ID yet. Use a local
+    identifier and keep it narrow:
+  </p>
+  <pre><code>-- vulnerability_rules.lua: virtual patch for a captured, undisclosed bug
+-- PH-2026-0007: unauthenticated option update via example-plugin AJAX action
+-- captured in pool 3, session 9f2c…; vendor notified; remove after v2.4.1
+if string.find(combined, "action=example_plugin_save_settings", 1, true) and
+   not is_authenticated_admin then
+    return &#123;
+        cve = "PH-2026-0007",
+        severity = "CRITICAL",
+        description = "example-plugin unauthenticated settings update (virtual patch)",
+        plugin = "example-plugin",
+        attack_vector = "missing_capability_check"
+    &#125;
+end</code></pre>
+  <ol>
+    <li><strong>Match the bug, not the payload.</strong> Key on the vulnerable endpoint or action plus the
+    precondition (unauthenticated, wrong parameter type). An AI attacker will mutate the payload but can't avoid
+    the code path.</li>
+    <li><strong>Test both directions.</strong> Add a positive test with the captured request and a negative test
+    with a legitimate request to the same endpoint, then run the plain-Lua suite (see
+    <a href="/docs/testing">Testing</a>).</li>
+    <li><strong>Add the network view.</strong> Where the payload has a stable body shape, add a Suricata
+    signature in the local SID range.</li>
+    <li><strong>Regenerate the catalogue</strong> so the dashboard's Pattern Database and these docs list the
+    virtual patch. Every active one stays visible.</li>
+  </ol>
+  <p>
+    Because a match diverts rather than blocks, a slightly over-broad virtual patch costs little: a legitimate
+    user who trips it lands on a believable decoy rather than an error. That lets operators ship protection in
+    under an hour, instead of waiting until they're sure no legitimate request could ever match.
+  </p>
+
+  <h2 id="rollout">4. Roll Out and Retire</h2>
+  <ul>
+    <li><strong>Notify the vendor</strong> through their normal security contact or the WordPress plugin team,
+    with the captured request. This is coordinated disclosure of something already being exploited, not
+    vulnerability hunting.</li>
+    <li><strong>Optionally share the indicator.</strong> The pattern catalogue's export can publish the rule for
+    other PressHaven deployments. Because rules are plain data, one capture can protect many shops.</li>
+    <li><strong>Apply the fix through the pools first.</strong> When a release ships, use the
+    <a href="/docs/ai-defense/hardening#updates">pool-first update path</a>, and confirm the captured exploit
+    no longer works by replaying it against the patched pool.</li>
+    <li><strong>Retire or keep.</strong> Once production is patched, either remove the virtual patch or keep it
+    as a detection-only signal. Clients still sending that exploit are worth diverting.</li>
+  </ul>
+
+  <h2 id="nomodel">Why No Defender-Side Model Is Needed</h2>
+  <p>
+    The asymmetry that makes AI-found bugs frightening, where finding is cheap and defending is expensive, only
+    holds if defenders must find the same bugs first. This loop never asks them to:
+  </p>
+  <table>
+    <tr><th>Step</th><th>What it needs</th><th>Needs a frontier model?</th></tr>
+    <tr><td>Know what the shop legitimately serves</td><td>Your own traffic</td><td>No</td></tr>
+    <tr><td>Notice something outside it</td><td>Allowlist plus behaviour rules</td><td>No</td></tr>
+    <tr><td>Watch the exploit run safely</td><td>An isolated decoy pool</td><td>No</td></tr>
+    <tr><td>Understand what it does</td><td>Request timeline plus pool diff</td><td>No</td></tr>
+    <tr><td>Stop it reaching production</td><td>A narrow, tested Lua rule</td><td>No</td></tr>
+  </table>
+  <p>
+    The attacker's AI does the expensive part, finding the bug. The defender only has to recognise its exploit
+    once it arrives, which is cheap, auditable work that stays under the company's control. An operator who
+    wants to use an LLM to help <em>read</em> a captured request or draft a rule can. Every output is then a
+    readable rule with tests, not an opaque model decision in the request path.
+  </p>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Protection in under an hour from first capture, before any advisory exists.
+  Every virtual patch is explainable, tested and visible in the catalogue. It reuses the shipped rule, test and
+  update workflows.</p>
+  <p><strong>Limitations:</strong> The loop only starts once an exploit is diverted and noticed. An exploit that
+  goes straight to production on its first try is outside it. Pool diffs and indicator sharing are proposals.
+  Writing a good virtual patch still needs an operator who can read a request and a little Lua. Virtual patches
+  accumulate and must be retired deliberately, or the rule set grows stale.</p>
+</DocsLayout>

@@ -1,0 +1,147 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'AI-Era Defense Overview', href: '/docs/ai-defense' },
+  { title: 'Allowlisting', href: '/docs/ai-defense/allowlisting' },
+  { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
+  { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception', active: true },
+  { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+];
+const toc = [
+  { id: 'sensor', text: 'A Decoy That Catches the Unknown', level: 2 },
+  { id: 'signals', text: 'Signals That Need No CVE', level: 2 },
+  { id: 'agents', text: 'Why Agents Fall for Decoys', level: 2 },
+  { id: 'honey', text: 'Honey-Endpoints (Proposed)', level: 2 },
+  { id: 'fingerprints', text: 'Decoy Fingerprints (Proposed)', level: 2 },
+  { id: 'llm', text: 'LLM-Aware Signals', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Deception as a 0-Day Sensor" description="Use the honeypot pools to catch, record and understand exploits for vulnerabilities nobody has disclosed yet" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+  <p>
+    Allowlisting and hardening <em>reduce</em> exposure. Deception tells you <em>what is being tried</em>.
+    For AI-era attacks this matters more than ever: the first sign of a new, AI-found plugin vulnerability is
+    usually an exploit attempt against someone's live shop, weeks before an advisory. PressHaven makes that
+    someone's shop a recorded decoy.
+  </p>
+
+  <h2 id="sensor">A Decoy That Catches the Unknown</h2>
+  <p>
+    Diversion in PressHaven is triggered by <em>behaviour and context</em>, not only by known exploit
+    signatures. The <a href="/docs/architecture#pipeline">routing pipeline</a> diverts on accumulated risk, IP
+    reputation, admin probing, rapid automation, suspicious uploads and repeated low-grade signals (stages 3 and
+    6–10), as well as CVE matches. An agent that reconnoitres before it strikes, as nearly all of them do, is
+    usually diverted <em>before</em> it sends the novel exploit. The exploit then runs against an isolated,
+    cloned WordPress + WooCommerce pool where:
+  </p>
+  <CardGrid columns={2}>
+    <DocCard title="Everything is recorded" icon="eye" tag="Capture" description="Full request sequence, bodies, headers and timing reach the SIEM. The exploit chain for an undisclosed bug is in Kibana, not lost behind a 403." meta="SIEM timeline" />
+    <DocCard title="Success is harmless" icon="box" tag="Isolation" description="The pool has its own database user and data copy. A working RCE or SQL injection lands on a disposable clone, and the engine retires and rebuilds it." meta="per-adversary pool" />
+    <DocCard title="The attacker keeps going" icon="activity" tag="Engagement" description="The decoy looks and behaves like the real shop, so post-exploitation steps (persistence, credential theft, pivoting) are observed too." meta="full kill chain" />
+    <DocCard title="Stolen secrets betray reuse" icon="key" tag="Honeytokens" description="Fake API keys, DB credentials, admin passwords, S3 URLs and JWT secrets are planted in decoys. Seeing one inbound later confirms compromise with near-zero false positives." meta="5 token types" />
+  </CardGrid>
+
+  <h2 id="signals">Signals That Need No CVE</h2>
+  <table>
+    <tr><th>Signal</th><th>Why it catches AI-found exploits</th><th>Status</th></tr>
+    <tr><td>Generic pattern families (traversal, SQLi syntax, command injection, upload abuse)</td><td>A new bug in a new plugin is usually still exploited with an old bug <em>class</em>; the payload shape gives it away</td><td>Shipped, <a href="/docs/detection/patterns">Pattern Database</a></td></tr>
+    <tr><td>Direct plugin-file access (stage 5)</td><td>Exploits often call a plugin's PHP file or AJAX action directly, which customers never do</td><td>Shipped</td></tr>
+    <tr><td>Rapid automation and request-rate streaks</td><td>Agents iterate quickly on failing payloads</td><td>Shipped, <code>session_rules.lua</code></td></tr>
+    <tr><td>Cumulative suspicion (stage 8)</td><td>Many small reconnaissance signals add up even when each is harmless</td><td>Shipped</td></tr>
+    <tr><td>Suricata network evidence</td><td>Protocol-level anomalies independent of the WordPress code path</td><td>Shipped, <a href="/docs/detection/suricata">Suricata</a></td></tr>
+    <tr><td>Unlisted route</td><td>Anything outside the shop's legitimate surface</td><td>Proposed, <a href="/docs/ai-defense/allowlisting#manifest">route manifest</a></td></tr>
+    <tr><td>Honey-endpoint hit</td><td>Only an enumerating client ever requests it</td><td>Proposed, <a href="#honey">below</a></td></tr>
+  </table>
+
+  <h2 id="agents">Why Agents Fall for Decoys</h2>
+  <p>LLM-driven attack agents have predictable habits that a deception layer can exploit defensively:</p>
+  <ul>
+    <li><strong>They are thorough.</strong> An agent told to "find a way in" enumerates plugins, versions, users,
+    backup files and config paths systematically. A human customer requests none of these.</li>
+    <li><strong>They trust what they read.</strong> A version string in a <code>readme.txt</code>, a path in
+    <code>robots.txt</code> or a comment in HTML is taken as fact and acted on.</li>
+    <li><strong>They report success on plausible output.</strong> An agent that gets a convincing response
+    (a dumped "user table", a "config file") usually moves to the next step without checking it's real. The
+    next step is then observed too.</li>
+    <li><strong>They are operated by people who can't verify.</strong> A low-skill operator relying on the agent
+    can't tell a decoy from production. The decoy only needs to convince the model.</li>
+  </ul>
+
+  <h2 id="honey">Honey-Endpoints (Proposed)</h2>
+  <p>
+    A <strong>honey-endpoint</strong> is a URL that exists only to be discovered. No page links to it and no
+    customer flow uses it, so any request to it is enumeration by definition and has zero false positives from
+    real customers. The proposal adds a short list served by the edge and wired to an immediate diversion with
+    reason <code>honey_endpoint</code>:
+  </p>
+  <ul>
+    <li>Plausible <code>robots.txt</code> <code>Disallow:</code> entries (<code>/wp-content/backup-db/</code>,
+    <code>/old-admin/</code>). Crawlers that respect robots.txt never fetch them. Agents reading it as a map
+    do.</li>
+    <li>Classic sensitive leftovers: <code>/.env</code>, <code>/wp-config.php.bak</code>, <code>/.git/HEAD</code>.
+    These are already scored by the pattern rules. Promoting them to honey-endpoints makes the first hit
+    divert.</li>
+    <li>A REST namespace that appears in the decoy's <code>/wp-json/</code> index but not in production's.</li>
+  </ul>
+  <pre><code>-- honey_endpoint_rules.lua (proposed) — pure, unit-testable
+local HONEY = &#123;
+  "^/wp%-content/backup%-db/",
+  "^/old%-admin/",
+  "^/%.git/",
+  "^/wp%-config%.php%.bak$",
+&#125;
+
+function _M.is_honey_endpoint(uri)
+  for _, p in ipairs(HONEY) do
+    if string.find(uri, p) then return true end
+  end
+  return false
+end</code></pre>
+
+  <h2 id="fingerprints">Decoy Fingerprints (Proposed)</h2>
+  <p>
+    AI-assisted exploitation usually starts with fingerprinting: which plugins and versions are installed. Pools
+    can advertise a <em>believable but deliberately outdated</em> plugin version (in <code>readme.txt</code>,
+    asset <code>?ver=</code> strings and generator tags) for plugins the real shop doesn't run, while production
+    advertises nothing. An agent that picks the "vulnerable" version to exploit has revealed intent and is
+    already inside a decoy. Exploit attempts against these bait plugins are high-value captures: they show how
+    current AI tooling weaponises a known bug class, which informs the generic rules that protect against the
+    next, unknown one.
+  </p>
+  <div class="admonition note">
+    <div class="admonition-title">Stays defensive</div>
+    <p>Decoy fingerprints are content served by the defender's own decoy to clients that came to it. They don't
+    plant anything on, call back to or interfere with the adversary's systems, in line with the
+    <a href="/docs/reference/roadmap">roadmap's</a> no-offensive-features rule.</p>
+  </div>
+
+  <h2 id="llm">LLM-Aware Signals</h2>
+  <p>Two shipped modules already look at AI-driven traffic specifically:</p>
+  <ul>
+    <li><strong><a href="/docs/detection/advanced#behaviour"><code>sophistication_analyzer.lua</code></a></strong>
+    classifies each session as <code>scripted</code>, <code>ai_assisted</code>, <code>manual</code> or
+    <code>unknown</code>, with every contributing signal (timing variance, SDK/agent user-agent markers, header
+    completeness, precision of targeting) returned for audit. <code>ai_assisted</code> sessions are worth
+    prioritising in triage: their payloads are the ones most likely to target something new.</li>
+    <li><strong><code>prompt_injection_filter.lua</code></strong> scores request content that tries to manipulate an
+    LLM consumer of the logs or the shop (for example an AI support bot). It contributes
+    <code>risk / 2</code> to the request score. It's a detection probe. The adaptive, LLM-driven response design
+    is <em>not</em> implemented.</li>
+  </ul>
+  <p>Proposed refinements: count honey-endpoint and bait-plugin hits as strong <code>ai_assisted</code> evidence.
+  Also track "systematic enumeration breadth" (distinct sensitive paths per session), which separates an agent's
+  thoroughness from a commodity scanner's fixed wordlist.</p>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Turns attacks on undisclosed bugs into captured, replayable evidence. Isolated
+  pools make a successful exploit harmless. Honeytokens give near-certain compromise confirmation. Behaviour-based
+  diversion usually triggers during reconnaissance, before the novel payload.</p>
+  <p><strong>Limitations:</strong> A careful attacker who skips reconnaissance and sends a single well-formed
+  exploit from a clean IP to an allowed route reaches production. Deception only helps once something has
+  diverted the session. Honey-endpoints and decoy fingerprints are proposals. The sophistication classifier is
+  rule-based and can be fooled by an agent that mimics browser headers and human timing. Pool capacity is finite
+  under mass exploitation (see <a href="/docs/engine#pools">pool limits</a>).</p>
+</DocsLayout>

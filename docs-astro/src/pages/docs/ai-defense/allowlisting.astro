@@ -1,0 +1,172 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'AI-Era Defense Overview', href: '/docs/ai-defense' },
+  { title: 'Allowlisting', href: '/docs/ai-defense/allowlisting', active: true },
+  { title: 'Attack-Surface Hardening', href: '/docs/ai-defense/hardening' },
+  { title: 'Deception as a 0-Day Sensor', href: '/docs/ai-defense/deception' },
+  { title: 'Capture to Virtual Patch', href: '/docs/ai-defense/response' },
+];
+const toc = [
+  { id: 'why', text: 'Why Allowlisting Beats Signatures', level: 2 },
+  { id: 'today', text: 'What Ships Today', level: 2 },
+  { id: 'admin', text: 'Admin-Plane Allowlist', level: 2 },
+  { id: 'manifest', text: 'Route Manifest (Proposed)', level: 2 },
+  { id: 'params', text: 'Parameter Shapes (Proposed)', level: 2 },
+  { id: 'learn', text: 'Learning the Manifest', level: 2 },
+  { id: 'divert', text: 'Divert, Don’t Block', level: 2 },
+  { id: 'honest', text: 'Honest Assessment', level: 2 },
+];
+---
+<DocsLayout title="Allowlisting" description="A positive security model: describe what the shop legitimately serves, and treat everything else as suspect without needing to know the vulnerability" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+  <p>
+    A signature describes an attack someone has already seen. An allowlist describes your shop, which you
+    already know. When frontier models produce new exploits faster than signatures can be written, the
+    allowlist is the half of the comparison that stays current.
+  </p>
+
+  <h2 id="why">Why Allowlisting Beats Signatures</h2>
+  <table>
+    <tr><th></th><th>Signature (deny) model</th><th>Allowlist (positive) model</th></tr>
+    <tr><td>Needs to know the bug</td><td>Yes, one rule per exploit</td><td>No, one rule per legitimate feature</td></tr>
+    <tr><td>Size of rule set</td><td>Grows with every CVE ever published</td><td>Grows with the shop's own features</td></tr>
+    <tr><td>Novel AI-found exploit</td><td>Missed until someone writes a rule</td><td>Caught if it touches anything outside the manifest</td></tr>
+    <tr><td>Who maintains it</td><td>Vendor or community feed</td><td>The shop owner, from their own traffic</td></tr>
+    <tr><td>Failure mode</td><td>False negatives (silent)</td><td>False positives (visible, and diverted rather than blocked)</td></tr>
+  </table>
+  <p>
+    Most WordPress exploits, including the ones in the <a href="/docs/detection/cves">seeded CVE table</a>,
+    reach a plugin's AJAX action, REST route or PHP file that a normal customer never calls. An allowlist doesn't
+    need to know <em>why</em> <code>?mwb_wgm_preview_mail</code> is dangerous. It only needs to know that this
+    shop's customers never send it.
+  </p>
+
+  <h2 id="today">What Ships Today</h2>
+  <CardGrid columns={3}>
+    <DocCard title="Trusted origins" icon="globe" tag="ip_whitelist" description="CIDR ranges (admin IP, VPN/Tailscale range, office network) get a negative reputation score and are never diverted." meta="ip_rules.lua" />
+    <DocCard title="Admin gating" icon="lock" tag="Stage 7" description="wp-admin and login access from an origin not on the allowlist escalates: a warning, then diversion on the third attempt." meta="router.lua" />
+    <DocCard title="Known-risky endpoints" icon="shieldAlert" tag="Stages 4–5" description="CVE patterns and direct vulnerable-plugin endpoint access are diverted on the first request." meta="vulnerability_rules.lua" />
+  </CardGrid>
+  <p>
+    These are allowlist-shaped already: the admin plane is trusted <em>by origin</em>, not by guessing whether a
+    login is malicious. The proposals below extend the same idea from <em>who</em> may reach the admin plane to
+    <em>what</em> may reach the storefront.
+  </p>
+
+  <h2 id="admin">Admin-Plane Allowlist</h2>
+  <p>This is the cheapest and highest-value step, and it works with the current code. Most AI-found WordPress
+  bugs that end in full takeover go through an authenticated or semi-authenticated admin path:
+  <code>admin-ajax.php</code> actions missing a capability check, REST routes with a weak
+  <code>permission_callback</code>, or <code>wp-admin/*.php</code> includes.</p>
+  <ol>
+    <li>Put every operator behind a fixed origin: a VPN, a Tailscale tailnet (<code>100.64.0.0/10</code>) or an
+    office range.</li>
+    <li>Add exactly those ranges to <code>threat.ip_whitelist</code> (see
+    <a href="/docs/operations/hardening#lua">Hardening → IP Whitelisting</a>), and nothing broader.</li>
+    <li>Treat any admin-area request from elsewhere as an attack. Today that means diversion after three attempts.
+    A stricter proposed mode (<code>ADMIN_ALLOWLIST_STRICT</code>) diverts on the first one.</li>
+  </ol>
+  <div class="admonition warning">
+    <div class="admonition-title">Customer accounts</div>
+    <p>WooCommerce customers use <code>/my-account/</code>, not <code>wp-admin</code>. Check that no customer flow
+    in your theme redirects through <code>wp-admin</code> or <code>wp-login.php</code> before tightening the
+    gate, or legitimate shoppers will be diverted.</p>
+  </div>
+
+  <h2 id="manifest">Route Manifest (Proposed)</h2>
+  <p>
+    A <strong>route manifest</strong> is a declarative list of every request shape the production storefront
+    legitimately serves. A request that matches no entry isn't blocked. It is scored, and above the threshold
+    it is diverted into a decoy pool exactly like today's CVE matches. The proposal adds it as a new pure module,
+    <code>route_manifest_rules.lua</code>, consulted as an early routing stage so it fits the existing
+    <a href="/docs/architecture#pipeline">pipeline</a> and pure/adapter split:
+  </p>
+  <pre><code>-- route_manifest.lua (proposed) — this shop's legitimate surface
+return &#123;
+  mode = "score",            -- "observe" | "score" | "divert"
+  unknown_score = 60,        -- added when nothing matches (threshold is 80)
+  routes = &#123;
+    &#123; path = "^/$",                 methods = "GET" &#125;,
+    &#123; path = "^/shop/",             methods = "GET" &#125;,
+    &#123; path = "^/product/[%w%-]+/$", methods = "GET" &#125;,
+    &#123; path = "^/cart/$",            methods = "GET POST" &#125;,
+    &#123; path = "^/checkout/$",        methods = "GET POST" &#125;,
+    &#123; path = "^/my%-account/",      methods = "GET POST" &#125;,
+    &#123; path = "^/wp%-json/wc/store/", methods = "GET POST" &#125;,  -- block checkout
+    &#123; path = "^/wp%-admin/admin%-ajax%.php$", methods = "POST",
+      actions = &#123; "woocommerce_add_to_cart", "woocommerce_get_refreshed_fragments" &#125; &#125;,
+  &#125;,
+&#125;</code></pre>
+  <p>Three modes allow a safe rollout:</p>
+  <table>
+    <tr><th>Mode</th><th>Effect</th><th>Use</th></tr>
+    <tr><td><code>observe</code></td><td>Logs <code>route_unlisted</code> security events to the SIEM, with no score change</td><td>First weeks: build and validate the manifest</td></tr>
+    <tr><td><code>score</code></td><td>Adds <code>unknown_score</code>, so an unlisted request plus any other signal crosses the threshold</td><td>Normal operation</td></tr>
+    <tr><td><code>divert</code></td><td>An unlisted request is diverted on its own</td><td>High-risk windows, e.g. right after a major plugin advisory</td></tr>
+  </table>
+  <p>
+    The <code>admin-ajax.php</code> entry matters most. WordPress multiplexes hundreds of plugin actions through
+    that one file, and it is where much of the AI-found plugin bug class lives. Listing the handful of
+    <code>action</code> values the storefront really uses removes every other action from the
+    unauthenticated attack surface, including ones from plugins added after the manifest was written.
+  </p>
+
+  <h2 id="params">Parameter Shapes (Proposed)</h2>
+  <p>Routes alone let an exploit through an allowed endpoint. A second, optional level describes the
+  <em>shape</em> of each allowed endpoint's input:</p>
+  <ul>
+    <li><strong>Known parameter names</strong>: an unexpected argument (<code>file[path]</code>,
+    <code>integration_id</code>, <code>supported_type</code>) adds score even on an allowed route.</li>
+    <li><strong>Type and length bounds</strong>: <code>product_id</code> is digits, <code>quantity</code> is 1–3
+    digits, a coupon code is ≤ 32 word characters. Out-of-shape values are what injection payloads look like,
+    whatever the bug.</li>
+    <li><strong>Content types</strong>: storefront routes accept form or JSON bodies only. A
+    <code>multipart/form-data</code> body outside the upload routes you list is diverted, which covers the
+    file-upload RCE class without knowing the plugin. This extends today's
+    <a href="/docs/detection/capabilities"><code>upload_rules.lua</code></a>.</li>
+  </ul>
+
+  <h2 id="learn">Learning the Manifest</h2>
+  <p>Nobody should write a manifest by hand from memory. The project already records every request in the SIEM,
+  so the manifest can be <em>derived</em>:</p>
+  <ol>
+    <li>Run in <code>observe</code> mode for a representative period, including a sales peak if possible.</li>
+    <li>A proposed dashboard tool, <strong>Detection Policy → Route Manifest</strong>, aggregates production-routed
+    requests from sessions that never crossed any threshold. It groups them by normalised path, method and
+    parameter names, and proposes entries above a minimum hit count.</li>
+    <li>The operator reviews each proposed entry. Anything unexpected (a plugin endpoint you didn't know was
+    public) is a finding in itself: it's either a feature to keep or surface to remove (see
+    <a href="/docs/ai-defense/hardening">Hardening</a>).</li>
+    <li>Commit the manifest next to <code>init.lua</code>, switch to <code>score</code>, and watch
+    <code>route_unlisted</code> events in Kibana for false positives.</li>
+  </ol>
+  <p>Learning from <em>your own</em> traffic is the key difference from defensive AI. The manifest isn't a
+  prediction about attackers. It's a record of customers, which an attacker can't shift by being smarter.</p>
+
+  <h2 id="divert">Divert, Don’t Block</h2>
+  <p>A conventional WAF answers an unlisted request with a 403. That has two costs in the AI era:</p>
+  <ul>
+    <li><strong>It's an oracle.</strong> An agent iterating on an exploit learns from every block and mutates
+    until something passes. A diverted request gets a normal-looking shop back, so there's no gradient to
+    follow.</li>
+    <li><strong>It throws the exploit away.</strong> A blocked 0-day is a log line. A diverted one runs in a
+    cloned pool, where the full exploit chain, payloads and post-exploitation steps are recorded (see
+    <a href="/docs/ai-defense/deception">Deception</a>).</li>
+  </ul>
+  <p>Because a false positive is diverted, not refused, a too-tight manifest degrades to "a real customer
+  browses a believable clone" rather than "a real customer sees an error". The device signature and decay
+  policy then let that customer recover, so a strict allowlist is far less risky here than in a blocking
+  WAF.</p>
+
+  <h2 id="honest">Honest Assessment</h2>
+  <p><strong>Strengths:</strong> Works against bugs nobody has found yet. Derived from the shop's own traffic.
+  Explainable entry by entry. Fails toward diversion rather than outage. The admin-plane allowlist works with
+  current code.</p>
+  <p><strong>Limitations:</strong> The route manifest and parameter shapes are proposals, not shipped code. An
+  exploit using an allowed route with in-shape parameters (for example a logic bug in checkout) isn't caught by
+  this layer. Diversion of a legitimate customer mid-checkout is a real business cost, so roll out in
+  <code>observe</code> mode first. The manifest needs updating whenever plugins add public features.</p>
+</DocsLayout>
