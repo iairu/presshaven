@@ -14,7 +14,7 @@ Primary: the thesis author and their evaluators/committee reading the work, plus
 
 ## Product Purpose
 
-The site is the **documentation / knowledge hub** for the Honeypot IDS system (a FIIT STU master's thesis project). It explains a real deployment: an OpenResty (nginx + Lua) reverse proxy that scores HTTP requests 0–100 and diverts suspicious sessions into per-session WordPress/WooCommerce honeypot pools, with Suricata network IDS, a SIEM pipeline (Vector → Elasticsearch → Kibana), and a PyQt6 operator dashboard. Success is a reader being able to learn every major capability and find the exact module, flag, or measured figure behind it.
+The site is the **documentation / knowledge hub** for PressHaven (a FIIT STU master's thesis project). It explains a real deployment: an OpenResty (nginx + Lua) reverse proxy that scores HTTP requests 0–100 and diverts suspicious sessions into per-session WordPress/WooCommerce honeypot pools, with Suricata network IDS, a SIEM pipeline (Vector → Elasticsearch → Kibana), and a PyQt6 operator dashboard. Success is a reader being able to learn every major capability and find the exact module, flag, or measured figure behind it.
 
 ## Positioning
 
@@ -36,8 +36,8 @@ Not marketing for a product — it is the authoritative, source-grounded record 
 
 ## Brand Commitments
 
-- Name: **Honeypot IDS** — Knowledge Hub (v2.0). Brand mark is a monospace `>` prompt glyph before the name.
-- Repo link is always `https://github.com/iairu/honeypot-ids`.
+- Name: **PressHaven** — Knowledge Hub (v2.0), hosted at `https://presshaven.io`. Brand mark is a monospace `>` prompt glyph before the name; the logo (favicon, dashboard app icon) is a neon-green `>` chevron on a black rounded square.
+- Repo link is always `https://github.com/presshaven/presshaven`.
 - Binding visual constraint carried through the whole site: a **grayscale + single neon-green accent** palette, expressed only through CSS custom-property tokens (no raw hex in page markup). Mono type (JetBrains Mono) for labels/metadata, Inter for prose. This is an established, deliberate identity — preserve it.
 - Footer identifies it as a FIIT STU master's thesis project.
 

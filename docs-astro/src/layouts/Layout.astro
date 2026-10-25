@@ -29,6 +29,8 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <title>{title} — PressHaven Knowledge Hub</title>
     {description && <meta name="description" content={description} />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -56,7 +58,7 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
         <a href="/" class={path === '/' ? 'active' : ''}>Hub</a>
         <a href="/docs" class={isDocs ? 'active' : ''}>Docs</a>
         <a href="/reference" class={isReference ? 'active' : ''}>Reference</a>
-        <a href="https://github.com/iairu/honeypot-ids" class="md-header__github" target="_blank" rel="noopener" aria-label="Source repository on GitHub">
+        <a href="https://github.com/presshaven/presshaven" class="md-header__github" target="_blank" rel="noopener" aria-label="Source repository on GitHub">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 00-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.6 1.2 3.2.9.1-.8.4-1.3.7-1.6-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-2.9 0 0 .9-.3 3.1 1.1a10.6 10.6 0 015.6 0c2.2-1.4 3.1-1.1 3.1-1.1.6 1.5.2 2.6.1 2.9.7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.2-5.1 5.5.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.2 11.2 0 0012 .8z"/></svg>
         </a>
       </nav>
@@ -81,7 +83,7 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
         <span>
           <a href="/docs/reference/literature">Literature</a> ·
           <a href="/docs/reference/changelog">Changelog</a> ·
-          <a href="https://github.com/iairu/honeypot-ids" target="_blank" rel="noopener">github.com/iairu/honeypot-ids</a>
+          <a href="https://github.com/presshaven/presshaven" target="_blank" rel="noopener">github.com/presshaven/presshaven</a>
         </span>
       </div>
     </footer>

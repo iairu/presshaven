@@ -4,7 +4,7 @@ The Astro site in this directory is the documentation hub for PressHaven.
 It documents the architecture, detection pipeline, honeypot engine, observability stack,
 operations and testing strategy of the project in `../`.
 
-Repository: <https://github.com/iairu/honeypot-ids>
+Repository: <https://github.com/presshaven/presshaven>
 
 ## Commands
 
@@ -36,4 +36,4 @@ without hard-coded colours.
 - Keep the existing grayscale + neon green palette; do not introduce new colour families.
 - Prefer existing tokens (`var(--color-accent-green)`, `var(--color-border)`, …) over hex values.
 - Documentation cards belong inside `.md-typeset` pages and should link to a real page.
-- Site-wide links to the source repository point at `https://github.com/iairu/honeypot-ids`.
+- Site-wide links to the source repository point at `https://github.com/presshaven/presshaven`.

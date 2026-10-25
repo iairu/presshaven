@@ -1,8 +1,12 @@
 <p align="center">
-  <img src="dashboard/resources/app_icon.svg" alt="Honeypot IDS System logo" width="96" height="96">
+  <img src="dashboard/resources/app_icon.svg" alt="PressHaven logo" width="96" height="96">
 </p>
 
-<h1 align="center">Honeypot IDS System</h1>
+<h1 align="center">PressHaven</h1>
+<p align="center">
+  <strong>Security platform for WordPress and WooCommerce</strong><br>
+  <a href="https://presshaven.io">presshaven.io</a> · <a href="https://github.com/presshaven/presshaven">github.com/presshaven/presshaven</a>
+</p>
 <p align="center">
   <em>Zlepšenie efektivity honeypot nástroja pomocou zvýšenia úrovne interakcie</em><br>
   <em>Improving Honeypot Tool Efficiency by Increasing Interaction Level</em>

@@ -1,5 +1,5 @@
 ---
-name: Honeypot IDS Knowledge Hub
+name: PressHaven Knowledge Hub
 description: Grayscale terminal reference with a single neon-green signal accent
 colors:
   bg-primary: "#080808"
@@ -85,7 +85,7 @@ components:
     padding: "0.9rem 1.1rem"
 ---
 
-# Design System: Honeypot IDS Knowledge Hub
+# Design System: PressHaven Knowledge Hub
 
 ## Overview
 
