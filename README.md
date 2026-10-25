@@ -8,12 +8,10 @@
   <a href="https://presshaven.io">presshaven.io</a> · <a href="https://github.com/presshaven/presshaven">github.com/presshaven/presshaven</a>
 </p>
 <p align="center">
-  <em>Zlepšenie efektivity honeypot nástroja pomocou zvýšenia úrovne interakcie</em><br>
   <em>Improving Honeypot Tool Efficiency by Increasing Interaction Level</em>
 </p>
 
 ---
-Ústav počítačového inžinierstva a aplikovanej informatiky, FIIT STU · Kombinované bezpečnostné riešenia
 
 A WordPress/WooCommerce shop behind an OpenResty (Nginx + Lua) reverse proxy that scores every
 request in real time and quietly diverts suspicious sessions to isolated honeypot copies of the shop,
