@@ -1156,7 +1156,7 @@ def render_pdf(data: ReportData, out_path: str) -> None:
     # Wrap everything in the Baskerville font stack so it applies even to
     # elements QTextDocument styles from the HTML rather than the base font.
     parts.append(f'<div style="font-family: {_FONT_CSS_STACK};">')
-    parts.append('<h1 style="color:#222;">Honeypot IDS &ndash; Pattern test-scenario report</h1>')
+    parts.append('<h1 style="color:#222;">PressHaven.io &ndash; Pattern test-scenario report</h1>')
     decay_line = (f'Score decay half-life: {data.half_life_s}s' if data.decay_enabled
                   else 'Threat decay: <b>off</b> (THREAT_DECAY_ENABLED=false) &ndash; '
                        'scores persist indefinitely')

@@ -47,7 +47,7 @@ def _remaining_requirements() -> list[str]:
 class SetupWindow(QWidget):
     def __init__(self, requirements: list[str]):
         super().__init__()
-        self.setWindowTitle("Setting up Honeypot Dashboard…")
+        self.setWindowTitle("Setting up PressHaven.io…")
         self.setFixedSize(440, 130)
         if APP_ICON_PATH.exists():
             self.setWindowIcon(QIcon(str(APP_ICON_PATH)))

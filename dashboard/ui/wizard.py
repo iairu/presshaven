@@ -442,7 +442,7 @@ class SetupWizard(QWizard):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self.state = state
-        self.setWindowTitle("Honeypot IDS — Console Setup")
+        self.setWindowTitle("PressHaven.io — Setup")
         self.setMinimumSize(700, 620)
 
         # Remote/local choice comes first so the .env pages that follow

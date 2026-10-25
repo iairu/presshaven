@@ -674,7 +674,7 @@ def render_pdf(data: PoolTestData, out_path: str) -> Verdict:
     doc.setDefaultFont(QFont(family, 11))
 
     parts = [f'<div style="font-family: {_FONT_CSS_STACK};">',
-             '<h1 style="color:#222;">Honeypot IDS &ndash; Pool test report</h1>',
+             '<h1 style="color:#222;">PressHaven.io &ndash; Pool test report</h1>',
              '<table width="100%" style="color:#555;"><tr><td>'
              f'Generated: {_esc(data.generated_at)}<br/>'
              f'Target: {_esc(data.target_label)} &nbsp; ({_esc(data.base_url)})<br/>'

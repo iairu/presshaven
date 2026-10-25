@@ -73,7 +73,7 @@ from ui.wizard import SetupWizard
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("Honeypot Dashboard")
+    app.setApplicationName("PressHaven.io")
     app.setOrganizationName("DP_Repository")
 
     state = AppState.load()

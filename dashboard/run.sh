@@ -19,7 +19,7 @@ if [ ! -d venv ]; then
     # never seen at all. Silently skipped if notify-send isn't installed --
     # optional, not a hard dependency.
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send -a "Honeypot Dashboard" "Setting up Honeypot Dashboard…" \
+        notify-send -a "PressHaven.io" "Setting up PressHaven.io…" \
             "First run -- installing dependencies, this can take a minute or two." 2>/dev/null || true
     fi
 

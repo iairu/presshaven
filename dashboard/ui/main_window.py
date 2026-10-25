@@ -3,8 +3,9 @@ operations / Manage / Reporting) with drag-and-drop reordering, a persistent
 per-category overflow panel, per-page SVG icons, a page header bar, a menu bar
 (Settings menu + re-run wizard), a shared background status poller,
 window-geometry persistence, a system tray icon (unhealthy-container
-notifications), and a confirm-before-quit guard while a mutating docker
-compose action is in flight."""
+notifications), a custom frameless title bar (ui/title_bar.py: brand, menus,
+centred Ctrl+K search, presshaven.io link) and a confirm-before-quit guard
+while a mutating docker compose action is in flight."""
 from __future__ import annotations
 
 import base64
@@ -61,6 +62,7 @@ from ui.page_suricata import SuricataPage
 from ui.responsive import scrollable
 from ui.security_feed import SecurityEventFeed
 from ui.status_poller import StatusPoller
+from ui.title_bar import TitleBar, WindowBorder, WindowResizeGrips
 from ui.wizard import SetupWizard
 
 # Bundled instead of relying on QIcon.fromTheme() -- confirmed live that
@@ -144,7 +146,7 @@ NAV_OVERFLOW = {
 NAV_ORDER = [page_id for _group, ids in NAV_GROUPS for page_id in ids]
 PAGE_GROUP = {page_id: group for group, ids in NAV_GROUPS for page_id in ids}
 
-APP_TITLE = "Honeypot IDS · Security Operations Console"
+APP_TITLE = "PressHaven.io"
 
 
 def _default_nav_layout() -> dict[str, dict[str, list[str]]]:
@@ -230,6 +232,14 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
         if _APP_ICON_PATH.exists():
             self.setWindowIcon(QIcon(str(_APP_ICON_PATH)))
+        # Our own title bar replaces the OS one; it holds the menu bar and
+        # the centred command-palette search.
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        self.title_bar = TitleBar(self, self.windowIcon())
+        self.title_bar.searchRequested.connect(self._show_palette)
+        self.setMenuWidget(self.title_bar)
+        self._resize_grips = WindowResizeGrips(self, self.title_bar.host.is_maximized)
+        self._border = WindowBorder(self, self.title_bar.host.is_maximized)
         self._restore_geometry()
 
         self._build_menu()
@@ -463,7 +473,7 @@ class MainWindow(QMainWindow):
         return target_for("edge", self.state)
 
     def _build_nav_rail(self) -> QWidget:
-        """Brand block, then one non-selectable header per NAV_GROUPS
+        """One non-selectable header per NAV_GROUPS
         section followed by the rows currently in that section's visible
         list. Page items carry their page id in PAGE_ROLE; header items
         carry only GROUP_ROLE."""
@@ -471,26 +481,8 @@ class MainWindow(QMainWindow):
         rail.setObjectName("NavRail")
         rail.setFixedWidth(236)
         layout = QVBoxLayout(rail)
-        layout.setContentsMargins(0, 16, 0, 12)
+        layout.setContentsMargins(0, 6, 0, 12)
         layout.setSpacing(0)
-
-        brand = QHBoxLayout()
-        brand.setContentsMargins(18, 0, 16, 14)
-        brand.setSpacing(10)
-        mark = QLabel()
-        mark.setObjectName("BrandMark")
-        mark.setFixedSize(6, 34)
-        brand.addWidget(mark)
-        brand_text = QVBoxLayout()
-        brand_text.setSpacing(1)
-        title = QLabel("HONEYPOT IDS")
-        title.setObjectName("BrandTitle")
-        subtitle = QLabel("Security Operations Console")
-        subtitle.setObjectName("BrandSubtitle")
-        brand_text.addWidget(title)
-        brand_text.addWidget(subtitle)
-        brand.addLayout(brand_text, stretch=1)
-        layout.addLayout(brand)
 
         self.nav_list = NavSidebarList()
         self.nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -691,17 +683,10 @@ class MainWindow(QMainWindow):
         self.page_subtitle = QLabel()
         self.page_subtitle.setObjectName("PageSubtitle")
         self.page_subtitle.setWordWrap(True)
-        # Always-visible entry point to the command palette (also Ctrl+K /
-        # View menu), so the quick switcher is discoverable from every page
-        # rather than only by those who know the shortcut.
-        self.palette_btn = QPushButton("⌘K  Search")
-        self.palette_btn.setObjectName("PaletteButton")
-        self.palette_btn.setProperty("compact", True)
-        self.palette_btn.setToolTip("Jump to any page or action (Ctrl+K)")
-        self.palette_btn.clicked.connect(self._show_palette)
+        # The command palette's always-visible entry point lives in the
+        # title bar (TitleBar.search_btn), centred above every page.
         crumb_row.addWidget(self.nav_toggle)
         crumb_row.addWidget(self.page_crumb, stretch=1)
-        crumb_row.addWidget(self.palette_btn)
         layout.addLayout(crumb_row)
         layout.addWidget(self.page_title)
         layout.addWidget(self.page_subtitle)
@@ -937,7 +922,9 @@ class MainWindow(QMainWindow):
     # ---- menu ----
 
     def _build_menu(self) -> None:
-        menu_bar: QMenuBar = self.menuBar()
+        # Not self.menuBar(): that would replace the title bar set as the
+        # menu widget with a fresh QMenuBar.
+        menu_bar: QMenuBar = self.title_bar.menu_bar
 
         settings_menu = menu_bar.addMenu("&Settings")
         open_settings_action = settings_menu.addAction("Open " + _menu_text(PAGE_LABELS["settings"]))
@@ -1003,7 +990,15 @@ class MainWindow(QMainWindow):
             self._on_find_shortcut()
 
     def _show_palette(self) -> None:
-        CommandPalette(self.palette_commands(), self._run_palette_command, self).exec()
+        dialog = CommandPalette(self.palette_commands(), self._run_palette_command, self)
+        # Drop it down from the title bar's search, so it reads as that
+        # field opening rather than a dialog appearing somewhere else.
+        search = self.title_bar.search_btn
+        width = max(dialog.width(), search.width() + 160)
+        anchor = search.mapToGlobal(search.rect().center())
+        dialog.resize(width, dialog.height())
+        dialog.move(anchor.x() - width // 2, search.mapToGlobal(search.rect().topLeft()).y() - 4)
+        dialog.exec()
 
     def _show_page_help(self) -> None:
         """F1: what the current page is for, what to try, what to notice
@@ -1104,6 +1099,8 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self._resize_grips.update_geometry()
+        self._border.update_geometry()
         # The panel is an overlay anchored to a "⋮" button; a resize can
         # move that anchor, so close it rather than leave it floating.
         panel = getattr(self, "overflow_panel", None)
@@ -1133,6 +1130,13 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        # Edge grips and the outline hide while maximized.
+        if event.type() == event.Type.WindowStateChange:
+            self._resize_grips.update_geometry()
+            self._border.update_geometry()
+
     def closeEvent(self, event) -> None:
         if self.services_page.any_mutating_action_running():
             reply = QMessageBox.warning(
@@ -1147,6 +1151,9 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
 
+        # A by-hand maximize (no window manager) is just a big geometry to
+        # Qt; put the normal one back so the next launch isn't full-screen.
+        self.title_bar.host.restore()
         data = bytes(self.saveGeometry())
         self.state.window_geometry_b64 = base64.b64encode(data).decode("ascii")
         self.state.save()

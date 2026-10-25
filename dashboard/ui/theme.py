@@ -116,7 +116,8 @@ CONSOLE = {
 #   nav_bg / nav_fg / nav_muted - the navigation rail (dark in every theme
 #               except High Contrast Light)
 #   nav_hover / nav_selected / nav_selected_fg - navigation rail item states
-#   header_bg - page header / title bar fill
+#   header_bg - page header fill (the window title bar uses nav_bg, so the
+#               title bar and rail read as one piece of chrome)
 #   selection_bg / selection_fg - text and item selection
 #   danger / success / warning - semantic status colors
 _SCHEME_COLORS = {
@@ -162,8 +163,8 @@ _SCHEME_COLORS = {
 _EXTRA_ROLES = {
     THEME_DOCS: {
         "accent": DOCS["accent"], "accent_text": DOCS["accent_text"], "surface": DOCS["surface"],
-        "nav_bg": DOCS["bg"], "nav_fg": DOCS["text"], "nav_muted": DOCS["muted"],
-        "nav_hover": "rgba(0, 255, 65, 0.08)", "nav_selected": "rgba(0, 255, 65, 0.12)",
+        "nav_bg": DOCS["surface"], "nav_fg": DOCS["text"], "nav_muted": "#6b6b6b",
+        "nav_hover": DOCS["surface_alt"], "nav_selected": "rgba(0, 255, 65, 0.07)",
         "nav_selected_fg": DOCS["accent"], "header_bg": DOCS["surface"],
         "selection_bg": "#064616", "selection_fg": DOCS["text"],
         "danger": DOCS["danger"], "success": DOCS["accent"], "warning": DOCS["warning"],
@@ -352,6 +353,20 @@ def _arrow_icons(color: str) -> tuple[str, str]:
     return paths[0], paths[1]
 
 
+def _check_icon(color: str) -> str:
+    """Path of a check-mark SVG in `color`, for styled check box
+    indicators (same reason as _arrow_icons())."""
+    folder = Path(tempfile.gettempdir()) / "honeypot-dashboard-icons"
+    folder.mkdir(exist_ok=True)
+    path = folder / f"check_{color.lstrip('#')}.svg"
+    if not path.exists():
+        path.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12">'
+            f'<polyline points="2.5,6.5 5,9 9.5,3.5" fill="none" stroke="{color}" '
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+    return path.as_posix()
+
+
 def _build_stylesheet(effective: str) -> str:
     """The app-wide QSS layered on top of the palette: theme-shaped controls,
     focus rings in the accent color, flat tabs/tables/scrollbars, and the
@@ -362,13 +377,12 @@ def _build_stylesheet(effective: str) -> str:
     c = _SCHEME_COLORS[effective]
     is_docs = effective == THEME_DOCS
     if is_docs:
-        radius = panel_radius = small_radius = nav_radius = brand_radius = "0px"
+        radius = panel_radius = small_radius = nav_radius = "0px"
     else:
         radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "6px"
         panel_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "8px"
         small_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "4px"
         nav_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "6px"
-        brand_radius = "2px" if effective in (THEME_HC_DARK, THEME_HC_LIGHT) else "3px"
     mono = f"font-family: {MONO_STACK};" if is_docs else ""
     mono_micro = (
         f"font-family: {MONO_STACK}; font-size: 8pt; letter-spacing: 0.5px;"
@@ -377,37 +391,84 @@ def _build_stylesheet(effective: str) -> str:
     status_bg = c["header_bg"] if is_docs else c["nav_bg"]
     tab_selected_fg = c["accent"] if is_docs else c["fg"]
     table_header_fg = c["accent"] if is_docs else c["fg_muted"]
-    scroll_track = c["surface"] if is_docs else "transparent"
     scroll_thumb = DOCS["border_accent"] if is_docs else c["border"]
+    # Docs Dark keeps green for live signal only: hover is a gray step,
+    # not an accent outline.
+    button_hover_bg = DOCS["card_hover"] if is_docs else c["bg_alt"]
+    button_hover_border = c["fg_muted"] if is_docs else c["accent"]
+    strong_border = DOCS["border_accent"] if is_docs else c["border"]
+    title_fg = c["nav_fg"]
     down, up = _arrow_icons(c["fg_muted"])
+    check = _check_icon(c["accent_text"])
     return f"""
     QWidget {{ font-family: {FONT_STACK}; font-size: 10pt; }}
     QMainWindow, QDialog {{ background: {c["bg"]}; }}
-    QToolTip {{ background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
-               padding: 6px 8px; border-radius: {small_radius}; }}
+    QToolTip {{ background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {strong_border};
+               padding: 6px 9px; border-radius: {small_radius}; }}
 
     QPushButton, QToolButton {{
-        background: {c["bg_alt"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
-        border-radius: {radius}; padding: 5px 14px; min-height: 18px;
+        background: {c["bg_alt"]}; color: {c["fg"]}; border: 1px solid {strong_border};
+        border-radius: {radius}; padding: 6px 16px; min-height: 18px;
     }}
     QToolButton {{ padding: 4px 8px; }}
     QPushButton[compact="true"] {{ padding: 4px 0; }}
-    QPushButton:hover, QToolButton:hover {{ border-color: {c["accent"]}; }}
+    QPushButton:hover, QToolButton:hover {{
+        background: {button_hover_bg}; border-color: {button_hover_border};
+    }}
+    QPushButton:focus {{ border-color: {c["accent"]}; }}
     QPushButton:pressed, QToolButton:pressed, QToolButton:checked {{
         background: {c["accent"]}; color: {c["accent_text"]}; border-color: {c["accent"]};
     }}
-    QPushButton:default {{ border-color: {c["accent"]}; }}
-    QPushButton:default:pressed {{ background: {c["accent"]}; color: {c["accent_text"]}; }}
-    QPushButton:disabled, QToolButton:disabled {{ color: {c["fg_muted"]}; background: {c["bg"]}; }}
+    QPushButton:default {{
+        background: {c["accent"]}; color: {c["accent_text"]}; border-color: {c["accent"]};
+        font-weight: 600;
+    }}
+    QPushButton:default:hover {{ background: {DOCS["accent_dim"] if is_docs else c["accent"]};
+                                 border-color: {c["fg"]}; }}
+    QPushButton:disabled, QToolButton:disabled {{
+        color: {c["fg_muted"]}; background: {c["bg"]}; border-color: {c["border"]};
+    }}
+
+    QCheckBox, QRadioButton {{ spacing: 8px; background: transparent; }}
+    QCheckBox::indicator, QRadioButton::indicator {{
+        width: 14px; height: 14px; background: {c["surface"]};
+        border: 1px solid {strong_border};
+    }}
+    QCheckBox::indicator {{ border-radius: {small_radius}; }}
+    QRadioButton::indicator {{ border-radius: 8px; }}
+    QCheckBox::indicator:hover, QRadioButton::indicator:hover {{ border-color: {c["accent"]}; }}
+    QCheckBox::indicator:checked {{
+        background: {c["accent"]}; border-color: {c["accent"]}; image: url("{check}");
+    }}
+    QRadioButton::indicator:checked {{
+        background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+            stop:0 {c["accent"]}, stop:0.45 {c["accent"]}, stop:0.55 {c["surface"]});
+        border-color: {c["accent"]};
+    }}
+    QCheckBox::indicator:disabled, QRadioButton::indicator:disabled {{
+        background: {c["bg"]}; border-color: {c["border"]};
+    }}
+
+    QSlider::groove:horizontal {{ height: 4px; background: {c["bg_alt"]}; border-radius: 2px; }}
+    QSlider::sub-page:horizontal {{ background: {c["accent"]}; border-radius: 2px; }}
+    QSlider::handle:horizontal {{
+        width: 14px; height: 14px; margin: -6px 0; background: {c["fg"]};
+        border: 2px solid {c["accent"]}; border-radius: 8px;
+    }}
 
     QLineEdit, QPlainTextEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox,
     QComboBox, QDateTimeEdit {{
-        background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
-        border-radius: {radius}; padding: 4px 6px;
+        background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {strong_border};
+        border-radius: {radius}; padding: 5px 8px;
         selection-background-color: {c["selection_bg"]}; selection-color: {c["selection_fg"]};
     }}
     QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus,
     QDoubleSpinBox:focus, QComboBox:focus, QDateTimeEdit:focus {{ border-color: {c["accent"]}; }}
+    QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
+    QDateTimeEdit:hover {{ border-color: {c["fg_muted"]}; }}
+    QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QComboBox:disabled,
+    QSpinBox:disabled, QDoubleSpinBox:disabled {{ background: {c["bg"]}; color: {c["fg_muted"]};
+                                                  border-color: {c["border"]}; }}
     QComboBox::drop-down {{ border: none; width: 22px; }}
     QComboBox::down-arrow, QSpinBox::down-arrow, QDoubleSpinBox::down-arrow,
     QDateTimeEdit::down-arrow {{ image: url("{down}"); width: 10px; height: 10px; }}
@@ -420,13 +481,14 @@ def _build_stylesheet(effective: str) -> str:
     QSpinBox::up-button, QDoubleSpinBox::up-button, QDateTimeEdit::up-button {{ subcontrol-position: top right; }}
     QSpinBox::down-button, QDoubleSpinBox::down-button, QDateTimeEdit::down-button {{ subcontrol-position: bottom right; }}
     QComboBox QAbstractItemView {{
-        background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {c["border"]};
+        background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {strong_border};
+        padding: 4px; outline: 0;
         selection-background-color: {c["selection_bg"]}; selection-color: {c["selection_fg"]};
     }}
 
     QGroupBox {{
         background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: {panel_radius};
-        margin-top: 14px; padding: 12px 10px 10px 10px;
+        margin-top: 16px; padding: 14px 12px 12px 12px;
     }}
     QGroupBox::title {{
         subcontrol-origin: margin; left: 12px; padding: 0 4px; color: {c["fg_muted"]};
@@ -436,7 +498,7 @@ def _build_stylesheet(effective: str) -> str:
     QTabWidget::pane {{ border: 1px solid {c["border"]}; border-radius: {radius}; top: -1px;
                         background: {c["bg"]}; }}
     QTabBar::tab {{
-        background: transparent; color: {c["fg_muted"]}; padding: 7px 14px;
+        background: transparent; color: {c["fg_muted"]}; padding: 8px 16px;
         border: none; border-bottom: 2px solid transparent; margin-right: 2px;
     }}
     QTabBar::tab:hover {{ color: {c["fg"]}; }}
@@ -454,39 +516,41 @@ def _build_stylesheet(effective: str) -> str:
     }}
     QTableCornerButton::section {{ background: {c["bg_alt"]}; border: none; }}
 
-    QScrollBar:vertical {{ background: {scroll_track}; width: 10px; margin: 0; }}
-    QScrollBar:horizontal {{ background: {scroll_track}; height: 10px; margin: 0; }}
+    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px 2px 2px 0; }}
+    QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 0 2px 2px 2px; }}
     QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
-        background: {scroll_thumb}; border-radius: {small_radius}; min-height: 24px; min-width: 24px;
+        background: {scroll_thumb}; border-radius: {"0px" if is_docs else "4px"};
+        min-height: 28px; min-width: 28px;
     }}
-    QScrollBar::handle:hover {{ background: {c["fg_muted"]}; }}
+    QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{ background: {c["fg_muted"]}; }}
     QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 
     QProgressBar {{ background: {c["bg_alt"]}; border: 1px solid {c["border"]};
-                    border-radius: {radius}; text-align: center; color: {c["fg"]}; }}
+                    border-radius: {radius}; text-align: center; color: {c["fg"]};
+                    min-height: 16px; {mono} font-size: 8pt; }}
     QProgressBar::chunk {{ background: {c["accent"]}; border-radius: {radius}; }}
 
     QMenuBar {{ background: {c["bg"]}; border-bottom: 1px solid {c["border"]}; }}
     QMenuBar::item {{ padding: 4px 10px; background: transparent; }}
     QMenuBar::item:selected {{ background: {c["bg_alt"]}; border-radius: {small_radius}; }}
-    QMenu {{ background: {c["surface"]}; border: 1px solid {c["border"]}; padding: 4px; }}
-    QMenu::item {{ padding: 5px 22px 5px 14px; border-radius: {small_radius}; }}
-    QMenu::item:selected {{ background: {c["selection_bg"]}; color: {c["selection_fg"]}; }}
-    QMenu::separator {{ height: 1px; background: {c["border"]}; margin: 4px 6px; }}
+    QMenu {{ background: {c["surface"]}; color: {c["fg"]}; border: 1px solid {strong_border};
+             padding: 6px; border-radius: {small_radius}; }}
+    QMenu::item {{ padding: 6px 28px 6px 12px; border-radius: {small_radius}; background: transparent; }}
+    QMenu::item:selected {{ background: {c["nav_hover"] if is_docs else c["selection_bg"]};
+                            color: {c["fg"] if is_docs else c["selection_fg"]}; }}
+    QMenu::item:disabled {{ color: {c["fg_muted"]}; }}
+    QMenu::icon {{ padding-left: 8px; }}
+    QMenu::separator {{ height: 1px; background: {c["border"]}; margin: 5px 6px; }}
     QStatusBar {{ background: {status_bg}; color: {c["nav_muted"]}; border-top: 1px solid {c["border"]}; }}
     QStatusBar QLabel {{ color: {c["nav_muted"]}; }}
     QSplitter::handle {{ background: {c["border"]}; }}
 
     #NavRail {{ background: {c["nav_bg"]}; border-right: 1px solid {c["border"]}; }}
     #NavRail QLabel {{ color: {c["nav_fg"]}; background: transparent; }}
-    #BrandTitle {{ font-size: 12pt; font-weight: 700; letter-spacing: 2px; }}
-    #NavRail QLabel#BrandSubtitle {{ color: {c["nav_muted"]}; font-size: 8pt;
-                                     {mono} letter-spacing: 0.5px; }}
-    #NavRail QLabel#BrandMark {{ background: {c["accent"]}; border-radius: {brand_radius}; }}
     #NavGroupHeader {{ background: transparent; }}
     #NavRail QLabel#NavGroupTitle {{ color: {c["nav_muted"]}; background: transparent;
-                                     font-size: 7.5pt; font-weight: 700; letter-spacing: 1.2px; }}
+                                     {mono} font-size: 7.5pt; font-weight: 700; letter-spacing: 1.2px; }}
     #NavRail QToolButton#NavMore {{ background: transparent; border: none; color: {c["nav_muted"]};
                                     padding: 0; min-height: 0; font-size: 12pt; }}
     #NavRail QToolButton#NavMore:hover {{ color: {c["accent"]}; background: {c["nav_hover"]};
@@ -494,11 +558,55 @@ def _build_stylesheet(effective: str) -> str:
     #NavRail QToolButton#NavMore:pressed {{ color: {c["accent"]}; background: {c["nav_selected"]}; }}
     #NavList {{ background: transparent; border: none; color: {c["nav_fg"]}; outline: 0; }}
     #NavList::item {{ padding: 7px 12px; margin: 1px 8px; border-radius: {nav_radius};
-                      border-left: 3px solid transparent; }}
+                      border-left: 2px solid transparent; color: {c["nav_fg"]}; }}
     #NavList::item:hover {{ background: {c["nav_hover"]}; }}
     #NavList::item:selected {{ background: {c["nav_selected"]}; color: {c["nav_selected_fg"]};
-                               border-left: 3px solid {c["accent"]}; font-weight: 600; }}
-    #NavRail QLabel#NavFooter {{ color: {c["nav_muted"]}; font-size: 8pt; }}
+                               border-left: 2px solid {c["accent"]}; font-weight: 600; }}
+    #NavRail QLabel#NavFooter {{ color: {c["nav_muted"]}; {mono} font-size: 7.5pt;
+                                 letter-spacing: 0.5px; }}
+
+    #TitleBar {{ background: {c["nav_bg"]}; border-bottom: 1px solid {c["border"]}; }}
+    #TitleBar QLabel {{ background: transparent; color: {title_fg}; }}
+    #TitleBar QLabel#TitleBrand {{ font-size: 10.5pt; font-weight: 700; letter-spacing: -0.2px; }}
+    #TitleBar QFrame#TitleDivider {{ background: {strong_border if is_docs else c["nav_muted"]}; }}
+    #TitleBar QLabel#TitleLink {{ {mono} font-size: 8.5pt; }}
+    #TitleBar QMenuBar {{ background: transparent; border: none; color: {c["nav_muted"]}; }}
+    #TitleBar QMenuBar::item {{ padding: 5px 9px; color: {c["nav_muted"]}; background: transparent;
+                                border-radius: {small_radius}; }}
+    #TitleBar QMenuBar::item:selected, #TitleBar QMenuBar::item:pressed {{
+        background: {c["nav_hover"]}; color: {title_fg};
+    }}
+    #TitleBar QPushButton#TitleSearch {{
+        background: {c["bg"] if is_docs else c["nav_hover"]}; color: {c["nav_muted"]};
+        border: 1px solid {strong_border if is_docs else "transparent"};
+        border-radius: {radius}; padding: 0 12px; min-height: 0; text-align: left;
+    }}
+    #TitleBar QPushButton#TitleSearch:hover {{ border-color: {c["accent"]}; color: {title_fg}; }}
+    #TitleBar QPushButton#TitleSearch:pressed {{ background: {c["nav_selected"]}; }}
+    #TitleBar QLabel#TitleSearchHint {{
+        color: {c["nav_muted"]}; {mono} font-size: 7.5pt; padding: 1px 5px;
+        border: 1px solid {strong_border if is_docs else c["nav_muted"]};
+        border-radius: {small_radius};
+    }}
+    #TitleBar QToolButton#TitleWindowButton, #TitleBar QToolButton#TitleCloseButton {{
+        background: transparent; border: none; border-radius: 0; padding: 0; min-height: 0;
+        color: {c["nav_muted"]}; font-size: 10pt;
+    }}
+    #TitleBar QToolButton#TitleWindowButton:hover {{ background: {c["nav_hover"]}; color: {title_fg}; }}
+    #TitleBar QToolButton#TitleWindowButton:pressed {{ background: {c["nav_selected"]}; }}
+    #TitleBar QToolButton#TitleCloseButton:hover {{ background: #c42b1c; color: #ffffff; }}
+    #TitleBar QToolButton#TitleCloseButton:pressed {{ background: #a32518; color: #ffffff; }}
+
+    QDialog#CommandPalette {{ background: {c["surface"]}; border: 1px solid {strong_border};
+                              border-radius: {panel_radius}; }}
+    #CommandPalette QLineEdit#CommandPaletteSearch {{ font-size: 11pt; padding: 8px 10px;
+                                                      border-color: {c["accent"]}; }}
+    #CommandPalette QListWidget#CommandPaletteResults {{ background: transparent; border: none;
+                                                         outline: 0; }}
+    #CommandPaletteResults::item {{ padding: 6px 8px; border-radius: {small_radius}; }}
+    #CommandPaletteResults::item:selected {{ background: {c["nav_selected"] if is_docs else c["selection_bg"]};
+                                             color: {c["accent"] if is_docs else c["selection_fg"]}; }}
+    #CommandPalette QLabel#CommandPaletteHint {{ color: {c["fg_muted"]}; {mono} font-size: 7.5pt; }}
 
     #NavOverflowPanel {{ background: {c["surface"]}; border: 1px solid {c["border"]};
                          border-radius: {panel_radius}; }}
@@ -517,9 +625,10 @@ def _build_stylesheet(effective: str) -> str:
                                        color: {c["nav_selected_fg"]}; font-weight: 600; }}
 
     #HeaderBar {{ background: {c["header_bg"]}; border-bottom: 1px solid {c["border"]}; }}
-    #PageCrumb {{ color: {c["accent"]}; {mono} font-size: 8pt; font-weight: 700;
+    #PageCrumb {{ color: {c["accent"]}; {mono} font-size: 7.5pt; font-weight: 700;
                   letter-spacing: 1.5px; }}
-    #PageTitle {{ color: {c["fg"]}; font-size: 16pt; font-weight: 700; }}
+    #PageTitle {{ color: {c["fg"]}; font-size: 17pt; font-weight: 700; letter-spacing: -0.4px;
+                  padding-top: 2px; }}
     #PageSubtitle {{ color: {c["fg_muted"]}; }}
     """
 

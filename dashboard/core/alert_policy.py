@@ -71,7 +71,7 @@ def message(label: str, detail: str) -> str:
 
 
 def webhook_payload(label: str, detail: str, severity: str, score: int | None, timestamp: int) -> dict:
-    text = f"[Honeypot IDS] {severity.upper()}: {message(label, detail)}"
+    text = f"[PressHaven.io] {severity.upper()}: {message(label, detail)}"
     return {"text": text, "label": label, "detail": detail, "severity": severity,
             "score": score, "timestamp": timestamp}
 

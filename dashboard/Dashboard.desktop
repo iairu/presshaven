@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Honeypot / SIEM Dashboard
+Name=PressHaven.io
 Comment=Control ids and siem (start/stop, health, certs, .env)
 Exec=/home/ondrej/Desktop/DP_honeypot/honeypot-ids/dashboard/run.sh
 Path=/home/ondrej/Desktop/DP_honeypot/honeypot-ids/dashboard
