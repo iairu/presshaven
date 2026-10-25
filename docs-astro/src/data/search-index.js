@@ -20,7 +20,7 @@ export const searchIndex = [
   { title: 'Device & GDPR Signature', url: '/docs/detection/signature', section: 'Detection', content: 'gdpr signature device fingerprint consent privacy one-way hash returning visitor recovery' },
   { title: 'Observability', url: '/docs/observability', section: 'Observability', content: 'siem kibana dashboards logs' },
   { title: 'SIEM & Log Pipeline', url: '/docs/observability/siem', section: 'Observability', content: 'vector elasticsearch kibana logs mtls' },
-  { title: 'Kibana Dashboards', url: '/docs/observability/kibana', section: 'Observability', content: 'dashboards visualizations timeline' },
+  { title: 'Kibana Dashboards', url: '/docs/observability/kibana', section: 'Observability', content: 'dashboards visualizations timeline dashboard IDs registry build_dashboards export_dashboards ndjson saved objects' },
   { title: 'Operations', url: '/docs/operations', section: 'Operations', content: 'deployment hardening runbooks' },
   { title: 'Two-Host', url: '/docs/operations/two-host', section: 'Operations', content: 'two host deployment topology' },
   { title: 'Single-Host', url: '/docs/operations/single-host', section: 'Operations', content: 'single host deployment' },

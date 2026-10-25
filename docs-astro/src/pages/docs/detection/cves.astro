@@ -55,15 +55,11 @@ const toc = [
   <p><code>CVE-2024-8425</code> shares the same Gift Voucher upload pattern as <code>CVE-2025-47577</code> and is noted as an alias in code comments, but <code>vulnerability_rules.lua</code> only ever returns <code>CVE-2025-47577</code> for that match — it is not an independently-matched 14th CVE. The Suricata layer does detect it separately (see <a href="/docs/detection/suricata">Suricata Network IDS</a>, SID 1000010), since its signature matches on a distinct PHP-upload body pattern rather than the URI.</p>
 
   <h2 id="suricata">Suricata Alert-Based Detections</h2>
-  <p>The system leverages Suricata alerts to detect potential exploits. When an alert is generated, it is processed via <code>suricata_rules.lua</code> and used to generate a descriptive reason string mapped to an AbuseIPDB category.</p>
-  <ul>
-    <li><strong>Detection Mechanism:</strong> Suricata signature matching on network traffic (eve.json).</li>
-    <li><strong>Reputation Scoring:</strong> Severity 1 → +50, Severity 2 → +25, default → +10. Max score capped at 100.</li>
-    <li><strong>Why eve.json:</strong> Previous fast.log regex parser had 8 capture groups into 7 variables — Lua silently drops excess, shifting all fields. eve.json uses named fields, eliminating this bug class.</li>
-    <li><strong>Private IP filtering:</strong> <code>is_private_ip()</code> filters RFC1918/loopback at ingestion time.</li>
-    <li><strong>Decay:</strong> <code>decayed_score()</code> applies exponential decay at READ time based on half-life, offense count, and permaflag thresholds.</li>
-  </ul>
-
+  <p>The second CVE path is network evidence: Suricata's CVE signatures (SIDs 1000001–1000016) raise the source
+  IP's reputation by severity (1 → +50, 2 → +25, otherwise +10, capped at 100), and a flagged IP is diverted at
+  routing stage 6. The reason string carries the signature, so a Suricata-confirmed IP maps to the
+  <code>suricata_confirmed_alert</code> AbuseIPDB reason below. Parsing, private-IP filtering and decay are on
+  <a href="/docs/detection/suricata#integration">Suricata Network IDS</a>.</p>
   <h2 id="abuseipdb">AbuseIPDB Reportability Mapping</h2>
   <table>
     <tr><th>Honeypot Reason</th><th>Categories</th><th>Description</th></tr>

@@ -11,7 +11,7 @@ const sidebar = [
 const toc = [
   { id: 'layers', text: 'Observability Layers', level: 2 },
   { id: 'sources', text: 'Telemetry Sources', level: 2 },
-  { id: 'logging', text: 'Logging Architecture', level: 2 },
+  { id: 'logging', text: 'Security Event Logging', level: 2 },
   { id: 'suricata', text: 'Suricata Log Ingestion', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
@@ -54,7 +54,7 @@ const toc = [
     />
     <DocCard
       title="Routing traces"
-      href="/docs/operations"
+      href="/docs/architecture#pipeline"
       icon="route"
       tag="Decision trace"
       description="Flat decision strings recorded per request so an analyst can reconstruct why a session was diverted."
@@ -70,27 +70,18 @@ const toc = [
     />
   </CardGrid>
 
-  <h2 id="logging">Logging Architecture (from init.lua)</h2>
-  <h3>Shared Dictionaries</h3>
-  <table>
-    <tr><th>Dictionary</th><th>Size</th><th>Purpose</th></tr>
-    <tr><td>sessions</td><td>10 MB</td><td>Shared cache (across all worker processes) of session JSON blobs. Reduces Redis round-trips on hot paths.</td></tr>
-    <tr><td>threat_intel</td><td>10 MB</td><td>Threat-intelligence data: flagged IPs, flagged user-agents, and backend health-check results.</td></tr>
-    <tr><td>rate_limit</td><td>10 MB</td><td>Per-IP request-rate counters for botnet detection.</td></tr>
-    <tr><td>honeypot_routes</td><td>1 MB</td><td>Per-IP pool assignments cached locally for 5 min.</td></tr>
-  </table>
-  <h3>Security Event Logging</h3>
-  <p><code>_G.utils.log_security_event(event_type, details)</code> appends structured JSON security events to the Nginx error log. Vector reads these and forwards to Elasticsearch.</p>
-  <p><strong>Important:</strong> Empty Lua tables are tagged with <code>cjson.empty_array_mt</code> so they encode as <code>[]</code> rather than <code>{}</code>. This prevents Elasticsearch mapping conflicts.</p>
-
+  <h2 id="logging">Security Event Logging</h2>
+  <p><code>_G.utils.log_security_event(event_type, details)</code> appends one structured JSON line per event to
+  the Nginx error log, prefixed with <code>SECURITY_EVENT</code>. Vector reads these lines and forwards them to
+  Elasticsearch; the rules they must follow (JSON lines, empty tables encoded as <code>[]</code>, retries never
+  blocking the edge) are the <a href="/docs/observability/siem#contracts">Pipeline Contracts</a>. The shared
+  dictionaries that cache state between requests are listed in
+  <a href="/docs/architecture/lua-internals#globals">Lua Internals</a>.</p>
   <h2 id="suricata">Suricata Log Ingestion</h2>
-  <ul>
-    <li><code>init_worker.lua</code> runs <code>parse_suricata_logs()</code> every 30 seconds.</li>
-    <li>Alerts are extracted via <code>suricata_rules.extract_alert()</code> and written to <code>threat_intel</code> shared dict as <code>threat_ips</code>.</li>
-    <li>Private IPs (RFC1918/loopback) are filtered at ingestion time via <code>suricata_rules.is_private_ip()</code>.</li>
-    <li>Scores are decayed at read time via <code>suricata_rules.decayed_score()</code> using <code>score_decay_half_life_seconds</code>.</li>
-  </ul>
-
+  <p><code>init_worker.lua</code> reads new <code>eve.json</code> alerts every 30 seconds, drops private and
+  loopback sources, and stores a severity-graded score per IP in <code>threat_ips</code>, decayed when read. The
+  scoring functions are on <a href="/docs/detection/suricata#integration">Suricata Network IDS</a>, and the reader's
+  resume and size limits on <a href="/docs/architecture/lua-internals#suricata">Lua Internals</a>.</p>
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> Multi-layer observability, structured security events, empty-table fix, Suricata integration, offline dashboard generation.</p>
   <p><strong>Limitations:</strong> Dashboard drift, timeline capture fragility, no automated health monitoring, Vector complexity, same-host testing gap.</p>

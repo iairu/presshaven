@@ -9,11 +9,9 @@ const sidebar = [
   { title: 'Kibana Dashboards', href: '/docs/observability/kibana' },
 ];
 const toc = [
-  { id: 'dashboard', text: 'Dashboard Management', level: 2 },
   { id: 'timeline', text: 'Timeline Visualization', level: 2 },
   { id: 'dataflow', text: 'Data Flow', level: 2 },
   { id: 'transport', text: 'Transport & mTLS', level: 2 },
-  { id: 'artifacts', text: 'Key Artifacts', level: 2 },
   { id: 'contracts', text: 'Pipeline Contracts', level: 2 },
 ];
 ---
@@ -24,30 +22,23 @@ const toc = [
     Kibana to answer.
   </p>
   <CardGrid columns={3}>
-    <DocCard title="Offline first" icon="archive" tag="Idempotent" description="Dashboard objects are generated from Python into NDJSON, so a rebuild does not depend on a live Kibana." meta="build_dashboards.py" />
-    <DocCard title="Live sync" icon="branch" tag="Saved Objects API" description="The same tooling can import into and export from a running Kibana instance to preserve manual edits." meta="export_dashboards.py" />
-    <DocCard title="Visual evidence" icon="eye" tag="Timeline" description="Embed-mode screenshots capture a specific pattern's request timeline for reports and the thesis appendix." meta="render-complete wait" />
+    <DocCard title="One direction" icon="route" tag="Outbound only" description="The edge opens the connection and ships; the SIEM never connects into the edge network." meta="vector_outbound → vector_inbound" />
+    <DocCard title="Mutual TLS" icon="lock" tag="Transport" description="A private CA signs both ends; the agent certificate is copied to the edge before shipping starts." meta="gen_elk_certs.sh" />
+    <DocCard title="Typed fields" icon="search" tag="VRL enrich" description="Security lines are parsed into real fields so dashboards can aggregate on route, score and decay state." meta="per-type daily indices" />
   </CardGrid>
 
-  <h2 id="dashboard">Dashboard Management</h2>
-  <p>Honeypot dashboards are managed through a combination of offline generation and live Kibana interactions.</p>
-  <h3>1. Dashboard Building and Export</h3>
-  <ul>
-    <li><strong>Offline Building:</strong> <code>siem/kibana/build_dashboards.py</code> generates dashboard objects and visualizations into a local NDJSON file. Idempotent, can be run offline.</li>
-    <li><strong>Live Kibana Interaction:</strong> Same script can interact with a live Kibana instance via Saved Objects API (using KIBANA_URL, ELASTIC_USERNAME, ELASTIC_PASSWORD env vars).</li>
-    <li><strong>Exporting Live Changes:</strong> <code>siem/kibana/export_dashboards.py</code> exports live dashboard objects from Kibana to local NDJSON. Used after manually editing panels in live Kibana.</li>
-  </ul>
-  <h3>2. Timeline Visualization</h3>
-  <p>A key component is the pattern report time-series panel, which visualizes requests captured by the reverse proxy. The client-side component (<code>dashboard/ui/kibana_timeline_capture.py</code>) handles the capture process: automates login, imports saved objects via Kibana API, loads the timeline dashboard in embed mode, waits for render-complete signal, captures screenshot.</p>
-
-  <h2 id="dataflow">Data Flow Architecture</h2>
-  <pre><code>Client Request → Nginx access_by_lua_block → pattern_analyzer.analyze_request()
-  → security events → Nginx error log → Vector → Elasticsearch
-  → router.decide_route() → routing decision → honeypot pool or production
-  → session_handler.update_session() → Redis session_store
-  → Suricata eve.json → init_worker.lua → threat_intel shared dict
-  → abuseipdb_client.report_ip_async() → AbuseIPDB</code></pre>
-
+  <h2 id="dataflow">Data Flow</h2>
+  <pre><code>reverse_proxy (Lua)  → SECURITY_EVENT lines in the Nginx error log
+                     → security access log (decision_trace fields)
+Suricata             → eve.json
+        ↓ edge Vector shipper (vector_outbound), tags log_type
+        ↓ mTLS
+SIEM Vector aggregator (vector_inbound) → VRL enrich → Elasticsearch honeypot-&#123;log_type&#125;-YYYY.MM.DD
+        ↓
+Kibana dashboards (honeypot-* data view)</code></pre>
+  <p>The request-side pipeline that produces these events is in
+  <a href="/docs/architecture#pipeline">Architecture → Request Pipeline</a>. To check that the hop is actually
+  delivering, use the dashboard's <a href="/docs/getting-started/dashboard#monitor">Log Pipeline</a> page.</p>
   <h2 id="transport">Transport & mTLS</h2>
   <p>The SIEM host (<code>siem/</code>) and the honeypot host (<code>ids/</code>) are a two-host split — see
   <a href="/docs/architecture">Architecture</a> for why. The Vector hop between them is secured with mutual TLS:</p>
@@ -70,20 +61,12 @@ const toc = [
     never as a failed or slowed request in the honeypot's path.</p>
   </div>
 
-  <h2 id="artifacts">Key Artifacts</h2>
-  <ul>
-    <li><code>siem/kibana/build_dashboards.py</code> — Script for generating and managing dashboard configuration.</li>
-    <li><code>siem/kibana/export_dashboards.py</code> — Script for synchronizing live Kibana state to disk.</li>
-    <li><code>dashboard/core/kibana_timeline.py</code> — Defines structure and payload for request timeline visualization.</li>
-    <li><code>dashboard/ui/kibana_timeline_capture.py</code> — Handles client-side workflow for live dashboard capture.</li>
-  </ul>
-
   <h2 id="contracts">Pipeline Contracts</h2>
   <ul>
     <li><strong>Events are JSON lines.</strong> <code>log_security_event()</code> emits a single JSON object per line, prefixed so Vector can filter without parsing unrelated Nginx errors.</li>
     <li><strong>Arrays are arrays.</strong> Empty Lua tables are tagged with <code>cjson.empty_array_mt</code>, so they encode as <code>[]</code> instead of <code>{}</code> and do not trigger Elasticsearch mapping conflicts.</li>
     <li><strong>Retries never block the edge.</strong> Vector buffers locally; a SIEM outage shows up as lag, not as failed requests.</li>
     <li><strong>Dashboards are code.</strong> Saved objects are generated from Python and committed as NDJSON, which makes reviews and rollbacks possible.</li>
-    <li><strong>Exports preserve manual work.</strong> If a panel was edited live, export it back to NDJSON instead of rebuilding over it.</li>
+    <li><strong>Exports preserve manual work.</strong> If a panel was edited live, export it back to NDJSON instead of rebuilding over it (see <a href="/docs/observability/kibana#building">Building and Exporting</a>).</li>
   </ul>
 </DocsLayout>

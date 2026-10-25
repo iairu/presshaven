@@ -11,7 +11,6 @@ const sidebar = [
   { title: 'Runbooks', href: '/docs/operations/runbooks' },
 ];
 const toc = [
-  { id: 'ids', text: 'Dashboard IDs', level: 2 },
   { id: 'context', text: 'SIEM Single-Host Context', level: 2 },
   { id: 'notes', text: 'Single-Host Notes', level: 2 },
   { id: 'budget', text: 'Resource Budgeting', level: 2 },
@@ -29,19 +28,8 @@ const toc = [
     <DocCard title="Same test caveat" icon="alert" tag="Known limit" description="Loopback traffic can make Suricata attribute alerts to container-internal addresses, so IP reputation may not fire locally." meta="is_private_ip()" />
   </CardGrid>
 
-  <h2 id="ids">Dashboard IDs (All Consolidated)</h2>
-  <p>All dashboards are consolidated under a single SIEM instance:</p>
-  <ul>
-    <li>dashboard-ids-alerts</li>
-    <li>dashboard-web-threat-overview</li>
-    <li>dashboard-threat-decisions</li>
-    <li>dashboard-session-analysis</li>
-    <li>dashboard-attack-patterns</li>
-    <li>dashboard-threat-intel</li>
-  </ul>
-
   <h2 id="context">SIEM Single-Host Context</h2>
-  <p>On one host there is a single SIEM instance that handles the full dashboard lifecycle, relying on
+  <p>On one host there is a single SIEM instance that holds all six <a href="/docs/observability/kibana#registry">Kibana dashboards</a> and handles their full lifecycle, relying on
   <code>build_dashboards.py</code> for creation and <code>export_dashboards.py</code> for distribution and backup.
   Certificate generation still runs, but the Vector agent connects over <code>host.docker.internal</code> rather than
   a remote IP — the <code>vector</code> server certificate's Subject Alternative Name list already covers both cases

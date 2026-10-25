@@ -132,6 +132,7 @@ const toc = [
     <li><strong>Borrow, then move.</strong> A waiting session borrows a ready pool and is moved when its own pool finishes building.</li>
     <li><strong>Bounded reuse.</strong> At the resource ceiling, sessions share ready pools round-robin instead of failing.</li>
     <li><strong>Idle retirement.</strong> Assignments expire after 24 hours; pools above the spare count are removed after the idle timeout.</li>
+    <li><strong>Health fallback.</strong> If the assigned pool is unhealthy, the router serves the next healthy pool without changing the stored assignment.</li>
   </ul>
   <p>See <a href="/docs/engine">Honeypot Engine</a> for the pool lifecycle, configuration knobs and isolation model.</p>
 
@@ -149,8 +150,10 @@ const toc = [
   </ul>
 
   <h2 id="gdpr">GDPR Identity</h2>
-  <p>A privacy-preserving second identifier runs alongside the signed SERVERID session cookie. The browser RSA-OAEP-encrypts a payload of characteristics + timestamp into a gdpr_token. The proxy decrypts in memory, checks freshness, and hashes into a one-way gdpr_signature. Only the signature is stored (only when bound to a honeypot), with TTL as the binding's expiry.</p>
-  <p>Consent gates the whole path: the token is only created after the visitor agrees, and the proxy never
-  stores the plaintext payload. The signature is useful for recovering a returning adversary session; it is
-  not a tracking identifier for legitimate visitors.</p>
+  <p>A second, consent-gated identifier runs alongside the signed <code>SERVERID</code> cookie. Only after the
+  visitor agrees does the browser RSA-OAEP-encrypt a few characteristics and a timestamp into a
+  <code>gdpr_token</code>; the proxy decrypts it in memory, checks freshness and hashes it into a one-way
+  <code>gdpr_signature</code>. Only the signature is stored, and only while bound to a honeypot. It recovers a
+  returning adversary's session (routing stage 1a); it is not a tracking identifier for legitimate visitors.
+  The full flow and settings are on <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</p>
 </DocsLayout>

@@ -10,6 +10,7 @@ const sidebar = [
 ];
 const toc = [
   { id: 'registry', text: 'Dashboard Registry', level: 2 },
+  { id: 'building', text: 'Building and Exporting', level: 2 },
   { id: 'timeline', text: 'Pattern Report Timeline', level: 2 },
   { id: 'modules', text: 'Python Module Reference', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
@@ -50,6 +51,21 @@ const toc = [
     <code>patterns</code> and <code>route_reason</code>. Vector parses them into typed Elasticsearch fields — see
     <a href="/docs/observability/siem">SIEM &amp; Log Pipeline</a>.</p>
   </div>
+
+  <h2 id="building">Building and Exporting</h2>
+  <ul>
+    <li><strong>Offline build.</strong> <code>python3 siem/kibana/build_dashboards.py --ndjson</code> regenerates
+    <code>saved_objects/honeypot-dashboards.ndjson</code> from the Python definitions. It is idempotent and needs no
+    running Kibana.</li>
+    <li><strong>Live import.</strong> The same script can push the objects into a running Kibana through the Saved
+    Objects API, using <code>KIBANA_URL</code>, <code>ELASTIC_USERNAME</code> and <code>ELASTIC_PASSWORD</code>. On
+    a normal start, <code>kibana_dashboards_setup</code> does this for you.</li>
+    <li><strong>Export after live edits.</strong> If you change panels by hand in Kibana,
+    <code>python3 siem/kibana/export_dashboards.py</code> writes the live objects back to NDJSON so the next build
+    or import does not overwrite them.</li>
+  </ul>
+  <p>Inside the operator dashboard, the <a href="/docs/getting-started/dashboard#monitor">SIEM Analytics</a> page
+  opens these dashboards with autologin and can export them to PDF.</p>
 
   <h2 id="timeline">Pattern Report Timeline Dashboard</h2>
   <p>A dedicated pattern report timeline dashboard (<code>pattern-report-request-timeline-dashboard</code>) is used in embed mode to capture screenshots of request timelines for specific patterns.</p>

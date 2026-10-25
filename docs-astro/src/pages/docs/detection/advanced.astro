@@ -32,13 +32,9 @@ const toc = [
   <p>Responsible for direct pattern matching against URI requests to identify known vulnerability patterns or exploit kit signatures. Uses <code>lua_pattern_utils.escape_pattern</code> for safe pattern matching. The core function <code>detect_vulnerability_pattern(uri, args, wcpay_checkout_user_header)</code> analyzes request URIs to flag potential vulnerabilities.</p>
 
   <h2 id="suricata">Threat Alert Processing (suricata_rules.lua)</h2>
-  <p>Processes raw threat intelligence (specifically eve.json alerts) to derive a risk score and a human-readable reason string.</p>
-  <ul>
-    <li><strong>Parsing:</strong> Reads <code>eve.json</code> lines and extracts a structured record only from <code>alert</code> events; non-alert event types (flow, netflow, http, dns, tls) and malformed lines return <code>nil</code> and are ignored.</li>
-    <li><strong>Risk Scoring & Gating:</strong> Connects incoming alerts to IP reputation checks and is used in the honeypot diversion logic in router.lua Stage 6 ("IP reputation").</li>
-    <li><strong>Output:</strong> Generates a final risk-score, delta, and a detailed reason string for each event.</li>
-  </ul>
-
+  <p>Turns <code>eve.json</code> alerts into per-IP reputation scores and reason strings, which feed routing stage
+  6 ("IP reputation"). Its functions are listed on <a href="/docs/detection/suricata#integration">Suricata Network
+  IDS</a>; its decay is the shared policy <a href="#decay">below</a>.</p>
   <h2 id="behaviour">Behavioural & Sophistication Signals</h2>
   <p>Beyond matching a single request, <code>sophistication_analyzer.lua</code> classifies a whole session as
   <code>scripted</code>, <code>ai_assisted</code>, <code>manual</code> or <code>unknown</code> using an inspectable
@@ -66,21 +62,10 @@ const toc = [
   </ul>
 
   <h2 id="scoring">Risk Scoring Model</h2>
-  <table>
-    <tr><th>Signal</th><th>Score Impact</th></tr>
-    <tr><td>Static asset requests</td><td>0 (always skipped)</td></tr>
-    <tr><td>Matching a suspicious pattern</td><td>+15 base, +5..+30 specific</td></tr>
-    <tr><td>Matching a CVE pattern</td><td>+40 per CVE matched</td></tr>
-    <tr><td>Flagged user-agent string</td><td>+50</td></tr>
-    <tr><td>Bad IP reputation</td><td>+variable (from threat_intel dict)</td></tr>
-    <tr><td>High per-IP request rate</td><td>+20 (>10 req/s)</td></tr>
-    <tr><td>Missing user-agent</td><td>+10</td></tr>
-    <tr><td>CVE-specific header present</td><td>+50</td></tr>
-    <tr><td>Automated tool signature</td><td>+5..+30</td></tr>
-    <tr><td>Prompt-injection pattern hit</td><td>+(risk_score / 2)</td></tr>
-    <tr><td>Honeypot threshold (default)</td><td>80 (configurable in init.lua)</td></tr>
-  </table>
-
+  <p>Per-signal score deltas are listed once, by analyser stage, in
+  <a href="/docs/detection#stages">Detection → Detection Stages</a>. Static assets are always skipped (0), the
+  accumulated score is capped at 100, and a session is diverted at the honeypot threshold of 80
+  (<code>honeypot_threshold</code>; see the <a href="/docs/operations#config">Configuration Reference</a>).</p>
   <h2 id="decay">Escalation-Aware Decay (decay_policy.lua)</h2>
   <p>Shared by two risk-score decay paths: <code>router_rules.decayed_score()</code> (per-session) and <code>suricata_rules.decayed_score()</code> (per-IP reputation).</p>
   <ul>

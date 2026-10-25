@@ -89,6 +89,10 @@ const toc = [
     <tr><td>build_reason(alert)</td><td>Builds "suricata: " + alert.signature</td></tr>
     <tr><td>is_private_ip(ip)</td><td>Filters RFC1918/loopback so container-internal hops never pollute threat_ips</td></tr>
   </table>
+  <p><code>init_worker.lua</code> runs the reader every 30 seconds in worker 0 and stores the results as one JSON value under the
+  <code>threat_ips</code> Redis key, mirrored into the <code>threat_intel</code> shared dict; scores are decayed when
+  read, using the shared <a href="/docs/detection/advanced#decay">escalation-aware decay</a>. Resume position and
+  per-cycle limits are on <a href="/docs/architecture/lua-internals#suricata">Lua Internals</a>.</p>
 
   <h2 id="caveats">Known Caveats</h2>
   <ul>
