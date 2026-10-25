@@ -26,11 +26,11 @@ const toc = [
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
-<DocsLayout title="Case Study: Black October" description="How PressHaven is exposed to and protected against PHP2Shell and Node2Shell, including deployments still running older PHP or Node inside their containers" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
+<DocsLayout title="Case Study: Black October" description="How PressHaven.io is exposed to and protected against PHP2Shell and Node2Shell, including deployments still running older PHP or Node inside their containers" section="AI-Era Defense" sidebar={sidebar} toc={toc}>
   <p>
     <strong>Black October</strong> (October 2026) is the first wave the rest of this section was written for: a
     cluster of critical, AI-accelerated disclosures in software almost every web stack runs, exploited within
-    days. Two of them matter directly to a PressHaven deployment: <strong>PHP2Shell</strong> in the PHP runtime
+    days. Two of them matter directly to a PressHaven.io deployment: <strong>PHP2Shell</strong> in the PHP runtime
     that every WordPress container runs, and <strong>Node2Shell</strong> in the Brotli decoder bundled with
     Node.js, which Kibana runs. This page states plainly what is exposed, what the existing layers do and don't
     cover, and what to change, including when an image can't be upgraded straight away.
@@ -38,7 +38,7 @@ const toc = [
 
   <div class="admonition warning">
     <div class="admonition-title">Short version</div>
-    <p>PressHaven now runs patched PHP: every WordPress container is WordPress 7.1.3 on PHP 8.4.27 under Apache
+    <p>PressHaven.io now runs patched PHP: every WordPress container is WordPress 7.1.3 on PHP 8.4.27 under Apache
     <code>mod_php</code>. Until the end of October it stayed on PHP 8.1.33 <em>on purpose</em>, protected only by
     three interim layers: a <a href="#old">hardened WordPress image</a>, a <a href="#guard">request body guard</a>
     at the edge and a <a href="#quarantine">parser-exploit quarantine</a>. All three stay in place as defence in
@@ -65,7 +65,7 @@ const toc = [
     <li><strong>Node2Shell.</strong> No official workaround exists. The only interim advice is to stop handing
     untrusted Brotli data (<code>Content-Encoding: br</code>) to an affected Node process.</li>
     <li><strong>Around them.</strong> The same weeks brought the eMudhra CA compromise, a LiteLLM supply-chain
-    attack (PyPI 1.107.0 and its Docker images) and a CVSS 10 GitLab RCE. None of these ship in PressHaven, but
+    attack (PyPI 1.107.0 and its Docker images) and a CVSS 10 GitLab RCE. None of these ship in PressHaven.io, but
     they shape the <a href="#supply">supply-chain lessons</a> below.</li>
   </ul>
 
@@ -124,7 +124,7 @@ const toc = [
   </ul>
 
   <h2 id="now">Do This Now</h2>
-  <p>Patching is the fix, and PressHaven has now done it. This is what the upgrade involved, for deployments
+  <p>Patching is the fix, and PressHaven.io has now done it. This is what the upgrade involved, for deployments
   still on the old images:</p>
   <ol>
     <li><strong>Move every WordPress service off PHP 8.1.</strong> The hardened image is now built from
@@ -148,7 +148,7 @@ const toc = [
   </ol>
 
   <h2 id="old">If You Must Stay on Old PHP or Node</h2>
-  <p>PressHaven stayed on PHP 8.1 for the first weeks of Black October deliberately, to show how far mitigation
+  <p>PressHaven.io stayed on PHP 8.1 for the first weeks of Black October deliberately, to show how far mitigation
   goes without a patched binary. The same layer now sits on top of patched PHP 8.4. All WordPress services in
   both compose files, and pool_manager's runtime pools (<code>POOL_WORDPRESS_IMAGE</code>), run
   <code>presshaven/wordpress:7.1.3-php8.4-hardened</code>, built from <code>ids/images/wordpress_hardened/</code>.
@@ -251,7 +251,7 @@ rewrite_by_lua_block &#123;
 
   <h2 id="quarantine">Parser-Exploit Quarantine</h2>
   <p>
-    PressHaven's normal response to an attack is to <a href="/docs/ai-defense/allowlisting#divert">divert, not
+    PressHaven.io's normal response to an attack is to <a href="/docs/ai-defense/allowlisting#divert">divert, not
     block</a>. Parser exploits need an exception, because the decoy runs the same vulnerable runtime: forwarding
     a PHP2Shell body to a pool runs a real exploit against real PHP. A <strong>quarantine</strong> verdict keeps the
     deception without the execution:
@@ -317,10 +317,10 @@ rewrite_by_lua_block &#123;
   events of the WordPress containers need to be added as sources for the host-side rows.</p>
 
   <h2 id="supply">Supply-Chain Lessons</h2>
-  <p>The other Black October incidents don't touch PressHaven's code, but they apply to how it's deployed:</p>
+  <p>The other Black October incidents don't touch PressHaven.io's code, but they apply to how it's deployed:</p>
   <ul>
     <li><strong>Pin images by digest.</strong> The LiteLLM attack shipped through ordinary version tags.
-    PressHaven's former floating tags (<code>openresty/openresty:alpine</code>, <code>alpine:latest</code>,
+    PressHaven.io's former floating tags (<code>openresty/openresty:alpine</code>, <code>alpine:latest</code>,
     <code>jasonish/suricata:latest</code>) are now exact versions. The next step is pinning them by digest, as
     the hardened WordPress base already is, and updating the digest deliberately through the pool-first path.</li>
     <li><strong>Check what's inside an image, not just its tag.</strong> <code>wordpress:6.8.3</code> sounded

@@ -74,7 +74,7 @@ const toc = [
   <h2 id="rule">3. Write the Virtual Patch</h2>
   <p>
     A virtual patch is a rule at the edge that diverts the exploit's request shape until the real fix is
-    installed. PressHaven's detection is plain, explainable Lua, so this follows the existing
+    installed. PressHaven.io's detection is plain, explainable Lua, so this follows the existing
     <a href="/docs/detection/cves#adding">Adding a CVE</a> workflow even though there's no CVE ID yet. Use a local
     identifier and keep it narrow:
   </p>
@@ -115,7 +115,7 @@ end</code></pre>
     with the captured request. This is coordinated disclosure of something already being exploited, not
     vulnerability hunting.</li>
     <li><strong>Optionally share the indicator.</strong> The pattern catalogue's export can publish the rule for
-    other PressHaven deployments. Because rules are plain data, one capture can protect many shops.</li>
+    other PressHaven.io deployments. Because rules are plain data, one capture can protect many shops.</li>
     <li><strong>Apply the fix through the pools first.</strong> When a release ships, use the
     <a href="/docs/ai-defense/hardening#updates">pool-first update path</a>, and confirm the captured exploit
     no longer works by replaying it against the patched pool.</li>

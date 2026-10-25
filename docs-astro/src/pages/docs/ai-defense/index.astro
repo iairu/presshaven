@@ -29,7 +29,7 @@ const toc = [
     weeks.
   </p>
   <p>
-    This section explains how PressHaven helps a company <strong>keep control of its own instance without
+    This section explains how PressHaven.io helps a company <strong>keep control of its own instance without
     entering that race</strong>. You don't need to run a stronger model than the attacker's to find CVEs first,
     and you don't need to wait for a CVSS 10.0 advisory before you're protected. The approach is
     <strong>allowlist what the shop actually does, harden away what it doesn't, divert everything else into a
@@ -55,7 +55,7 @@ const toc = [
     exploit has to reach a code path that legitimate customers never use. It usually needs reconnaissance first:
     enumerating plugins, versions, users and endpoints. And after it succeeds, it tries to <em>do</em> something:
     write a file, call home, read credentials, create an admin. None of that depends on knowing the CVE in
-    advance, and every one of them is something PressHaven already observes or can constrain.
+    advance, and every one of them is something PressHaven.io already observes or can constrain.
   </p>
 
   <h2 id="race">Why the Patch Race Is Lost</h2>
@@ -70,7 +70,7 @@ const toc = [
     is its own outage risk, and plugin abandonment means some fixes never arrive.</li>
   </ol>
   <p>
-    PressHaven changes which question has to be answered. Instead of <em>"which requests exploit a bug we don't
+    PressHaven.io changes which question has to be answered. Instead of <em>"which requests exploit a bug we don't
     know about?"</em>, which can't be answered in advance, the edge asks <em>"is this request something our shop
     is supposed to receive?"</em> The shop's owner can answer that today, from their own traffic, without any AI.
   </p>

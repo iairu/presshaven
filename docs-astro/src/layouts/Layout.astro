@@ -16,6 +16,7 @@ const tabs = [
   { title: 'Detection', href: '/docs/detection' },
   { title: 'Observability', href: '/docs/observability' },
   { title: 'Operations', href: '/docs/operations' },
+  { title: 'AI-Era Defense', href: '/docs/ai-defense' },
   { title: 'Testing', href: '/docs/testing' },
   { title: 'Reference', href: '/docs/reference' },
 ];
@@ -31,7 +32,7 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <title>{title} — PressHaven Knowledge Hub</title>
+    <title>{title} — PressHaven.io Knowledge Hub</title>
     {description && <meta name="description" content={description} />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -44,7 +45,7 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
     <!-- Top header: brand + search + primary links -->
     <header class="md-header">
       <a href="/" class="md-header__brand">
-        <span class="prompt">&gt;</span> PressHaven
+        <span class="prompt">&gt;</span> PressHaven.io
         <span class="version">alpha</span>
       </a>
       <div class="md-header__search">
@@ -79,7 +80,7 @@ const isReference = path === '/reference' || path.startsWith('/reference/');
 
     <footer class="md-footer">
       <div class="md-footer__inner">
-        <span>PressHaven — FIIT STU Master's Thesis Project</span>
+        <span>PressHaven.io — FIIT STU Master's Thesis Project</span>
         <span>
           <a href="/docs/reference/literature">Literature</a> ·
           <a href="/docs/reference/changelog">Changelog</a> ·
