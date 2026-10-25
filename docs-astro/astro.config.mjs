@@ -15,5 +15,5 @@ export default defineConfig({
   // renders as `word<strong>…` with the words joined. Disabling it lets the
   // browser collapse that whitespace to a single space, as normal HTML.
   compressHTML: false,
-  site: 'https://honeypot-ids.local',
+  site: 'https://presshaven.io',
 });

@@ -1,6 +1,6 @@
-# Honeypot IDS — Knowledge Hub
+# PressHaven — Knowledge Hub
 
-The Astro site in this directory is the documentation hub for the Honeypot IDS System.
+The Astro site in this directory is the documentation hub for PressHaven.
 It documents the architecture, detection pipeline, honeypot engine, observability stack,
 operations and testing strategy of the project in `../`.
 
