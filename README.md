@@ -151,5 +151,18 @@ ARCHITECTURE.md   the two-host split and data flow
 | [`ids/db_proxy/README.md`](ids/db_proxy/README.md) | Files used only by the database-proxy honeypot layer |
 | [`ids/testing/`](ids/testing) | Attack scenarios and the blind-pentest protocol |
 
-Licensed under the terms in [`LICENSE`](LICENSE). Primary literature is listed in
+Primary literature is listed in
 [the manual, §13](docs/MANUAL.md#13-primary-literature).
+
+## License
+
+Copyright (C) 2025–2026 Ondrej Špánik
+
+PressHaven is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version. This matches the licensing of the software it
+is built on: WordPress (GPLv2 or later) and WooCommerce (GPLv3). PressHaven is distributed WITHOUT ANY
+WARRANTY; see the license for details.
+
+The bundled WordPress core, WooCommerce, themes and plugins in `ids/production_eshop_files/` keep
+their own licenses and copyright notices (see each component's `license.txt` / `readme.txt`).
