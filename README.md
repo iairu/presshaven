@@ -2,7 +2,7 @@
   <img src="dashboard/resources/app_icon.svg" alt="PressHaven logo" width="96" height="96">
 </p>
 
-<h1 align="center">PressHaven</h1>
+<h1 align="center">PressHaven <img src="https://img.shields.io/badge/-alpha-00ff41?style=flat-square&labelColor=000000" alt="alpha" align="top"></h1>
 <p align="center">
   <strong>Security platform for WordPress and WooCommerce</strong><br>
   <a href="https://presshaven.io">presshaven.io</a> · <a href="https://github.com/presshaven/presshaven">github.com/presshaven/presshaven</a>
