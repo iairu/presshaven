@@ -1838,6 +1838,12 @@ services:
       # Redis logs (if available) – named volume (vmhgfs bind-mount does not support chown)
       - redis_data:/var/log/redis:ro
     environment:
+      # Vector 0.50+ no longer expands ${VAR} in its config unless asked to:
+      # without this, vector.yaml's docker_logs filter stays the literal
+      # "com.docker.compose.project=${COMPOSE_PROJECT_NAME:-...}" (matches no
+      # container) and the SIEM address is unresolved -- it validates and
+      # then ships nothing. Every variable it reads is set here, by us.
+      - VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true
       - ELK_ENABLED=${ELK_ENABLED:-true}
       - VECTOR_HOST=${VECTOR_HOST:-147.175.151.193}
       - VECTOR_PORT=${VECTOR_PORT:-6000}

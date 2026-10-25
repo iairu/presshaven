@@ -236,6 +236,9 @@ services:
     image: timberio/vector:${VECTOR_VERSION}-debian
     container_name: vector_inbound
     environment:
+      # Vector 0.50+ no longer expands ${VAR} in its config unless asked to;
+      # vector.yaml's Elasticsearch endpoint and credentials come from here.
+      - VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true
       - ELASTIC_USERNAME=${ELASTIC_USERNAME}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - ELASTIC_HOSTS=https://es01:9200
