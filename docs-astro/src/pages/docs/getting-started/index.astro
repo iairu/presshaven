@@ -6,6 +6,7 @@ import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
   { title: 'Documentation Home', href: '/docs' },
   { title: 'Getting Started', href: '/docs/getting-started', active: true },
+  { title: 'Dashboard Guide', href: '/docs/getting-started/dashboard' },
   { title: 'Architecture', href: '/docs/architecture' },
   { title: 'Honeypot Engine', href: '/docs/engine' },
   { title: 'Detection', href: '/docs/detection' },
@@ -18,6 +19,7 @@ const toc = [
   { id: 'paths', text: 'Choose a Path', level: 2 },
   { id: 'prerequisites', text: 'Prerequisites', level: 2 },
   { id: 'dashboard', text: 'Dashboard Setup', level: 2 },
+  { id: 'first-run', text: 'First Run Walkthrough', level: 3 },
   { id: 'manual', text: 'Manual Setup', level: 2 },
   { id: 'verify', text: 'Verify the Stack', level: 2 },
   { id: 'cheatsheet', text: 'Command Cheat Sheet', level: 2 },
@@ -40,7 +42,7 @@ const toc = [
       icon="gauge"
       tag="Guided"
       description="Upload the project over SSH, edit .env, start and stop stacks, tail logs, open a container shell, run scenarios and export reports."
-      meta="Handles local and remote targets"
+      meta="Handles local and remote targets · see the Dashboard Guide"
     />
     <DocCard
       title="Manual Docker Compose"
@@ -54,34 +56,91 @@ const toc = [
 
   <h2 id="prerequisites">Prerequisites</h2>
   <h3>Docker and system packages</h3>
-  <p>Every host that runs a stack needs Docker with the Compose plugin. For a remote target you also need an SSH key that can log in and <code>rsync</code> on both sides.</p>
-  <pre><code># Arch Linux example
-sudo pacman -S --needed git python python-pip docker docker-compose openssh rsync curl jq
-
-sudo systemctl enable --now docker.service
-sudo usermod -aG docker "$USER"    # log out and back in afterwards</code></pre>
+  <p>Every host that runs a stack needs Docker with the Compose plugin. The machine that runs the dashboard
+  also needs <code>python3</code> with the <code>venv</code> module. For a remote target you also need an SSH key
+  that can log in, and <code>rsync</code> on both machines. The dashboard checks for docker, Compose, ssh and
+  rsync at startup and shows the matching command below in a banner if one is missing.</p>
+  <table>
+    <tr><th>Distribution</th><th>Install command</th></tr>
+    <tr><td>Arch / Manjaro</td><td><code>sudo pacman -S --needed docker docker-compose openssh rsync</code></td></tr>
+    <tr><td>Ubuntu / Debian / Mint / Pop!_OS</td><td><code>sudo apt install docker.io docker-compose-v2 openssh-client rsync</code></td></tr>
+    <tr><td>Fedora / RHEL / CentOS / Rocky / Alma</td><td><code>sudo dnf install docker docker-compose-plugin openssh-clients rsync</code></td></tr>
+    <tr><td>openSUSE</td><td><code>sudo zypper install docker docker-compose openssh rsync</code></td></tr>
+    <tr><td>Other</td><td>Follow <a href="https://docs.docker.com/engine/install/">docs.docker.com/engine/install</a>.</td></tr>
+  </table>
+  <p>The scenario scripts and the commands on this page also use <code>git</code>, <code>curl</code> and
+  <code>jq</code>. Then let your user run Docker:</p>
+  <pre><code>sudo systemctl enable --now docker.service
+sudo usermod -aG docker "$USER"    # log out and back in afterwards
+docker compose version             # confirms the Compose plugin</code></pre>
 
   <h3>Kernel settings</h3>
-  <p>Redis warns about memory overcommit on every start without the first setting. Elasticsearch needs the larger mmap limit on the SIEM host.</p>
+  <p>Without the first setting, Redis logs a memory-overcommit warning on every start. Elasticsearch needs the larger mmap limit on the SIEM host. No container can set these itself, so set them on each host. The dashboard's host-settings banner checks every host in use, including remote ones over SSH.</p>
   <pre><code>echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/99-honeypot.conf
 echo 'vm.max_map_count = 262144' | sudo tee -a /etc/sysctl.d/99-honeypot.conf
 sudo sysctl --system</code></pre>
 
   <h3>Python environment for the dashboard</h3>
+  <p>You normally don't need to do anything here. On its first run, <code>./run.sh</code> creates
+  <code>dashboard/venv/</code>, installs PyQt6, and shows a progress window while it installs the rest of
+  <code>requirements.txt</code>. To set the environment up by hand instead (for example on a headless build
+  machine):</p>
   <pre><code>cd dashboard
 python3 -m venv venv
 ./venv/bin/python3 -m pip install -r requirements.txt</code></pre>
   <p>The dashboard uses PyQt6 WebEngine, which needs the usual Qt/Chromium libraries (on Arch: <code>nss</code>, <code>alsa-lib</code>, <code>mesa</code>, <code>libxkbcommon-x11</code>, <code>libxcomposite</code>, <code>libxdamage</code>, <code>libxrandr</code>, <code>libxtst</code>, <code>xcb-util-cursor</code>).</p>
 
   <h2 id="dashboard">Dashboard Setup</h2>
-  <p>Run <code>./run.sh</code> from <code>dashboard/</code>. On first launch the wizard asks, per project (<code>ids</code> and <code>siem</code>), whether it runs locally or on a remote host, then walks through the <code>.env</code> and optional certificate generation.</p>
+  <pre><code>cd dashboard
+./run.sh</code></pre>
+  <p>The first launch creates the venv (see above) and then opens the setup wizard. The wizard's steps are
+  <strong>Welcome → Remote hosts (optional) → Edge .env → SIEM .env → Certificates (optional) → Done</strong>.</p>
   <ol>
-    <li><strong>Connectors &amp; Config</strong> — enter the host, SSH user, key and remote path, then <em>Test connection</em>.</li>
-    <li><strong>Upload</strong> — choose <em>Upload entire project to remote…</em>. The project and <code>.env</code> are copied with <code>rsync</code> and <code>scp</code>.</li>
-    <li><strong>Workloads</strong> — start, restart, stop or purge each stack, tail logs and open a container shell.</li>
-    <li><strong>Global Visualization</strong> — watch the live container topology of both stacks side by side.</li>
-    <li><strong>Knowledge Base &amp; Reporting</strong> — read the glossary, guided labs and threat briefs, then export implementation and architecture PDFs.</li>
+    <li><strong>Welcome</strong>: shows a warning if docker, Compose, ssh or rsync is missing.</li>
+    <li><strong>Remote hosts</strong>: mark <code>ids</code> and/or <code>siem</code> as remote and enter each
+    one's SSH host, port, user, key and remote path. Leave both unticked to run everything on this machine.</li>
+    <li><strong>Edge .env / SIEM .env</strong>: fill in each project's <code>.env</code>. A local file starts
+    from <code>.env.example</code>. A remote file is fetched over SSH and saved back to the remote. Use
+    <em>Generate</em> for the secrets (see <a href="#manual">the minimum values</a>).</li>
+    <li><strong>Certificates</strong>: <em>Generate all certificates now</em> creates the SIEM CA and service
+    certificates and the edge nginx certificate. Do this before the first start.</li>
   </ol>
+  <p>You can run the wizard again from <em>Connectors &amp; Config → Re-run setup wizard</em>. It keeps the values
+  already in the <code>.env</code> files. For remote targets, copy the code to the host once from
+  <em>Connectors &amp; Config</em>: run <em>Test connection</em>, then <em>Upload entire project…</em>
+  (<code>rsync</code>, which skips backups, logs and volumes). After that, <em>Upload .env to remote…</em> pushes
+  configuration changes alone.</p>
+
+  <h3 id="first-run">First Run Walkthrough</h3>
+  <ol>
+    <li><strong>Clear the banners.</strong> Apply any commands shown in the dependency or host-settings banner
+    above the pages.</li>
+    <li><strong>Start the SIEM, then the edge.</strong> On <em>Workloads</em>, start <code>siem</code> and then
+    <code>ids</code>. The progress bar counts one-shot jobs that exit with 0 as up. The first <code>ids</code>
+    start seeds the shop and builds the initial pools, which takes a few minutes. The Honeypot layer dropdown
+    on this page chooses between the two <a href="/docs/engine/layers">deception layers</a>; keep the default
+    for a first run.</li>
+    <li><strong>Check the topology.</strong> On <em>Global Visualization</em>, every node should be green
+    (healthy, running or exited-ok). A red <strong>!N</strong> badge shows error lines in that container's
+    log.</li>
+    <li><strong>Check log shipping.</strong> <em>Log Pipeline</em> should report that the edge shipper is
+    delivering to the SIEM's <code>vector_inbound</code>.</li>
+    <li><strong>Send a clean request, then an attack.</strong> On <em>Attack Simulation</em>, browse the shop
+    (it should route to production), then pick the CVE-2024-27956 preset and press <em>Run pattern (curl)</em>.
+    The Pattern analyzer tab shows each signal and the HONEYPOT decision. <em>Live Events</em> shows the same
+    decision without needing the SIEM.</li>
+    <li><strong>Follow the session.</strong> <em>Adversary Sessions</em> and <em>Pool State Store</em> show its
+    score and pool. <em>SIEM Analytics</em> opens Kibana, logged in automatically, at the Attack Patterns
+    dashboard.</li>
+    <li><strong>Clean up.</strong> <em>Unpoison host IP</em> clears the reputation your own test runs built up for
+    your host, so later visits are not diverted.</li>
+  </ol>
+  <div class="admonition tip">
+    <div class="admonition-title">Learning the dashboard</div>
+    <p>Press <kbd>F1</kbd> on any page for its guide, or <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump to a page by name.
+    The <em>Knowledge Base</em> page has eight guided labs that cover the steps above and more. The
+    <a href="/docs/getting-started/dashboard">Dashboard Guide</a> describes every page.</p>
+  </div>
 
   <h2 id="manual">Manual Setup</h2>
   <p>The edge stack is enough for a first run. The shop is published at <code>https://localhost/</code> with a self-signed certificate, so expect a browser warning. The command below brings up the default reverse-proxy deception layer (a separate decoy backend per session); see <a href="/docs/engine/layers">Honeypot Layers</a> for the lighter database-proxy alternative and how to choose between them.</p>
@@ -121,7 +180,7 @@ docker compose up -d</code></pre>
     <li><strong>Containers are healthy.</strong> <code>docker compose ps</code> should show the proxy, production shop, pool manager, Redis, Suricata, Vector and the database services running. The first start also seeds the shop and builds the initial pools, which takes a few minutes.</li>
     <li><strong>The shop responds.</strong> Open <code>https://localhost/</code> and browse a product. A clean request should stay on production.</li>
     <li><strong>A scenario is detected.</strong> Run one of the scenario scripts, for example <code>bash testing/scenario_02_owasp_wstg.sh</code>. With the internal test secret configured, the response headers show the route and risk score.</li>
-    <li><strong>A pool was assigned.</strong> Inspect Redis for the session and pool keys, or use the dashboard's Redis and pool views.</li>
+    <li><strong>A pool was assigned.</strong> Inspect Redis for the session and pool keys, or use the dashboard's Pool State Store, Adversary Sessions and Pool Scaling pages.</li>
     <li><strong>Events reached the SIEM.</strong> With the SIEM stack running, refresh the Kibana dashboards. Security events arrive through Vector; Suricata alerts arrive through <code>eve.json</code> ingestion.</li>
   </ol>
   <div class="admonition tip">
@@ -144,7 +203,8 @@ docker compose up -d</code></pre>
   </table>
 
   <h2 id="next">Where to Go Next</h2>
-  <CardGrid columns={3}>
+  <CardGrid columns={2}>
+    <DocCard title="Dashboard Guide" href="/docs/getting-started/dashboard" icon="gauge" description="Every dashboard page, its shortcuts, remote targets and troubleshooting." />
     <DocCard title="Architecture" href="/docs/architecture" icon="layers" description="Read the request pipeline and the pure/adapter split before changing detection code." />
     <DocCard title="Detection" href="/docs/detection" icon="radar" description="Learn how scores are accumulated, capped and decayed, and which stages can force a route." />
     <DocCard title="Runbooks" href="/docs/operations/runbooks" icon="wrench" description="Keep the troubleshooting procedures open when running your first scenarios." />

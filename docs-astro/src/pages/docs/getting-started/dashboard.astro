@@ -1,0 +1,401 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Getting Started', href: '/docs/getting-started' },
+  { title: 'Dashboard Guide', href: '/docs/getting-started/dashboard', active: true },
+];
+const toc = [
+  { id: 'launch', text: 'Launching', level: 2 },
+  { id: 'wizard', text: 'First-Run Wizard', level: 2 },
+  { id: 'banners', text: 'Warning Banners', level: 2 },
+  { id: 'navigation', text: 'Navigation', level: 2 },
+  { id: 'overview', text: 'Overview', level: 2 },
+  { id: 'monitor', text: 'Monitor', level: 2 },
+  { id: 'threat-ops', text: 'Threat Operations', level: 2 },
+  { id: 'manage', text: 'Manage', level: 2 },
+  { id: 'reporting', text: 'Reporting', level: 2 },
+  { id: 'remote', text: 'Remote Targets', level: 2 },
+  { id: 'state', text: 'State and Settings Files', level: 2 },
+  { id: 'troubleshooting', text: 'Troubleshooting', level: 2 },
+];
+---
+<DocsLayout title="Dashboard Guide" description="Every page of the PyQt6 operator dashboard: what it is for, what to try and what to watch for" section="Getting Started" sidebar={sidebar} toc={toc}>
+  <p>The dashboard in <code>dashboard/</code> is a PyQt6 desktop app that configures, deploys and operates both
+  stacks, on this machine or on remote hosts over SSH. It also acts as a teaching tool: every page has an in-app
+  guide (press <kbd>F1</kbd>), and the Knowledge Base page has guided labs. This page describes each page and the
+  setup flow around them. For the setup steps in order, see <a href="/docs/getting-started#dashboard">Getting Started</a>.</p>
+
+  <h2 id="launch">Launching</h2>
+  <pre><code>cd dashboard
+./run.sh</code></pre>
+  <p>On the first run, <code>run.sh</code> creates <code>venv/</code> by itself. You do not have to install
+  anything with pip by hand:</p>
+  <ol>
+    <li>If <code>notify-send</code> is installed, a desktop notification appears straight away. This matters when
+    the app is started from the desktop launcher, where nothing else shows until Qt is available.</li>
+    <li>It creates the venv, upgrades pip and installs PyQt6 on its own.</li>
+    <li>It opens a graphical progress window (<code>setup_progress.py</code>) while the rest of
+    <code>requirements.txt</code> installs (PyQt6-WebEngine, PyQt6-Charts).</li>
+  </ol>
+  <p>On every launch, <code>run.sh</code> also checks the X11 keyboard layout (see
+  <a href="#troubleshooting">Troubleshooting</a>) and then runs <code>main.py</code>. To rebuild the environment
+  from scratch, delete <code>venv/</code> and run <code>./run.sh</code> again.</p>
+  <p><code>Dashboard.desktop</code> is an XDG launcher entry with <code>Terminal=false</code>. Its
+  <code>Exec</code>, <code>Path</code> and <code>Icon</code> lines contain absolute paths from the author's
+  machine. Change them to your checkout's path before copying the file to
+  <code>~/.local/share/applications/</code>.</p>
+
+  <h2 id="wizard">First-Run Wizard</h2>
+  <p>The wizard opens until a first run completes (on a fresh checkout, or after deleting <code>state.json</code>). To run it again, go to <em>Connectors &amp; Config →
+  Re-run setup wizard</em>. A re-run loads the existing <code>.env</code> values rather than clearing them, so you
+  can use it to fix a single field. A step strip at the top of each page shows which steps are done, which one is
+  current and which are left.</p>
+  <table>
+    <tr><th>Step</th><th>What it does</th></tr>
+    <tr><td>Welcome</td><td>Introduction. Also shows the <a href="#banners">dependency banner</a> if docker, the Compose plugin, ssh or rsync is missing.</td></tr>
+    <tr><td>Remote hosts (optional)</td><td>Marks <code>ids</code> and/or <code>siem</code> as remote and asks for each one's SSH host, port, user, key and remote path.</td></tr>
+    <tr><td>Edge .env</td><td>Edits <code>ids/.env</code>. For a local target with no <code>.env</code> yet, the form starts from <code>.env.example</code>. For a remote target, the file is fetched over SSH and saved back to the remote. A missing remote file gives an empty form. If the fetch fails, the local file is shown instead, with a note explaining why.</td></tr>
+    <tr><td>SIEM .env</td><td>The same for <code>siem/docker/.env</code>.</td></tr>
+    <tr><td>Certificates (optional)</td><td><em>Generate all certificates now</em> creates the SIEM CA and service certificates, then the edge nginx certificate. You can also do this later on the PKI &amp; Certificates page.</td></tr>
+    <tr><td>Done</td><td>Writes <code>state.json</code> and opens the main window.</td></tr>
+  </table>
+
+  <h2 id="banners">Warning Banners</h2>
+  <p>Banners appear above every page, so a problem shows up on any page you are on.</p>
+  <ul>
+    <li><strong>Missing dependency.</strong> Shown when docker or the Compose plugin is missing (both are required),
+    or ssh or rsync is missing (needed only for remote features). The banner offers an install command for your
+    distribution. The commands are listed under <a href="/docs/getting-started#prerequisites">Prerequisites</a>.</li>
+    <li><strong>Host settings.</strong> Shown when a host lacks a kernel setting that a stack needs but cannot set
+    for itself: <code>vm.overcommit_memory=1</code> for Redis on the edge host, and
+    <code>vm.max_map_count=262144</code> for Elasticsearch on the SIEM host. Every target in use is checked,
+    including remote ones over SSH. The banner shows the commands that fix it.</li>
+  </ul>
+
+  <h2 id="navigation">Navigation</h2>
+  <p>The left rail groups the pages into five sections. Each section shows its main pages and keeps the rest in an
+  overflow list. You can edit the rail layout, and the <em>View</em> menu always lists every page.</p>
+  <table>
+    <tr><th>Shortcut</th><th>Action</th></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Command palette: jump to any page by name. Also a toolbar button.</td></tr>
+    <tr><td><kbd>F1</kbd></td><td>Help for the current page: what it is for, what to try, what to notice.</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td>Open the Nth visible page in the rail.</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Refresh the current page.</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Focus the Forensics Analysis search box.</td></tr>
+  </table>
+  <table>
+    <tr><th>Group</th><th>In the rail</th><th>In overflow</th></tr>
+    <tr><td>Overview</td><td>Overview</td><td>—</td></tr>
+    <tr><td>Monitor</td><td>Live Events, Global Visualization, SIEM Analytics</td><td>Log Pipeline, Workload Telemetry, Forensics Analysis</td></tr>
+    <tr><td>Threat Operations</td><td>Attack Simulation, Adversary Sessions, Network IDS (Suricata), Detection Policy</td><td>Pattern Database, Signature Simulation, Pool Scaling, Segmentation Validation, Pool State Store</td></tr>
+    <tr><td>Manage</td><td>Workloads, WordPress Studio, WordPress Update, Connectors &amp; Config</td><td>PKI &amp; Certificates, Backup &amp; Recovery</td></tr>
+    <tr><td>Reporting</td><td>Knowledge Base</td><td>Reporting</td></tr>
+  </table>
+  <p>Pages that poll (Log Pipeline, Pool Scaling, Workload Telemetry) refresh only while they are visible. Docker,
+  SSH and Redis calls run on background threads, so a slow or unreachable remote host does not freeze the window.</p>
+
+  <h2 id="overview">Overview</h2>
+  <p>The landing page. It shows the current risk score, one health line for each stack and a list of recent
+  security events. It takes its data from the shared <code>docker compose ps</code> poller and the app-wide
+  security-event feed, so it starts no background work of its own. The quick-action tiles jump to the relevant
+  page.</p>
+
+  <h2 id="monitor">Monitor</h2>
+  <h3>Live Events</h3>
+  <p>A stream of every decision the reverse proxy's pattern analyzer makes. It does not depend on Kibana or the
+  SIEM. Each request writes a burst of log lines (scoring signals, routing steps, the final score and one
+  <em>outcome</em> line), and the page collapses each burst into a single row with the outcome, the final score,
+  the signals that fired and the request latency. When first opened, it fills in recent history from one
+  <code>docker compose logs</code> read.</p>
+
+  <h3>Global Visualization</h3>
+  <p>A diagram of both stacks' containers and how they connect, with a details panel for the selected node.</p>
+  <table>
+    <tr><th>Colour / state</th><th>Meaning</th></tr>
+    <tr><td>healthy</td><td>Running with a passing healthcheck.</td></tr>
+    <tr><td>running</td><td>Running; the service has no healthcheck.</td></tr>
+    <tr><td>unhealthy</td><td>Running but failing its healthcheck.</td></tr>
+    <tr><td>exited (ok)</td><td>A one-shot job that finished with exit code 0, such as a seed or init job.</td></tr>
+    <tr><td>exited (bad)</td><td>Exited with a non-zero code.</td></tr>
+    <tr><td>created (amber)</td><td>Created but not started.</td></tr>
+    <tr><td>down</td><td>No container.</td></tr>
+  </table>
+  <ul>
+    <li>Nodes show uptime. A red <strong>!N</strong> badge counts the log lines that contain <code>error</code>
+    or a word starting with <code>fail</code> or <code>fault</code> (case-insensitive). Click the badge to see
+    only those lines, read with <code>--tail=all</code>.</li>
+    <li>Each node has two quick icons: ⬇ exports its logs to a file, and ↗ opens its web UI.</li>
+    <li>The details panel has <em>Restart</em>, <em>View logs</em>, <em>Open web UI</em> and <em>Open shell</em>.
+    The shell runs <code>docker exec -it … sh -c 'exec bash || exec sh'</code>, over SSH for remote targets.</li>
+  </ul>
+  <p>A green <code>vector_outbound</code> node only means the container is running. It does not show whether logs
+  are reaching the SIEM; use Log Pipeline for that.</p>
+
+  <h3>SIEM Analytics</h3>
+  <p>An embedded browser that opens Kibana at <code>https://&lt;SIEM host or localhost&gt;:5601/</code>. You can
+  edit the address bar.</p>
+  <ul>
+    <li><strong>Autologin</strong> fills in Kibana's login form with the SIEM stack's
+    <code>ELASTIC_USERNAME</code> / <code>ELASTIC_PASSWORD</code>. If it cannot read them, it does nothing and the
+    normal login form stays usable.</li>
+    <li><strong>Remember credentials</strong> (on by default) keeps a persistent browser profile, so you stay
+    logged in across restarts. Every other embedded browser in the app uses a private (off-the-record) profile.</li>
+    <li><strong>Bookmarks</strong> open the saved dashboards (Attack Patterns, Threat Decisions &amp; Decay) and
+    Discover. <strong>Export PDF…</strong> saves a full-page screenshot of every bookmarked page, each with a short explanation of what it shows. See
+    <a href="/docs/observability/kibana">Kibana Dashboards</a>.</li>
+  </ul>
+
+  <h3>Log Pipeline</h3>
+  <p>Shows whether the edge's Vector shipper is actually delivering logs to the SIEM. It combines four checks:
+  shipping is configured (<code>ELK_ENABLED</code> / <code>VECTOR_HOST</code>), the shipper container is running,
+  its recent log has no delivery errors since its last passing healthcheck, and <code>vector_inbound</code> is
+  running on the SIEM side. It refreshes every 15&nbsp;s. To check it works, stop <code>vector_inbound</code>
+  and the page should turn to failing.</p>
+
+  <h3>Workload Telemetry</h3>
+  <p>Live resource use per container for the selected target, in an htop-style table: CPU, memory, PIDs,
+  network and block I/O, and on-disk log size. Three graphs show CPU %, memory and log size over time, with one
+  line per container plus a bold average line. Attack markers make it easy to see what a scenario cost.</p>
+
+  <h3>Forensics Analysis</h3>
+  <p>A grep-style search across all containers of every configured target at once, local and remote. It runs
+  <code>docker compose logs --tail=N</code> for each selected target and keeps docker's per-service colours in
+  the results. Matching is done on the text with colour codes removed, so a code cannot split a search term.
+  Options:</p>
+  <ul>
+    <li>Regex mode, a time range (docker's <code>--since</code>) and search history.</li>
+    <li>Named saved searches.</li>
+    <li>Collapsing repeated lines into one (×N).</li>
+    <li>Export to plain text or JSON Lines.</li>
+  </ul>
+
+  <h2 id="threat-ops">Threat Operations</h2>
+  <h3>Attack Simulation</h3>
+  <p>An embedded browser on the shop, a pattern-preset dropdown and a live pattern-analyzer log. The proxy routes
+  the browser like any other visitor, so a request may end up on production or on a honeypot pool.</p>
+  <ul>
+    <li><em>Run pattern (curl)</em> sends the preset's real request, with its headers and body.
+    <em>Run pattern (browser)</em> opens the preset's URL in the embedded browser as a plain GET, using the
+    browser's current session. These are separate buttons on purpose: an earlier version sent both requests from
+    one click, and the log showed two different signal profiles for what looked like a single run.</li>
+    <li><em>What is this?</em> explains the selected preset.</li>
+    <li>The <em>Pattern analyzer</em> tab shows a timeline of colour-coded event cards, newest first. Tick some
+    cards and use <em>Copy selected</em> to copy them as text with their real log timestamps.</li>
+    <li>A Postman-style request builder (method, URL, headers, body) can be filled from a preset, edited, and
+    sent with curl. It shows the raw status, headers and body.</li>
+    <li><em>Reset local score + cookies</em> clears the embedded browser's cookie jar. <em>Unpoison host IP</em> clears the
+    IP reputation that your own test runs have built up for your host.</li>
+  </ul>
+
+  <h3>Adversary Sessions</h3>
+  <p>Lists every proxy session (<code>session:*</code> in <code>session_store</code>) with its IP, risk score,
+  request count, verdict and honeypot pool. For the selected session it shows a plain-language summary, the IP's
+  reputation entry, and a timeline of the suspicious requests that built up its score.</p>
+
+  <h3>Network IDS (Suricata)</h3>
+  <p>Two tabs. <em>Alerts</em> shows recent <code>eve.json</code> alerts with counts by severity, top signatures
+  and top source IPs. <em>Rules</em> lists <code>local.rules</code> with sid, message, class and state. You can
+  switch rules off or on (they are commented out in the file) and save, which restarts Suricata to load the
+  edited file. See <a href="/docs/detection/suricata">Suricata Network IDS</a>.</p>
+
+  <h3>Detection Policy</h3>
+  <p>A form for the edge <code>.env</code> settings that decide who gets diverted, so you do not have to edit the
+  raw file. It covers score decay and half-life, IP-reputation weight and shared-address handling. Each value is
+  checked before saving. Only the changed keys are written back, and comments in the file are kept. A sentence
+  under the form explains what the current decay settings do to a maxed-out score. nginx reads these values at
+  startup, so the page offers to restart <code>reverse_proxy</code> after saving.</p>
+
+  <h3>Pattern Database</h3>
+  <p>A browsable, filterable catalogue of every pattern: Lua CVE patterns, generic signatures, header and upload
+  rules, scanner rules, Attack Simulation presets and Suricata SIDs. Select a row to see its trigger, source,
+  score path and lesson. The catalogue is read from <code>patterns/patterns.json</code>, the same file this
+  documentation site uses (see <a href="/docs/detection/patterns">Pattern Database</a>). The checkboxes and the
+  add / edit / duplicate / remove / revert / export actions change only the plugin registry
+  (<code>patterns/registry.json</code>). A pattern switched off here is also dropped from Attack Simulation and
+  Segmentation Validation runs.</p>
+
+  <h3>Signature Simulation</h3>
+  <p>Follows one browser characteristic, the screen size, all the way to the proxy's consent-gated, one-way
+  <code>gdpr_signature</code>. You can resize the mock browser window on the left, and its size is the value that
+  gets signed. Five stages are shown on the right. The two client-side stages (collect the characteristics,
+  RSA-encrypt them into a <code>gdpr_token</code>) are reproduced in full. The two server-side stages (append the
+  client IP, hash with a secret salt) are described but not shown, because only the resulting signature ever
+  leaves the proxy. To see the idea at work, resize the window and run again: the signature changes, and
+  returning to an earlier size gives the earlier signature back. See
+  <a href="/docs/detection/signature">Device &amp; GDPR Signature</a>.</p>
+
+  <h3>Pool Scaling</h3>
+  <p>Shows the honeypot pool registry without running a test or reading raw Redis keys. It covers:</p>
+  <ul>
+    <li>the pool count and the state of each pool;</li>
+    <li>the resource budget in use (memory, CPU, pool cap) and the reason growth stopped;</li>
+    <li>each pool's sessions and idle time;</li>
+    <li><code>pool_manager</code>'s recent build, hand-off and scale-down events.</li>
+  </ul>
+
+  <h3>Segmentation Validation</h3>
+  <p>Opens 3 to 10 embedded browsers, each with its own private profile and cookie jar, to show how pools handle
+  several users at once. A cookie-less request is matched to a session by a passive fingerprint, so each window
+  also gets its own User-Agent suffix and Accept-Language; otherwise the proxy would see them as one client.</p>
+  <ul>
+    <li><em>Open shop in all</em> loads the shop in every window. <em>Attack from all</em> sends the same pattern
+    from each window. <em>Refresh pool state</em> re-reads the pools.</li>
+    <li>Once a window's score passes the threshold, its session is bound to a pool. <code>pool_manager</code>
+    builds one pool per session until it reaches its resource limit; after that, sessions share pools
+    round-robin.</li>
+    <li>In the database-proxy layer, one production shop serves every window and each diverted session goes to its
+    own honeypot database. The run then offers only the patterns that layer isolates, and tells windows apart in
+    each database's MySQL query log by their WooCommerce session key.</li>
+    <li>The run can be saved as a PDF report that includes pool memory and CPU use over time, showing pools being
+    built and later scaled down.</li>
+  </ul>
+
+  <h3>Pool State Store</h3>
+  <p>Every key in the edge Redis (<code>session_store</code>): sessions, <code>threat_ips</code>,
+  <code>suricata_alerts</code> and the rest. The table shows each key's type, TTL and size; click a row to see
+  the full value. A bar chart shows the current <code>threat_ips</code> score for each IP. A dropdown chooses the
+  local or remote edge target. The key layout is described in
+  <a href="/docs/architecture/lua-internals#redis">Lua Internals</a>.</p>
+
+  <h2 id="manage">Manage</h2>
+  <h3>Workloads</h3>
+  <p>Start, restart, stop and purge each project, local and remote, with the live status next to the buttons and
+  the command output below.</p>
+  <ul>
+    <li>A progress bar follows a start. The "all N up" count includes one-shot jobs that exited with code 0.</li>
+    <li>The log tail runs all the time. It also feeds the error badges on Global Visualization, so those keep
+    counting whichever page is open. <em>Download logs</em> saves it to a file.</li>
+    <li><em>Purge</em> runs <code>docker compose down -v</code>, which deletes the project's volumes, so it asks
+    for confirmation first.</li>
+    <li>The <strong>Honeypot layer</strong> dropdown chooses between the WordPress-proxy level (a separate decoy
+    stack per session) and the Database-proxy level (one shop, a decoy database per session). See
+    <a href="/docs/engine/layers">Honeypot Layers</a>.</li>
+    <li>You can save a start or stop as a PDF report, with Global Visualization screenshots and warnings from any
+    failed seed jobs. See <a href="/docs/testing#lifecycle">Service Start/Stop Reports</a>.</li>
+  </ul>
+
+  <h3>WordPress Studio</h3>
+  <p>The production wp-admin, embedded, plus a button that copies your changes out to every honeypot pool, with a
+  progress bar and a status row per pool. The embedded browser adds the studio passthrough headers and the
+  internal-test secret to every request, so nginx always sends wp-admin to production and never diverts an edit
+  into a honeypot. The copy step runs the same allow-listed script as <code>honeypot_content_sync</code>
+  (<code>--once N</code>). It copies pages, posts, products and safe settings. It never copies user accounts,
+  orders or secrets. See <a href="/docs/engine/wordpress-management">WordPress Management</a>.</p>
+
+  <h3>WordPress Update</h3>
+  <p>Checks for newer WordPress core and WooCommerce versions, then upgrades every instance in five steps:</p>
+  <ol>
+    <li>Turn the maintenance page on. This is a Redis flag with a TTL; while it is set, the edge returns 503.</li>
+    <li>Update production's files and database.</li>
+    <li>Re-sync the files into every pool volume.</li>
+    <li>Migrate each static pool's database.</li>
+    <li>Turn the maintenance page off.</li>
+  </ol>
+  <p>If maintenance mode cannot be turned on, the run stops before touching production. Once it is on, a failed
+  step does not stop the run; each failure is reported on its own row. The flag is always cleared at the end, and
+  its TTL brings the site back even if the dashboard crashes mid-update.</p>
+
+  <h3>Connectors &amp; Config</h3>
+  <ul>
+    <li><strong>.env editor</strong> for both projects, with a Local / Remote switch (a remote file is edited over
+    SSH). Secrets are masked and have a <em>Generate</em> button. <em>Refresh</em> reloads the file. Keys that
+    exist in <code>.env.example</code> but not in your <code>.env</code> are marked <em>(new, from
+    .env.example)</em>, which shows what an update added.</li>
+    <li><strong>Remote targets</strong>: see <a href="#remote">below</a>.</li>
+    <li><strong>General</strong> tab: the status poll interval, and tray notifications. When these are on, the tray
+    icon alerts you when a container becomes unhealthy or exits with an error.</li>
+    <li><strong>Export / import</strong> of the whole configuration as one JSON file.</li>
+    <li><strong>Re-run setup wizard</strong>.</li>
+  </ul>
+  <div class="admonition warning">
+    <div class="admonition-title">Exported settings contain plaintext secrets</div>
+    <p>The export file includes both <code>.env</code> files in plain text: database, Redis, Elastic and
+    signing secrets. Treat it like the <code>.env</code> files themselves.</p>
+  </div>
+
+  <h3>PKI &amp; Certificates</h3>
+  <p>Regenerates certificates: all of them, the SIEM CA and every service certificate, a single service's
+  certificate, or the edge nginx self-signed certificate. The vector-agent certificate is copied to the edge
+  automatically. Generate certificates before the first start. The edge certificate is self-signed, so use
+  <code>curl -k</code> or accept the browser warning.</p>
+
+  <h3>Backup &amp; Recovery</h3>
+  <p>Lists the database dumps and WordPress file archives that <code>backup_service</code> writes under
+  <code>/backups</code>, plus the end of its <code>backup.log</code>. From here you can:</p>
+  <ul>
+    <li>restore either kind of backup onto the live production stack;</li>
+    <li>label (rename), delete, export or import a backup;</li>
+    <li>use <em>Reset demo store</em>, which re-runs the seed script (<code>scripts/seed_production_db.sh</code>) to
+    rebuild a clean WooCommerce/Elementor shop after patterns have been run against it.</li>
+  </ul>
+  <p><code>ids/backups/manage_backups.sh</code> does the same from the command line and shares the same
+  <code>labels.json</code> labels file.</p>
+
+  <h2 id="reporting">Reporting</h2>
+  <h3>Knowledge Base</h3>
+  <p>The dashboard's teaching layer, with four tabs:</p>
+  <ul>
+    <li><strong>Start here</strong>: how the system works in five steps, plus a tour of every page with links that
+    open it.</li>
+    <li><strong>Guided labs</strong>: checklists that walk through the pages. Ticked steps are saved.</li>
+    <li><strong>Glossary</strong>: searchable terms.</li>
+    <li><strong>Pattern lessons</strong>: one per preset, covering the attack class, OWASP Top 10, MITRE ATT&amp;CK
+    mapping, how the attack works and how to defend against it.</li>
+  </ul>
+  <table>
+    <tr><th>Lab</th><th>Covers</th></tr>
+    <tr><td>1. Bring the system up</td><td>Generate certificates, start <code>ids</code> then <code>siem</code> on Workloads, wait for every node in Global Visualization to turn green, then read the glossary entries for Honeypot, Reverse proxy and SIEM.</td></tr>
+    <tr><td>2. Watch a normal visitor</td><td>Reset the local score, browse the shop in Attack Simulation, and check that the requests route to PRODUCTION with a low score.</td></tr>
+    <tr><td>3. Fire an SQL injection</td><td>Run the CVE-2024-27956 (WP Automatic SQLi) preset with curl, read each signal and its points, check that the result is HONEYPOT, then find the session's score in Pool State Store.</td></tr>
+    <tr><td>4. Investigate in the SIEM</td><td>Find the CVE under Top CVEs Detected in Attack Patterns, filter Discover by your IP, then search the raw logs for the CVE ID.</td></tr>
+    <tr><td>5. Tune the detector</td><td>Divert the browser, wait one half-life (five minutes: 100 decays to 50, below the threshold) and watch it return to production. Then repeat with <code>THREAT_DECAY_ENABLED=false</code> and think about why never forgiving a score causes false positives.</td></tr>
+    <tr><td>6. Divert sessions and watch the pools</td><td>Note the pool budget, attack from every Segmentation Validation window, check that each session gets a different pool, then read the build and hand-off events in Pool Scaling.</td></tr>
+    <tr><td>7. Switch the honeypot layer</td><td>Run the same CVE with the WordPress-proxy layer and then with the Database-proxy layer, and compare which attack types each layer can isolate.</td></tr>
+    <tr><td>8. Derive a device signature</td><td>Derive a signature, resize the window and derive again, then return to the first size. The first signature comes back, which is how a visitor is recognised again after clearing cookies.</td></tr>
+  </table>
+
+  <h3>Reporting</h3>
+  <p>One-click PDF exports: an auto-generated "Implementation" chapter built from excerpts of the live source
+  tree, an architecture overview, and the Pattern/CVE matrix. A preview lists what will be included; entries whose
+  source file is missing in your checkout are skipped.</p>
+
+  <h2 id="remote">Remote Targets</h2>
+  <p>Each project (<code>ids</code>, <code>siem</code>) can run locally or on a remote host. Set the host, port,
+  user, SSH key and remote path in <em>Connectors &amp; Config</em>, then use <em>Test connection</em>.</p>
+  <ul>
+    <li><em>Upload .env to remote…</em> copies just the <code>.env</code> with <code>scp</code>.</li>
+    <li><em>Upload entire project…</em> copies the project with <code>rsync</code> and shows progress. Backups,
+    logs and volumes are left out. If the remote directory is not empty, it asks before overwriting. This needs
+    <code>rsync</code> installed locally as well as on the remote.</li>
+    <li>Once a target is set up, every page that touches Docker or Redis (Workloads, shells, logs, Pool State Store,
+    Suricata, Detection Policy, host-settings checks) runs its commands over SSH.</li>
+  </ul>
+
+  <h2 id="state">State and Settings Files</h2>
+  <table>
+    <tr><th>File</th><th>Holds</th></tr>
+    <tr><td><code>dashboard/state.json</code></td><td>Window geometry, the last open page, remote target settings, the poll interval, the tray toggle, the theme, the rail layout, the honeypot layer choice, Forensics search history and saved searches, recent security events and completed lab steps. It is gitignored and contains no <code>.env</code> contents. Delete it to get the first-run wizard again. Older files still load: keys the app does not recognise are ignored, and missing keys fall back to their defaults.</td></tr>
+    <tr><td><code>ids/.env</code>, <code>siem/docker/.env</code></td><td>The real configuration. The dashboard edits these directly, or the remote copies over SSH.</td></tr>
+    <tr><td><code>dashboard/venv/</code></td><td>Created by <code>run.sh</code>. Safe to delete.</td></tr>
+  </table>
+
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause and fix</th></tr>
+    <tr><td>The app aborts at startup inside QtWebEngine on X11</td><td>The X11 keyboard layout/variant cannot be compiled by xkeyboard-config (for example layout <code>sk</code> with variant <code>qwertz</code>), and QtWebEngine treats that as fatal. <code>run.sh</code> detects this and falls back to the layout with no variant, printing a warning. If you start <code>main.py</code> directly, run <code>setxkbmap &lt;layout&gt;</code> first.</td></tr>
+    <tr><td>Nothing happens when using the desktop launcher</td><td>The paths in <code>Dashboard.desktop</code> still point to the author's machine. Fix <code>Exec</code>, <code>Path</code> and <code>Icon</code>. On a first run, wait for the setup notification and the progress window.</td></tr>
+    <tr><td>Embedded browsers are blank or crash</td><td>Missing Qt/Chromium system libraries. See <a href="/docs/getting-started#prerequisites">Prerequisites</a>.</td></tr>
+    <tr><td><em>command not found</em> for docker, ssh or rsync</td><td>Use the install command in the dependency banner, then restart the app.</td></tr>
+    <tr><td>Global Visualization is green but Kibana is empty</td><td>Open Log Pipeline. See also <a href="/docs/operations/runbooks">Runbooks</a>.</td></tr>
+  </table>
+
+  <CardGrid columns={3}>
+    <DocCard title="Getting Started" href="/docs/getting-started" icon="check" description="The setup steps in order, from prerequisites to a verified stack." />
+    <DocCard title="Honeypot Layers" href="/docs/engine/layers" icon="layers" description="What the Workloads layer dropdown switches between." />
+    <DocCard title="Runbooks" href="/docs/operations/runbooks" icon="wrench" description="Troubleshooting for the stacks the dashboard runs." />
+  </CardGrid>
+</DocsLayout>
