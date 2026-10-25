@@ -5,6 +5,7 @@ import DocCard from '../../../components/DocCard.astro';
 const sidebar = [
   { title: 'Documentation Home', href: '/docs' },
   { title: 'Testing Overview', href: '/docs/testing', active: true },
+  { title: 'Validation Rounds', href: '/docs/testing/validation-rounds' },
   { title: 'Blind Pentest', href: '/docs/testing/blind-pentest' },
 ];
 const toc = [
@@ -15,6 +16,7 @@ const toc = [
   { id: 'secret', text: 'Internal Test Secret', level: 2 },
   { id: 'running', text: 'Running Tests', level: 2 },
   { id: 'results', text: 'Validation Results', level: 2 },
+  { id: 'lifecycle', text: 'Service Start/Stop Reports', level: 2 },
   { id: 'honest', text: 'Honest Assessment', level: 2 },
 ];
 ---
@@ -141,11 +143,36 @@ bash testing/scenario_*.sh</code></pre>
     <tr><td>Production</td><td>360&nbsp;ms</td><td>382&nbsp;ms</td><td>384&nbsp;ms</td><td>12</td></tr>
     <tr><td>Own honeypot pool</td><td>372&nbsp;ms</td><td>469&nbsp;ms</td><td>495&nbsp;ms</td><td>16</td></tr>
   </table>
+  <p>The probe loads the same product page three times during the run (all windows on production, after the
+  scale-up, at the end), so step loads made while ten windows render at once do not distort the comparison.</p>
   <p><strong>Forced scale-down.</strong> With the idle timeout
   (<code>POOL_IDLE_TIMEOUT_SECONDS</code>=1800&nbsp;s) too long for a test, the run forced the scale-down:
   requested at 4:36, finished in 16.2&nbsp;s, dropping from 10 pools to 3 (the Compose-declared 1, 2, 3 are
   only freed, never removed). Pool-container memory fell 4,687&nbsp;MB&nbsp;→&nbsp;1,515&nbsp;MB
   (−3,172&nbsp;MB) and running containers 20&nbsp;→&nbsp;6.</p>
+
+  <h4>Scaling and latency (measured, 2026-10-18 database-proxy run)</h4>
+  <p>On the <a href="/docs/engine/layers">database layer</a> a pool is only a honeypot database cloned from
+  production and scrubbed; the one shared shop connects a diverted session to it on every request. Pools are
+  therefore much cheaper and faster to add. The run had 10 windows (3 delayed) and took 4:47, plus 0:22 of
+  clean-up.</p>
+  <table>
+    <tr><th>Measurement</th><th>Value</th></tr>
+    <tr><td>Pools built during the run</td><td>9 (on top of 1 Compose-declared) — build time median 15&nbsp;s, max 17&nbsp;s</td></tr>
+    <tr><td>Build phases (per pool)</td><td>database start 6–9&nbsp;s; clone + scrub 7–9&nbsp;s; query log and create/register under 1&nbsp;s</td></tr>
+    <tr><td>Borrow while scaling (case A)</td><td>6 windows borrowed a pool, then moved to their own after a median 9&nbsp;s (max 11&nbsp;s)</td></tr>
+    <tr><td>Share at the ceiling (case B)</td><td>1 window shared a pool after the limit (10 of <code>POOL_MAX</code>=10) was reached at 2:27; every window still ended on a pool of its own</td></tr>
+    <tr><td>Pre-build for 3 delayed windows</td><td>3 free pools after 29&nbsp;s (2 built for them, 1 spare already free)</td></tr>
+    <tr><td>Pool memory</td><td>peak 2,133&nbsp;MB across 10 pools (~213&nbsp;MB per pool, against a 512&nbsp;MB database limit and a 768&nbsp;MB budget charge)</td></tr>
+    <tr><td>Page-load latency</td><td>production median 362&nbsp;ms (p90 405, n=13); own pool 320&nbsp;ms (p90 370, n=17)</td></tr>
+    <tr><td>Forced scale-down</td><td>10&nbsp;→&nbsp;1 pools in 10.2&nbsp;s (each removal ~0.3&nbsp;s); pool memory 2,133&nbsp;→&nbsp;218&nbsp;MB</td></tr>
+    <tr><td>Failed page loads</td><td>40 first-attempt failures, all while a pool was built or removed; every one loaded on retry</td></tr>
+  </table>
+  <p>Because every pool's PHP runs in <code>production_eshop</code> on this layer, the diverted sessions' CPU
+  load shows on production's container, not on the pool containers.</p>
+  <p>How these reports were made trustworthy — thirteen rounds of audits against <code>pool_manager</code>'s
+  event log and the fixes they led to — is described in <a href="/docs/testing/validation-rounds">Validation
+  Rounds</a>.</p>
 
   <h3>Exploit test-scenario — detection rate per attack class</h3>
   <p>Each seeded CVE is replayed from a freshly reset threat state (Redis and the proxy's shared dicts
@@ -167,6 +194,24 @@ bash testing/scenario_*.sh</code></pre>
     contained after routing. Lower-confidence attacks (generic and user-enumeration probes) sometimes need a
     second or third request before the accumulated score crosses the threshold — repetition tips them over.</p>
   </div>
+
+  <h2 id="lifecycle">Service Start/Stop Reports</h2>
+  <p>Starting or stopping a stack from the Workloads page records a <strong>services report</strong>: host
+  CPU/RAM from <code>/proc</code> and per-container CPU/memory from the cgroup files every 0.25&nbsp;s, container
+  states from <code>docker compose ps</code> (~1.5&nbsp;s) and Docker events, numbered event markers, Global
+  Visualization screenshots before, during and after, and a Warnings section listing failed or unstarted
+  containers, error lines logged during the recording, killed containers and missing host settings.</p>
+  <table>
+    <tr><th>Recording</th><th>Window</th><th>Result</th></tr>
+    <tr><td>Edge start, 2026-10-17</td><td>58&nbsp;s</td><td>all containers healthy at 19.2&nbsp;s, every one-shot job exit 0, host CPU peak 35&nbsp;%, no warnings</td></tr>
+    <tr><td>Edge stop, 2026-10-17</td><td>8&nbsp;s</td><td>stack gone by 5.8&nbsp;s, <code>down</code> done at 8.2&nbsp;s, no container killed (24&nbsp;s with five SIGKILLs before <code>init: true</code>)</td></tr>
+    <tr><td>Edge stop, database layer, 2026-10-18</td><td>8&nbsp;s</td><td>no warnings, nothing killed</td></tr>
+    <tr><td>SIEM start, 2026-10-18</td><td>70&nbsp;s</td><td>all healthy at ~58&nbsp;s, host CPU peak 82&nbsp;% at 56.8&nbsp;s while Kibana starts, no warnings</td></tr>
+    <tr><td>Edge start, 2026-10-18</td><td>64&nbsp;s</td><td>healthy, one warning: <code>vector_outbound</code>'s first healthcheck was refused because the SIEM was still starting</td></tr>
+  </table>
+  <p>A tile's red badge on Global Visualization counts every line with an error word since the dashboard's log
+  tail started (including 50 lines of replayed scrollback); the report's Warnings count only lines logged
+  during the recording, so the two numbers can differ.</p>
 
   <h2 id="honest">Honest Assessment</h2>
   <p><strong>Strengths:</strong> Pure/adapter split enables 23 unit test files. Comprehensive coverage of all pure modules. Dashboard validation catches NDJSON drift. Segmentation and exploit runs turn a live stack into reproducible, statistics-backed evidence on both deception layers.</p>

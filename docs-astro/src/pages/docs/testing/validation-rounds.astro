@@ -1,0 +1,149 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CardGrid from '../../../components/CardGrid.astro';
+import DocCard from '../../../components/DocCard.astro';
+const sidebar = [
+  { title: 'Documentation Home', href: '/docs' },
+  { title: 'Testing Overview', href: '/docs/testing' },
+  { title: 'Validation Rounds', href: '/docs/testing/validation-rounds', active: true },
+  { title: 'Blind Pentest', href: '/docs/testing/blind-pentest' },
+];
+const toc = [
+  { id: 'loop', text: 'The Report-Driven Loop', level: 2 },
+  { id: 'rounds', text: 'Round by Round', level: 2 },
+  { id: 'progress', text: 'Measured Progress', level: 2 },
+  { id: 'stack-findings', text: 'What the Reports Found in the Stack', level: 2 },
+  { id: 'session', text: 'Session redirection', level: 3 },
+  { id: 'scaling', text: 'Resource delegation', level: 3 },
+  { id: 'lifecycle', text: 'Start-up and shutdown', level: 3 },
+  { id: 'logging', text: 'Logging and the SIEM', level: 3 },
+  { id: 'report-findings', text: 'What the Reports Found in Themselves', level: 2 },
+  { id: 'lessons', text: 'Lessons', level: 2 },
+];
+---
+<DocsLayout title="Validation Rounds" description="How thirteen rounds of generated reports, issue audits and fixes hardened the pool engine, the stack and the reports themselves" section="Testing" sidebar={sidebar} toc={toc}>
+  <p>
+    The <a href="/docs/testing#results">Segmentation Validation</a> and services start/stop reports were not
+    written once and trusted. Between 2 and 18&nbsp;October&nbsp;2026 they went through thirteen rounds (the systematic issue audits ran from round&nbsp;3, 16–18&nbsp;October): run the
+    stack, export the PDF, audit the PDF line by line against the system's own event logs, write every
+    discrepancy into an issues file, fix it, and run again. This page summarises what those rounds found. The raw
+    material is kept in the repository's <code>reports/</code> folder, one numbered directory per round.
+  </p>
+
+  <CardGrid columns={3}>
+    <DocCard title="13 rounds" href="#rounds" icon="clock" tag="2–18 Oct" description="From a first pool test where a diverted session escaped to production, to two EXCLUSIVE verdicts on both deception layers." meta="2–18 Oct 2026" />
+    <DocCard title="Stack bugs" href="#stack-findings" icon="alert" tag="Found by reports" description="Escapes via TLS GREASE, 502s after scale-down, pools wasted on dead sessions, containers killed on stop, logs shipped twice." meta="All fixed" />
+    <DocCard title="Report bugs" href="#report-findings" icon="file" tag="Self-audit" description="Wrong owners, false failures, HTTP errors retried as network errors, short jobs missing from charts, mislabelled peaks." meta="Evidence quality" />
+  </CardGrid>
+
+  <h2 id="loop">The Report-Driven Loop</h2>
+  <ol>
+    <li><strong>Run.</strong> Start both stacks from the dashboard (each start and stop records its own services report), then run Segmentation Validation with 10 windows, some delayed so they attack only after pools were pre-built for them.</li>
+    <li><strong>Audit.</strong> Read the exported PDF against independent sources — <code>pool_manager</code>'s event log (<code>honeypot_pool:events</code> in Redis), the pool registry, container logs and Elasticsearch — and mark each issue <em>confirmed</em> (seen in a log or registry) or <em>inferred</em> (from the PDF alone).</li>
+    <li><strong>Record.</strong> Write the issues file next to the PDF (<code>pool_test_report_issues*.md</code>, <code>services_start_*.md</code>, …), grouped into stack problems, data correctness, charts and layout, each with a severity and a suggested fix.</li>
+    <li><strong>Fix and track.</strong> Fix each item with tests, and add a status table to the issues file that names the commit — or says plainly why an item was only surfaced and not changed.</li>
+    <li><strong>Re-run.</strong> The next round's file opens with what the previous fixes changed, then lists only new issues.</li>
+  </ol>
+  <div class="admonition note">
+    <div class="admonition-title">Why audit a report against the logs</div>
+    <p>A report that only restates what the test harness believed cannot catch the harness being wrong. Most of
+    the high-severity stack bugs below were found because a number in the PDF disagreed with
+    <code>pool_manager</code>'s own event log — a hand-off to the wrong session, a pool that was never released,
+    a build counted as a spare.</p>
+  </div>
+
+  <h2 id="rounds">Round by Round</h2>
+  <table>
+    <tr><th>Round</th><th>Reports</th><th>Main findings</th><th>Outcome</th></tr>
+    <tr><td>1</td><td>Exploit report, five-window pool tests, start-ups (2–7 Oct)</td><td>First scaling runs; under a memory cap (1,058&nbsp;MB free, 2,560&nbsp;MB needed) pools were shared round-robin — verdict SHARED EXPECTED</td><td>Baseline</td></tr>
+    <tr><td>2</td><td>Start/stop with and without purge, pool tests with 5 and 10 windows, idle browsing (9 Oct)</td><td>Five windows each on their own pool (EXCLUSIVE); first delayed-window runs</td><td>Material shared with the supervisor</td></tr>
+    <tr><td>3</td><td>Pool test, SIEM and edge start-ups</td><td>A diverted window escaped to production by clearing cookies (TLS GREASE); a new pool handed to an abandoned session; budget stopped at a quarter of real use; the edge shipped no logs; Kibana dashboards never seeded</td><td>~35 items fixed or surfaced</td></tr>
+    <tr><td>4</td><td>Start/stop of both stacks, operator notes on the pool test</td><td>Event times wrong (created ≠ started, removed ≠ exited), sample gaps drawn as lines, stale screenshots; slow 3-pool pre-build (213&nbsp;s); CPU shown as % of one core</td><td><code>POOL_FAST_CLONE</code>, CPU normalised to all cores, memory breakdown table</td></tr>
+    <tr><td>5</td><td>Pool test (verdict EXCLUSIVE)</td><td><code>ERR_NETWORK_CHANGED</code> during builds; 502 after scale-down; post-run polling kept pools busy; reverse-proxy traces logged and shipped twice</td><td>Router fixed; report learned to detect 502s</td></tr>
+    <tr><td>6</td><td>Pool test</td><td>No 502, reassignment HTTP 200; but the reassignment check leaked into the run's statistics and rebuilt pools shown as "failed"</td><td>Separate observation phase, clean-up after it</td></tr>
+    <tr><td>7</td><td>Pool test, edge start-up</td><td>HTTP 4xx answers retried as failed loads, re-sending each attack up to ~67 times; short borrows missed by routing samples</td><td>Retry only on connection errors</td></tr>
+    <tr><td>8</td><td>Pool test, edge stop</td><td>Tamper schedule diverted a delayed window before its own attack; tables split before screenshot rows</td><td>One forgery per window, pagination fixes</td></tr>
+    <tr><td>9</td><td>Pool test, edge start and stop</td><td>Black screenshots of near-empty pages; five containers SIGKILLed after 10&nbsp;s on stop; nginx <code>[info]</code> lines counted as errors</td><td><code>init: true</code>, level-aware error matching</td></tr>
+    <tr><td>10</td><td>Pool test (7 delayed), edge start and stop</td><td>Header-only screenshots from small views; one-shot jobs too short to sample; stop now 8&nbsp;s instead of 24&nbsp;s</td><td><code>docker events</code> for job timing</td></tr>
+    <tr><td>11</td><td>First database-proxy-level pool test, start, stop</td><td>Verdict EXCLUSIVE on the database layer; builds of 13–17&nbsp;s</td><td>Second layer validated</td></tr>
+    <tr><td>12</td><td>Dashboard gap analyses (two rounds)</td><td>No Overview page while its data was collected and discarded; no native event feed, session drill-down, Suricata page, alerting or pool view; then alerting blind to pipeline/pool/Suricata health</td><td>Sidebar grew from 13 to 20 pages</td></tr>
+    <tr><td>13</td><td>Pool test, both start-ups</td><td>Re-validation of segmentation on the WordPress-proxy level</td><td>Verdict EXCLUSIVE</td></tr>
+  </table>
+
+  <h2 id="progress">Measured Progress</h2>
+  <p>Numbers taken from the reports of successive rounds, on the same development host (20 logical CPUs).</p>
+  <table>
+    <tr><th>Measurement</th><th>Early rounds</th><th>Later rounds</th></tr>
+    <tr><td>Pools that fit the 12&nbsp;GB budget</td><td>8 (each charged its 1,536&nbsp;MB container limit)</td><td>10 = <code>POOL_MAX</code> (charged 768&nbsp;MB via <code>POOL_RESERVE_MEM_MB</code>)</td></tr>
+    <tr><td>Measured memory per WordPress-level pool</td><td>~420–430&nbsp;MB</td><td>~469&nbsp;MB (round 13)</td></tr>
+    <tr><td>Measured memory per database-level pool</td><td>—</td><td>~213&nbsp;MB (round 11; the database alone)</td></tr>
+    <tr><td>Pool build time</td><td>~60&nbsp;s, of which ~50&nbsp;s re-applying storefront settings via wp-cli</td><td>median 27&nbsp;s (WordPress level), 15&nbsp;s (database level)</td></tr>
+    <tr><td>Pre-build for 3 delayed windows</td><td>213&nbsp;s</td><td>29&nbsp;s (database level, 2 built + 1 spare)</td></tr>
+    <tr><td>Wait on a borrowed pool (case A)</td><td>63–99&nbsp;s</td><td>median 34&nbsp;s (WordPress level), 9&nbsp;s (database level)</td></tr>
+    <tr><td>Edge stack <code>down</code></td><td>24&nbsp;s (five containers killed after the 10&nbsp;s grace period)</td><td>8&nbsp;s, nothing killed</td></tr>
+    <tr><td>Post-scale-down outcome</td><td>502 Bad Gateway for most windows</td><td>All 7 reassigned, HTTP 200, same session</td></tr>
+  </table>
+
+  <h2 id="stack-findings">What the Reports Found in the Stack</h2>
+
+  <h3 id="session">Session redirection</h3>
+  <ul>
+    <li><strong>Escape by clearing cookies.</strong> A window diverted at 1:20 cleared its site data and spent about four minutes on the real shop as a new session. Chromium (QtWebEngine) puts a random GREASE value in each TLS ClientHello, so the passive recovery fingerprint changed per connection. Fixed with <code>session_identity_rules.strip_grease()</code>.</li>
+    <li><strong>Pools handed to sessions nobody uses.</strong> The hand-off took the oldest entry of the waiting queue, and a session whose client had vanished kept its place for the 24&nbsp;h assignment TTL. A live window waited 99&nbsp;s instead of ~18&nbsp;s. Fixed: a waiting session gets a pool only if its client sent a request within <code>POOL_WAITING_ACTIVE_SECONDS</code> (default 60).</li>
+    <li><strong>502 after scale-down.</strong> Every nginx worker cached session → pool for 300&nbsp;s, and a pool with a missing or stale health status was treated as healthy, so requests went to a removed container. Fixed: a cached pool not in the ready list is a cache miss.</li>
+    <li><strong>Tamper score diverting the wrong window.</strong> A delayed window received three tamperings in a row; two rejected forgeries (+50 each) reached the threshold before its attack. The test now spreads tamper events across windows and forges each window's cookie at most once — tampering alone must not divert.</li>
+    <li><strong>The test's own setup scored as suspicious.</strong> The window that looked up product IDs through the Store API reached score 65 before attacking, close to the threshold.</li>
+  </ul>
+
+  <h3 id="scaling">Resource delegation</h3>
+  <ul>
+    <li><strong>Budget by reservation, not by use.</strong> Scaling stopped at 8 pools with ~3.4&nbsp;GB used of a 12&nbsp;GB budget. <code>POOL_RESERVE_MEM_MB</code> / <code>POOL_RESERVE_CPUS</code> now set the per-pool charge; the host-level checks still stop growth if the host really runs short.</li>
+    <li><strong>A spare built before the compose pools existed.</strong> Before pools 1–3 became healthy, <code>pool_manager</code> saw zero free pools and built a runtime spare, taking budget and adding a 60&nbsp;s build to the busiest part of the start. Compose pools that are still starting now count as on their way.</li>
+    <li><strong>Scale-down left abandoned sessions' pools running.</strong> The forced scale-down released only each window's current session. It now releases every session a window held during the run.</li>
+    <li><strong>Slow builds.</strong> A runtime pool already clones the configured production database, then re-applied the same storefront settings via wp-cli. <code>POOL_FAST_CLONE</code> (experimental, off by default) skips that step; raising <code>POOL_PARALLEL_BUILDS</code> builds several delayed windows' pools in one wave.</li>
+    <li><strong>Network churn.</strong> Each build adds containers and veth interfaces, and Chromium cancels in-flight loads on every interface change (<code>ERR_NETWORK_CHANGED</code>). Every such load succeeds on retry; in round 10 all 21 failures fell inside the 7-pool pre-build while windows kept browsing.</li>
+  </ul>
+
+  <h3 id="lifecycle">Start-up and shutdown</h3>
+  <ul>
+    <li><strong>Kibana dashboards never seeded.</strong> Kibana's healthcheck accepted the <code>200 OK</code> of its temporary <em>preboot</em> server, the import got 503, <code>curl</code> without <code>--fail</code> exited 0, and cleanup deleted the failed job. Fixed with a stricter healthcheck and an import job that waits, retries and verifies; failed one-shot jobs are kept visible.</li>
+    <li><strong>Kibana at its memory limit.</strong> Kibana sat at exactly 1,024&nbsp;MiB; <code>KIBANA_MEM_LIMIT</code> is now 2&nbsp;GiB.</li>
+    <li><strong>Host settings.</strong> Redis warned that background saves may fail without <code>vm.overcommit_memory=1</code> — and a failed save makes Redis refuse writes, which would stop sessions, threat state and the pool registry together. The dashboard now checks this and Elasticsearch's <code>vm.max_map_count</code> on every host (<code>core/host_settings.py</code>).</li>
+    <li><strong>Containers killed on stop.</strong> <code>backup_service</code>, <code>log_capper</code>, <code>honeypot_content_sync</code>, <code>pool_manager</code> and <code>session_store</code> ran a shell or Python as PID&nbsp;1, which ignores SIGTERM without a handler, so Docker killed them after 10&nbsp;s. <code>init: true</code> and <code>exec redis-server</code> cut <code>down</code> from 24&nbsp;s to 8&nbsp;s.</li>
+  </ul>
+
+  <h3 id="logging">Logging and the SIEM</h3>
+  <ul>
+    <li><strong>The edge shipped nothing.</strong> <code>vector_outbound</code> belongs to the <code>elk</code> profile, but the dashboard always started compose with <code>--profile '*'</code>, so it ran against the placeholder <code>VECTOR_HOST</code>, failed DNS and dropped events while the SIEM held 0 <code>honeypot-*</code> documents. The dashboard now scales the shipper to 0 while shipping isn't configured. On one machine, point <code>VECTOR_HOST</code> at <code>host.docker.internal</code>.</li>
+    <li><strong>Request traces shipped twice.</strong> nginx writes <code>info</code>-level traces both to <code>error.log</code> and to stdout, and Vector read both, so every line was parsed and shipped twice. Vector also tagged every <code>error.log</code> line as an error; it now carries the line's own level.</li>
+    <li><strong>Post-run traffic.</strong> After a report finished, each window's cart poll kept sending ~3 requests per second, keeping pools busy so idle scale-down never fired. Polling now stops with the run.</li>
+    <li><strong>Pre-warm noise.</strong> The proxy logged its pre-warm pass ~160 times per start, and the word "failed" in "0 failed" raised false warnings. It now logs one summary line, and error matching trusts nginx's own level tags.</li>
+  </ul>
+
+  <h2 id="report-findings">What the Reports Found in Themselves</h2>
+  <table>
+    <tr><th>Problem</th><th>Effect</th><th>Fix</th></tr>
+    <tr><td>HTTP error answers treated as failed loads</td><td>QtWebEngine reports a 4xx page as <code>loadFinished(False)</code>, so a 404 attack was re-sent up to ~67 times, inflating scores and evidence</td><td>Retry only connection-level errors; never retry an attack after an HTTP answer</td></tr>
+    <tr><td>Timeline merged a window's sessions</td><td>A window that lost its session was credited with outcomes of its old one</td><td>Timelines and cases per <code>(window, session)</code></td></tr>
+    <tr><td>Owner = last window seen</td><td>Designed borrowing reported as cross-traffic leaks</td><td>Owner = first holder; explained borrows marked as expected</td></tr>
+    <tr><td>Pools shared with an abandoned session drawn green</td><td>Verdict counted only test windows</td><td>Shared when the Redis owner count exceeds the windows on it</td></tr>
+    <tr><td>Reassignment check counted in the run</td><td>False "borrowed" findings and builds shown as failed</td><td>Run ends at the scale-down request; the check is its own phase</td></tr>
+    <tr><td>"Started" meant created, "stopped" meant removed</td><td>Start order and job durations untrustworthy</td><td>Times from <code>docker events</code> / <code>docker inspect</code></td></tr>
+    <tr><td>One-shot jobs shorter than the ~1.5&nbsp;s poll</td><td>Jobs silently missing from charts</td><td>Follow <code>docker events</code>; list jobs too brief to sample</td></tr>
+    <tr><td>Killed containers reported as clean</td><td>Exit code 137 gone once compose removed the container</td><td>Exit codes from die events</td></tr>
+    <tr><td>Sample gaps drawn as straight lines; lines ramping from 0 before a container existed</td><td>Invented load</td><td>Lines broken at gaps, start at the first real sample</td></tr>
+    <tr><td>Host CPU as % of one core; the RAM peak labelled as CPU peak</td><td>Misleading load figures</td><td>% of all logical CPUs, one decimal; peak per series</td></tr>
+    <tr><td>Screenshots: stale, black, or header-only</td><td>Evidence that did not show the claim</td><td>Wait for a painted frame; minimum view size during export</td></tr>
+  </table>
+
+  <h2 id="lessons">Lessons</h2>
+  <ul>
+    <li><strong>Fingerprints must survive the client's own randomisation.</strong> A recovery fingerprint that hashes GREASE is not a fingerprint.</li>
+    <li><strong>Every cache needs an invalidation path.</strong> The 502s came from a worker-local route cache that a pool removal never touched.</li>
+    <li><strong>Queues need liveness.</strong> A waiting list without a last-seen time hands resources to clients that have gone.</li>
+    <li><strong>Budget on what is used, cap on what is allowed.</strong> Charging container limits fitted a quarter of the pools the host could carry.</li>
+    <li><strong>Tell server answers from network failures.</strong> Retrying a 404 changes the experiment.</li>
+    <li><strong>PID&nbsp;1 is special.</strong> Without <code>init: true</code> or <code>exec</code>, SIGTERM is ignored and every stop costs the full grace period.</li>
+    <li><strong>A test harness can be the adversary.</strong> Setup requests, post-run polling and tamper scheduling all changed scores or load until they were isolated.</li>
+  </ul>
+</DocsLayout>
