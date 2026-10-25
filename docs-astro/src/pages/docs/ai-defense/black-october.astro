@@ -38,13 +38,12 @@ const toc = [
 
   <div class="admonition warning">
     <div class="admonition-title">Short version</div>
-    <p>PressHaven still runs the affected runtimes <em>on purpose</em>: every WordPress container is WordPress
-    6.8.3 on PHP 8.1.33 under Apache <code>mod_php</code>. PHP 8.1 is end of life and gets no binary fix. Kibana
-    8.17.3 bundles Node 20.18.2, also end of life. Instead of upgrading, the project ships three interim layers:
-    a <a href="#old">hardened WordPress image</a> (<code>presshaven/wordpress:6.8.3-php8.1-hardened</code>), a
-    <a href="#guard">request body guard</a> at the edge and a <a href="#quarantine">parser-exploit
-    quarantine</a>. Kibana was checked and doesn't decode Brotli request bodies. <a href="#now">Upgrading</a> is
-    still the real fix.</p>
+    <p>PressHaven now runs patched PHP: every WordPress container is WordPress 7.1.3 on PHP 8.4.27 under Apache
+    <code>mod_php</code>. Until the end of October it stayed on PHP 8.1.33 <em>on purpose</em>, protected only by
+    three interim layers: a <a href="#old">hardened WordPress image</a>, a <a href="#guard">request body guard</a>
+    at the edge and a <a href="#quarantine">parser-exploit quarantine</a>. All three stay in place as defence in
+    depth. Kibana is on 9.5.5, but its bundled Node 24.21.0 is still below the 24.22.1 fix. It was checked again
+    and doesn't decode Brotli request bodies.</p>
   </div>
 
   <h2 id="summary">What Happened</h2>
@@ -74,15 +73,15 @@ const toc = [
   <p>Checked against the running containers of the current compose files:</p>
   <table>
     <tr><th>Component</th><th>Image / runtime</th><th>PHP2Shell</th><th>Node2Shell</th></tr>
-    <tr><td>Edge (<code>openresty/openresty:alpine</code>)</td><td>OpenResty 1.31.1.1, OpenSSL 3.5.8</td><td>Not affected: no PHP</td><td>Not affected: no Node, no Brotli module, nginx doesn't decompress request bodies</td></tr>
-    <tr><td>Production storefront</td><td><code>presshaven/wordpress:6.8.3-php8.1-hardened</code> (built from <code>wordpress:6.8.3-php8.1</code> by digest): PHP 8.1.33, Apache 2.4.65, <code>mod_php</code> prefork</td><td><strong>Vulnerable binary</strong>, EOL branch. Mitigated by the <a href="#old">hardened image</a> and the <a href="#guard">body guard</a></td><td>n/a</td></tr>
-    <tr><td>Decoy pools (<code>honeypot_eshop_N</code> and pool_manager's runtime pools)</td><td>Same hardened image as production</td><td><strong>Vulnerable binary</strong>, mitigated the same way</td><td>n/a</td></tr>
-    <tr><td>wp-cli sidecars</td><td><code>wordpress:cli-php8.1</code> (unchanged)</td><td>Vulnerable binary, but not reachable over HTTP</td><td>n/a</td></tr>
-    <tr><td>Kibana (SIEM host)</td><td><code>kibana:8.17.3</code>, bundled Node 20.18.2</td><td>n/a</td><td><strong>Vulnerable runtime</strong>, but Brotli request bodies are not decoded (<a href="#kibana">verified</a>)</td></tr>
-    <tr><td>Pool manager, dashboard</td><td>Python 3.12</td><td>n/a</td><td>No Python <code>brotli</code> package installed</td></tr>
-    <tr><td>Database</td><td><code>mysql:5.7</code></td><td>n/a</td><td>n/a (EOL, but only on internal networks)</td></tr>
+    <tr><td>Edge (<code>openresty/openresty:1.31.1.1-5-alpine</code>)</td><td>OpenResty 1.31.1.1, OpenSSL 3.5.9</td><td>Not affected: no PHP</td><td>Not affected: no Node, no Brotli module, nginx doesn't decompress request bodies</td></tr>
+    <tr><td>Production storefront</td><td><code>presshaven/wordpress:7.1.3-php8.4-hardened</code> (built from <code>wordpress:7.1.3-php8.4-apache</code> by digest): PHP 8.4.27, Apache 2.4.69, <code>mod_php</code> prefork</td><td><strong>Patched.</strong> The <a href="#old">hardened image</a> and the <a href="#guard">body guard</a> stay as defence in depth</td><td>n/a</td></tr>
+    <tr><td>Decoy pools (<code>honeypot_eshop_N</code> and pool_manager's runtime pools)</td><td>Same hardened image as production</td><td>Patched, same extra layers</td><td>n/a</td></tr>
+    <tr><td>wp-cli sidecars</td><td><code>wordpress:cli-2.12.0-php8.4</code></td><td>Patched (PHP 8.4.27), and not reachable over HTTP anyway</td><td>n/a</td></tr>
+    <tr><td>Kibana (SIEM host)</td><td><code>kibana:9.5.5</code>, bundled Node 24.21.0</td><td>n/a</td><td><strong>Vulnerable runtime</strong> (fix is 24.22.1, no Kibana release ships it yet), but Brotli request bodies are not decoded (<a href="#kibana">verified</a>)</td></tr>
+    <tr><td>Pool manager, dashboard</td><td>Python 3.15 (pool manager), 3.12 (dashboard)</td><td>n/a</td><td>No Python <code>brotli</code> package installed</td></tr>
+    <tr><td>Database</td><td><code>mysql:8.4.13</code> (LTS)</td><td>n/a</td><td>n/a (internal networks only)</td></tr>
   </table>
-  <p>The stock PHP settings made it worse, which is what the hardened image changes. <code>memory_limit=128M</code>
+  <p>Before the upgrade, the stock PHP settings made it worse, which is what the hardened image changes. <code>memory_limit=128M</code>
   is easy to reach while parsing, and <code>session.upload_progress.enabled=1</code> exposes the upload-progress
   path. <code>disable_functions</code> is empty, so a working exploit gets a shell immediately. And the edge keeps
   up to 512 idle keepalive connections to production, so requests from different clients are served one after
@@ -125,34 +124,43 @@ const toc = [
   </ul>
 
   <h2 id="now">Do This Now</h2>
-  <p>Patching is the fix. The rest of the page explains how to stay safe until it's done.</p>
+  <p>Patching is the fix, and PressHaven has now done it. This is what the upgrade involved, for deployments
+  still on the old images:</p>
   <ol>
-    <li><strong>Move every WordPress service off PHP 8.1.</strong> In <code>ids/docker-compose.yml</code>,
-    change <code>wordpress:6.8.3-php8.1</code> (production and every <code>honeypot_eshop_N</code>) and
-    <code>wordpress:cli-php8.1</code> to a <code>-php8.3</code> or <code>-php8.4</code> tag whose PHP is at least
-    8.3.36 or 8.4.27. Pin it by digest (<code>image: wordpress@sha256:…</code>) after checking
-    <code>docker run --rm &lt;image&gt; php -v</code>. Roll it through a pool first, using the
-    <a href="/docs/ai-defense/hardening#updates">pool-first path</a>.</li>
-    <li><strong>Upgrade Kibana.</strong> Raise <code>STACK_VERSION</code> in <code>siem/docker/.env</code> to an
-    Elastic release whose bundled Node is at least 22.23.4. Check with
-    <code>docker run --rm --entrypoint /usr/share/kibana/node/bin/node &lt;image&gt; -v</code>. Elasticsearch
-    and Kibana must stay on the same version.</li>
+    <li><strong>Move every WordPress service off PHP 8.1.</strong> The hardened image is now built from
+    <code>wordpress:7.1.3-php8.4-apache</code> (pinned by digest) and the wp-cli sidecars use
+    <code>wordpress:cli-2.12.0-php8.4</code>. Check any tag with <code>docker run --rm &lt;image&gt; php -v</code>
+    (at least 8.3.36 or 8.4.27). Roll it through a pool first, using the
+    <a href="/docs/ai-defense/hardening#updates">pool-first path</a>, then run
+    <code>scripts/update_wordpress.sh --apply</code> to migrate the database.</li>
+    <li><strong>Upgrade MySQL with it.</strong> 5.7 goes to 8.0 and then 8.4 in place (one LTS step at a time,
+    after a dump). The servers keep <code>mysql_native_password</code>
+    (<code>--mysql-native-password=ON --authentication-policy=mysql_native_password</code>) because the
+    MariaDB-based clients in the wp-cli and Alpine images can't load <code>caching_sha2_password</code>. 8.4 is
+    the last series where that works; plan the client switch before 9.x.</li>
+    <li><strong>Upgrade Kibana.</strong> Elasticsearch and Kibana go 8.17.3 → 8.19.23 (Upgrade Assistant clean) →
+    9.5.5, always on the same version. Check the bundled Node with
+    <code>docker run --rm --entrypoint /usr/share/kibana/node/bin/node &lt;image&gt; -v</code>. 9.5.5 bundles
+    24.21.0, which is supported but not yet patched, so the <a href="#kibana">Kibana controls</a> still apply.</li>
     <li><strong>Keep the interim layers after upgrading.</strong> The <a href="#old">hardened image</a>'s
     settings and the <a href="#guard">body guard</a> also cover the next parser bug, not just this one. Rebase
     <code>images/wordpress_hardened/Dockerfile</code> onto the new tag rather than dropping it.</li>
   </ol>
 
   <h2 id="old">If You Must Stay on Old PHP or Node</h2>
-  <p>PressHaven stays on PHP 8.1 deliberately, to show how far mitigation goes without a patched binary. All
-  WordPress services in both compose files, and pool_manager's runtime pools (<code>POOL_WORDPRESS_IMAGE</code>),
-  run <code>presshaven/wordpress:6.8.3-php8.1-hardened</code>, built from
-  <code>ids/images/wordpress_hardened/</code>. It is the official image, pinned by digest, plus three files:</p>
+  <p>PressHaven stayed on PHP 8.1 for the first weeks of Black October deliberately, to show how far mitigation
+  goes without a patched binary. The same layer now sits on top of patched PHP 8.4. All WordPress services in
+  both compose files, and pool_manager's runtime pools (<code>POOL_WORDPRESS_IMAGE</code>), run
+  <code>presshaven/wordpress:7.1.3-php8.4-hardened</code>, built from <code>ids/images/wordpress_hardened/</code>.
+  It is the official image, pinned by digest, plus three files. On an unpatched PHP, use them as shown; the
+  <code>memory_limit</code> line below is the unpatched setting:</p>
   <pre><code># /etc/apache2/conf-available/php-black-october.conf  (enabled)
 # php_admin_*: web SAPI only, and neither .htaccess nor ini_set() can undo it
 &lt;IfModule mod_php.c&gt;
     # 109618: parsing can't stop half-way at memory_limit. The container's
     # cgroup mem_limit (1024m) is the real cap: an OOM-killed child, not a
     # corrupted heap.
+    # (On the patched 8.4 image this is back to 512M.)
     php_admin_value memory_limit -1
     # 109619: close the upload-progress path
     php_admin_flag session.upload_progress.enabled off
@@ -177,7 +185,7 @@ KeepAlive Off
 expose_php = Off</code></pre>
   <ul>
     <li><strong>Verified on the running containers.</strong> Through Apache, PHP reports
-    <code>memory_limit=-1</code>, upload progress off and nesting 16; <code>ini_set()</code> can't change them;
+    <code>memory_limit=-1</code> (on 8.1; 512M on 8.4), upload progress off and nesting 16; <code>ini_set()</code> can't change them;
     every request gets a new child PID; responses carry <code>Connection: close</code> and no
     <code>X-Powered-By</code>. The PHP CLI (WP-Cron, wp-cli) keeps the stock settings.</li>
     <li><strong>One request per child closes the cross-request window.</strong> The parent never serves a
@@ -190,7 +198,8 @@ expose_php = Off</code></pre>
     <code>pull_policy: build</code> and every other service uses <code>pull_policy: never</code>, so a Docker
     Hub image squatting the same name is never pulled. pool_manager uses <code>containers.create()</code>,
     which fails instead of pulling.</li>
-    <li><strong>Node.</strong> No setting makes Node 20's Brotli decoder safe. The interim control is
+    <li><strong>Node.</strong> No setting makes an unpatched Brotli decoder safe (Node 20, or the 24.21.0
+    inside Kibana 9.5.5). The interim control is
     <em>reachability</em>: no untrusted Brotli may reach Kibana (see <a href="#kibana">Protecting
     Kibana</a>).</li>
   </ul>
@@ -268,12 +277,14 @@ rewrite_by_lua_block &#123;
   <h2 id="kibana">Protecting Kibana (Node2Shell)</h2>
   <p>
     Kibana is less exposed than the storefront. It runs on the SIEM host, behind the firewall, and only analysts
-    should reach it. It was also checked directly on 8.17.3: Kibana's HTTP server registers its Brotli decoder
+    should reach it. It was also checked directly on 8.17.3, and again on 9.5.5 (where
+    <code>POST /api/saved_objects/_bulk_get</code> answers 200 for identity and gzip bodies and 400 for the same
+    body sent as <code>br</code>): Kibana's HTTP server registers its Brotli decoder
     only when <code>server.compression.brotli.enabled</code> is set (default off), and even then doesn't
     decompress request bodies. A <code>Content-Encoding: br</code> body is parsed raw, while the same body with
     <code>gzip</code> is decompressed and rejected, so attacker Brotli never reaches the vulnerable decoder. The
     SIEM VM has no internet route and <code>TELEMETRY_ENABLED=false</code>, which removes Brotli
-    <em>responses</em> too. Keep it that way until <code>STACK_VERSION</code> is upgraded:
+    <em>responses</em> too. Keep it that way until a Kibana release bundles Node 24.22.1 or later:
   </p>
   <ul>
     <li><strong>Don't enable Brotli.</strong> Leave <code>server.compression.brotli.enabled</code> unset.</li>
@@ -309,11 +320,12 @@ rewrite_by_lua_block &#123;
   <p>The other Black October incidents don't touch PressHaven's code, but they apply to how it's deployed:</p>
   <ul>
     <li><strong>Pin images by digest.</strong> The LiteLLM attack shipped through ordinary version tags.
-    PressHaven still uses floating tags in places (<code>openresty/openresty:alpine</code>,
-    <code>alpine:latest</code>, <code>jasonish/suricata:latest</code>). Pin them by digest, and update the
-    digest deliberately through the pool-first path.</li>
-    <li><strong>Check what's inside an image, not just its tag.</strong> <code>wordpress:6.8.3</code> sounds
-    current while it bundles an end-of-life PHP, and <code>kibana:8.17.3</code> bundles an end-of-life Node. Add
+    PressHaven's former floating tags (<code>openresty/openresty:alpine</code>, <code>alpine:latest</code>,
+    <code>jasonish/suricata:latest</code>) are now exact versions. The next step is pinning them by digest, as
+    the hardened WordPress base already is, and updating the digest deliberately through the pool-first path.</li>
+    <li><strong>Check what's inside an image, not just its tag.</strong> <code>wordpress:6.8.3</code> sounded
+    current while it bundled an end-of-life PHP, and even the current <code>kibana:9.5.5</code> bundles a Node
+    below the fix. Add
     <code>php -v</code> and <code>node -v</code> checks to your update review.</li>
     <li><strong>Trust stores change too.</strong> After a CA compromise like eMudhra's, rebuilding images
     refreshes their CA bundles. The SIEM's mTLS channel uses its own private CA, so it doesn't depend on the
@@ -326,10 +338,11 @@ rewrite_by_lua_block &#123;
   settings can't be undone from <code>.htaccess</code> or plugin code. Quarantine keeps deception's benefits
   without running the exploit. The guard's checks describe legitimate storefront bodies rather than this one
   CVE, so they also cover the next parser bug.</p>
-  <p><strong>Limitations:</strong> Production and every pool still run a vulnerable, end-of-life PHP binary, and
-  Kibana runs end-of-life Node. Legitimate multipart (media uploads, checkout file fields) still reaches PHP and
+  <p><strong>Limitations:</strong> PHP is now patched, but Kibana's bundled Node is not, so its protection is
+  still reachability alone. Legitimate multipart (media uploads, checkout file fields) still reaches PHP and
   relies on the per-part limits. The guard parses bodies the way PHP <em>should</em> parse them, and a parser
-  differential between the two could evade it. <code>memory_limit=-1</code> trades RCE for possible
-  memory-exhaustion DoS, bounded by the container's <code>mem_limit</code>. A route-based multipart allowlist
-  would narrow it further but isn't implemented. None of this replaces upgrading.</p>
+  differential between the two could evade it. On unpatched PHP, <code>memory_limit=-1</code> trades RCE for
+  possible memory-exhaustion DoS, bounded by the container's <code>mem_limit</code>. A route-based multipart allowlist
+  would narrow it further but isn't implemented. None of this replaces upgrading, which is why the project
+  upgraded too.</p>
 </DocsLayout>

@@ -142,11 +142,14 @@ services:
       # server on the same port answers "/" with 200 OK and every API with
       # 503 -- this check used to accept that 200, so (probing every 2 s
       # during start_period) Kibana was marked healthy before it could
-      # import anything, and kibana_dashboards_setup ran too early.
+      # import anything, and kibana_dashboards_setup ran too early. Matches
+      # the status code, not the status line: Kibana 9 speaks HTTP/2 over TLS
+      # ("HTTP/2 302", no reason phrase), so the old "HTTP/1.1 302 Found"
+      # grep never matched and Kibana stayed "starting" forever.
       test:
         [
           "CMD-SHELL",
-          "curl -sI --cacert config/certs/ca/ca.crt https://kibana:5601 | grep -q \"HTTP/1\\.1 302 Found\""
+          "test \"$$(curl -s -o /dev/null -w '%{http_code}' --cacert config/certs/ca/ca.crt https://kibana:5601)\" = 302"
         ]
       interval: 30s
       timeout: 10s
@@ -187,7 +190,9 @@ services:
   # object keyed by the exact running version string (e.g. "8.17.3"), so an
   # exported copy silently stops applying the moment STACK_VERSION changes
   # -- confirmed live via `GET _find?type=config`. Setting it explicitly
-  # here is version-independent.
+  # here is version-independent. Kibana 9 made the settings API internal
+  # ("exists but is not available with the current configuration" without
+  # x-elastic-internal-origin, the header Kibana's own UI sends).
   #
   # Robust against a Kibana that is up but not ready: it waits for
   # /api/status to report "available", retries the import until Kibana
@@ -214,8 +219,8 @@ services:
         do echo "$$out" | head -c 400; echo; n=$$((n+1)); [ $$n -ge 24 ] && { echo "Import was never accepted"; exit 1; }; echo "Retrying import in 5 s..."; sleep 5; done;
         echo "$$out" | grep -o "\"successCount\":[0-9]*";
         echo "Setting default landing page to the Web Traffic & Threat Overview dashboard...";
-        api -H "Content-Type: application/json" -X POST "https://kibana:5601/api/kibana/settings/defaultRoute" \
-          -d "{\"value\": \"/app/dashboards#/view/dashboard-web-threat-overview\"}" >/dev/null || echo "WARNING: could not set the default route";
+        api -H "Content-Type: application/json" -H "x-elastic-internal-origin: Kibana" -X POST "https://kibana:5601/api/kibana/settings" \
+          -d "{\"changes\": {\"defaultRoute\": \"/app/dashboards#/view/dashboard-web-threat-overview\"}}" >/dev/null || echo "WARNING: could not set the default route";
         ids=$$(grep -o "\"id\": *\"dashboard-[^\"]*\"" /data/honeypot-dashboards.ndjson | sed "s/.*\"\\(dashboard-[^\"]*\\)\"/\\1/" | sort -u);
         [ -n "$$ids" ] || { echo "No dashboard ids found in the NDJSON"; exit 1; };
         missing=0;

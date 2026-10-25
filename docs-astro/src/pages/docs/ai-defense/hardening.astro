@@ -104,8 +104,9 @@ const toc = [
     individual plugins, so an AI-era advisory for one plugin can be rolled out in minutes with a tested
     rollback (the engine's <a href="/docs/engine#backups">backups</a>), not deferred for weeks.</li>
   </ol>
-  <p>The same applies to the runtime under WordPress. Images pin a PHP branch (<code>-php8.1</code>) and Kibana
-  bundles its own Node, and both can reach end of life while the tag still looks current. The
+  <p>The same applies to the runtime under WordPress. Images pin a PHP branch (<code>-php8.4</code>, previously
+  <code>-php8.1</code>) and Kibana bundles its own Node, and either can fall behind a fix while the tag still
+  looks current. The
   <a href="/docs/ai-defense/black-october">Black October case study</a> shows what that costs.</p>
   <p>Hardening and allowlisting decide <em>whether</em> a shop survives the gap between disclosure and
   patch. Pool-first updates shrink the gap.</p>

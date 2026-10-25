@@ -70,9 +70,9 @@ _BOOKMARKS = [
     ("Discover", "/app/discover"),
 ]
 
-# Kibana's login form (x-pack security plugin, stable across 7.x/8.x) uses
+# Kibana's login form (x-pack security plugin, stable across 7.x-9.x) uses
 # these data-test-subj attributes on its username/password inputs and
-# submit button -- confirmed live against this repo's own Kibana 8.17.3.
+# submit button -- confirmed against this repo's own Kibana 8.17.3 and 9.5.5.
 # React controls these inputs, so a plain `input.value = x` doesn't stick
 # (React's onChange never fires) -- setNativeValue() below is the standard
 # workaround: call the native <input> value setter (bypassing React's
