@@ -636,6 +636,47 @@ services:
     cpus: "1.0"
     pids_limit: 100
 
+  # Sets the decoy admin account in the honeypot database. honeypot_db_init's
+  # scrub replaces wp_users with placeholder accounts, so without this the
+  # honeypot side had an admin password nobody knew. Same user name and e-mail
+  # as production, but HONEYPOT_WP_ADMIN_PASSWORD -- never production's (see
+  # .env). ADMIN_ONLY=1: nothing else is seeded or reconfigured. HONEYPOT_LAYER
+  # is deliberately unset, so wp-content/db.php stays inactive and wp-cli talks
+  # to WORDPRESS_DB_HOST below rather than routing to production.
+  honeypot_admin_seed:
+    logging: *default-logging
+    image: wordpress:cli-2.12.0-php8.4
+    user: root
+    depends_on:
+      honeypot_db_init:
+        condition: service_completed_successfully
+    environment:
+      - WORDPRESS_DB_HOST=honeypot_database:3306
+      - WORDPRESS_DB_NAME=production_database
+      - WORDPRESS_DB_USER=production_user
+      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+      - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
+      - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
+      - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
+      - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
+      - WP_SITE_TITLE=${WP_SITE_TITLE:-Fernhill Coffee Roasters}
+      - ADMIN_ONLY=1
+    volumes:
+      - ./production_eshop_files:/var/www/html:ro
+      - ./scripts/seed_wordpress_db.sh:/seed_wordpress_db.sh:ro
+    networks:
+      - honeypot_network
+    command: ["sh", "/seed_wordpress_db.sh"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+    mem_limit: 512m
+    cpus: "1.0"
+    pids_limit: 100
+
   # The single honeypot database (a scrubbed clone of production, see
   # honeypot_db_init). Own volume, not shared with the default layer's pools.
   honeypot_database:

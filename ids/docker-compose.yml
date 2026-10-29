@@ -485,7 +485,9 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
-      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD:-change_this_wp_admin_password}
+      # Runtime pools are decoys: their admin gets this password, not production's
+      # (which pool_manager therefore isn't given at all).
+      - HONEYPOT_WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
       - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
       - WP_SITE_TITLE=${WP_SITE_TITLE:-Fernhill Coffee Roasters}
@@ -853,7 +855,8 @@ services:
       - WORDPRESS_DB_USER=production_user
       - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
-      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD:-change_this_wp_admin_password}
+      # Decoy admin password, deliberately different from production's (see .env).
+      - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
       # Deliberately identical to production_db_seed's WP_SITE_URL, not a
       # pool-specific one -- pool_router.lua's whole premise is that an
@@ -923,7 +926,8 @@ services:
       - WORDPRESS_DB_USER=production_user
       - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD_POOL_2}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
-      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD:-change_this_wp_admin_password}
+      # Decoy admin password, deliberately different from production's (see .env).
+      - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
       - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
       - WP_SITE_TITLE=${WP_SITE_TITLE:-Fernhill Coffee Roasters}
@@ -979,7 +983,8 @@ services:
       - WORDPRESS_DB_USER=production_user
       - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD_POOL_3}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
-      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD:-change_this_wp_admin_password}
+      # Decoy admin password, deliberately different from production's (see .env).
+      - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
       - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
       - WP_SITE_TITLE=${WP_SITE_TITLE:-Fernhill Coffee Roasters}

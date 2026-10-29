@@ -13,6 +13,8 @@
 #   * php-black-october.conf  -- PHP settings that remove the trigger paths
 #   * mpm-black-october.conf  -- one request per Apache child, so no request
 #                                ever runs on a worker an earlier one touched
+#   * healthprobe-log.conf    -- the edge's own health probes are not written
+#                                to the access log (not a security setting)
 # The edge's body guard (reverse_proxy_enhanced/lua/body_guard_rules.lua)
 # strips the request bodies these exploits need before they reach Apache.
 FROM wordpress:7.1.3-php8.4-apache@sha256:edbfa4a140f7c5950435f5737538ad83d25af4661b74b990d7ec1eff3bec99a8
@@ -20,5 +22,9 @@ FROM wordpress:7.1.3-php8.4-apache@sha256:edbfa4a140f7c5950435f5737538ad83d25af4
 COPY php-black-october.conf /etc/apache2/conf-available/php-black-october.conf
 COPY mpm-black-october.conf /etc/apache2/conf-available/mpm-black-october.conf
 COPY php-black-october.ini /usr/local/etc/php/conf.d/zz-black-october.ini
-RUN a2enconf php-black-october mpm-black-october \
+COPY healthprobe-log.conf /etc/apache2/conf-available/healthprobe-log.conf
+RUN a2enconf php-black-october mpm-black-october healthprobe-log \
+ && sed -i 's#^\(\s*CustomLog \${APACHE_LOG_DIR}/access.log combined\)$#\1 env=!healthprobe#' \
+        /etc/apache2/sites-available/000-default.conf \
+ && grep -q 'env=!healthprobe' /etc/apache2/sites-available/000-default.conf \
  && apache2ctl -t

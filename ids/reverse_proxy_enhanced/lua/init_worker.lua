@@ -6,12 +6,6 @@ local suricata_rules = require "suricata_rules"
 local threat_intel = require "threat_intel"
 
 -- Try to load optional modules
-local http_ok, http = pcall(require, "resty.http")
-if not http_ok then
-    ngx.log(ngx.WARN, "lua-resty-http not available, connection pre-warming will be disabled")
-    http = nil
-end
-
 local health_check_ok, health_check = pcall(require, "health_check")
 if not health_check_ok then
     ngx.log(ngx.WARN, "health_check module not available, health checks will be disabled")
@@ -33,85 +27,13 @@ local function init_worker()
         return { 1, 2, 3 }
     end
 
-    -- Pre-warm connection pools to prevent 503 on first requests
-    local function prewarm_connections()
-        if not http or not health_check then
-            ngx.log(ngx.WARN, "[PREWARM] Required modules not available, skipping pre-warming")
-            return
-        end
-        
-        ngx.log(ngx.DEBUG, "[PREWARM] Starting connection pool pre-warming for worker ", ngx.worker.id())
-        
-        -- Ready honeypot pools (static ones from docker-compose.yml plus any
-        -- pool_manager has created); see pool_router.get_pool_ids().
-        local pool_ids = current_pool_ids()
-
-        -- Wait for production backend first (critical path).
-        local production_ready = health_check.wait_for_backend(
-            "production_backend", "http://production_eshop", 30)
-        if not production_ready then
-            ngx.log(ngx.ERR, "[PREWARM] Production backend not ready, pre-warming may fail")
-        end
-
-        -- Wait for each honeypot pool backend independently so that one slow
-        -- instance does not block pre-warming of the others.
-        local pool_ready = {}
-        local total_ok, total_failed = 0, 0
-        for _, i in ipairs(pool_ids) do
-            local svc      = "honeypot_eshop_" .. i
-            local upstream = "honeypot_backend_" .. i
-            pool_ready[i]  = health_check.wait_for_backend(upstream, "http://" .. svc, 30)
-            if not pool_ready[i] then
-                ngx.log(ngx.WARN,
-                    "[PREWARM] Honeypot pool ", i, " (", svc, ") not ready – ",
-                    "pre-warming skipped for this pool")
-            end
-        end
-
-        -- Pre-warm production backend connections (more connections – high traffic).
-        if production_ready then
-            local success, failed = health_check.prewarm_backend_connections(
-                "production_backend",
-                "http://production_eshop",
-                20  -- 20 keepalive connections for the production instance
-            )
-            total_ok, total_failed = total_ok + success, total_failed + failed
-        end
-
-        -- Pre-warm each honeypot pool with a smaller connection budget.
-        -- Fewer connections per pool are needed because user traffic is a
-        -- fraction of total traffic and is spread across the pool instances.
-        for _, i in ipairs(pool_ids) do
-            if pool_ready[i] then
-                local svc      = "honeypot_eshop_" .. i
-                local upstream = "honeypot_backend_" .. i
-                local success, failed = health_check.prewarm_backend_connections(
-                    upstream,
-                    "http://" .. svc,
-                    5  -- 5 keepalive connections per pool instance
-                )
-                total_ok, total_failed = total_ok + success, total_failed + failed
-            end
-        end
-        
-        -- One summary line per worker, at INFO from worker 0 only (the others
-        -- at DEBUG unless a connection failed): per-backend INFO lines from
-        -- every worker came to ~160 lines per start on a 20-core host.
-        local level = total_failed > 0 and ngx.WARN or (ngx.worker.id() == 0 and ngx.INFO or ngx.DEBUG)
-        ngx.log(level, "[PREWARM] Connection pre-warming completed for worker ", ngx.worker.id(),
-            ": ", total_ok, " connections established, ", total_failed, " failed")
-    end
-    
-    -- Schedule pre-warming after a short delay to let services start
-    local ok, err = ngx.timer.at(3, function()
-        local success, err = pcall(prewarm_connections)
-        if not success then
-            ngx.log(ngx.ERR, "[PREWARM] Connection pre-warming failed: ", err)
-        end
-    end)
-    if not ok then
-        ngx.log(ngx.ERR, "Failed to schedule connection pre-warming: ", err)
-    end
+    -- No connection pre-warming. It used to open 20 keepalive connections to
+    -- production (5 per pool) from EVERY worker at start-up and on every
+    -- reload -- a burst of a few hundred `HEAD /robots.txt` lines in the
+    -- eshop logs -- but the hardened WordPress image runs KeepAlive Off and
+    -- one request per Apache child (mpm-black-october.conf), so each warmed
+    -- connection was closed the moment it was answered and nothing stayed
+    -- warm. Worker 0's periodic health check below is the only probe now.
     
     -- Set up periodic tasks only in worker 0 to avoid duplication
     if ngx.worker.id() == 0 then

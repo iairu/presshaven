@@ -170,7 +170,10 @@ class WpStudioPage(QWidget):
         self._pool_rows: list[_PoolRow] = []
         self._run_t0 = 0.0
         self._eta = EtaTracker()
-        self._secret_cache: str | None = None
+        self._env_cache = None
+        # One automatic sign-in per visit to the login form: set when the
+        # form is submitted, cleared once any other page loads.
+        self._autologin_pending = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -225,6 +228,7 @@ class WpStudioPage(QWidget):
         self.browser = BrowserWidget(wp_studio.studio_url(_edge_host(self.state)),
                                      profile_name="wp-studio")
         self.browser.profile.setUrlRequestInterceptor(self._interceptor)
+        self.browser.view.loadFinished.connect(self._maybe_autologin)
         root.addWidget(self.browser, stretch=1)
 
         if not self._internal_secret():
@@ -242,19 +246,48 @@ class WpStudioPage(QWidget):
     def _target(self):
         return target_for("edge", self.state)
 
+    def _edge_env(self):
+        """The edge stack's .env (cached; anything with .get). Empty if unreadable."""
+        if self._env_cache is None:
+            try:
+                self._env_cache = load_project_env("edge", self._target().remote)
+            except EnvUploadError:
+                self._env_cache = {}
+        return self._env_cache
+
     def _internal_secret(self) -> str:
-        """The edge INTERNAL_TEST_SECRET (cached). Empty string if unreadable --
-        the page degrades to an un-pinned admin panel and warns."""
-        if self._secret_cache is not None:
-            return self._secret_cache
-        secret = ""
-        try:
-            env = load_project_env("edge", self._target().remote)
-            secret = env.get("INTERNAL_TEST_SECRET", "").strip()
-        except EnvUploadError:
-            secret = ""
-        self._secret_cache = secret
-        return secret
+        """The edge INTERNAL_TEST_SECRET. Empty string if unreadable -- the
+        page degrades to an un-pinned admin panel and warns."""
+        return (self._edge_env().get("INTERNAL_TEST_SECRET", "") or "").strip()
+
+    def _maybe_autologin(self, ok: bool) -> None:
+        """Sign in with the production admin account (WP_ADMIN_USER /
+        WP_ADMIN_PASSWORD from the edge .env) when wp-login.php shows up.
+        Only while the browser is pinned to production: unpinned, the edge may
+        route the login into a honeypot, which would record the real password."""
+        url = self.browser.view.url().toString()
+        home = wp_studio.studio_url(_edge_host(self.state))
+        if not ok or not wp_studio.is_login_form(url, home):
+            self._autologin_pending = False
+            return
+        login = wp_studio.admin_login(self._edge_env())
+        if login is None or not self._internal_secret():
+            return
+        if self._autologin_pending:
+            # Back on the form after our submit: report a rejection, never retry.
+            self.browser.page.runJavaScript(wp_studio.AUTOLOGIN_ERROR_PROBE,
+                                            self._on_autologin_result)
+            return
+        self._autologin_pending = True
+        self.browser.page.runJavaScript(wp_studio.autologin_script(login),
+                                        self._on_autologin_result)
+
+    def _on_autologin_result(self, result) -> None:
+        if result == wp_studio.AUTOLOGIN_REJECTED:
+            self.error_banner.show_message(
+                "Automatic sign-in was rejected: WP_ADMIN_USER / WP_ADMIN_PASSWORD "
+                "in the edge .env don't match production. Sign in by hand, or run "
+                "production_db_seed to re-apply the account.")
 
     def _build_policy_panel(self) -> QWidget:
         """Two columns: what an edit carries to every pool, and what never

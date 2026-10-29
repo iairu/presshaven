@@ -20,10 +20,10 @@ os.environ.setdefault("MYSQL_ROOT_PASSWORD", "x")
 import manager  # noqa: E402
 
 
-def _fake_volume(name, built):
+def _fake_volume(name, built, **labels):
     v = mock.MagicMock()
     v.name = name
-    v.attrs = {"Labels": {"honeypot.template.built": str(built)}}
+    v.attrs = {"Labels": {"honeypot.template.built": str(built), **labels}}
     return v
 
 
@@ -165,6 +165,15 @@ class WordPressBase(TemplateBase):
         self.mgr.host_paths.update({
             "/source_files": "/h/files", "/source_db": "/h/db", "/scripts": "/h/scripts"})
 
+    def _template_present(self, age_seconds=10.0, admin=None):
+        # The WordPress marker also records which decoy admin it was seeded with.
+        marker = self.mgr._template_marker_name()
+        if admin is None:
+            admin = manager.Manager._decoy_admin_fingerprint()
+        self.mgr.docker.volumes.list.return_value = [
+            _fake_volume(marker, manager.time.time() - age_seconds,
+                         **{"honeypot.template.admin": admin})]
+
 
 class ProvisionWordPressWithTemplate(WordPressBase):
     def test_pool_copies_template_and_skips_wpcli(self):
@@ -196,6 +205,40 @@ class ProvisionWordPressWithTemplate(WordPressBase):
         self.mgr.provision_wordpress(7)
         self.assertIn("WordPress seed", self.helpers)
         self.assertNotIn("copy template", self.helpers)
+
+
+class DecoyAdminAccount(WordPressBase):
+    """Pools are decoys: their admin password is HONEYPOT_WP_ADMIN_PASSWORD,
+    never production's, and a template seeded with an older one is rebuilt."""
+
+    def test_template_seeded_with_another_admin_is_stale(self):
+        self._template_present(admin="0000000000000000")
+        self.assertFalse(self.mgr._template_is_fresh())
+        self._template_present()
+        self.assertTrue(self.mgr._template_is_fresh())
+
+    def test_template_without_admin_label_is_stale(self):
+        marker = self.mgr._template_marker_name()
+        self.mgr.docker.volumes.list.return_value = [
+            _fake_volume(marker, manager.time.time() - 10)]
+        self.assertFalse(self.mgr._template_is_fresh())
+
+    def test_fingerprint_follows_the_decoy_password(self):
+        with mock.patch.dict(os.environ, {"HONEYPOT_WP_ADMIN_PASSWORD": "one"}):
+            a = manager.Manager._decoy_admin_fingerprint()
+        with mock.patch.dict(os.environ, {"HONEYPOT_WP_ADMIN_PASSWORD": "two"}):
+            b = manager.Manager._decoy_admin_fingerprint()
+        self.assertNotEqual(a, b)
+        self.assertNotIn("one", a)
+
+    def test_wpcli_seed_gets_the_decoy_password_not_productions(self):
+        runs = []
+        self.mgr._run_helper = lambda *a, **k: runs.append(k)
+        env = {"WP_ADMIN_PASSWORD": "production-secret",
+               "HONEYPOT_WP_ADMIN_PASSWORD": "decoy-secret"}
+        with mock.patch.dict(os.environ, env):
+            self.mgr._wordpress_cli_seed("honeypot_database_9", "files", {}, "dbpw", "WordPress seed")
+        self.assertEqual(runs[0]["environment"]["WP_ADMIN_PASSWORD"], "decoy-secret")
 
 
 class BuildWordPressTemplate(WordPressBase):

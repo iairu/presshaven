@@ -111,3 +111,64 @@ class PolicyConstantTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdminLoginTests(unittest.TestCase):
+    def test_reads_user_and_password(self):
+        login = wp_studio.admin_login({"WP_ADMIN_USER": " admin ", "WP_ADMIN_PASSWORD": "pw"})
+        self.assertEqual(login, wp_studio.AdminLogin("admin", "pw"))
+
+    def test_missing_either_value_disables_autologin(self):
+        self.assertIsNone(wp_studio.admin_login({"WP_ADMIN_USER": "admin"}))
+        self.assertIsNone(wp_studio.admin_login({"WP_ADMIN_PASSWORD": "pw"}))
+        self.assertIsNone(wp_studio.admin_login({}))
+
+    def test_never_uses_the_honeypot_password(self):
+        self.assertIsNone(wp_studio.admin_login(
+            {"WP_ADMIN_USER": "admin", "HONEYPOT_WP_ADMIN_PASSWORD": "decoy"}))
+
+
+class IsLoginFormTests(unittest.TestCase):
+    HOME = "https://shop.example/wp-admin/"
+
+    def test_login_redirect_on_studio_host(self):
+        self.assertTrue(wp_studio.is_login_form(
+            "https://shop.example/wp-login.php?redirect_to=%2Fwp-admin%2F&reauth=1", self.HOME))
+
+    def test_http_siteurl_redirect_on_same_host(self):
+        self.assertTrue(wp_studio.is_login_form("http://shop.example/wp-login.php", self.HOME))
+
+    def test_other_host_is_never_filled(self):
+        self.assertFalse(wp_studio.is_login_form("https://evil.example/wp-login.php", self.HOME))
+        self.assertFalse(wp_studio.is_login_form(
+            "https://shop.example.evil.example/wp-login.php", self.HOME))
+
+    def test_non_login_actions_and_explicit_logout_are_skipped(self):
+        for q in ("action=logout", "action=lostpassword", "action=rp", "loggedout=true"):
+            self.assertFalse(wp_studio.is_login_form(
+                f"https://shop.example/wp-login.php?{q}", self.HOME), q)
+        self.assertTrue(wp_studio.is_login_form(
+            "https://shop.example/wp-login.php?action=login", self.HOME))
+
+    def test_other_pages_are_not_login_forms(self):
+        self.assertFalse(wp_studio.is_login_form("https://shop.example/wp-admin/", self.HOME))
+        self.assertFalse(wp_studio.is_login_form("about:blank", self.HOME))
+
+
+class AutologinScriptTests(unittest.TestCase):
+    def test_values_are_json_escaped(self):
+        js = wp_studio.autologin_script(wp_studio.AdminLogin("ad'min", 'p"w</script>\\'))
+        self.assertIn('"ad\'min"', js)
+        self.assertIn('"p\\"w</script>\\\\"', js)
+
+    def test_does_not_resubmit_after_a_login_error(self):
+        js = wp_studio.autologin_script(wp_studio.AdminLogin("a", "b"))
+        self.assertLess(js.index("login_error"), js.index(".submit.call"))
+
+
+class AutologinErrorProbeTests(unittest.TestCase):
+    def test_probe_only_reads_the_page(self):
+        probe = wp_studio.AUTOLOGIN_ERROR_PROBE
+        self.assertIn("login_error", probe)
+        self.assertNotIn("submit", probe)
+        self.assertNotIn(".value", probe)

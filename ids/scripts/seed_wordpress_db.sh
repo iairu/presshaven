@@ -343,9 +343,78 @@ author_storefront_content() {
     $WP eval-file /seed_storefront_content.php || log "  WARNING: storefront content authoring failed -- continuing."
 }
 
+# ---------------------------------------------------------------------------
+# Main admin account: make WP_ADMIN_USER exist as an administrator with
+# WP_ADMIN_PASSWORD / WP_ADMIN_EMAIL from .env. `wp core install` only sets
+# it once, so without this an edited .env never reached an installed site,
+# and a pool cloned from production + scrubbed (honeypot migrations replace
+# wp_users with placeholder accounts) kept a password nobody knew. Runs on
+# every boot in one wp-cli call. The password is only rewritten when it
+# differs, because wp_set_password() also ends every session of that user
+# (the dashboard's WordPress Studio would be logged out on each restart).
+#
+# Honeypot seeds pass HONEYPOT_WP_ADMIN_PASSWORD here instead (see
+# docker-compose.yml), so decoys share the user name but never the password.
+# ---------------------------------------------------------------------------
+ensure_admin_account() {
+    $WP eval-file - <<'PHP' || log "  WARNING: could not apply the admin account from .env -- continuing."
+<?php
+$login = getenv( 'WP_ADMIN_USER' );
+$pass  = getenv( 'WP_ADMIN_PASSWORD' );
+$email = getenv( 'WP_ADMIN_EMAIL' );
+$user  = get_user_by( 'login', $login );
+if ( ! $user ) {
+    $id = wp_insert_user( [
+        'user_login' => $login,
+        'user_pass'  => $pass,
+        'user_email' => $email,
+        'role'       => 'administrator',
+    ] );
+    if ( is_wp_error( $id ) ) {
+        WP_CLI::error( 'admin account: ' . $id->get_error_message() );
+    }
+    WP_CLI::log( "  Admin account '$login' created" );
+    return;
+}
+$changed = [];
+if ( ! wp_check_password( $pass, $user->user_pass, $user->ID ) ) {
+    wp_set_password( $pass, $user->ID );
+    $changed[] = 'password';
+}
+if ( $email && strcasecmp( $user->user_email, $email ) !== 0 ) {
+    $res = wp_update_user( [ 'ID' => $user->ID, 'user_email' => $email ] );
+    if ( is_wp_error( $res ) ) {
+        WP_CLI::warning( 'admin e-mail not changed: ' . $res->get_error_message() );
+    } else {
+        $changed[] = 'e-mail';
+    }
+}
+if ( ! in_array( 'administrator', (array) $user->roles, true ) ) {
+    $user->set_role( 'administrator' );
+    $changed[] = 'role';
+}
+WP_CLI::log( $changed
+    ? "  Admin account '$login' updated: " . implode( ', ', $changed )
+    : "  Admin account '$login' already matches .env" );
+PHP
+}
+
+# ADMIN_ONLY=1: only apply the admin account (the db-proxy layer's
+# honeypot_admin_seed, whose database is a scrubbed clone that must not be
+# re-seeded or re-configured from here).
+if [ "${ADMIN_ONLY:-0}" = "1" ]; then
+    if $WP core is-installed 2>/dev/null; then
+        ensure_admin_account
+    else
+        log "ADMIN_ONLY=1 but WordPress is not installed in this database -- nothing to do."
+    fi
+    exit 0
+fi
+
 if $WP core is-installed 2>/dev/null; then
     if [ "${FORCE_RESEED:-0}" != "1" ]; then
         log "WordPress already installed -- skipping install (set FORCE_RESEED=1 to wipe and rebuild)."
+        ensure_admin_account
         # SKIP_STOREFRONT_CONFIG=1: the database was cloned from an already-
         # configured source (pool_manager cloning production for a runtime
         # pool), so permalinks, shipping and the enabled payment gateways are

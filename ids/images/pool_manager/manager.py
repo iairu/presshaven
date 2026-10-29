@@ -43,6 +43,8 @@ import sys
 import threading
 import time
 
+import hashlib
+import hmac
 import json
 
 import docker
@@ -639,10 +641,35 @@ class Manager:
                     return 0.0
         return None
 
+    def _template_marker_labels(self) -> dict:
+        name = self._template_marker_name()
+        for v in self.docker.volumes.list(filters={"name": name}):
+            if v.name == name:
+                return v.attrs.get("Labels") or {}
+        return {}
+
+    @staticmethod
+    def _decoy_admin_fingerprint() -> str:
+        """Identifies the decoy admin settings the WordPress template was seeded
+        with. Pools copied from the template skip wp-cli, so a changed
+        HONEYPOT_WP_ADMIN_PASSWORD (or user/e-mail) must rebuild it. Keyed HMAC,
+        not a plain hash, because volume labels are readable by anyone who can
+        list volumes."""
+        material = "\0".join((os.environ.get("WP_ADMIN_USER", "admin"),
+                               os.environ.get("HONEYPOT_WP_ADMIN_PASSWORD",
+                                              "change_this_honeypot_wp_admin_password"),
+                               os.environ.get("WP_ADMIN_EMAIL", "admin@example.com")))
+        return hmac.new(env_required("MYSQL_ROOT_PASSWORD").encode(), material.encode(),
+                        hashlib.sha256).hexdigest()[:16]
+
     def _template_is_fresh(self) -> bool:
-        """A usable template volume exists and is within POOL_TEMPLATE_TTL_SECONDS."""
+        """A usable template volume exists and is within POOL_TEMPLATE_TTL_SECONDS
+        (and, for the WordPress template, was seeded with the current decoy admin)."""
         built = self._template_built_at()
         if built is None:
+            return False
+        if MODE == "wordpress" and (self._template_marker_labels().get("honeypot.template.admin")
+                                    != self._decoy_admin_fingerprint()):
             return False
         return TEMPLATE_TTL_S <= 0 or time.time() - built < TEMPLATE_TTL_S
 
@@ -743,7 +770,8 @@ class Manager:
         finally:
             db.remove(force=True)
         self.docker.volumes.create(name=marker, labels={
-            "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}"})
+            "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}",
+            "honeypot.template.admin": self._decoy_admin_fingerprint()})
         log(f"WordPress pool template ready in {time.time() - started:.0f}s")
 
     def _enable_query_log(self, db) -> None:
@@ -883,7 +911,9 @@ class Manager:
                 "WORDPRESS_DB_HOST": f"{db_name}:3306", "WORDPRESS_DB_NAME": DB_NAME,
                 "WORDPRESS_DB_USER": DB_USER, "WORDPRESS_DB_PASSWORD": password,
                 "WP_ADMIN_USER": os.environ.get("WP_ADMIN_USER", "admin"),
-                "WP_ADMIN_PASSWORD": os.environ.get("WP_ADMIN_PASSWORD", "change_this_wp_admin_password"),
+                # A decoy's admin password, never production's (see .env).
+                "WP_ADMIN_PASSWORD": os.environ.get("HONEYPOT_WP_ADMIN_PASSWORD",
+                                                    "change_this_honeypot_wp_admin_password"),
                 "WP_ADMIN_EMAIL": os.environ.get("WP_ADMIN_EMAIL", "admin@example.com"),
                 "WP_SITE_URL": os.environ.get("WP_SITE_URL", "http://localhost"),
                 "WP_SITE_TITLE": os.environ.get("WP_SITE_TITLE", "Fernhill Coffee Roasters"),

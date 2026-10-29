@@ -7,6 +7,7 @@ pool. This module holds the parts of that worth testing without Qt or Docker:
   * which pools a propagation targets (ready pools, with a fixed fallback),
   * the exact `docker compose` command that mirrors production into one pool,
   * the headers/URL the embedded browser uses to stay pinned to production,
+  * the automatic wp-admin sign-in (which pages qualify, the form-fill script),
   * the human-readable policy (what propagates, what never does) shown in the
     page's info panel.
 
@@ -17,7 +18,9 @@ is no second copy of the "what is safe to copy" policy to drift out of sync.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlsplit
 
 # The honeypot_content_sync service mounts the replication script at this path
 # (see ids/docker-compose.yml). Running it with `--once N` syncs one pool now.
@@ -90,6 +93,89 @@ def studio_headers(secret: str | None) -> dict[str, str]:
     if secret:
         headers[INTERNAL_TEST_HEADER] = secret
     return headers
+
+
+@dataclass(frozen=True)
+class AdminLogin:
+    """The production WordPress admin account from the edge .env."""
+    user: str
+    password: str
+
+
+def admin_login(env) -> AdminLogin | None:
+    """WP_ADMIN_USER / WP_ADMIN_PASSWORD from the edge .env (any mapping with
+    .get), or None when either is missing -- the page then leaves sign-in to
+    the operator. Production's account only: honeypots use
+    HONEYPOT_WP_ADMIN_PASSWORD, and the studio browser is pinned to
+    production anyway."""
+    user = (env.get("WP_ADMIN_USER", "") or "").strip()
+    password = env.get("WP_ADMIN_PASSWORD", "") or ""
+    if not user or not password:
+        return None
+    return AdminLogin(user, password)
+
+
+# wp-login.php actions that show the sign-in form. Everything else (logout,
+# lostpassword, rp, register, confirmaction, ...) is left alone.
+_LOGIN_ACTIONS = {"", "login"}
+
+
+def is_login_form(url: str, studio_home: str) -> bool:
+    """Whether `url` is the wp-login.php sign-in form on the studio's own host,
+    i.e. where an automatic sign-in may fill in the password. The host must
+    match the studio's (scheme may differ: WordPress redirects to its http
+    siteurl), so the password is never typed into another site the operator
+    browsed to. Skipped after an explicit log-out (?loggedout=true), so
+    "Log Out" isn't undone immediately."""
+    try:
+        u, home = urlsplit(url), urlsplit(studio_home)
+    except ValueError:
+        return False
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return False
+    if (u.hostname or "").lower() != (home.hostname or "").lower():
+        return False
+    if not u.path.endswith("/wp-login.php"):
+        return False
+    q = parse_qs(u.query)
+    if q.get("action", [""])[0] not in _LOGIN_ACTIONS:
+        return False
+    return q.get("loggedout", [""])[0] != "true"
+
+
+# Result strings autologin_script() returns to the page's callback.
+AUTOLOGIN_SUBMITTED = "submitted"
+AUTOLOGIN_REJECTED = "rejected"   # WordPress showed #login_error after our attempt
+AUTOLOGIN_NO_FORM = "no-form"
+
+# Read-only check run when the form comes back after a submit: reports
+# AUTOLOGIN_REJECTED if WordPress shows a login error, and touches nothing.
+AUTOLOGIN_ERROR_PROBE = ("document.getElementById('login_error') ? %s : %s"
+                         % (json.dumps(AUTOLOGIN_REJECTED), json.dumps(AUTOLOGIN_NO_FORM)))
+
+
+def autologin_script(login: AdminLogin) -> str:
+    """JavaScript that fills wp-login.php's form and submits it once. Returns
+    one of the AUTOLOGIN_* strings. If WordPress is already showing a login
+    error the form is not resubmitted, so a wrong password in .env costs one
+    failed attempt, not a loop (and never trips a lockout plugin)."""
+    return """(function () {
+  var f = document.getElementById('loginform');
+  var u = document.getElementById('user_login');
+  var p = document.getElementById('user_pass');
+  if (!f || !u || !p) { return %(no_form)s; }
+  if (document.getElementById('login_error')) { return %(rejected)s; }
+  u.value = %(user)s;
+  p.value = %(password)s;
+  var r = document.getElementById('rememberme');
+  if (r) { r.checked = true; }
+  HTMLFormElement.prototype.submit.call(f);
+  return %(submitted)s;
+})();""" % {
+        "user": json.dumps(login.user), "password": json.dumps(login.password),
+        "no_form": json.dumps(AUTOLOGIN_NO_FORM), "rejected": json.dumps(AUTOLOGIN_REJECTED),
+        "submitted": json.dumps(AUTOLOGIN_SUBMITTED),
+    }
 
 
 def ready_pools(remote, *, timeout: float = 10.0) -> list[int]:
