@@ -12,24 +12,25 @@
 #   test: it verifies the pooling architecture's own isolation guarantee
 #   holds, independent of any specific attack.
 #
-#   BACKGROUND: all honeypot_eshop_N containers share one flat
-#   honeypot_network and can reach every honeypot_database_N over TCP (see
-#   Phase 2b below) -- there is no network-level segmentation between pools.
-#   Isolation therefore depends entirely on each pool's MySQL user having a
-#   DIFFERENT password. Until this was fixed, all three pools (and
-#   production) shared the same MYSQL_PASSWORD, so a compromised pool could
-#   authenticate directly into another adversary's pool database -- see
-#   docker-compose.yml's honeypot_database_N block and MYSQL_PASSWORD_POOL_2/
-#   MYSQL_PASSWORD_POOL_3 in .env.
+#   BACKGROUND: all honeypot pools share one honeypot_network. Isolation
+#   between them has two layers: (1) each pool's MySQL user has a DIFFERENT
+#   password (until this was fixed, all three pools and production shared
+#   MYSQL_PASSWORD, so a compromised pool could log into another adversary's
+#   pool database -- see honeypot_database_N in docker-compose.yml and
+#   MYSQL_PASSWORD_POOL_2/3 in .env); (2) each pool's container firewall
+#   (honeypot_eshop_N_net, honeypot profile) only lets it open connections to
+#   its OWN database. Phase 2 reports which layer currently stops a cross-pool
+#   connection; Phase 3 passes on either, and keeps catching a regression of
+#   the password layer whenever the firewall is off.
+#   The firewall side is tested in full by test_honeypot_instance.sh.
 #
 # THIS SCRIPT VERIFIES:
 #   Phase 1 - Static config: docker-compose.yml declares a strict 1:1
 #             WORDPRESS_DB_HOST -> honeypot_database_N binding per pool,
 #             with no cross-wiring, for however many pools are defined.
-#   Phase 2 - Live network topology: confirms the flat-network premise above
-#             still holds (so this test doesn't silently stop meaning
-#             anything if the network topology is ever changed to add
-#             segmentation) -- informational, not a pass/fail gate.
+#   Phase 2 - Live network topology: reports whether the container firewall
+#             already refuses a cross-pool database connection --
+#             informational, not a pass/fail gate.
 #   Phase 3 - Live credential isolation: for every pool N, its own DB
 #             credentials authenticate against honeypot_database_N and are
 #             REJECTED by every honeypot_database_M (M != N). This is the
@@ -161,9 +162,9 @@ banner "Phase 2 - Live Network Topology (informational, not pass/fail)"
 ESHOP_1="${PROJECT_PREFIX}-honeypot_eshop_1-1"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ESHOP_1}\$"; then
     if docker exec "${ESHOP_1}" bash -c 'exec 3<>/dev/tcp/honeypot_database_2/3306' >/dev/null 2>&1; then
-        info "Confirmed flat network: honeypot_eshop_1 CAN open a TCP socket to honeypot_database_2 -- isolation depends entirely on Phase 3's credential checks, not network segmentation"
+        info "honeypot_eshop_1 CAN open a TCP socket to honeypot_database_2 -- the container firewall is not stopping it (off, or not deployed); isolation rests on Phase 3's credential checks alone"
     else
-        info "honeypot_eshop_1 could NOT reach honeypot_database_2 over TCP -- network topology has changed since this test was written; Phase 3 may be redundant with network-level isolation now"
+        info "honeypot_eshop_1 could NOT reach honeypot_database_2 over TCP -- the container firewall refuses it; Phase 3's credential checks below pass on that ground too"
     fi
 else
     info "honeypot_eshop_1 not running -- skipping live network topology check"

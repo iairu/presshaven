@@ -379,6 +379,25 @@ services:
       - production_mysql_data:/var/lib/mysql
     networks:
       - production_network
+    # Same hardening as the honeypot pool databases (see honeypot_database_1),
+    # which run this exact image and command: no-new-privileges, every
+    # capability dropped but the ones mysqld's entrypoint needs to own its
+    # data dir and drop to the mysql user, and limits so a runaway query
+    # cannot starve the host. More memory than a pool: the real shop's data.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - SYS_NICE
+    mem_limit: 1024m
+    cpus: "1.0"
+    pids_limit: 300
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
       interval: 30s
