@@ -90,9 +90,11 @@ end
 local function code_only(src)
     local out = {}
     for line in (src .. "\n"):gmatch("(.-)\n") do
-        line = line:gsub("%-%-.*$", "")
-        if not line:match("^%s*#") then
-            out[#out + 1] = line
+        -- Strip comments into a fresh local: the loop variable is const in
+        -- Lua 5.4+, so reassigning `line` itself raises an error.
+        local code = line:gsub("%-%-.*$", "")
+        if not code:match("^%s*#") then
+            out[#out + 1] = code
         end
     end
     return table.concat(out, "\n")

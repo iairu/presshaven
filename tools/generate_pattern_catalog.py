@@ -185,6 +185,11 @@ SOURCES = {
         "module": "session_rules.lua / GDPR",
         "detail": "identity continuity and restoration behaviour",
     },
+    "edge": {
+        "label": "Edge block",
+        "module": "nginx.conf access_by_lua_block",
+        "detail": "outright 403 at the edge, before scoring or routing",
+    },
 }
 
 
@@ -246,6 +251,8 @@ def _category_from_wstg(wstg: str) -> str:
         return "command-injection"
     if wstg.startswith("WSTG-INPV-15"):
         return "http"
+    if wstg.startswith("WSTG-INPV-18"):
+        return "template"
     if wstg.startswith("WSTG-CONF"):
         return "sensitive-file"
     if wstg.startswith("WSTG-INFO"):
@@ -259,6 +266,31 @@ def _category_from_wstg(wstg: str) -> str:
     if wstg.startswith("WSTG-SESS"):
         return "session"
     return "injection"
+
+
+def _owasp_from_wstg(wstg: str) -> str:
+    """OWASP Top 10 (2021) category for a WSTG code.
+
+    Used to tag the generic CRS-style signatures with an OWASP bucket when no
+    lesson supplies one -- the ModSecurity Core Rule Set maps its rule families
+    (930 LFI, 931 RFI, 932 RCE, 933 PHP, 941 XSS, 942 SQLi, 944 Java, ...) onto
+    these same Top 10 categories.
+    """
+    if wstg.startswith(("WSTG-INPV-02", "WSTG-INPV-04", "WSTG-INPV-05",
+                        "WSTG-INPV-06", "WSTG-INPV-10", "WSTG-INPV-11",
+                        "WSTG-INPV-12", "WSTG-INPV-15", "WSTG-INPV-18")):
+        return "A03 Injection"
+    if wstg.startswith("WSTG-INPV-19"):
+        return "A10 Server-Side Request Forgery (SSRF)"
+    if wstg.startswith("WSTG-INPV-07"):   # XXE
+        return "A05 Security Misconfiguration"
+    if wstg.startswith(("WSTG-INPV-01", "WSTG-AUTHZ")):
+        return "A01 Broken Access Control"
+    if wstg.startswith(("WSTG-CONF", "WSTG-INFO")):
+        return "A05 Security Misconfiguration"
+    if wstg.startswith(("WSTG-IDNT", "WSTG-ATHN", "WSTG-SESS")):
+        return "A07 Identification and Authentication Failures"
+    return ""
 
 
 def parse_init_cve_patterns() -> dict[str, dict]:
@@ -519,6 +551,15 @@ NEW_CONCEPTS: dict[str, tuple[str, str, str, str, int, str]] = {
     "context-edit": ("context=edit probe", "access-control", "backend", "A context=edit parameter, often used to request editable content from an API.", 15, "WSTG-AUTHZ"),
     "auth-action": ("Registration / password-reset probe", "authentication", "backend", "lostpassword or register actions, used to probe account-recovery and registration flows.", 15, "WSTG-ATHN"),
     "cloud-storage": ("Cloud storage backup probe", "cloud", "backend", "An s3-backup string, indicating a probe for cloud storage backups.", 15, "WSTG-CONF"),
+}
+
+# Edge blocks: controls enforced as an outright 403 in nginx.conf's access
+# phase, BEFORE scoring or routing -- they are not threat scores and never feed
+# honeypot diversion, so they have no Lua pattern for parse_layer*() to see and
+# need their own catalogue record. id: (name, category, surface, description,
+# severity, wstg).
+EDGE_BLOCKS: dict[str, tuple[str, str, str, str, str, str]] = {
+    "sig-untrusted-external-callback": ("Untrusted external callback / open redirect", "injection", "backend", "An absolute http(s)/ftp URL in the request URI pointing at a host outside the trusted payment/OAuth callback allowlist (the shop's own WP_SITE_URL host plus known bank/gateway providers, see TRUSTED_CALLBACK_DOMAINS) -- the shape of an RFI, open-redirect or SSRF payload. Blocked outright with a 403 at the edge; deliberately NOT scored or routed, because such a URL can be planted in a link and sent to an innocent visitor to get them diverted and mislabelled. Legitimate WooCommerce gateway and OAuth callbacks point at a trusted host and pass.", "critical", "WSTG-INPV-19"),
 }
 
 # Layer 1 helper/name -> canonical record id.
@@ -1140,6 +1181,25 @@ class CatalogBuilder:
             )
             self.source(record, "lua-layer1", "specific entry")
 
+    def build_edge_blocks(self) -> None:
+        for concept_id, (name, category, surface, description, severity, wstg) in EDGE_BLOCKS.items():
+            record = self.get(
+                concept_id,
+                name=name,
+                category=category,
+                surface=surface,
+                description=description,
+                severity=severity,
+                score=None,
+                score_note="blocked outright with a 403 at the edge; not scored or routed",
+                wstg=[wstg] if wstg else [],
+                tags=[category, wstg, "edge-block"] if wstg else [category, "edge-block"],
+            )
+            self.source(record, "edge", f"{name} · outright 403")
+            self.detection(record, "Edge · outright 403 · not scored or routed")
+            if wstg:
+                self.tag(record, wstg)
+
     def build_presets(self) -> None:
         for preset in [*PATTERN_PRESETS, GDPR_RESTORE_PRESET]:
             if preset.cve.startswith("CVE-"):
@@ -1488,6 +1548,7 @@ class CatalogBuilder:
         self.build_cves()
         self.build_layer2()
         self.build_new_concepts()
+        self.build_edge_blocks()
         self.build_layer1()
         self.build_uploads()
         self.build_headers_tools()
@@ -1495,6 +1556,13 @@ class CatalogBuilder:
         self.build_suricata()
         self.build_tool_presets_without_suricata()
         self.finalise()
+
+        # Fill the OWASP Top 10 tag from the WSTG mapping wherever a lesson did
+        # not already supply one, so every WSTG-classified signature (the new
+        # generic CRS-style ones included) carries an OWASP category.
+        for p in self.patterns.values():
+            if not p["owasp"] and p["wstg"]:
+                p["owasp"] = _owasp_from_wstg(p["wstg"][0])
 
         patterns = list(self.patterns.values())
         for p in patterns:

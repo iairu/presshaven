@@ -65,6 +65,11 @@
       "label": "Session policy",
       "module": "session_rules.lua / GDPR",
       "detail": "identity continuity and restoration behaviour"
+    },
+    "edge": {
+      "label": "Edge block",
+      "module": "nginx.conf access_by_lua_block",
+      "detail": "outright 403 at the edge, before scoring or routing"
     }
   },
   "kinds": {
@@ -101,11 +106,11 @@
     "webshell": "Web shell"
   },
   "counts": {
-    "total": 133,
+    "total": 206,
     "by_kind": {
       "behaviour": 5,
       "cve": 15,
-      "generic": 96,
+      "generic": 169,
       "session": 1,
       "tool": 16
     },
@@ -114,37 +119,38 @@
       "authentication": 5,
       "behaviour": 4,
       "cloud": 1,
-      "command-injection": 7,
+      "command-injection": 26,
       "cve": 15,
       "deserialization": 1,
       "enumeration": 3,
-      "file-inclusion": 3,
-      "http": 3,
-      "injection": 2,
+      "file-inclusion": 22,
+      "http": 5,
+      "injection": 13,
       "recon": 13,
       "sensitive-file": 16,
       "session": 4,
-      "sqli": 10,
-      "template": 1,
+      "sqli": 20,
+      "template": 4,
       "tool": 17,
       "traversal": 4,
       "upload": 9,
       "webshell": 2,
       "wordpress": 2,
-      "xss": 6
+      "xss": 15
     },
     "by_severity": {
-      "critical": 14,
+      "critical": 15,
       "high": 48,
       "info": 1,
       "low": 10,
-      "medium": 60
+      "medium": 132
     },
     "by_source": {
       "automation": 24,
+      "edge": 1,
       "headers": 18,
       "lua-cve": 14,
-      "lua-layer1": 80,
+      "lua-layer1": 152,
       "lua-layer2": 49,
       "lua-vuln": 13,
       "method": 2,
@@ -1144,7 +1150,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -1183,6 +1189,54 @@
         "WSTG-INPV-12",
         "command-injection",
         "network"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "sig-untrusted-external-callback",
+      "aliases": [],
+      "name": "Untrusted external callback / open redirect",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "critical",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "An absolute http(s)/ftp URL in the request URI pointing at a host outside the trusted payment/OAuth callback allowlist (the shop's own WP_SITE_URL host plus known bank/gateway providers, see TRUSTED_CALLBACK_DOMAINS) -- the shape of an RFI, open-redirect or SSRF payload. Blocked outright with a 403 at the edge; deliberately NOT scored or routed, because such a URL can be planted in a link and sent to an innocent visitor to get them diverted and mislabelled. Legitimate WooCommerce gateway and OAuth callbacks point at a trusted host and pass.",
+      "trigger": "",
+      "trigger_type": "",
+      "score": null,
+      "score_note": "blocked outright with a 403 at the edge; not scored or routed",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Edge · outright 403 · not scored or routed"
+      ],
+      "sources": [
+        {
+          "label": "Edge block",
+          "module": "nginx.conf access_by_lua_block",
+          "detail": "Untrusted external callback / open redirect · outright 403",
+          "key": "edge"
+        }
+      ],
+      "signatures": [],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19",
+        "edge-block",
+        "injection"
       ],
       "notes": "",
       "kind_label": "Generic attack"
@@ -1332,7 +1386,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2287,7 +2341,7 @@
       "wstg": [
         "WSTG-ATHN-04"
       ],
-      "owasp": "",
+      "owasp": "A07 Identification and Authentication Failures",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2422,7 +2476,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2536,7 +2590,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2604,7 +2658,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2672,7 +2726,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2740,7 +2794,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -2802,7 +2856,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3030,7 +3084,7 @@
         "WSTG-IDNT",
         "WSTG-IDNT-04"
       ],
-      "owasp": "",
+      "owasp": "A07 Identification and Authentication Failures",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3115,7 +3169,7 @@
       "wstg": [
         "WSTG-IDNT"
       ],
-      "owasp": "",
+      "owasp": "A07 Identification and Authentication Failures",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3185,7 +3239,7 @@
         "WSTG-INPV-07",
         "WSTG-INPV-11"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3269,7 +3323,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3336,7 +3390,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3405,7 +3459,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3459,7 +3513,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3580,7 +3634,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3740,7 +3794,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3794,7 +3848,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3887,7 +3941,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -3980,7 +4034,7 @@
       "wstg": [
         "WSTG-INPV-10"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4132,7 +4186,7 @@
       "wstg": [
         "WSTG-INPV-01"
       ],
-      "owasp": "",
+      "owasp": "A01 Broken Access Control",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4194,7 +4248,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4307,7 +4361,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4363,7 +4417,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4432,7 +4486,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4597,7 +4651,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4666,7 +4720,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4721,7 +4775,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4777,7 +4831,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4906,7 +4960,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -4974,7 +5028,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5036,7 +5090,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5169,7 +5223,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5357,7 +5411,7 @@
       "wstg": [
         "WSTG-AUTHZ"
       ],
-      "owasp": "",
+      "owasp": "A01 Broken Access Control",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5418,7 +5472,7 @@
       "wstg": [
         "WSTG-AUTHZ"
       ],
-      "owasp": "",
+      "owasp": "A01 Broken Access Control",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5667,7 +5721,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5722,7 +5776,7 @@
       "wstg": [
         "WSTG-ATHN"
       ],
-      "owasp": "",
+      "owasp": "A07 Identification and Authentication Failures",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5856,7 +5910,7 @@
       "wstg": [
         "WSTG-CONF"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5899,6 +5953,654 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-bin-bash",
+      "aliases": [],
+      "name": "/bin/bash (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "/bin/bash",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `/bin/bash`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · /bin/bash · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "/bin/bash",
+          "kind": "plain",
+          "name": "/bin/bash",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-bin-sh",
+      "aliases": [],
+      "name": "/bin/sh (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "/bin/sh",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `/bin/sh`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · /bin/sh · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "/bin/sh",
+          "kind": "plain",
+          "name": "/bin/sh",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-bash-reverse",
+      "aliases": [],
+      "name": "Cmd bash reverse (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "bash%s+%-i",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `bash%s+%-i`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · bash%s+%-i · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "bash%s+%-i",
+          "kind": "pat",
+          "name": "cmd-bash-reverse",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-id",
+      "aliases": [],
+      "name": "Cmd id (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": ";%s*id[%s%+;&|$]",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `;%s*id[%s%+;&|$]`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · ;%s*id[%s%+;&|$] · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": ";%s*id[%s%+;&|$]",
+          "kind": "pat",
+          "name": "cmd-id",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-id-eol",
+      "aliases": [],
+      "name": "Cmd id eol (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": ";%s*id$",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `;%s*id$`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · ;%s*id$ · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": ";%s*id$",
+          "kind": "pat",
+          "name": "cmd-id-eol",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-nc-exec",
+      "aliases": [],
+      "name": "Cmd nc exec (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "nc%s+%-e",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `nc%s+%-e`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · nc%s+%-e · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "nc%s+%-e",
+          "kind": "pat",
+          "name": "cmd-nc-exec",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-perl",
+      "aliases": [],
+      "name": "Cmd perl (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "perl%s+%-e",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `perl%s+%-e`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · perl%s+%-e · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "perl%s+%-e",
+          "kind": "pat",
+          "name": "cmd-perl",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-python",
+      "aliases": [],
+      "name": "Cmd python (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "python%s+%-c",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `python%s+%-c`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · python%s+%-c · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "python%s+%-c",
+          "kind": "pat",
+          "name": "cmd-python",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-subshell",
+      "aliases": [],
+      "name": "Cmd subshell (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "%$%(%s*%a",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `%$%(%s*%a`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · %$%(%s*%a · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "%$%(%s*%a",
+          "kind": "pat",
+          "name": "cmd-subshell",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-uname",
+      "aliases": [],
+      "name": "Cmd uname (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": ";%s*uname",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `;%s*uname`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · ;%s*uname · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": ";%s*uname",
+          "kind": "pat",
+          "name": "cmd-uname",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-wget",
+      "aliases": [],
+      "name": "Cmd wget (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "&&%s*wget[%s%+]",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `&&%s*wget[%s%+]`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · &&%s*wget[%s%+] · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "&&%s*wget[%s%+]",
+          "kind": "pat",
+          "name": "cmd-wget",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-cmd-whoami",
+      "aliases": [],
+      "name": "Cmd whoami (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": ";%s*whoami",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `;%s*whoami`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · ;%s*whoami · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": ";%s*whoami",
+          "kind": "pat",
+          "name": "cmd-whoami",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-cmd-backticks",
       "aliases": [],
       "name": "Command injection: backticks",
@@ -5917,7 +6619,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -5986,7 +6688,7 @@
       "wstg": [
         "WSTG-INPV-12"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6050,6 +6752,816 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-getruntime",
+      "aliases": [],
+      "name": "Getruntime (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "getruntime",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `getruntime`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · getruntime · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "getruntime",
+          "kind": "plain",
+          "name": "getruntime",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-java-lang-runtime",
+      "aliases": [],
+      "name": "Java.lang.runtime (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "java.lang.runtime",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `java.lang.runtime`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · java.lang.runtime · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "java.lang.runtime",
+          "kind": "plain",
+          "name": "java.lang.runtime",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-jndi-lookup",
+      "aliases": [],
+      "name": "Jndi lookup (pat)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "%${jndi",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `%${jndi`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · %${jndi · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "%${jndi",
+          "kind": "pat",
+          "name": "jndi-lookup",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-jndi-dns",
+      "aliases": [],
+      "name": "Jndi:dns (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "jndi:dns",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `jndi:dns`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · jndi:dns · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "jndi:dns",
+          "kind": "plain",
+          "name": "jndi:dns",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-jndi-ldap",
+      "aliases": [],
+      "name": "Jndi:ldap (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "jndi:ldap",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `jndi:ldap`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · jndi:ldap · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "jndi:ldap",
+          "kind": "plain",
+          "name": "jndi:ldap",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-jndi-rmi",
+      "aliases": [],
+      "name": "Jndi:rmi (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "jndi:rmi",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `jndi:rmi`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · jndi:rmi · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "jndi:rmi",
+          "kind": "plain",
+          "name": "jndi:rmi",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-runtime-exec",
+      "aliases": [],
+      "name": "Runtime.exec (plain)",
+      "kind": "generic",
+      "category": "command-injection",
+      "category_label": "Command injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Shell metacharacters and command names used to execute operating-system commands.",
+      "trigger": "runtime.exec",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-12"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `runtime.exec`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · runtime.exec · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "runtime.exec",
+          "kind": "plain",
+          "name": "runtime.exec",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-12"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-iframe",
+      "aliases": [],
+      "name": "<iframe (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "<iframe",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `<iframe`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · <iframe · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "<iframe",
+          "kind": "plain",
+          "name": "<iframe",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-svg",
+      "aliases": [],
+      "name": "<svg (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "<svg",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `<svg`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · <svg · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "<svg",
+          "kind": "plain",
+          "name": "<svg",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-document-cookie",
+      "aliases": [],
+      "name": "Document.cookie (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "document.cookie",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `document.cookie`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · document.cookie · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "document.cookie",
+          "kind": "plain",
+          "name": "document.cookie",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-fromcharcode",
+      "aliases": [],
+      "name": "Fromcharcode (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "fromcharcode",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `fromcharcode`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · fromcharcode · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "fromcharcode",
+          "kind": "plain",
+          "name": "fromcharcode",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-onclick",
+      "aliases": [],
+      "name": "Onclick= (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "onclick=",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `onclick=`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · onclick= · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "onclick=",
+          "kind": "plain",
+          "name": "onclick=",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-onfocus",
+      "aliases": [],
+      "name": "Onfocus= (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "onfocus=",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `onfocus=`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · onfocus= · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "onfocus=",
+          "kind": "plain",
+          "name": "onfocus=",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-onmouseover",
+      "aliases": [],
+      "name": "Onmouseover= (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "onmouseover=",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `onmouseover=`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · onmouseover= · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "onmouseover=",
+          "kind": "plain",
+          "name": "onmouseover=",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-vbscript",
+      "aliases": [],
+      "name": "Vbscript: (plain)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "vbscript:",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `vbscript:`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · vbscript: · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "vbscript:",
+          "kind": "plain",
+          "name": "vbscript:",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-xss-alert",
       "aliases": [],
       "name": "XSS alert() probe",
@@ -6068,7 +7580,7 @@
       "wstg": [
         "WSTG-INPV-02"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6118,6 +7630,60 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-pat-xss-css-expression",
+      "aliases": [],
+      "name": "Xss css expression (pat)",
+      "kind": "generic",
+      "category": "xss",
+      "category_label": "Cross-site scripting",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Browser-side script injection through tags, event handlers or javascript: URIs.",
+      "trigger": "expression%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-02"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `expression%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · expression%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "expression%s*%(",
+          "kind": "pat",
+          "name": "xss-css-expression",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-02"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-xss-javascript",
       "aliases": [],
       "name": "XSS javascript: URI",
@@ -6136,7 +7702,7 @@
       "wstg": [
         "WSTG-INPV-02"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6333,7 +7899,7 @@
       "wstg": [
         "WSTG-INPV-02"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6495,6 +8061,168 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-allow-url-include",
+      "aliases": [],
+      "name": "Allow url include (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "allow_url_include",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `allow_url_include`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · allow_url_include · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "allow_url_include",
+          "kind": "plain",
+          "name": "allow_url_include",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-auto-prepend-file",
+      "aliases": [],
+      "name": "Auto prepend file (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "auto_prepend_file",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `auto_prepend_file`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · auto_prepend_file · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "auto_prepend_file",
+          "kind": "plain",
+          "name": "auto_prepend_file",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-boot-ini",
+      "aliases": [],
+      "name": "Boot.ini (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "boot.ini",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `boot.ini`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · boot.ini · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "boot.ini",
+          "kind": "plain",
+          "name": "boot.ini",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-data-wrapper",
       "aliases": [],
       "name": "data:// stream wrapper",
@@ -6514,7 +8242,7 @@
         "WSTG-INPV-07",
         "WSTG-INPV-11"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6580,6 +8308,222 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-etc-hosts",
+      "aliases": [],
+      "name": "Etc/hosts (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "etc/hosts",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `etc/hosts`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · etc/hosts · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "etc/hosts",
+          "kind": "plain",
+          "name": "etc/hosts",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-etc-passwd",
+      "aliases": [],
+      "name": "Etc/passwd (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "etc/passwd",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `etc/passwd`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · etc/passwd · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "etc/passwd",
+          "kind": "plain",
+          "name": "etc/passwd",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-etc-shadow",
+      "aliases": [],
+      "name": "Etc/shadow (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "etc/shadow",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `etc/shadow`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · etc/shadow · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "etc/shadow",
+          "kind": "plain",
+          "name": "etc/shadow",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-expect",
+      "aliases": [],
+      "name": "Expect:// (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "expect://",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `expect://`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · expect:// · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "expect://",
+          "kind": "plain",
+          "name": "expect://",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-file-wrapper",
       "aliases": [],
       "name": "file:// stream wrapper",
@@ -6599,7 +8543,7 @@
         "WSTG-INPV-07",
         "WSTG-INPV-11"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6665,6 +8609,762 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-glob",
+      "aliases": [],
+      "name": "Glob:// (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "glob://",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `glob://`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · glob:// · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "glob://",
+          "kind": "plain",
+          "name": "glob://",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-phar",
+      "aliases": [],
+      "name": "Phar:// (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "phar://",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `phar://`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · phar:// · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "phar://",
+          "kind": "plain",
+          "name": "phar://",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-base64-decode",
+      "aliases": [],
+      "name": "Php base64 decode (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "base64_decode%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `base64_decode%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · base64_decode%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "base64_decode%s*%(",
+          "kind": "pat",
+          "name": "php-base64-decode",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-call-user-func",
+      "aliases": [],
+      "name": "Php call user func (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "call_user_func",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `call_user_func`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · call_user_func · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "call_user_func",
+          "kind": "pat",
+          "name": "php-call-user-func",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-exec",
+      "aliases": [],
+      "name": "Php exec (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "exec%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `exec%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · exec%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "exec%s*%(",
+          "kind": "pat",
+          "name": "php-exec",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-passthru",
+      "aliases": [],
+      "name": "Php passthru (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "passthru%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `passthru%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · passthru%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "passthru%s*%(",
+          "kind": "pat",
+          "name": "php-passthru",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-proc-open",
+      "aliases": [],
+      "name": "Php proc open (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "proc_open%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `proc_open%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · proc_open%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "proc_open%s*%(",
+          "kind": "pat",
+          "name": "php-proc-open",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-shell-exec",
+      "aliases": [],
+      "name": "Php shell exec (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "shell_exec%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `shell_exec%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · shell_exec%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "shell_exec%s*%(",
+          "kind": "pat",
+          "name": "php-shell-exec",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-php-system",
+      "aliases": [],
+      "name": "Php system (pat)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "system%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `system%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · system%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "system%s*%(",
+          "kind": "pat",
+          "name": "php-system",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-proc-self-environ",
+      "aliases": [],
+      "name": "Proc/self/environ (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "proc/self/environ",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `proc/self/environ`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · proc/self/environ · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "proc/self/environ",
+          "kind": "plain",
+          "name": "proc/self/environ",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-win-ini",
+      "aliases": [],
+      "name": "Win.ini (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "win.ini",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `win.ini`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · win.ini · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "win.ini",
+          "kind": "plain",
+          "name": "win.ini",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-zip",
+      "aliases": [],
+      "name": "Zip:// (plain)",
+      "kind": "generic",
+      "category": "file-inclusion",
+      "category_label": "File inclusion",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "PHP/file/data stream wrappers used to include or read local or remote files.",
+      "trigger": "zip://",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-11"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `zip://`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · zip:// · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "zip://",
+          "kind": "plain",
+          "name": "zip://",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-11"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-crlf-cr",
+      "aliases": [],
+      "name": "Crlf cr (pat)",
+      "kind": "generic",
+      "category": "http",
+      "category_label": "HTTP abuse",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "HTTP-level abuse such as CRLF splitting, unusual methods and parameter pollution.",
+      "trigger": "%%0d",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-15"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `%%0d`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · %%0d · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "%%0d",
+          "kind": "pat",
+          "name": "crlf-cr",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-15"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-crlf-lf",
+      "aliases": [],
+      "name": "Crlf lf (pat)",
+      "kind": "generic",
+      "category": "http",
+      "category_label": "HTTP abuse",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "HTTP-level abuse such as CRLF splitting, unusual methods and parameter pollution.",
+      "trigger": "%%0a",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-15"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `%%0a`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · %%0a · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "%%0a",
+          "kind": "pat",
+          "name": "crlf-lf",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-15"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "http-splitting",
       "aliases": [],
       "name": "HTTP response splitting",
@@ -6683,7 +9383,7 @@
       "wstg": [
         "WSTG-INPV-15"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6721,6 +9421,546 @@
       "tags": [
         "WSTG-INPV-15",
         "http"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-169-254-169-254",
+      "aliases": [],
+      "name": "169.254.169.254 (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "169.254.169.254",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `169.254.169.254`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · 169.254.169.254 · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "169.254.169.254",
+          "kind": "plain",
+          "name": "169.254.169.254",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-doctype",
+      "aliases": [],
+      "name": "<!doctype (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "<!doctype",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-07"
+      ],
+      "owasp": "A05 Security Misconfiguration",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `<!doctype`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · <!doctype · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "<!doctype",
+          "kind": "plain",
+          "name": "<!doctype",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-07"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-entity",
+      "aliases": [],
+      "name": "<!entity (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "<!entity",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-07"
+      ],
+      "owasp": "A05 Security Misconfiguration",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `<!entity`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · <!entity · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "<!entity",
+          "kind": "plain",
+          "name": "<!entity",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-07"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-gt",
+      "aliases": [],
+      "name": "[$gt] (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "[$gt]",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-06"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `[$gt]`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · [$gt] · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "[$gt]",
+          "kind": "plain",
+          "name": "[$gt]",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-06"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-ne",
+      "aliases": [],
+      "name": "[$ne] (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "[$ne]",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-06"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `[$ne]`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · [$ne] · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "[$ne]",
+          "kind": "plain",
+          "name": "[$ne]",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-06"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-where",
+      "aliases": [],
+      "name": "[$where] (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "[$where]",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-06"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `[$where]`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · [$where] · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "[$where]",
+          "kind": "plain",
+          "name": "[$where]",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-06"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-constructor-prototype",
+      "aliases": [],
+      "name": "Constructor.prototype (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "constructor.prototype",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `constructor.prototype`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · constructor.prototype · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "constructor.prototype",
+          "kind": "plain",
+          "name": "constructor.prototype",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-latest-meta-data",
+      "aliases": [],
+      "name": "Latest/meta data (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "latest/meta-data",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `latest/meta-data`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · latest/meta-data · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "latest/meta-data",
+          "kind": "plain",
+          "name": "latest/meta-data",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-metadata-google-internal",
+      "aliases": [],
+      "name": "Metadata.google.internal (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "metadata.google.internal",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `metadata.google.internal`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · metadata.google.internal · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "metadata.google.internal",
+          "kind": "plain",
+          "name": "metadata.google.internal",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-plain-proto",
+      "aliases": [],
+      "name": "Proto (plain)",
+      "kind": "generic",
+      "category": "injection",
+      "category_label": "Injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Code, template, header and parameter injection outside the SQL/XSS families.",
+      "trigger": "__proto__",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-19"
+      ],
+      "owasp": "A10 Server-Side Request Forgery (SSRF)",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `__proto__`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · __proto__ · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "__proto__",
+          "kind": "plain",
+          "name": "__proto__",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-19"
       ],
       "notes": "",
       "kind_label": "Generic attack"
@@ -6861,7 +10101,7 @@
       "wstg": [
         "WSTG-INPV-01"
       ],
-      "owasp": "",
+      "owasp": "A01 Broken Access Control",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -6958,7 +10198,7 @@
       "wstg": [
         "WSTG-INPV-01"
       ],
-      "owasp": "",
+      "owasp": "A01 Broken Access Control",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7028,7 +10268,7 @@
         "WSTG-CONF",
         "WSTG-INFO"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7091,7 +10331,7 @@
         "WSTG-CONF",
         "WSTG-INFO"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7306,7 +10546,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7368,7 +10608,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7490,7 +10730,7 @@
         "WSTG-CONF",
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7559,7 +10799,7 @@
       "wstg": [
         "WSTG-CONF"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7621,7 +10861,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7691,7 +10931,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7761,7 +11001,7 @@
         "WSTG-CONF",
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -7894,7 +11134,7 @@
       "wstg": [
         "WSTG-CONF"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8167,6 +11407,222 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-plain-information-schema",
+      "aliases": [],
+      "name": "Information schema (plain)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "information_schema",
+      "trigger_type": "layer1_plain",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `information_schema`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "plain · information_schema · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "information_schema",
+          "kind": "plain",
+          "name": "information_schema",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-and-condition",
+      "aliases": [],
+      "name": "Sql and condition (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "'%s+and%s+",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `'%s+and%s+`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · '%s+and%s+ · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "'%s+and%s+",
+          "kind": "pat",
+          "name": "sql-and-condition",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-extractvalue",
+      "aliases": [],
+      "name": "Sql extractvalue (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "extractvalue%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `extractvalue%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · extractvalue%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "extractvalue%s*%(",
+          "kind": "pat",
+          "name": "sql-extractvalue",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-group-concat",
+      "aliases": [],
+      "name": "Sql group concat (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "group_concat%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `group_concat%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · group_concat%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "group_concat%s*%(",
+          "kind": "pat",
+          "name": "sql-group-concat",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-sql-insert",
       "aliases": [],
       "name": "SQL INSERT INTO",
@@ -8185,7 +11641,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8220,6 +11676,168 @@
           "match": "insert[^%a]+into[^%a]",
           "kind": "pat",
           "name": "insert.*into",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-into-outfile",
+      "aliases": [],
+      "name": "Sql into outfile (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "into%s+outfile",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `into%s+outfile`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · into%s+outfile · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "into%s+outfile",
+          "kind": "pat",
+          "name": "sql-into-outfile",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-load-file",
+      "aliases": [],
+      "name": "Sql load file (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "load_file%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `load_file%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · load_file%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "load_file%s*%(",
+          "kind": "pat",
+          "name": "sql-load-file",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-or-numeric",
+      "aliases": [],
+      "name": "Sql or numeric (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "'%s+or%s+'?%d",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `'%s+or%s+'?%d`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · '%s+or%s+'?%d · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "'%s+or%s+'?%d",
+          "kind": "pat",
+          "name": "sql-or-numeric",
           "score": 15
         }
       ],
@@ -8334,6 +11952,60 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-pat-sql-pg-sleep",
+      "aliases": [],
+      "name": "Sql pg sleep (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "pg_sleep%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `pg_sleep%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · pg_sleep%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "pg_sleep%s*%(",
+          "kind": "pat",
+          "name": "sql-pg-sleep",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-sql-quote-or",
       "aliases": [],
       "name": "SQL quote + OR",
@@ -8352,7 +12024,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8406,7 +12078,7 @@
       "wstg": [
         "WSTG-INPV-05"
       ],
-      "owasp": "",
+      "owasp": "A03 Injection",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8441,6 +12113,114 @@
           "match": "select[^%a].-[^%a]from[^%a]",
           "kind": "pat",
           "name": "select.*from",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-updatexml",
+      "aliases": [],
+      "name": "Sql updatexml (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "updatexml%s*%(",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `updatexml%s*%(`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · updatexml%s*%( · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "updatexml%s*%(",
+          "kind": "pat",
+          "name": "sql-updatexml",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-05"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-sql-waitfor-delay",
+      "aliases": [],
+      "name": "Sql waitfor delay (pat)",
+      "kind": "generic",
+      "category": "sqli",
+      "category_label": "SQL injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Database query manipulation: tautologies, UNION SELECT, time delays or destructive statements.",
+      "trigger": "waitfor%s+delay",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-05"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `waitfor%s+delay`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · waitfor%s+delay · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "waitfor%s+delay",
+          "kind": "pat",
+          "name": "sql-waitfor-delay",
           "score": 15
         }
       ],
@@ -8577,6 +12357,168 @@
       "kind_label": "Generic attack"
     },
     {
+      "id": "lua-layer1-pat-ssti-dollar-braces",
+      "aliases": [],
+      "name": "Ssti dollar braces (pat)",
+      "kind": "generic",
+      "category": "template",
+      "category_label": "Template injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Server-side template expression syntax.",
+      "trigger": "%${{",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-18"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `%${{`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · %${{ · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "%${{",
+          "kind": "pat",
+          "name": "ssti-dollar-braces",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-18"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-ssti-erb",
+      "aliases": [],
+      "name": "Ssti erb (pat)",
+      "kind": "generic",
+      "category": "template",
+      "category_label": "Template injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Server-side template expression syntax.",
+      "trigger": "<%%=",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-18"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `<%%=`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · <%%= · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "<%%=",
+          "kind": "pat",
+          "name": "ssti-erb",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-18"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
+      "id": "lua-layer1-pat-ssti-mustache-expr",
+      "aliases": [],
+      "name": "Ssti mustache expr (pat)",
+      "kind": "generic",
+      "category": "template",
+      "category_label": "Template injection",
+      "severity": "medium",
+      "component": "core",
+      "plugin": "",
+      "surface": "backend",
+      "description": "Server-side template expression syntax.",
+      "trigger": "{{%s*%d",
+      "trigger_type": "layer1_pat",
+      "score": 15,
+      "score_note": "+15 base score when this generic entry matches",
+      "wstg": [
+        "WSTG-INPV-18"
+      ],
+      "owasp": "A03 Injection",
+      "mitre": "",
+      "cve": "",
+      "attack_vector": "",
+      "detection": [
+        "Lua Layer 1 generic entry · +15 · `{{%s*%d`"
+      ],
+      "sources": [
+        {
+          "label": "Lua Layer 1",
+          "module": "pattern_rules.lua",
+          "detail": "pat · {{%s*%d · +15",
+          "key": "lua-layer1"
+        }
+      ],
+      "signatures": [
+        {
+          "layer": "layer1",
+          "match": "{{%s*%d",
+          "kind": "pat",
+          "name": "ssti-mustache-expr",
+          "score": 15
+        }
+      ],
+      "suricata": [],
+      "preset": null,
+      "lesson": null,
+      "reportable": true,
+      "enabled": true,
+      "tags": [
+        "WSTG-INPV-18"
+      ],
+      "notes": "",
+      "kind_label": "Generic attack"
+    },
+    {
       "id": "sig-admin-post",
       "aliases": [],
       "name": "admin-post.php access",
@@ -8595,7 +12537,7 @@
       "wstg": [
         "WSTG-CONF-05"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8767,7 +12709,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -8843,7 +12785,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -9344,7 +13286,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -10052,7 +13994,7 @@
         "WSTG-INFO",
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -10151,7 +14093,7 @@
         "WSTG-INFO",
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -10221,7 +14163,7 @@
         "WSTG-CONF",
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -10305,7 +14247,7 @@
         "WSTG-INFO",
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",
@@ -10374,7 +14316,7 @@
       "wstg": [
         "WSTG-INFO-02"
       ],
-      "owasp": "",
+      "owasp": "A05 Security Misconfiguration",
       "mitre": "",
       "cve": "",
       "attack_vector": "",

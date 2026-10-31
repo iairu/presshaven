@@ -163,7 +163,160 @@ _M.SUSPICIOUS_PATTERNS = {
 
     -- WSTG-CONF: Cloud / storage
     plain("s3-backup"),
+
+    -- =======================================================================
+    -- OWASP CRS-derived generic signatures. These broaden Layer 1 beyond the
+    -- WordPress/CVE specifics above to the generic attack classes the ModSecurity
+    -- Core Rule Set guards (LFI/RFI, RCE, PHP/Java injection, SSTI, SSRF, XXE,
+    -- NoSQL, and deeper SQLi/XSS). All are generic (kind=generic, so enabled by
+    -- default) and add +15 on a match. URI-only tokens are chosen to keep false
+    -- positives on normal shop traffic low; the edge whitelist bypasses these
+    -- for legitimate paths.
+    -- =======================================================================
+
+    -- WSTG-INPV-11 / CRS 930: Local File Inclusion (sensitive OS files)
+    plain("etc/passwd"), plain("etc/shadow"), plain("etc/hosts"),
+    plain("proc/self/environ"), plain("win.ini"), plain("boot.ini"),
+
+    -- WSTG-INPV-11 / CRS 931: Remote File Inclusion (PHP stream wrappers)
+    plain("expect://"), plain("zip://"), plain("phar://"), plain("glob://"),
+
+    -- WSTG-INPV-12 / CRS 932: Remote Command Execution (commands and operators)
+    pat(";%s*id[%s%+;&|$]", "cmd-id"), pat(";%s*id$", "cmd-id-eol"),
+    pat(";%s*whoami", "cmd-whoami"),
+    pat(";%s*uname", "cmd-uname"), pat("&&%s*wget[%s%+]", "cmd-wget"),
+    plain("/bin/bash"), plain("/bin/sh"), pat("nc%s+%-e", "cmd-nc-exec"),
+    pat("bash%s+%-i", "cmd-bash-reverse"), pat("python%s+%-c", "cmd-python"),
+    pat("perl%s+%-e", "cmd-perl"), pat("%$%(%s*%a", "cmd-subshell"),
+
+    -- WSTG-INPV-11 / CRS 933: PHP injection (dangerous functions, directives)
+    pat("base64_decode%s*%(", "php-base64-decode"), pat("system%s*%(", "php-system"),
+    pat("exec%s*%(", "php-exec"), pat("passthru%s*%(", "php-passthru"),
+    pat("shell_exec%s*%(", "php-shell-exec"), pat("proc_open%s*%(", "php-proc-open"),
+    pat("call_user_func", "php-call-user-func"),
+    plain("allow_url_include"), plain("auto_prepend_file"),
+
+    -- WSTG-INPV-12 / CRS 944: Java attacks (Log4Shell JNDI, OGNL, runtime exec)
+    plain("jndi:ldap"), plain("jndi:rmi"), plain("jndi:dns"),
+    pat("%${jndi", "jndi-lookup"), plain("runtime.exec"), plain("java.lang.runtime"),
+    plain("getruntime"),
+
+    -- WSTG-INPV-18 / CRS: Server-Side Template Injection
+    pat("%${{", "ssti-dollar-braces"), pat("{{%s*%d", "ssti-mustache-expr"),
+    pat("<%%=", "ssti-erb"),
+
+    -- WSTG-INPV-19 / CRS 934: SSRF, cloud metadata and prototype pollution
+    plain("169.254.169.254"), plain("latest/meta-data"),
+    plain("metadata.google.internal"), plain("__proto__"), plain("constructor.prototype"),
+
+    -- WSTG-INPV-07: XML external entity (XXE)
+    plain("<!entity"), plain("<!doctype"),
+
+    -- WSTG-INPV-06: NoSQL injection operators
+    plain("[$ne]"), plain("[$gt]"), plain("[$where]"),
+
+    -- WSTG-INPV-05 / CRS 942: SQL injection (deeper signatures)
+    plain("information_schema"), pat("load_file%s*%(", "sql-load-file"),
+    pat("into%s+outfile", "sql-into-outfile"), pat("extractvalue%s*%(", "sql-extractvalue"),
+    pat("updatexml%s*%(", "sql-updatexml"), pat("waitfor%s+delay", "sql-waitfor-delay"),
+    pat("pg_sleep%s*%(", "sql-pg-sleep"), pat("group_concat%s*%(", "sql-group-concat"),
+    pat("'%s+and%s+", "sql-and-condition"), pat("'%s+or%s+'?%d", "sql-or-numeric"),
+
+    -- WSTG-INPV-02 / CRS 941: Cross-site scripting (deeper signatures)
+    plain("onmouseover="), plain("onfocus="), plain("onclick="), plain("<iframe"),
+    plain("<svg"), plain("document.cookie"), plain("fromcharcode"),
+    plain("vbscript:"), pat("expression%s*%(", "xss-css-expression"),
+
+    -- WSTG-INPV-15 / CRS 921: HTTP response splitting / CRLF (lone CR or LF)
+    pat("%%0a", "crlf-lf"), pat("%%0d", "crlf-cr"),
 }
+
+-- ---------------------------------------------------------------------------
+-- Trusted callback / redirect domains (WSTG-INPV-19: SSRF; open redirect).
+--
+-- A WooCommerce shop legitimately puts absolute http(s):// URLs in its own
+-- request URIs: payment-gateway return/notify callbacks and OAuth redirect
+-- URIs. A blanket "=http://" or "://" generic signature would false-positive
+-- on every one of those, so instead we allow callbacks only to a curated set
+-- of known bank / payment-gateway providers plus the shop's own host (added
+-- at runtime from WP_SITE_URL and the TRUSTED_CALLBACK_DOMAINS env var, see
+-- init.lua). An absolute URL pointing anywhere else -- the shape of an RFI,
+-- open-redirect or SSRF payload -- is then a strong suspicious signal.
+--
+-- Each entry is a registrable domain; a host matches when it equals the entry
+-- or is a subdomain of it (see host_is_trusted). Keep lower-case, no scheme.
+_M.TRUSTED_CALLBACK_DOMAINS = {
+    -- Slovak banks and payment gateways
+    "tatrabanka.sk", "slsp.sk", "vub.sk", "csob.sk", "postovabanka.sk",
+    "365.bank", "mbank.sk", "unicreditbank.sk", "primabanka.sk",
+    "gpwebpay.com", "trustpay.eu", "comgate.cz", "gopay.com", "besteron.com",
+    -- Czech banks and payment gateways
+    "csas.cz", "csob.cz", "kb.cz", "moneta.cz", "rb.cz", "fio.cz",
+    "airbank.cz", "unicreditbank.cz", "payu.cz", "thepay.cz", "gopay.cz",
+    -- European / global payment providers
+    "paypal.com", "stripe.com", "adyen.com", "klarna.com", "mollie.com",
+    "braintreegateway.com", "skrill.com", "trustly.com", "sofort.com",
+    "checkout.com", "worldpay.com", "globalpayments.com", "nets.eu",
+    "wise.com", "revolut.com",
+}
+
+-- True when `host` equals `domain` or is a subdomain of it. A suffix match on
+-- a "." boundary so "notevil.com" does not match "evil.com" and
+-- "paypal.com.attacker.tld" does not match "paypal.com".
+local function host_matches_domain(host, domain)
+    if host == domain then
+        return true
+    end
+    return #host > #domain
+        and host:sub(-(#domain + 1)) == "." .. domain
+end
+
+local function host_is_trusted(host, trusted)
+    if not trusted then
+        return false
+    end
+    for _, domain in ipairs(trusted) do
+        if host_matches_domain(host, domain) then
+            return true
+        end
+    end
+    return false
+end
+
+-- ---------------------------------------------------------------------------
+-- untrusted_callback_host(uri, trusted)
+--
+-- Scan the (decoded) URI for absolute http/https/ftp/ftps URLs and return the
+-- first host that is not in the trusted-callback allowlist, or nil when every
+-- absolute URL points at a trusted provider (or there are none). Userinfo and
+-- port are stripped so classic bypasses -- http://paypal.com@evil.tld and
+-- http://evil.tld:443/ -- are judged on the real host (evil.tld).
+--
+-- @param uri      string      Request URI (raw or decoded; decoded internally).
+-- @param trusted  table|nil   List of registrable domains (TRUSTED_CALLBACK_DOMAINS).
+-- @return string|nil  The first untrusted host, or nil.
+-- ---------------------------------------------------------------------------
+function _M.untrusted_callback_host(uri, trusted)
+    -- No allowlist configured -> the check is disabled (treat nothing as an
+    -- untrusted callback). An empty table, by contrast, trusts no external host.
+    if not uri or not trusted then
+        return nil
+    end
+    local decoded = string.lower(url_decode(uri))
+    for scheme, authority in decoded:gmatch("(%a[%w%+%.%-]*)://([^/?#%s]+)") do
+        if scheme == "http" or scheme == "https"
+            or scheme == "ftp" or scheme == "ftps" then
+            -- Strip userinfo (anything up to and including the last '@') and
+            -- the port, then a trailing dot (an absolute-root FQDN).
+            local hostport = authority:match("@([^@]*)$") or authority
+            local host = (hostport:match("^([^:]+)") or hostport):gsub("%.$", "")
+            if host ~= "" and not host_is_trusted(host, trusted) then
+                return host
+            end
+        end
+    end
+    return nil
+end
 
 -- Whether one generic entry matches a lower-cased URI (see SUSPICIOUS_PATTERNS).
 -- A plain string entry is a Lua pattern, as the list used to be.
@@ -325,6 +478,14 @@ function _M.analyze_uri_patterns(uri, suspicious_patterns, max_score)
         result.score = result.score + 15
         table.insert(result.patterns, "excessive_parameters")
     end
+
+    -- NOTE: An absolute callback/redirect URL to an untrusted host (WSTG-INPV-19:
+    -- RFI / open-redirect / SSRF) is deliberately NOT scored here. A score would
+    -- feed honeypot routing, and such a URL can be planted in a link and sent to
+    -- an innocent visitor to get THEM diverted and mislabelled. It is instead
+    -- blocked outright at the edge (nginx.conf access phase, via
+    -- _M.untrusted_callback_host) with a 403, touching neither the request score
+    -- nor the session's reputation. See _M.TRUSTED_CALLBACK_DOMAINS.
 
     -- Clamp to the max score this signal can actually contribute (see @param
     -- max_score). Purely corrects the reported "+N" -- the request total is

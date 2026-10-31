@@ -885,22 +885,61 @@ class Manager:
     def _provision_wordpress_from_template(self, n, db_name, db_vol, files_vol, labels, password):
         """Copy the template's files + database volumes into this pool's, start
         MySQL on the ready-made data dir with this pool's own DB password, then
-        apply the migrations. No wp-cli install: the template already ran it."""
+        apply the migrations. No wp-cli install: the template already ran it.
+
+        The files volume (~770 MB) dwarfs the DB data dir (~200 MB) but is not
+        needed until the catalog sync and the WordPress container, both of which
+        run only after MySQL is up and migrated. So the files copy runs on a
+        worker thread concurrently with the small DB copy, MySQL startup and the
+        migrations, and is joined just before the caller needs it; on a warm host
+        the whole files copy hides behind MySQL's start, shaving it off the build."""
         for vol in (db_vol, files_vol):
             self.docker.volumes.create(name=vol, labels=labels)
         # Local tar copy (tar as root restores ownership, as the raw DB seed does).
-        self._run_helper(
-            self.image, ["sh", "-c",
-                         "tar -C /src_files -cf - . | tar -C /dest_files -xf - && "
-                         "tar -C /src_db -cf - . | tar -C /dest_db -xf -"],
-            binds={self._template_files_volume_name(): ("/src_files", "ro"),
-                   self._template_db_volume_name(): ("/src_db", "ro"),
-                   files_vol: ("/dest_files", "rw"), db_vol: ("/dest_db", "rw")},
-            labels=labels, what="copy template")
-        db = self._create_database_container(db_name, db_vol, password, labels)
-        db.start()
-        self._wait_healthy(db, "database")
-        self._migrate_pool_db(db_name, labels, password, "migrations")
+        join_files = self._copy_template_files_async(files_vol, labels)
+        try:
+            self._run_helper(
+                self.image, ["sh", "-c", "tar -C /src_db -cf - . | tar -C /dest_db -xf -"],
+                binds={self._template_db_volume_name(): ("/src_db", "ro"),
+                       db_vol: ("/dest_db", "rw")},
+                labels=labels, what="copy template db")
+            db = self._create_database_container(db_name, db_vol, password, labels)
+            db.start()
+            self._wait_healthy(db, "database")
+            self._migrate_pool_db(db_name, labels, password, "migrations")
+        finally:
+            # Always reap the worker (even on failure) so no orphan helper or
+            # thread outlives the build; join_files re-raises its own error.
+            join_files()
+
+    def _copy_template_files_async(self, files_vol, labels):
+        """Start the (large) template files copy on a worker thread so it runs
+        concurrently with the caller's DB copy + MySQL startup. Returns a
+        callable that blocks until the copy finishes, records its phase timing
+        on the caller's thread, and re-raises any error from the worker."""
+        started = time.time()
+        error: list[BaseException] = []
+
+        def _work():
+            try:
+                self._run_helper(
+                    self.image, ["sh", "-c", "tar -C /src_files -cf - . | tar -C /dest_files -xf -"],
+                    binds={self._template_files_volume_name(): ("/src_files", "ro"),
+                           files_vol: ("/dest_files", "rw")},
+                    labels=labels, what="copy template files")
+            except BaseException as e:  # noqa: BLE001 -- surfaced to the caller on join
+                error.append(e)
+
+        t = threading.Thread(target=_work, daemon=True)
+        t.start()
+
+        def _join():
+            t.join()
+            self._phase("copy template files", started)
+            if error:
+                raise error[0]
+
+        return _join
 
     def _seed_wordpress_volumes(self, files_vol, db_vol, labels):
         """WordPress files from production (minus the production-only hardening

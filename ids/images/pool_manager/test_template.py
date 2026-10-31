@@ -40,6 +40,8 @@ class TemplateBase(unittest.TestCase):
             "/migrations_override/01_clean-honeypot-data.sql": "/h/clean.sql"}
         self.mgr.image = "pool_manager:test"
         self.mgr._template_lock = manager.threading.Lock()
+        self.mgr._local = manager.threading.local()
+        self.mgr._local.phases = []
         self.mgr.docker = mock.MagicMock()
         self.mgr.docker.volumes.list.return_value = []   # no template yet
         self.mgr.redis = mock.MagicMock()
@@ -203,7 +205,10 @@ class ProvisionWordPressWithTemplate(WordPressBase):
     def test_pool_copies_template_and_skips_wpcli(self):
         self._template_present()
         self.mgr.provision_wordpress(5)
-        self.assertIn("copy template", self.helpers)
+        # Files and DB are copied by separate helpers now (files runs on a
+        # worker thread concurrently with the DB copy + MySQL startup).
+        self.assertIn("copy template files", self.helpers)
+        self.assertIn("copy template db", self.helpers)
         self.assertIn("migrations", self.helpers)
         self.assertIn("content sync", self.helpers)        # catalog still freshened
         self.assertNotIn("WordPress seed", self.helpers)   # the ~50 s wp-cli install

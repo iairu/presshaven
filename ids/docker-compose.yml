@@ -2135,6 +2135,13 @@ services:
       - IP_REPUTATION_CAP=${IP_REPUTATION_CAP:-10}
       - SHARED_IP_SESSIONS=${SHARED_IP_SESSIONS:-2}
       - SHARED_IP_WINDOW=${SHARED_IP_WINDOW:-3600}
+      # Trusted payment/OAuth callback allowlist (lua/pattern_rules.lua). The
+      # shop's own host is auto-derived from WP_SITE_URL; TRUSTED_CALLBACK_DOMAINS
+      # is an optional comma-separated list of extra gateway/bank domains to add
+      # to the baked-in default set. Absolute URLs in a request URI pointing
+      # anywhere else score as untrusted_external_callback (RFI/open-redirect/SSRF).
+      - WP_SITE_URL=${WP_SITE_URL:-http://localhost}
+      - TRUSTED_CALLBACK_DOMAINS=${TRUSTED_CALLBACK_DOMAINS:-}
       # Threat decay: set THREAT_DECAY_ENABLED=false to make session/IP threat
       # scores persist indefinitely (no decay); half-life tunes the fade rate.
       - THREAT_DECAY_ENABLED=${THREAT_DECAY_ENABLED:-true}

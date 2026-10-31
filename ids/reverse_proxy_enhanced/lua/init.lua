@@ -42,6 +42,38 @@ if not SESSION_SIGNING_KEY_STABLE then
 end
 
 -- ---------------------------------------------------------------------------
+-- Trusted payment/OAuth callback domains (see pattern_rules.lua). Start from
+-- the baked-in provider list, then add (1) extra domains from the optional
+-- comma-separated TRUSTED_CALLBACK_DOMAINS env var and (2) the shop's own host
+-- parsed from WP_SITE_URL, so a legitimate return/redirect URL to the shop
+-- itself is never treated as an external callback. Built once in the master.
+local function build_trusted_callback_domains()
+    local domains = {}
+    for _, d in ipairs(require("pattern_rules").TRUSTED_CALLBACK_DOMAINS) do
+        domains[#domains + 1] = d
+    end
+    local extra = os.getenv("TRUSTED_CALLBACK_DOMAINS") or ""
+    for d in extra:gmatch("[^,%s]+") do
+        domains[#domains + 1] = d:lower()
+    end
+    -- Host portion of WP_SITE_URL (strip scheme, path, userinfo and port).
+    local site = os.getenv("WP_SITE_URL") or ""
+    local authority = site:match("^%a[%w%+%.%-]*://([^/?#]+)") or site:match("^([^/?#]+)")
+    if authority and authority ~= "" then
+        local hostport = authority:match("@([^@]*)$") or authority
+        local host = (hostport:match("^([^:]+)") or hostport):lower():gsub("%.$", "")
+        -- Skip loopback placeholders: "localhost" is the dev default, never a
+        -- real shop host, and allowlisting it would whitelist SSRF to the proxy.
+        if host ~= "" and host ~= "localhost"
+            and host ~= "127.0.0.1" and host ~= "[::1]" then
+            domains[#domains + 1] = host
+        end
+    end
+    return domains
+end
+local TRUSTED_CALLBACK_DOMAINS = build_trusted_callback_domains()
+
+-- ---------------------------------------------------------------------------
 -- _G.config – Central configuration table
 --
 -- All sub-tables and their fields are documented inline below.
@@ -304,6 +336,15 @@ _G.config = {
         -- matches (literal text, file extension, parameter name, path segment
         -- or a real Lua pattern), so dots and dashes are never wildcards.
         suspicious_patterns = require("pattern_rules").SUSPICIOUS_PATTERNS,
+
+        -- trusted_callback_domains: Allowlist of registrable domains that a
+        -- payment-gateway return/notify callback or OAuth redirect URI may point
+        -- at (built above: baked provider list + TRUSTED_CALLBACK_DOMAINS env +
+        -- the shop's own WP_SITE_URL host). An absolute http(s)/ftp URL in a
+        -- request URI pointing anywhere else scores as untrusted_external_callback
+        -- -- this is what lets the generic RFI/open-redirect/SSRF signatures stay
+        -- on without false-positiving on a WooCommerce shop's legitimate callbacks.
+        trusted_callback_domains = TRUSTED_CALLBACK_DOMAINS,
 
         -- static_asset_patterns: URI suffixes and path prefixes that identify
         -- static assets (CSS, JS, images, fonts).  Requests matching any of
