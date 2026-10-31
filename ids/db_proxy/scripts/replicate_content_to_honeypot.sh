@@ -82,10 +82,11 @@ log() {
     echo "[content-sync $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
 }
 
-# Every honeypot database uses production's credentials (the isolation is the
-# separate database host; see wp-content/db.php).
+# Every honeypot database shares one password of its own, HONEYPOT_DB_PASSWORD
+# (wp-content/db.php connects with it) -- never production's MYSQL_PASSWORD,
+# which only reads production.
 pool_password() {
-    echo "$MYSQL_PASSWORD"
+    echo "$HONEYPOT_DB_PASSWORD"
 }
 
 # Pool 1 is the compose service `honeypot_database`; pool N > 1 is the

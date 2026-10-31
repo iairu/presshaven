@@ -11,9 +11,9 @@ import unittest
 from unittest import mock
 
 sys.modules.setdefault("docker", mock.MagicMock())
+sys.modules.setdefault("redis", mock.MagicMock())
 os.environ.setdefault("REDIS_PASSWORD", "x")
 os.environ.setdefault("MYSQL_PASSWORD", "x")
-os.environ.setdefault("MYSQL_ROOT_PASSWORD", "x")
 import manager  # noqa: E402
 
 NET_ADMIN_FREE_CAPS = {"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "NET_BIND_SERVICE", "KILL"}
@@ -116,6 +116,7 @@ class PoolDatabase(unittest.TestCase):
         self.mgr._local = manager.threading.local()
         self.mgr._local.phases = []
         self.mgr._wait_healthy = mock.MagicMock()
+        self.mgr.host_paths = {"/scripts": "/h/scripts"}
         self.fw, self.db = mock.MagicMock(id="dbfw9"), mock.MagicMock()
         self.mgr.docker.containers.create.side_effect = [self.fw, self.db]
         self.mgr.docker.api.create_endpoint_config.side_effect = lambda **kw: {"cfg": kw}
@@ -137,6 +138,27 @@ class PoolDatabase(unittest.TestCase):
         self.assertNotIn("NET_ADMIN", kw["cap_add"])
         self.assertIn("no-new-privileges:true", kw["security_opt"])
         self.assertNotIn("ports", kw)
+
+    def test_database_accounts_follow_its_own_environment(self):
+        _, kw = self.create()
+        self.assertEqual(kw["command"][:3], ["bash", "/mysql_credentials_entrypoint.sh", "mysqld"])
+        self.assertEqual(kw["volumes"]["/h/scripts/mysql_credentials_entrypoint.sh"],
+                         {"bind": "/mysql_credentials_entrypoint.sh", "mode": "ro"})
+        env = kw["environment"]
+        self.assertEqual(env["MYSQL_PASSWORD"], "pw")
+        self.assertEqual(env["MYSQL_ROOT_HOST"], "localhost")
+        self.assertEqual(len(env["MYSQL_ROOT_PASSWORD"]), 32)
+        self.assertNotIn("-p", " ".join(kw["healthcheck"]["test"]))
+
+    def test_every_database_gets_its_own_root_password(self):
+        _, first = self.create()
+        self.mgr.docker.containers.create.reset_mock()
+        self.mgr.docker.containers.create.side_effect = [mock.MagicMock(id="f2"), self.db]
+        _, second = self.create()
+        self.assertTrue(first["environment"]["MYSQL_ROOT_PASSWORD"]
+                        != second["environment"]["MYSQL_ROOT_PASSWORD"], "root password shared")
+        self.assertTrue(first["environment"]["MYSQL_ROOT_PASSWORD"]
+                        != os.environ.get("MYSQL_ROOT_PASSWORD"), "production root password reused")
 
     def test_database_firewall_is_started_healthy_first(self):
         self.create()

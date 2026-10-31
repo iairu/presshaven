@@ -249,7 +249,7 @@ services:
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_PASSWORD_POOL_1=${MYSQL_PASSWORD_POOL_1}
       - MYSQL_PASSWORD_POOL_2=${MYSQL_PASSWORD_POOL_2}
       - MYSQL_PASSWORD_POOL_3=${MYSQL_PASSWORD_POOL_3}
     command: |
@@ -270,31 +270,18 @@ services:
       # a raw TCP connect (bash's /dev/tcp) as before -- confirmed live
       # that a connect-then-close with no MySQL handshake makes mysqld log
       # '[Note] Got an error reading communication packets' on every
-      # probe, one per pool per boot. Credentials: pool 2/3 may already
-      # have had their password rotated to their pool-specific value by a
-      # PRIOR run of set_pool_password() below (rotation is persisted in
-      # the pool's own datadir), so each candidate password is tried in
-      # turn -- pool-specific first, since that's the steady state after
-      # the very first boot (a rejected candidate is logged by mysqld as
-      # an 'Access denied' note, so the order matters for log noise, not
-      # correctness). Either password being accepted proves the server is
-      # up; ALL of them rejected also proves it's up (the server answered
-      # the handshake) and is left for set_pool_password() to report.
-      # Only a failed connect (ECONNREFUSED / server still starting) keeps
-      # waiting.
+      # probe, one per pool per boot. An 'Access denied' answer also proves
+      # the server is up and is left for apply_migrations to report; only a
+      # failed connect (ECONNREFUSED / server still starting) keeps waiting.
       # -----------------------------------------------------------------------
       db_ready() {
         HOST=\$$1
         shift
-        for PASS in \"\$$@\"; do
-          OUT=\$$(mysqladmin ping -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$PASS\" 2>&1)
-          case \"\$$OUT\" in
-            *'mysqld is alive'*) return 0 ;;
-            *'Access denied'*) ;;
-            *) return 1 ;;
-          esac
-        done
-        return 0
+        OUT=\$$(mysqladmin ping -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$2\" 2>&1)
+        case \"\$$OUT\" in
+          *'mysqld is alive'*|*'Access denied'*) return 0 ;;
+          *) return 1 ;;
+        esac
       }
 
       wait_for_db() {
@@ -316,45 +303,20 @@ services:
       }
 
       echo 'Waiting for all honeypot pool databases to actually accept connections...'
-      wait_for_db honeypot_database_1 \"\$$MYSQL_PASSWORD\"
-      wait_for_db honeypot_database_2 \"\$$MYSQL_PASSWORD_POOL_2\" \"\$$MYSQL_PASSWORD\"
-      wait_for_db honeypot_database_3 \"\$$MYSQL_PASSWORD_POOL_3\" \"\$$MYSQL_PASSWORD\"
+      wait_for_db honeypot_database_1 \"\$$MYSQL_PASSWORD_POOL_1\"
+      wait_for_db honeypot_database_2 \"\$$MYSQL_PASSWORD_POOL_2\"
+      wait_for_db honeypot_database_3 \"\$$MYSQL_PASSWORD_POOL_3\"
 
-      # -----------------------------------------------------------------------
-      # Helper: rotate a pool's DB user password to its own pool-specific
-      # value.  honeypot_database_N's data directory is a raw copy of
-      # production_database_data made ONCE by init_setup (see that service's
-      # copy_files comment) -- MySQL only applies MYSQL_USER/MYSQL_PASSWORD
-      # env vars on a truly empty data directory, so a freshly-provisioned
-      # pool still has the SAME credentials as production and every other
-      # pool until this rotates it. Idempotent: if NEW_PASS already works,
-      # nothing to do (a previous run already rotated it); otherwise falls
-      # back to the shared/original MYSQL_PASSWORD to perform the rotation.
-      # Without this, all pools share one password despite sitting on one
-      # flat network that lets any pool reach any other pool's database over
-      # TCP -- see the note on the honeypot_database_N block above and
-      # ids/testing/test_pool_isolation.sh.
-      # -----------------------------------------------------------------------
-      set_pool_password() {
-        HOST=\$$1
-        NEW_PASS=\$$2
-        if mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$NEW_PASS\" -e 'SELECT 1' >/dev/null 2>&1; then
-          echo \"  \$$HOST already uses its pool-specific password\"
-          return 0
-        fi
-        if mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -e \"ALTER USER '\$$MYSQL_USER'@'%' IDENTIFIED BY '\$$NEW_PASS';\" 2>/dev/null; then
-          echo \"  Rotated \$$HOST to its pool-specific password\"
-        else
-          echo \"  WARNING: could not set pool-specific password for \$$HOST (neither old nor new password worked)\"
-        fi
-      }
-
-      set_pool_password honeypot_database_2 \"\$$MYSQL_PASSWORD_POOL_2\"
-      set_pool_password honeypot_database_3 \"\$$MYSQL_PASSWORD_POOL_3\"
+      # Each pool database has its OWN user password (and root password)
+      # from its own environment: its data directory starts as a copy of
+      # production's, but mysql_credentials_entrypoint.sh resets the accounts
+      # to the pool's values on every start, so no pool shares a credential
+      # with production or with another pool -- and this job needs nothing
+      # but the three pool passwords (see test_pool_isolation.sh).
 
       # -----------------------------------------------------------------------
       # Helper: apply all migrations to a single database host. Each pool has
-      # its own DB password (see set_pool_password above), so the password to
+      # its own DB password (see above), so the password to
       # use is passed in per call, not read from a single shared MYSQL_PASSWORD.
       # Sets MIGRATION_FAILED=1 if any migration OTHER than
       # 01_clean-honeypot-data.sql fails, so the script exits 1 at the end
@@ -397,7 +359,7 @@ services:
       }
 
       # Apply to every pool database in turn, each with its own password.
-      apply_migrations honeypot_database_1 \"\$$MYSQL_PASSWORD\"
+      apply_migrations honeypot_database_1 \"\$$MYSQL_PASSWORD_POOL_1\"
       apply_migrations honeypot_database_2 \"\$$MYSQL_PASSWORD_POOL_2\"
       apply_migrations honeypot_database_3 \"\$$MYSQL_PASSWORD_POOL_3\"
 
@@ -474,6 +436,7 @@ services:
       - ./scripts/replicate_content_to_honeypot.sh:/replicate_content_to_honeypot.sh:ro
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_PASSWORD_POOL_1=${MYSQL_PASSWORD_POOL_1}
       - MYSQL_PASSWORD_POOL_2=${MYSQL_PASSWORD_POOL_2}
       - MYSQL_PASSWORD_POOL_3=${MYSQL_PASSWORD_POOL_3}
       - REDIS_HOST=session_store
@@ -527,8 +490,10 @@ services:
       - COMPOSE_PROJECT=honeypot-ids-system-v1
       - REDIS_HOST=session_store
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # Production's password: the clone / content-sync helpers read
+      # production with it. No root password: every pool database gets its
+      # own random one, and no pool its user password from this.
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
       # Runtime pools are decoys: their admin gets this password, not production's
       # (which pool_manager therefore isn't given at all).
@@ -585,17 +550,19 @@ services:
     depends_on:
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - production_mysql_data:/var/lib/mysql
     networks:
@@ -620,7 +587,7 @@ services:
     cpus: "1.0"
     pids_limit: 300
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5
@@ -945,20 +912,16 @@ services:
       # `wp plugin activate` below has nothing to activate.
       init_setup:
         condition: service_completed_successfully
-      # Pool 1 keeps the SAME password as production (no rotation --
-      # WORDPRESS_DB_PASSWORD below is ${MYSQL_PASSWORD}, not a POOL_2/3
-      # variant), so this dependency isn't about credentials for pool 1
-      # specifically -- it's still required so this never runs concurrently
-      # with honeypot_db_migration's own schema migrations against the
-      # same database. See honeypot_db_seed_2/3's copy of this comment for
-      # why it's load-bearing (not just a nice-to-have) for THOSE two.
+      # Never run concurrently with honeypot_db_migration's own schema
+      # migrations against the same database (wp core install below
+      # creates the wp_* tables those migrations clean up).
       honeypot_db_migration:
         condition: service_completed_successfully
     environment:
       - WORDPRESS_DB_HOST=honeypot_database_1:3306
       - WORDPRESS_DB_NAME=production_database
       - WORDPRESS_DB_USER=production_user
-      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD_POOL_1}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
       # Decoy admin password, deliberately different from production's (see .env).
       - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
@@ -1016,18 +979,7 @@ services:
         condition: service_healthy
       init_setup:
         condition: service_completed_successfully
-      # Load-bearing, not just ordering hygiene: honeypot_database_2's
-      # data directory starts as a raw copy of production's, so it still
-      # has production's OWN password (MYSQL_PASSWORD) until
-      # honeypot_db_migration's set_pool_password() step ALTER USERs it to
-      # MYSQL_PASSWORD_POOL_2 (see that service's own comment). Without
-      # waiting for that to actually finish, this could start and try to
-      # authenticate with MYSQL_PASSWORD_POOL_2 while the live password is
-      # still the old one -- a real race (both this and
-      # honeypot_db_migration only require honeypot_database_2 to be
-      # merely healthy to start), producing exactly the same "Error
-      # establishing a database connection" wp-cli reports for any bad
-      # credential, transient or not.
+      # Same as honeypot_db_seed_1: never concurrently with the migrations.
       honeypot_db_migration:
         condition: service_completed_successfully
     environment:
@@ -1087,9 +1039,7 @@ services:
         condition: service_healthy
       init_setup:
         condition: service_completed_successfully
-      # Same reasoning as honeypot_db_seed_2's identical dependency --
-      # honeypot_database_3 only gets rotated to MYSQL_PASSWORD_POOL_3 by
-      # honeypot_db_migration's set_pool_password() step.
+      # Same as honeypot_db_seed_1: never concurrently with the migrations.
       honeypot_db_migration:
         condition: service_completed_successfully
     environment:
@@ -1179,17 +1129,19 @@ services:
         restart: true
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD_POOL_1}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD_POOL_1}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data:/var/lib/mysql
     # No networks of its own: it lives in honeypot_database_1_net's network namespace, whose
@@ -1226,7 +1178,7 @@ services:
     cpus: "0.5"
     pids_limit: 200
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5
@@ -1253,17 +1205,19 @@ services:
         restart: true
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
       - MYSQL_PASSWORD=${MYSQL_PASSWORD_POOL_2}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD_POOL_2}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data_2:/var/lib/mysql
     # No networks of its own: it lives in honeypot_database_2_net's network namespace, whose
@@ -1287,7 +1241,7 @@ services:
     cpus: "0.5"
     pids_limit: 200
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD_POOL_2}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5
@@ -1314,17 +1268,19 @@ services:
         restart: true
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
       - MYSQL_PASSWORD=${MYSQL_PASSWORD_POOL_3}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD_POOL_3}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data_3:/var/lib/mysql
     # No networks of its own: it lives in honeypot_database_3_net's network namespace, whose
@@ -1348,7 +1304,7 @@ services:
     cpus: "0.5"
     pids_limit: 200
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD_POOL_3}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5
@@ -1405,7 +1361,7 @@ services:
       - WORDPRESS_DB_HOST=honeypot_database_1:3306
       - WORDPRESS_DB_NAME=production_database
       - WORDPRESS_DB_USER=production_user
-      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD_POOL_1}
       # Enable WordPress debugging for SQL routing logs
       - WORDPRESS_DEBUG=1
       - WORDPRESS_DEBUG_LOG=1

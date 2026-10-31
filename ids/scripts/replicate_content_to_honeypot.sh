@@ -80,9 +80,8 @@ log() {
     echo "[content-sync $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
 }
 
-# Pool number -> that pool's own DB user password (pool 1 shares
-# MYSQL_PASSWORD with production; pools 2/3 were rotated to their own
-# password by honeypot_db_migration -- see docker-compose.yml).
+# Pool number -> that pool's own DB user password (never production's
+# MYSQL_PASSWORD, which only reads production -- see docker-compose.yml).
 pool_password() {
     # One-shot mode (see the bottom of this file): pool_manager passes the new
     # pool's password directly; it is not registered anywhere yet.
@@ -91,7 +90,7 @@ pool_password() {
         return
     fi
     case "$1" in
-        1) echo "$MYSQL_PASSWORD" ;;
+        1) echo "$MYSQL_PASSWORD_POOL_1" ;;
         2) echo "$MYSQL_PASSWORD_POOL_2" ;;
         3) echo "$MYSQL_PASSWORD_POOL_3" ;;
         # Runtime pools get a random password from pool_manager, kept in Redis.

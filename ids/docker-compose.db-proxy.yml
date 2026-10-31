@@ -181,7 +181,10 @@ services:
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
+      # Production's password reads production; the honeypot database has
+      # its own (HONEYPOT_DB_PASSWORD) -- they never cross.
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - HP_PASSWORD=${HONEYPOT_DB_PASSWORD}
     command: |
       bash -c "
       set -e
@@ -190,21 +193,21 @@ services:
 
       wait_for() {
         TRIES=0
-        until mysqladmin ping -h\"\$$1\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" 2>/dev/null | grep -q 'mysqld is alive'; do
+        until mysqladmin ping -h\"\$$1\" -u\"\$$MYSQL_USER\" -p\"\$$2\" 2>/dev/null | grep -q 'mysqld is alive'; do
           TRIES=\$$((TRIES+1)); [ \"\$$TRIES\" -ge 60 ] && { echo \"  WARNING: \$$1 never became reachable\"; break; }
           sleep 2
         done
       }
       echo 'Waiting for production + honeypot databases to accept connections...'
-      wait_for \"\$$PROD\"; wait_for \"\$$HP\"
+      wait_for \"\$$PROD\" \"\$$MYSQL_PASSWORD\"; wait_for \"\$$HP\" \"\$$HP_PASSWORD\"
 
       # Clone production -> honeypot ONLY if the honeypot has no WordPress
       # schema yet (fresh volume). This never clobbers a honeypot that already
       # holds its own user-diverged state on a warm restart.
-      HAS_SCHEMA=\$$(mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$$MYSQL_DATABASE' AND table_name='wp_options'\" 2>/dev/null || echo 0)
+      HAS_SCHEMA=\$$(mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$HP_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$$MYSQL_DATABASE' AND table_name='wp_options'\" 2>/dev/null || echo 0)
       if [ \"\$$HAS_SCHEMA\" = '0' ]; then
         echo 'Cloning production database into the honeypot database...'
-        mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --single-transaction --no-tablespaces --skip-add-locks \"\$$MYSQL_DATABASE\" | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\"
+        mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --single-transaction --no-tablespaces --skip-add-locks \"\$$MYSQL_DATABASE\" | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$HP_PASSWORD\" \"\$$MYSQL_DATABASE\"
         echo '  Clone complete.'
       else
         echo '  Honeypot database already has a WordPress schema -- skipping clone.'
@@ -216,7 +219,7 @@ services:
       if [ -d /migrations ]; then
         for m in \$$(ls /migrations/*.sql 2>/dev/null | sort); do
           echo \"  Applying \$$m ...\"
-          mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --force \"\$$MYSQL_DATABASE\" < \"\$$m\" || echo \"    (non-zero, continuing)\"
+          mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$HP_PASSWORD\" --force \"\$$MYSQL_DATABASE\" < \"\$$m\" || echo \"    (non-zero, continuing)\"
         done
       fi
 
@@ -226,7 +229,7 @@ services:
       # so a volume that still carries the old demo name is put right too;
       # honeypot_content_sync never touches wp_options.
       echo 'Copying the production site name into the honeypot database...'
-      mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --no-create-info --replace --skip-add-locks --no-tablespaces --skip-triggers --where=\"option_name='blogname'\" \"\$$MYSQL_DATABASE\" wp_options | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\" || echo '  (could not copy the site name, continuing)'
+      mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --no-create-info --replace --skip-add-locks --no-tablespaces --skip-triggers --where=\"option_name='blogname'\" \"\$$MYSQL_DATABASE\" wp_options | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$HP_PASSWORD\" \"\$$MYSQL_DATABASE\" || echo '  (could not copy the site name, continuing)'
 
       echo 'Honeypot database initialisation complete.'
       "
@@ -281,6 +284,7 @@ services:
       - ./db_proxy/scripts/replicate_content_to_honeypot.sh:/replicate_content_to_honeypot.sh:ro
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - HONEYPOT_DB_PASSWORD=${HONEYPOT_DB_PASSWORD}
       - REDIS_HOST=session_store
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REPLICATION_INTERVAL_SECONDS=${REPLICATION_INTERVAL_SECONDS:-300}
@@ -336,7 +340,9 @@ services:
       - REDIS_HOST=session_store
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # Every honeypot database's user password (db.php has one); each gets
+      # its own random root password from pool_manager.
+      - HONEYPOT_DB_PASSWORD=${HONEYPOT_DB_PASSWORD}
       - POOL_SPARES=${POOL_SPARES:-1}
       - POOL_MAX=${POOL_MAX:-10}
       # Resource budget for all pools together (by their containers' limits);
@@ -373,17 +379,19 @@ services:
     depends_on:
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - production_mysql_data:/var/lib/mysql
     networks:
@@ -408,7 +416,7 @@ services:
     cpus: "1.0"
     pids_limit: 300
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5
@@ -498,13 +506,13 @@ services:
       # wp-content/db.php: when the reverse proxy diverts a request (trusted
       # X-Honeypot-Backend: honeypot header), db.php connects $wpdb to THIS
       # database (a scrubbed clone of production) instead of the production one
-      # above. Same user/password as production here -- the isolation is the
-      # separate database host, not separate credentials (credential isolation
-      # between pools is moot now that there is a single honeypot database).
+      # above. Same user name, but its own password: a diverted attacker who
+      # reads it (it is the honeypot WordPress' DB password) learns nothing
+      # that opens production_database.
       - HONEYPOT_DB_HOST=honeypot_database
       - HONEYPOT_DB_NAME=production_database
       - HONEYPOT_DB_USER=production_user
-      - HONEYPOT_DB_PASSWORD=${MYSQL_PASSWORD}
+      - HONEYPOT_DB_PASSWORD=${HONEYPOT_DB_PASSWORD}
       # Shared secret gating the honeypot-db-backend-header mu-plugin's
       # X-DB-Backend/X-DB-Host/X-DB-Probe response headers (which prove, via a
       # real SELECT, which database container served the request). Same secret
@@ -753,7 +761,7 @@ services:
       - WORDPRESS_DB_HOST=honeypot_database:3306
       - WORDPRESS_DB_NAME=production_database
       - WORDPRESS_DB_USER=production_user
-      - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+      - WORDPRESS_DB_PASSWORD=${HONEYPOT_DB_PASSWORD}
       - WP_ADMIN_USER=${WP_ADMIN_USER:-admin}
       - WP_ADMIN_PASSWORD=${HONEYPOT_WP_ADMIN_PASSWORD:-change_this_honeypot_wp_admin_password}
       - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL:-admin@example.com}
@@ -798,17 +806,19 @@ services:
         restart: true
       init_setup:
         condition: service_completed_successfully
-    command: |
-      bash -c "
-        rm -f /var/lib/mysql/placeholder
-        docker-entrypoint.sh mysqld --mysql-native-password=ON --authentication-policy=mysql_native_password
-      "
+    # The wrapper makes root@localhost and MYSQL_USER follow the passwords
+    # below on every start and drops root@'%' (scripts/
+    # mysql_credentials_entrypoint.sh) -- a copied data dir or a rotated
+    # .env can't leave stale or shared credentials behind.
+    command: ["bash", "/mysql_credentials_entrypoint.sh", "mysqld", "--mysql-native-password=ON", "--authentication-policy=mysql_native_password"]
     environment:
       - MYSQL_DATABASE=production_database
       - MYSQL_USER=production_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${HONEYPOT_DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${HONEYPOT_MYSQL_ROOT_PASSWORD}
+      - MYSQL_ROOT_HOST=localhost
     volumes:
+      - ./scripts/mysql_credentials_entrypoint.sh:/mysql_credentials_entrypoint.sh:ro
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_proxy_data:/var/lib/mysql
     # No networks of its own: it lives in honeypot_database_net's network
@@ -844,7 +854,7 @@ services:
     cpus: "0.5"
     pids_limit: 200
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "production_user", "-p${MYSQL_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # no credentials: "alive" even on access denied, and no password in `docker inspect`
       interval: 30s
       timeout: 5s
       retries: 5

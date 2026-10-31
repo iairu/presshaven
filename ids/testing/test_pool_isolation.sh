@@ -14,10 +14,10 @@
 #
 #   BACKGROUND: all honeypot pools share one honeypot_network. Isolation
 #   between them has two layers: (1) each pool's MySQL user has a DIFFERENT
-#   password (until this was fixed, all three pools and production shared
+#   password (until this was fixed, the pools and production shared
 #   MYSQL_PASSWORD, so a compromised pool could log into another adversary's
 #   pool database -- see honeypot_database_N in docker-compose.yml and
-#   MYSQL_PASSWORD_POOL_2/3 in .env); (2) each pool's container firewall
+#   MYSQL_PASSWORD_POOL_N in .env); (2) each pool's container firewall
 #   (honeypot_eshop_N_net, honeypot profile) only lets it open connections to
 #   its OWN database. Phase 2 reports which layer currently stops a cross-pool
 #   connection; Phase 3 passes on either, and keeps catching a regression of
@@ -132,7 +132,7 @@ for n in ${POOL_NUMBERS}; do
 done
 
 # Every pool's password variable must be textually distinct in the compose
-# file (pool 1 uses MYSQL_PASSWORD, pools 2+ use MYSQL_PASSWORD_POOL_N) --
+# file (pool N uses MYSQL_PASSWORD_POOL_N, never production's MYSQL_PASSWORD) --
 # this catches a regression where a future pool is added but its env block
 # is copy-pasted without updating the password variable.
 for n in ${POOL_NUMBERS}; do
@@ -142,11 +142,7 @@ for n in ${POOL_NUMBERS}; do
         found { print }
     ' "${COMPOSE_FILE}")
     pw_var=$(printf '%s\n' "${block}" | grep -oE 'WORDPRESS_DB_PASSWORD=\$\{[A-Z0-9_]+\}' | head -1)
-    if [ "${n}" = "1" ]; then
-        expected='WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}'
-    else
-        expected="WORDPRESS_DB_PASSWORD=\${MYSQL_PASSWORD_POOL_${n}}"
-    fi
+    expected="WORDPRESS_DB_PASSWORD=\${MYSQL_PASSWORD_POOL_${n}}"
     if [ "${pw_var}" = "${expected}" ]; then
         pass "honeypot_eshop_${n} uses its own password variable (${pw_var})"
     else

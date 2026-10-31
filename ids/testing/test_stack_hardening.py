@@ -196,6 +196,41 @@ class LayerChecks:
             self.assertNotIn('mysql -h "$db_host"', src, script)
             self.assertEqual(src.count('mysql --local-infile=0 -h "$db_host"'), 2, script)
 
+    # -- database credentials ----------------------------------------------------
+    def databases(self):
+        return [n for n, s in self.svc.items()
+                if s.get("image", "").startswith("mysql:") and "MYSQL_ROOT_PASSWORD" in env(s)]
+
+    def test_every_database_resets_its_accounts_on_start(self):
+        dbs = self.databases()
+        self.assertIn("production_database", dbs)
+        for name in dbs:
+            s = self.svc[name]
+            self.assertEqual(s["command"][:3], ["bash", "/mysql_credentials_entrypoint.sh", "mysqld"], name)
+            m = mounts(s)["/mysql_credentials_entrypoint.sh"]
+            self.assertTrue(m.get("read_only"), name)
+            self.assertTrue(m["source"].endswith("scripts/mysql_credentials_entrypoint.sh"), name)
+            self.assertEqual(env(s).get("MYSQL_ROOT_HOST"), "localhost", f"{name} allows root from any host")
+
+    def test_no_password_in_any_healthcheck(self):
+        for name, s in self.svc.items():
+            test = " ".join((s.get("healthcheck") or {}).get("test") or [])
+            self.assertNotRegex(test, r"(^| )-p\S|--password", f"{name}: password visible in docker inspect")
+
+    def test_every_database_has_its_own_user_and_root_password(self):
+        # Compared, never printed.
+        dbs = self.databases()
+        for key in ("MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD"):
+            values = [env(self.svc[n]).get(key) for n in dbs]
+            self.assertTrue(all(values), f"a database has an empty {key}")
+            self.assertTrue(len(set(values)) == len(values), f"two databases share a {key}")
+        users = {env(self.svc[n])["MYSQL_PASSWORD"] for n in dbs}
+        roots = {env(self.svc[n])["MYSQL_ROOT_PASSWORD"] for n in dbs}
+        self.assertFalse(users & roots, "a user password doubles as a root password")
+
+    def test_pool_manager_holds_no_root_password(self):
+        self.assertNotIn("MYSQL_ROOT_PASSWORD", env(self.svc["pool_manager"]))
+
     def test_production_firewall_defaults_do_not_open_honeypots_in_this_layer(self):
         doc = json.loads((EDGE_DIR / "images/container_firewall/production.json").read_text())
         for r in doc["outbound"]:
@@ -266,6 +301,13 @@ class DefaultLayer(LayerChecks, unittest.TestCase):
 class DbProxyLayer(LayerChecks, unittest.TestCase):
     LAYER = "db-proxy"
 
+    def test_db_php_diverts_with_the_honeypot_databases_own_password(self):
+        prod = env(self.svc["production_eshop"])
+        hp = env(self.svc["honeypot_database"])
+        self.assertTrue(prod["HONEYPOT_DB_PASSWORD"] == hp["MYSQL_PASSWORD"], "db.php can't log into the honeypot")
+        self.assertTrue(hp["MYSQL_PASSWORD"] != prod["WORDPRESS_DB_PASSWORD"], "honeypot uses production's password")
+        self.assertTrue(env(self.svc["honeypot_admin_seed"])["WORDPRESS_DB_PASSWORD"] == hp["MYSQL_PASSWORD"])
+
     def test_no_honeypot_wordpress_containers(self):
         self.assertFalse([n for n in self.svc if n.startswith("honeypot_eshop")])
 
@@ -280,3 +322,44 @@ class DbProxyLayer(LayerChecks, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ENV_SECRETS = re.compile(r"(PASSWORD|SECRET|_KEY|_SALT)$")
+PLACEHOLDER = re.compile(r"change_this|your_|changeme", re.I)
+
+
+@unittest.skipUnless((EDGE_DIR / ".env").exists(), "no ids/.env")
+class EnvSecrets(unittest.TestCase):
+    """ids/.env: no secret left at its placeholder or shared with another
+    (scripts/generate_secrets.py fixes both). Values are compared, never printed."""
+
+    @staticmethod
+    def parse(path):
+        return dict(re.findall(r"^([A-Z0-9_]+)=(.*)$", path.read_text(), re.M))
+
+    def setUp(self):
+        self.env = self.parse(EDGE_DIR / ".env")
+        self.example = self.parse(EDGE_DIR / ".env.example")
+        self.secrets = {k: v for k, v in self.env.items()
+                        if ENV_SECRETS.search(k) and not k.startswith(("STRIPE_TEST_PUBLISHABLE",))}
+
+    def test_no_secret_is_a_placeholder(self):
+        bad = [k for k, v in self.secrets.items()
+               if v and (PLACEHOLDER.search(v) or (len(v) > 8 and v == self.example.get(k)))]
+        self.assertEqual(bad, [], "placeholder secrets (names only)")
+
+    def test_no_two_secrets_share_a_value(self):
+        seen, shared = {}, []
+        for k, v in self.secrets.items():
+            if v:
+                if v in seen:
+                    shared.append(f"{seen[v]}/{k}")
+                seen.setdefault(v, k)
+        self.assertEqual(shared, [], "secrets sharing a value (names only)")
+
+    def test_database_passwords_are_set_and_strong(self):
+        keys = ["MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "HONEYPOT_DB_PASSWORD",
+                "HONEYPOT_MYSQL_ROOT_PASSWORD", "REDIS_PASSWORD", "SESSION_SIGNING_KEY",
+                *[f"MYSQL{r}_PASSWORD_POOL_{n}" for r in ("", "_ROOT") for n in (1, 2, 3)]]
+        weak = [k for k in keys if len(self.env.get(k, "")) < 24]
+        self.assertEqual(weak, [], "missing or short (names only)")

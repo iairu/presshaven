@@ -231,7 +231,15 @@ class Manager:
             host=os.environ.get("REDIS_HOST", "session_store"),
             password=env_required("REDIS_PASSWORD"),
             decode_responses=True)
+        # Production's database password: only ever sent to production (the
+        # clone / content-sync helpers read from it). Every honeypot database
+        # gets its own user and root password instead (_create_database_container).
         self.mysql_password = env_required("MYSQL_PASSWORD")
+        # Database layer: production_eshop's db.php connects to whichever
+        # honeypot database with this one password (HONEYPOT_DB_PASSWORD), so
+        # it is every database-layer pool's, and never production's.
+        self.honeypot_db_password = (env_required("HONEYPOT_DB_PASSWORD")
+                                     if MODE == "database" else None)
         self.host_paths = self._own_mount_sources()
         self.image = self.docker.containers.get(socket.gethostname()).image
         self.in_flight: set[int] = set()   # pools being built (one thread each)
@@ -569,9 +577,9 @@ class Manager:
         start time instead of ~44 s. With POOL_TEMPLATE=0, or while the template
         is still (re)building, it is cloned + scrubbed from production directly,
         the same way honeypot_db_init prepares the first one. All honeypot
-        databases share production's credentials (the isolation is the separate
-        database host, see wp-content/db.php), so the template's baked-in users
-        and grants are the right ones for every pool copied from it."""
+        databases share HONEYPOT_DB_PASSWORD (production_eshop's db.php has one
+        honeypot credential), never production's; each gets its own random root
+        password (_create_database_container)."""
         db_name = f"honeypot_database_{n}"
         db_vol = f"{PROJECT}_{db_name}_data"
         labels = {"honeypot.pool": str(n), "honeypot.pool.managed-by": "pool_manager"}
@@ -594,11 +602,11 @@ class Manager:
                 self.image, ["sh", "-c", "tar -C /src -cf - . | tar -C /dest -xf -"],
                 binds={self._template_volume_name(): ("/src", "ro"), db_vol: ("/dest", "rw")},
                 labels=labels, what="copy template")
-            db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+            db = self._create_database_container(db_name, db_vol, self.honeypot_db_password, labels)
             db.start()
             self._wait_healthy(db, "database")
         else:
-            db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+            db = self._create_database_container(db_name, db_vol, self.honeypot_db_password, labels)
             db.start()
             self._wait_healthy(db, "database")
             self._run_helper(
@@ -610,6 +618,7 @@ class Manager:
                 extra_networks=[self._net("production_network")],
                 environment={"HP": db_name, "PROD": "production_database",
                              "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
+                             "HP_PASSWORD": self.honeypot_db_password,
                              "MYSQL_DATABASE": DB_NAME})
         if self.redis.exists(QUERY_LOG_KEY):
             self._enable_query_log(db)
@@ -665,7 +674,7 @@ class Manager:
                                os.environ.get("HONEYPOT_WP_ADMIN_PASSWORD",
                                               "change_this_honeypot_wp_admin_password"),
                                os.environ.get("WP_ADMIN_EMAIL", "admin@example.com")))
-        return hmac.new(env_required("MYSQL_ROOT_PASSWORD").encode(), material.encode(),
+        return hmac.new(env_required("MYSQL_PASSWORD").encode(), material.encode(),
                         hashlib.sha256).hexdigest()[:16]
 
     def _template_is_fresh(self) -> bool:
@@ -716,7 +725,7 @@ class Manager:
                 if v.name == vname:
                     v.remove(force=True)
         self.docker.volumes.create(name=vol, labels=labels)
-        db = self._create_database_container(name, vol, self.mysql_password, labels)
+        db = self._create_database_container(name, vol, self.honeypot_db_password, labels)
         db.start()
         try:
             self._wait_healthy(db, "template database")
@@ -729,6 +738,7 @@ class Manager:
                 extra_networks=[self._net("production_network")],
                 environment={"HP": name, "PROD": "production_database",
                              "MYSQL_USER": DB_USER, "MYSQL_PASSWORD": self.mysql_password,
+                             "HP_PASSWORD": self.honeypot_db_password,
                              "MYSQL_DATABASE": DB_NAME})
             db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
         finally:
@@ -739,11 +749,11 @@ class Manager:
 
     def _build_template_wordpress(self) -> None:
         """Seed a WordPress files + database volume pair once -- production files,
-        a database clone, migrations and the wp-cli install -- keeping production's
-        baseline DB password, then shut MySQL down cleanly so the data directory
-        copies without crash recovery. Keeps both volumes; the container and the
-        wp-cli helper are removed. Each pool copied from this template rotates the
-        DB password to its own afterwards. The "ready" marker is created last, so
+        a database clone, migrations and the wp-cli install -- under a throwaway
+        DB password, then shut MySQL down cleanly so the data directory copies
+        without crash recovery. Keeps both volumes; the container and the
+        wp-cli helper are removed. Each pool copied from this template starts
+        MySQL with its own DB password (mysql_credentials_entrypoint.sh). The "ready" marker is created last, so
         a build that fails part-way leaves no usable template. Runs under
         _template_lock."""
         db_vol, files_vol = self._template_db_volume_name(), self._template_files_volume_name()
@@ -765,14 +775,13 @@ class Manager:
         for vol in (files_vol, db_vol):
             self.docker.volumes.create(name=vol, labels=labels)
         self._seed_wordpress_volumes(files_vol, db_vol, labels)
-        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        password = secrets.token_hex(12)   # the template's own; no pool keeps it
+        db = self._create_database_container(db_name, db_vol, password, labels)
         db.start()
         try:
             self._wait_healthy(db, "template database")
-            # old == new: keep production's baseline password, only run migrations.
-            self._rotate_pool_db(db_name, labels, self.mysql_password, self.mysql_password,
-                                 "template migrations")
-            self._wordpress_cli_seed(db_name, files_vol, labels, self.mysql_password,
+            self._migrate_pool_db(db_name, labels, password, "template migrations")
+            self._wordpress_cli_seed(db_name, files_vol, labels, password,
                                      "template WordPress seed")
             db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
         finally:
@@ -799,15 +808,24 @@ class Manager:
         of its own firewall (_start_database_firewall), as docker-compose.yml's
         honeypot_database_1: attackers who get into a pool's WordPress own its
         database too, and from there honeypot_network would lead everywhere
-        else -- the firewall lets connections in on 3306 and none out."""
+        else -- the firewall lets connections in on 3306 and none out.
+
+        Credentials, as the compose databases: the data directory is a copy
+        (of production's, or of the template), so mysql_credentials_entrypoint.sh
+        resets its accounts on start -- the user to `password`, root@localhost
+        to a random password of this container's own (used only from inside
+        it, by docker exec), root@'%' dropped."""
         fw = self._start_database_firewall(name, labels)
         return self.docker.containers.create(
             MYSQL_IMAGE, name=name, labels=labels, detach=True,
-            command=["bash", "-c", f"rm -f /var/lib/mysql/placeholder; docker-entrypoint.sh mysqld {MYSQLD_ARGS}"],
+            command=["bash", "/mysql_credentials_entrypoint.sh", "mysqld", *MYSQLD_ARGS.split()],
             environment={"MYSQL_DATABASE": DB_NAME, "MYSQL_USER": DB_USER,
                          "MYSQL_PASSWORD": password,
-                         "MYSQL_ROOT_PASSWORD": env_required("MYSQL_ROOT_PASSWORD")},
-            volumes={volume: {"bind": "/var/lib/mysql", "mode": "rw"}},
+                         "MYSQL_ROOT_PASSWORD": secrets.token_hex(16),
+                         "MYSQL_ROOT_HOST": "localhost"},
+            volumes={volume: {"bind": "/var/lib/mysql", "mode": "rw"},
+                     self.host_paths["/scripts"] + "/mysql_credentials_entrypoint.sh":
+                         {"bind": "/mysql_credentials_entrypoint.sh", "mode": "ro"}},
             network_mode=f"container:{fw.id}",
             security_opt=["no-new-privileges:true"], cap_drop=["ALL"],
             cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "SYS_NICE"],
@@ -823,8 +841,8 @@ class Manager:
         """WordPress layer: a full honeypot_eshop_N + honeypot_database_N pair.
         With POOL_TEMPLATE on (default) the files and database volumes are copied
         from a pre-seeded template (see _build_template_wordpress), skipping the
-        one-time WordPress install (wp-cli, ~50 s) per pool; only the DB password
-        is rotated to this pool's own and the current catalog synced. While the
+        one-time WordPress install (wp-cli, ~50 s) per pool; MySQL starts with
+        this pool's own DB password and the current catalog is synced. While the
         template is still (re)building, or with POOL_TEMPLATE=0, the pool is built
         from scratch the same way init_setup prepares pools 1-3."""
         project, db_name, wp_name = PROJECT, f"honeypot_database_{n}", f"honeypot_eshop_{n}"
@@ -853,22 +871,21 @@ class Manager:
 
     def _provision_wordpress_full(self, n, db_name, db_vol, files_vol, labels, password):
         """Build the pool's database and files from scratch: seed both volumes
-        from production, start MySQL, rotate to this pool's password + migrate,
-        then run the WordPress install (wp-cli)."""
+        from production, start MySQL with this pool's password, migrate, then
+        run the WordPress install (wp-cli)."""
         for vol in (db_vol, files_vol):
             self.docker.volumes.create(name=vol, labels=labels)
         self._seed_wordpress_volumes(files_vol, db_vol, labels)       # 1
-        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        db = self._create_database_container(db_name, db_vol, password, labels)
         db.start()                                                    # 2
         self._wait_healthy(db, "database")
-        self._rotate_pool_db(db_name, labels, self.mysql_password, password, "migrations")  # 3
+        self._migrate_pool_db(db_name, labels, password, "migrations")  # 3
         self._wordpress_cli_seed(db_name, files_vol, labels, password, "WordPress seed")    # 4
 
     def _provision_wordpress_from_template(self, n, db_name, db_vol, files_vol, labels, password):
         """Copy the template's files + database volumes into this pool's, start
-        MySQL on the ready-made data dir, then rotate the DB password to this
-        pool's own (the template keeps production's baseline). No wp-cli install:
-        the template already ran it."""
+        MySQL on the ready-made data dir with this pool's own DB password, then
+        apply the migrations. No wp-cli install: the template already ran it."""
         for vol in (db_vol, files_vol):
             self.docker.volumes.create(name=vol, labels=labels)
         # Local tar copy (tar as root restores ownership, as the raw DB seed does).
@@ -880,10 +897,10 @@ class Manager:
                    self._template_db_volume_name(): ("/src_db", "ro"),
                    files_vol: ("/dest_files", "rw"), db_vol: ("/dest_db", "rw")},
             labels=labels, what="copy template")
-        db = self._create_database_container(db_name, db_vol, self.mysql_password, labels)
+        db = self._create_database_container(db_name, db_vol, password, labels)
         db.start()
         self._wait_healthy(db, "database")
-        self._rotate_pool_db(db_name, labels, self.mysql_password, password, "rotate password")
+        self._migrate_pool_db(db_name, labels, password, "migrations")
 
     def _seed_wordpress_volumes(self, files_vol, db_vol, labels):
         """WordPress files from production (minus the production-only hardening
@@ -900,16 +917,15 @@ class Manager:
                    files_vol: ("/dest_files", "rw"), db_vol: ("/dest_db", "rw")},
             labels=labels, what="seed volumes")
 
-    def _rotate_pool_db(self, db_name, labels, old_password, new_password, what):
-        """Rotate the pool DB user's password old -> new and apply migrations
-        (idempotent, --force). When old == new (the template build) no ALTER
-        runs and only the migrations are applied."""
+    def _migrate_pool_db(self, db_name, labels, password, what):
+        """Apply the migrations to a pool database (idempotent, --force). Its
+        user already has the pool's password: MySQL started with it."""
         self._run_helper(
             MYSQL_IMAGE, ["bash", "-c", MIGRATE_SCRIPT],
             binds={self.host_paths["/migrations"]: ("/migrations", "ro")},
             labels=labels, what=what, entrypoint=[],
             environment={"DB_HOST": db_name, "DB_USER": DB_USER, "DB_NAME": DB_NAME,
-                         "OLD_PASSWORD": old_password, "NEW_PASSWORD": new_password},
+                         "DB_PASSWORD": password},
             network=self._net("honeypot_network"))
 
     def _wordpress_cli_seed(self, db_name, files_vol, labels, password, what):
@@ -1409,17 +1425,18 @@ return false
 """
 
 # Same steps as honeypot_db_init in docker-compose.db-proxy.yml, for one database.
+# MYSQL_PASSWORD is production's (read side only), HP_PASSWORD the honeypot's.
 CLONE_SCRIPT = r"""
 set -e
 wait_for() {
   TRIES=0
-  until mysqladmin ping -h"$1" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" 2>/dev/null | grep -q 'mysqld is alive'; do
+  until mysqladmin ping -h"$1" -u"$MYSQL_USER" -p"$2" 2>/dev/null | grep -q 'mysqld is alive'; do
     TRIES=$((TRIES+1)); [ "$TRIES" -ge 90 ] && { echo "$1 never became reachable"; exit 1; }
     sleep 2
   done
 }
-wait_for "$PROD"; wait_for "$HP"
-HAS_SCHEMA=$(mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE' AND table_name='wp_options'" 2>/dev/null || echo 0)
+wait_for "$PROD" "$MYSQL_PASSWORD"; wait_for "$HP" "$HP_PASSWORD"
+HAS_SCHEMA=$(mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$HP_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE' AND table_name='wp_options'" 2>/dev/null || echo 0)
 # --default-character-set=binary on both ends of the pipe transfers stored
 # bytes verbatim. Without it the dump/restore round-trips through the client's
 # connection charset and re-encodes multibyte bytes in PHP-serialized postmeta
@@ -1428,37 +1445,30 @@ HAS_SCHEMA=$(mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" 
 # "Add to cart" blocked. Mirrors replicate_content_to_honeypot.sh.
 if [ "$HAS_SCHEMA" = 0 ]; then
   mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --single-transaction --no-tablespaces --skip-add-locks "$MYSQL_DATABASE" \
-    | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE"
+    | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$HP_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE"
 fi
 for m in $(ls /migrations/*.sql 2>/dev/null | sort); do
-  mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
+  mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$HP_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
 done
 # Production's own site name (see honeypot_db_init): a renamed honeypot gave
 # itself away to every diverted user.
 mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --no-create-info --replace --skip-add-locks \
   --no-tablespaces --skip-triggers --where="option_name='blogname'" "$MYSQL_DATABASE" wp_options \
-  | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE" || true
+  | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$HP_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE" || true
 """
 
 MIGRATE_SCRIPT = r"""
 set -u
 for i in $(seq 1 60); do
-  mysqladmin ping -h"$DB_HOST" -u"$DB_USER" -p"$OLD_PASSWORD" 2>&1 | grep -q 'mysqld is alive' && break
+  mysqladmin ping -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" 2>&1 | grep -q 'mysqld is alive' && break
   sleep 2
 done
-# ALTER USER takes effect at once. No FLUSH PRIVILEGES: it needs the RELOAD
-# privilege, which the database's own user does not have, so it failed every
-# build after the password had already been changed.
-if ! mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" -e 'SELECT 1' >/dev/null 2>&1; then
-  mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$OLD_PASSWORD" \
-    -e "ALTER USER '$DB_USER'@'%' IDENTIFIED BY '$NEW_PASSWORD';" || exit 1
-fi
 failed=0
 for f in $(ls /migrations/*.sql | sort); do
   if [ "$(basename "$f")" = 01_clean-honeypot-data.sql ]; then
-    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" 2>/dev/null
+    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" --force < "$f" 2>/dev/null
   else
-    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" || failed=1
+    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" --force < "$f" || failed=1
   fi
 done
 exit $failed

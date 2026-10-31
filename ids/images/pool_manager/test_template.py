@@ -15,7 +15,6 @@ sys.modules.setdefault("docker", mock.MagicMock())
 sys.modules.setdefault("redis", mock.MagicMock())
 os.environ.setdefault("REDIS_PASSWORD", "x")
 os.environ.setdefault("MYSQL_PASSWORD", "x")
-os.environ.setdefault("MYSQL_ROOT_PASSWORD", "x")
 
 import manager  # noqa: E402
 
@@ -34,7 +33,8 @@ class TemplateBase(unittest.TestCase):
         manager.TEMPLATE_TTL_S = 0
         with mock.patch.object(manager.Manager, "__init__", lambda s: None):
             self.mgr = manager.Manager()
-        self.mgr.mysql_password = "pw"
+        self.mgr.mysql_password = "prod-pw"
+        self.mgr.honeypot_db_password = "hp-pw"
         self.mgr.host_paths = {
             "/migrations": "/h/migrations",
             "/migrations_override/01_clean-honeypot-data.sql": "/h/clean.sql"}
@@ -52,10 +52,13 @@ class TemplateBase(unittest.TestCase):
         self.registered = []
         self.mgr.register_ready = lambda n, owned=False: self.registered.append(n)
 
+        self.db_passwords = []
+
         def fake_create(name, vol, pw, labels):
             c = mock.MagicMock()
             c.name = name
             self.created.append((name, vol))
+            self.db_passwords.append(pw)
             return c
         self.mgr._create_database_container = fake_create
 
@@ -103,6 +106,26 @@ class ProvisionWithTemplate(TemplateBase):
         self.mgr.provision_database(10)
         self.assertNotIn("copy template", self.helpers)
         self.assertIn("clone + scrub", self.helpers)
+
+
+class DatabaseLayerCredentials(TemplateBase):
+    def test_every_database_layer_pool_uses_the_honeypot_password(self):
+        self._template_present()
+        self.mgr.provision_database(10)                 # from the template
+        self.mgr.ensure_template = lambda: None
+        self.mgr.docker.volumes.list.return_value = []
+        self.mgr.provision_database(11)                 # direct clone
+        self.assertEqual(self.db_passwords, ["hp-pw", "hp-pw"])
+
+    def test_clone_reads_production_with_its_password_and_writes_with_the_honeypots(self):
+        envs = []
+        self.mgr._run_helper = lambda *a, **k: envs.append(k.get("environment"))
+        self.mgr._build_template_database()
+        env = next(e for e in envs if e and "HP" in e)
+        self.assertEqual((env["MYSQL_PASSWORD"], env["HP_PASSWORD"]), ("prod-pw", "hp-pw"))
+        script = manager.CLONE_SCRIPT
+        self.assertNotIn('-h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD"', script)
+        self.assertNotIn('-h"$PROD" -u"$MYSQL_USER" -p"$HP_PASSWORD"', script)
 
 
 class BuildTemplate(TemplateBase):
@@ -157,7 +180,8 @@ class BuildTemplate(TemplateBase):
 
 class WordPressBase(TemplateBase):
     """WordPress layer: the template is a files + database volume pair, and a
-    pool copies both then rotates the DB password instead of re-running wp-cli."""
+    pool copies both and starts MySQL with its own DB password instead of
+    re-running wp-cli."""
 
     def setUp(self):
         super().setUp()
@@ -180,7 +204,7 @@ class ProvisionWordPressWithTemplate(WordPressBase):
         self._template_present()
         self.mgr.provision_wordpress(5)
         self.assertIn("copy template", self.helpers)
-        self.assertIn("rotate password", self.helpers)     # DB password -> per-pool
+        self.assertIn("migrations", self.helpers)
         self.assertIn("content sync", self.helpers)        # catalog still freshened
         self.assertNotIn("WordPress seed", self.helpers)   # the ~50 s wp-cli install
         self.assertNotIn("seed volumes", self.helpers)
@@ -197,6 +221,19 @@ class ProvisionWordPressWithTemplate(WordPressBase):
         self.assertIn("content sync", self.helpers)
         self.assertNotIn("copy template", self.helpers)
         self.assertEqual(self.registered, [6])
+
+    def test_pool_database_gets_the_pools_own_password_never_productions(self):
+        for template in (True, False):
+            self.db_passwords.clear()
+            if template:
+                self._template_present()
+            else:
+                self.mgr.ensure_template = lambda: None
+            self.mgr.provision_wordpress(7)
+            stored = self.mgr.redis.set.call_args.args[1]
+            self.assertEqual(len(self.db_passwords), 1)
+            self.assertTrue(self.db_passwords[0] == stored, "pool DB not created with its own password")
+            self.assertTrue(stored != "prod-pw", "pool uses production's password")
 
     def test_template_off_builds_from_scratch(self):
         manager.USE_TEMPLATE = False

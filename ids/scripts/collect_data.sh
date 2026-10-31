@@ -81,7 +81,6 @@
 #   mysql-client - direct MySQL access (optional; falls back to docker exec)
 #
 # ENVIRONMENT VARIABLES (override defaults from docker-compose):
-#   MYSQL_ROOT_PASSWORD  - root password for honeypot MySQL instances
 #   REDIS_PASSWORD       - Redis AUTH password
 #   COMPOSE_PROJECT      - docker-compose project name (default: honeypot-ids-system-v1)
 #   POOL_COUNT           - number of honeypot pool instances (default: 3)
@@ -188,7 +187,6 @@ ok "Output directory: ${OUTDIR}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-honeypot-ids-system-v1}"
 POOL_COUNT="${POOL_COUNT:-3}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-session_redis_password}"
-MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-}"
 
 # Counters for final metadata
 SESSIONS_EXPORTED=0
@@ -227,15 +225,15 @@ mysql_query() {
     _query="$3"
 
     _container="${COMPOSE_PROJECT}-honeypot_database_${_pool}-1"
+    # Each pool database has its own root password (root@localhost only), so
+    # log in with the container's own MYSQL_ROOT_PASSWORD, from inside it.
     # Fall back to bare service name if compose-prefixed name is not found.
-    docker exec "$_container" \
-        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" \
-        --silent --batch "$_db" \
-        -e "$_query" 2>/dev/null \
-    || docker exec "honeypot_database_${_pool}" \
-        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" \
-        --silent --batch "$_db" \
-        -e "$_query" 2>/dev/null
+    for _c in "$_container" "honeypot_database_${_pool}"; do
+        docker exec -e Q="$_query" -e D="$_db" "$_c" \
+            sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" --silent --batch "$D" -e "$Q"' \
+            2>/dev/null && return 0
+    done
+    return 1
 }
 
 # ---------------------------------------------------------------------------
