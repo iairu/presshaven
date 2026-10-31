@@ -1,6 +1,8 @@
 """Container Firewall page: the iptables rules around the WordPress containers
 (core/container_firewall.py), one ruleset per profile -- Production
-(production_eshop) and Honeypot pools (every pool, compose and runtime).
+(production_eshop), Honeypot pools (every pool, compose and runtime) and
+Honeypot databases. The two honeypot profiles are locked: always on, and no
+outbound peer past the pool's own database can be added.
 
 Only connection OPENINGS are filtered -- replies and loopback always pass --
 so each row says who may open a connection: inbound, the edge to Apache;
@@ -33,6 +35,7 @@ _COLUMNS = ["Rule", "Peer", "Protocol", "Ports", "Resolved to", "Packets", "Desc
 _PEER_SUGGESTIONS = {
     "production": ["reverse_proxy", "production_database", "internet", "local-subnets", "any"],
     "honeypot": ["db-host", "reverse_proxy", "local-subnets", "any"],
+    "honeypot_database": ["local-subnets"],
 }
 _EXPLANATION = {
     "production": (
@@ -47,8 +50,16 @@ _EXPLANATION = {
         "not become a gateway: by default it may open connections only to its own database (db-host), "
         "not to the edge (and through it production), the other pools, the Docker host or the "
         "internet. honeypot_network is also an internal network, so the internet stays unreachable "
-        "whatever these rules say. The rules live in honeypot_eshop_N_net, outside the pool's reach."),
+        "whatever these rules say. The rules live in honeypot_eshop_N_net, outside the pool's reach. "
+        "Locked: the firewall stays on and outbound rules can only name db-host."),
+    "honeypot_database": (
+        "Firewall around every honeypot database (honeypot_database_N, and the database proxy layer's "
+        "honeypot_database). An attacker who owns a pool's WordPress owns its database too, so the "
+        "database must not be a way out either: it accepts MySQL from honeypot_network and opens no "
+        "connections at all -- not to the edge, the session store, production, the other pools' "
+        "databases or the host. Locked: the firewall stays on and no outbound rule can be added."),
 }
+_WHAT = {"production": "production", "honeypot": "a honeypot pool", "honeypot_database": "a honeypot database"}
 
 
 class ContainerFirewallPage(QWidget):
@@ -64,8 +75,8 @@ class ContainerFirewallPage(QWidget):
         self.profile_combo = QComboBox()
         for profile in cfw.PROFILES.values():
             self.profile_combo.addItem(profile.title, profile.name)
-        self.profile_combo.setToolTip("Which ruleset to edit: production_eshop's, or the one every honeypot "
-                                      "pool shares")
+        self.profile_combo.setToolTip("Which ruleset to edit: production_eshop's, the one every honeypot "
+                                      "pool shares, or the one every honeypot database shares")
         bar.addWidget(self.profile_combo)
         bar.addWidget(QLabel("on"))
         self.target_combo = TargetSelector(lambda: targets_for("edge", state))
@@ -185,11 +196,14 @@ class ContainerFirewallPage(QWidget):
         set_status(self.sync_label, "")
         self.error_banner.set_error(None)
         self.explanation.setText(_EXPLANATION[name])
-        what = "production" if name == "production" else "a honeypot pool"
+        what = _WHAT[name]
+        self.enabled_check.setEnabled(not self.profile.locked)
+        self.enabled_check.setToolTip("Locked on: attackers get into these containers" if self.profile.locked
+                                      else "Off: the chains stay in place but accept everything")
         self.table_titles["inbound"].setText(f"<b>Inbound — who may connect to {what}</b>")
         self.table_titles["outbound"].setText(f"<b>Outbound — where {what} may connect</b>")
         self.apply_btn.setText(f"Apply to {self.profile.title.lower()}")
-        self.apply_btn.setToolTip(f"Send this ruleset to {self.profile.service} (protecting "
+        self.apply_btn.setToolTip(f"Send this ruleset to {self.profile.service_for(cfw.active_layer())} (protecting "
                                   f"{self.profile.protects}): enforced at once, kept across restarts")
         self.peer_combo.clear()
         self.peer_combo.addItems(_PEER_SUGGESTIONS[name])
@@ -358,7 +372,7 @@ class ContainerFirewallPage(QWidget):
             return
         self.apply_btn.setEnabled(True)
         remote, profile = self.target_combo.current_remote(), self.profile
-        set_status(self.sync_label, f"checking {profile.service}…")
+        set_status(self.sync_label, f"checking {profile.service_for(cfw.active_layer())}…")
         self._run(lambda: cfw.get_status(remote, profile),
                   lambda status, error: self._on_status(status, error, profile))
 
@@ -392,7 +406,7 @@ class ContainerFirewallPage(QWidget):
             live.append("IPv6 rules not loaded")
         self.live_label.setText(" · ".join(live))
         doc = self._document()
-        fw = self.profile.service
+        fw = self.profile.service_for(s.layer)
         if not s.hooked or s.enforced_fingerprint != s.fingerprint:
             set_status(self.sync_label, f"NOT enforced: {fw} has not loaded the saved rules (see its logs)",
                        color=colors["danger"])

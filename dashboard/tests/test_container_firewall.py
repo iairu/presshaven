@@ -47,13 +47,25 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual([(r["peer"], r["ports"]) for r in doc["inbound"] if r["enabled"]],
                          [("reverse_proxy", "80")])
 
+    def test_honeypot_database_default_opens_nothing(self):
+        doc = pfw.load_default_ruleset(pfw.HONEYPOT_DATABASE.defaults_path)
+        self.assertEqual(pfw.validate_document(doc, "honeypot_database"), [])
+        self.assertEqual(pfw.lockout_warnings(doc, "default", pfw.HONEYPOT_DATABASE), [])
+        self.assertEqual(doc["outbound"], [])
+        self.assertEqual([(r["peer"], r["proto"], r["ports"]) for r in doc["inbound"] if r["enabled"]],
+                         [("local-subnets", "tcp", "3306")])
+
     def test_profiles(self):
-        self.assertEqual(set(pfw.PROFILES), {"production", "honeypot"})
+        self.assertEqual(set(pfw.PROFILES), {"production", "honeypot", "honeypot_database"})
         for profile in pfw.PROFILES.values():
             self.assertTrue(profile.defaults_path.is_file(), profile.defaults_path)
-            self.assertTrue(profile.service.endswith("_net"))
-        self.assertNotEqual(pfw.PRODUCTION.settings_path, pfw.HONEYPOT.settings_path)
+            for layer in profile.layers:
+                self.assertTrue(profile.service_for(layer).endswith("_net"))
+        self.assertEqual(len({p.settings_path for p in pfw.PROFILES.values()}), 3)
         self.assertNotIn("db-proxy", pfw.HONEYPOT.layers)
+        self.assertEqual(pfw.HONEYPOT_DATABASE.service_for("default"), "honeypot_database_1_net")
+        self.assertEqual(pfw.HONEYPOT_DATABASE.service_for("db-proxy"), "honeypot_database_net")
+        self.assertEqual({p.name for p in pfw.PROFILES.values() if p.locked}, {"honeypot", "honeypot_database"})
 
     def test_php_tool_mirrors_limits(self):
         # The container validates the same document; keep the limits in step.
@@ -65,6 +77,66 @@ class ValidationTests(unittest.TestCase):
                          ", ".join(f"'{k}'" for k in pfw.PEER_KEYWORDS))
         self.assertEqual(re.search(r"const PROFILES = \[(.*?)\];", php).group(1),
                          ", ".join(f"'{k}'" for k in pfw.PROFILES))
+        locked = re.search(r"const LOCKED_OUTBOUND = \[(.*?)\];", php).group(1)
+        self.assertEqual(locked, ", ".join(
+            f"'{k}' => [{', '.join(repr(p) for p in v)}]" for k, v in pfw.LOCKED_OUTBOUND.items()))
+
+
+class LockedProfileTests(unittest.TestCase):
+    """Attackers get into honeypot containers: no ruleset may switch their
+    firewall off or give them a way out past the pool's own database."""
+
+    def settings(self, profile):
+        return pfw.FirewallSettings.load(Path(tempfile.mkdtemp()) / "s.json", profile.defaults_path)
+
+    def test_cannot_be_switched_off(self):
+        for profile in (pfw.HONEYPOT, pfw.HONEYPOT_DATABASE):
+            doc = pfw.load_default_ruleset(profile.defaults_path)
+            doc["enabled"] = False
+            self.assertIn("cannot be switched off", " ".join(pfw.validate_document(doc, profile.name)))
+            with self.assertRaises(pfw.FirewallError):
+                pfw.apply_document(None, doc, profile)
+            # Even a settings file saying "off" builds an enforcing document.
+            s = self.settings(profile)
+            s.path.write_text(json.dumps({"enabled": False}), encoding="utf-8")
+            again = pfw.FirewallSettings.load(s.path, profile.defaults_path)
+            self.assertTrue(again.enabled)
+            again.enabled = False
+            self.assertTrue(pfw.build_document(again)["enabled"])
+
+    def test_pool_outbound_only_db_host(self):
+        s = self.settings(pfw.HONEYPOT)
+        for peer, proto in (("internet", "tcp"), ("reverse_proxy", "tcp"), ("local-subnets", "tcp"),
+                            ("any", "tcp"), ("honeypot_database_2", "tcp"), ("10.9.0.0/16", "udp"),
+                            ("db-host", "udp"), ("session_store", "tcp")):
+            with self.assertRaises(ValueError, msg=peer):
+                s.add_custom("outbound", peer, proto, "1")
+        s.add_custom("outbound", "db-host", "tcp", "33060")  # its own database: allowed
+        s.add_custom("inbound", "local-subnets", "tcp", "8080")  # inbound opens no way out
+        self.assertEqual(pfw.validate_document(pfw.build_document(s), "honeypot"), [])
+
+    def test_database_opens_nothing(self):
+        s = self.settings(pfw.HONEYPOT_DATABASE)
+        with self.assertRaises(ValueError):
+            s.add_custom("outbound", "db-host", "tcp", "3306")
+        doc = pfw.build_document(s)
+        doc["outbound"].append({"id": "x", "enabled": False, "peer": "any", "proto": "tcp", "ports": "1",
+                                "label": ""})
+        self.assertIn("opens no connections", " ".join(pfw.validate_document(doc, "honeypot_database")))
+
+    def test_escape_rules_in_a_saved_file_are_dropped(self):
+        s = self.settings(pfw.HONEYPOT)
+        s.path.write_text(json.dumps({"custom": [
+            {"direction": "outbound", "peer": "reverse_proxy", "proto": "tcp", "ports": "80"},
+            {"direction": "outbound", "peer": "db-host", "proto": "tcp", "ports": "33060"}]}), encoding="utf-8")
+        again = pfw.FirewallSettings.load(s.path, pfw.HONEYPOT.defaults_path)
+        self.assertEqual([c["peer"] for c in again.custom_rules], ["db-host"])
+
+    def test_production_is_not_locked(self):
+        s = pfw.FirewallSettings(path=Path(tempfile.mkdtemp()) / "p.json")
+        s.add_custom("outbound", "internet", "tcp", "8443")
+        s.enabled = False
+        self.assertEqual(pfw.validate_document(pfw.build_document(s), "production"), [])
 
 
 class SettingsTests(unittest.TestCase):
@@ -156,26 +228,17 @@ class DocumentTests(unittest.TestCase):
         s.enabled = False
         self.assertIn("switched off", pfw.lockout_warnings(pfw.build_document(s), "default")[0])
 
-    def test_honeypot_escape_warnings(self):
+    def test_honeypot_lockout_warnings(self):
         s = pfw.FirewallSettings.load(Path(tempfile.mkdtemp()) / "h.json", pfw.HONEYPOT.defaults_path)
         warn = lambda: pfw.lockout_warnings(pfw.build_document(s), "default", pfw.HONEYPOT)  # noqa: E731
-        s.add_custom("outbound", "honeypot_database_2", "tcp", "3306")  # a pool database: no escape
         self.assertEqual(warn(), [])
-        for peer, proto, ports, needle in (("internet", "tcp", "443", "internet"),
-                                           ("reverse_proxy", "tcp", "80", "production"),
-                                           ("local-subnets", "tcp", "22", "other pools"),
-                                           ("10.9.0.0/16", "udp", "53", "10.9.0.0/16")):
-            rec = s.add_custom("outbound", peer, proto, ports)
-            self.assertEqual(len(warn()), 1, peer)
-            self.assertIn(needle, warn()[0])
-            s.remove_custom(f"outbound/{rec['id']}")
         s.set_enabled("outbound/database", False)
-        s.custom_rules.clear()
         self.assertIn("db-host", warn()[0])
         s.set_enabled("inbound/edge-http", False)
         self.assertEqual(len(warn()), 2)
-        s.enabled = False
-        self.assertIn("switched off", warn()[0])
+        d = pfw.FirewallSettings.load(Path(tempfile.mkdtemp()) / "d.json", pfw.HONEYPOT_DATABASE.defaults_path)
+        d.set_enabled("inbound/mysql", False)
+        self.assertIn("tcp/3306", pfw.lockout_warnings(pfw.build_document(d), "default", pfw.HONEYPOT_DATABASE)[0])
 
     def test_status_parse(self):
         doc = pfw.build_document(self.settings())
@@ -211,6 +274,14 @@ class DocumentTests(unittest.TestCase):
         argv = run.call_args.args[0]
         i = argv.index("exec")
         self.assertEqual(argv[i:i + 5], ["exec", "-T", "honeypot_eshop_1_net", "container-firewall", "apply"])
+
+    def test_database_profile_targets_the_layer_firewall(self):
+        doc = pfw.load_default_ruleset(pfw.HONEYPOT_DATABASE.defaults_path)
+        for layer, service in (("default", "honeypot_database_1_net"), ("db-proxy", "honeypot_database_net")):
+            with mock.patch.object(pfw, "active_layer", return_value=layer), \
+                    mock.patch.object(pfw, "run_checked") as run:
+                pfw.apply_document(None, doc, pfw.HONEYPOT_DATABASE)
+            self.assertIn(service, run.call_args.args[0])
 
     def test_missing_service_explained(self):
         with mock.patch.object(pfw, "run_checked",

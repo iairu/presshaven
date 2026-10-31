@@ -27,14 +27,23 @@
  *   container-firewall health         exit 0 once the ruleset is enforced
  *   container-firewall default        print the image's default ruleset
  *
- * $FIREWALL_PROFILE picks the ruleset: "production" (production_eshop) or
- * "honeypot" (every honeypot pool, compose and runtime). One file per profile
+ * $FIREWALL_PROFILE picks the ruleset: "production" (production_eshop),
+ * "honeypot" (every honeypot pool's WordPress, compose and runtime) or
+ * "honeypot_database" (every honeypot database). One file per profile
  * in RULES_DIR (a volume every firewall container shares), so a change the
  * dashboard applies through one honeypot pool's firewall reaches the others
  * within WATCH_INTERVAL. No file = the image default for the profile.
  *
- * Own chains only (FW_IN, FW_OUT, FW_INET in the filter table), hooked first
- * into INPUT and OUTPUT, replaced atomically with iptables-restore --noflush.
+ * Own chains only (FW_IN, FW_OUT, FW_INET, FW_FWD in the filter table), hooked
+ * first into INPUT, OUTPUT and FORWARD, replaced atomically with
+ * iptables-restore --noflush. FW_FWD drops everything, always: no container
+ * here routes, so a namespace on two networks (production_eshop_net in the
+ * db-proxy layer) can never be used as a router between them.
+ *
+ * The honeypot profiles are LOCKED (validate_locked()): an attacker can get
+ * into those containers, so no ruleset -- not the dashboard's, not a hand-
+ * written file -- may switch the firewall off or open a way out past the
+ * pool's own database, and IPv6 must be enforced too (fails closed).
  * The nat table is never touched: Docker's embedded DNS (127.0.0.11) lives
  * there, and is reached over loopback.
  *
@@ -56,7 +65,10 @@
 const RULES_DIR = '/var/lib/container-firewall';
 const DEFAULTS_DIR = '/usr/local/share/container-firewall';
 const RUNTIME_FILE = '/run/container-firewall.json';
-const PROFILES = ['production', 'honeypot'];
+const PROFILES = ['production', 'honeypot', 'honeypot_database'];
+// Locked profiles => the outbound peers they may have: a pool's WordPress only
+// its own database, a honeypot database nothing at all (it answers, never calls).
+const LOCKED_OUTBOUND = ['honeypot' => ['db-host'], 'honeypot_database' => []];
 const WATCH_INTERVAL = 5;
 const MAX_RULES = 64;
 const MAX_PORTS = 15;
@@ -142,8 +154,9 @@ function parse_ports( $ports ): string {
 	return implode( ',', $out );
 }
 
-/** Returns a list of error strings; empty = valid. */
-function validate( $doc ): array {
+/** Returns a list of error strings; empty = valid. A locked profile's
+ * ruleset must also pass validate_locked(). */
+function validate( $doc, ?string $profile = null ): array {
 	if ( ! is_array( $doc ) ) {
 		return [ 'ruleset must be a JSON object' ];
 	}
@@ -204,6 +217,27 @@ function validate( $doc ): array {
 			}
 		}
 	}
+	if ( ! $errors && $profile !== null && isset( LOCKED_OUTBOUND[ $profile ] ) ) {
+		$errors = validate_locked( $doc, $profile );
+	}
+	return $errors;
+}
+
+/** The shape that keeps a hijacked honeypot container a dead end. Disabled
+ * rules count too: switching one on must not be the way out. */
+function validate_locked( array $doc, string $profile ): array {
+	$errors = [];
+	if ( ! $doc['enabled'] ) {
+		$errors[] = "the $profile firewall cannot be switched off (attackers get into these containers)";
+	}
+	$allowed = LOCKED_OUTBOUND[ $profile ];
+	foreach ( $doc['outbound'] as $r ) {
+		if ( ! $allowed ) {
+			$errors[] = "outbound/{$r['id']}: a $profile container opens no connections at all";
+		} elseif ( ! in_array( $r['peer'], $allowed, true ) || $r['proto'] !== 'tcp' ) {
+			$errors[] = "outbound/{$r['id']}: a $profile container may only open tcp to " . implode( ', ', $allowed );
+		}
+	}
 	return $errors;
 }
 
@@ -212,7 +246,7 @@ function validate( $doc ): array {
 function load_default(): array {
 	$file = DEFAULTS_DIR . '/' . profile() . '.json';
 	$doc = json_decode( (string) @file_get_contents( $file ), true );
-	if ( validate( $doc ) ) {
+	if ( validate( $doc, profile() ) ) {
 		fail( "the image default ruleset $file is invalid" );
 	}
 	return $doc;
@@ -223,7 +257,7 @@ function load_saved( ?string &$source = null ): array {
 	$raw = @file_get_contents( rules_file() );
 	if ( $raw !== false ) {
 		$doc = json_decode( $raw, true );
-		if ( ! validate( $doc ) ) {
+		if ( ! validate( $doc, profile() ) ) {
 			$source = 'saved';
 			return $doc;
 		}
@@ -334,8 +368,8 @@ function active( array $r ): bool {
 
 /** The iptables-restore input for the filter table. */
 function render( array $doc, array $resolved ): string {
-	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', ':FW_INET - [0:0]',
-		'-F FW_IN', '-F FW_OUT', '-F FW_INET' ];
+	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', ':FW_INET - [0:0]', ':FW_FWD - [0:0]',
+		'-F FW_IN', '-F FW_OUT', '-F FW_INET', '-F FW_FWD', '-A FW_FWD -m comment --comment fw:fwd:default -j DROP' ];
 	if ( ! $doc['enabled'] ) {
 		$l[] = '-A FW_IN -m comment --comment fw:disabled -j ACCEPT';
 		$l[] = '-A FW_OUT -m comment --comment fw:disabled -j ACCEPT';
@@ -376,10 +410,12 @@ function render( array $doc, array $resolved ): string {
 	return implode( "\n", $l ) . "\n";
 }
 
-/** Same idea for IPv6, best effort: the stack networks are IPv4, so only
- * loopback and established traffic pass when the firewall is on. */
+/** Same idea for IPv6: the stack networks are IPv4, so only loopback and
+ * established traffic pass when the firewall is on. Required for the locked
+ * profiles (see enforce()), best effort for production. */
 function render6( bool $enabled ): string {
-	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', '-F FW_IN', '-F FW_OUT' ];
+	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', ':FW_FWD - [0:0]', '-F FW_IN', '-F FW_OUT', '-F FW_FWD',
+		'-A FW_FWD -j DROP' ];
 	if ( $enabled ) {
 		$l[] = '-A FW_IN -i lo -j ACCEPT';
 		$l[] = '-A FW_IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT';
@@ -396,7 +432,7 @@ function render6( bool $enabled ): string {
 }
 
 function hook( string $bin ): bool {
-	foreach ( [ 'INPUT' => 'FW_IN', 'OUTPUT' => 'FW_OUT' ] as $builtin => $chain ) {
+	foreach ( [ 'INPUT' => 'FW_IN', 'OUTPUT' => 'FW_OUT', 'FORWARD' => 'FW_FWD' ] as $builtin => $chain ) {
 		if ( run( [ $bin, '-w', '5', '-C', $builtin, '-j', $chain ] )[0] !== 0
 				&& run( [ $bin, '-w', '5', '-I', $builtin, '1', '-j', $chain ] )[0] !== 0 ) {
 			return false;
@@ -414,10 +450,15 @@ function enforce( array $doc ): array {
 		throw new RuntimeException( 'iptables-restore failed: ' . trim( $err ) );
 	}
 	if ( ! hook( 'iptables' ) ) {
-		throw new RuntimeException( 'cannot hook FW_IN / FW_OUT into INPUT / OUTPUT' );
+		throw new RuntimeException( 'cannot hook FW_IN / FW_OUT / FW_FWD into INPUT / OUTPUT / FORWARD' );
 	}
 	$v6 = run( [ 'ip6tables-restore', '-w', '5', '--noflush' ], render6( $doc['enabled'] ) )[0] === 0
 		&& hook( 'ip6tables' );
+	// A kernel without IPv6 has nothing to filter; anywhere else a locked
+	// profile does not report healthy (and its container never starts) without it.
+	if ( ! $v6 && isset( LOCKED_OUTBOUND[ profile() ] ) && file_exists( '/proc/net/if_inet6' ) ) {
+		throw new RuntimeException( 'ip6tables rules failed to load; the ' . profile() . ' profile requires them' );
+	}
 	$runtime = [ 'applied_at' => gmdate( 'c' ), 'profile' => profile(), 'layer' => layer(), 'resolved' => $resolved,
 		'fingerprint' => fingerprint( $doc ), 'ipv6' => $v6 ];
 	@file_put_contents( RUNTIME_FILE, json_encode( $runtime, JSON_UNESCAPED_SLASHES ) . "\n" );
@@ -443,20 +484,20 @@ function canonical( $v ) {
 /** Packet counters per rule id from the live chains. */
 function counters(): array {
 	[ $code, $out ] = run( [ 'iptables-save', '-c', '-t', 'filter' ] );
-	$hooked = [ 'in' => false, 'out' => false ];
+	$hooked = [ 'in' => false, 'out' => false, 'fwd' => false ];
 	$hits = [ 'in' => [], 'out' => [] ];
 	if ( $code !== 0 ) {
 		return [ null, $hits ];
 	}
 	foreach ( explode( "\n", $out ) as $line ) {
-		if ( preg_match( '/^\[\d+:\d+\] -A (INPUT|OUTPUT) -j FW_(IN|OUT)$/', $line, $m ) ) {
+		if ( preg_match( '/^\[\d+:\d+\] -A (INPUT|OUTPUT|FORWARD) -j FW_(IN|OUT|FWD)$/', $line, $m ) ) {
 			$hooked[ strtolower( $m[2] ) ] = true;
 		} elseif ( preg_match( '/^\[(\d+):(\d+)\] -A FW_(?:IN|OUT) .*--comment "?fw:(in|out):([a-z0-9-]+)"?/', $line, $m ) ) {
 			$hits[ $m[3] ][ $m[4] ]['packets'] = ( $hits[ $m[3] ][ $m[4] ]['packets'] ?? 0 ) + (int) $m[1];
 			$hits[ $m[3] ][ $m[4] ]['bytes'] = ( $hits[ $m[3] ][ $m[4] ]['bytes'] ?? 0 ) + (int) $m[2];
 		}
 	}
-	return [ $hooked['in'] && $hooked['out'], $hits ];
+	return [ $hooked['in'] && $hooked['out'] && $hooked['fwd'], $hits ];
 }
 
 // -- commands -------------------------------------------------------------------
@@ -499,7 +540,7 @@ switch ( $cmd ) {
 			fail( 'usage: container-firewall apply --b64 <base64 JSON>', 2 );
 		}
 		$doc = json_decode( (string) base64_decode( $argv[3], true ), true );
-		$errors = validate( $doc );
+		$errors = validate( $doc, profile() );
 		if ( $errors ) {
 			fail( "invalid ruleset:\n  " . implode( "\n  ", $errors ) );
 		}

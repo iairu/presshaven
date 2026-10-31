@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "enabled": true,
+  "inbound": [
+    {"id": "mysql", "enabled": true, "peer": "local-subnets", "proto": "tcp", "ports": "3306",
+     "label": "MySQL from honeypot_network: the pool's WordPress, the seed, migration and content-sync jobs"}
+  ],
+  "outbound": []
+}

@@ -458,6 +458,8 @@ class Manager:
             return None
         out: dict[int, str] = {}
         for c in listed:
+            if c.name.endswith("_net"):   # the database's firewall, not MySQL
+                continue
             n = pl.database_pool_number(c.attrs.get("Config", {}).get("Labels") or {}, PROJECT)
             if n is not None:
                 out[n] = pl.container_state(c.attrs.get("State", {}))
@@ -702,10 +704,11 @@ class Manager:
         labels = {"honeypot.template": "1"}
         log(f"building pool template {vol} (one-time clone + scrub from production)")
         started = time.time()
-        try:
-            self.docker.containers.get(name).remove(force=True)
-        except docker.errors.NotFound:
-            pass
+        for leftover in (name, f"{name}_net"):   # the database before its firewall
+            try:
+                self.docker.containers.get(leftover).remove(force=True)
+            except docker.errors.NotFound:
+                pass
         # Drop the marker first (so a crash now leaves the template "absent"),
         # then any previous, possibly half-built, data volume.
         for vname in (marker, vol):
@@ -729,7 +732,7 @@ class Manager:
                              "MYSQL_DATABASE": DB_NAME})
             db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
         finally:
-            db.remove(force=True)
+            self._remove_database(db)
         self.docker.volumes.create(name=marker, labels={
             "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}"})
         log(f"pool template ready in {time.time() - started:.0f}s")
@@ -748,10 +751,11 @@ class Manager:
         labels = {"honeypot.template": "1"}
         log(f"building WordPress pool template ({files_vol} + {db_vol}); one-time wp-cli install")
         started = time.time()
-        try:
-            self.docker.containers.get(db_name).remove(force=True)
-        except docker.errors.NotFound:
-            pass
+        for leftover in (db_name, f"{db_name}_net"):   # the database before its firewall
+            try:
+                self.docker.containers.get(leftover).remove(force=True)
+            except docker.errors.NotFound:
+                pass
         # Drop the marker first (so a crash now leaves the template "absent"),
         # then any previous, possibly half-built, data volumes.
         for vname in (marker, files_vol, db_vol):
@@ -772,7 +776,7 @@ class Manager:
                                      "template WordPress seed")
             db.stop(timeout=90)   # clean InnoDB shutdown -> copies need no recovery
         finally:
-            db.remove(force=True)
+            self._remove_database(db)
         self.docker.volumes.create(name=marker, labels={
             "honeypot.template": "1", "honeypot.template.built": f"{time.time():.0f}",
             "honeypot.template.admin": self._decoy_admin_fingerprint()})
@@ -791,6 +795,12 @@ class Manager:
         self._phase("query log", started)
 
     def _create_database_container(self, name, volume, password, labels):
+        """A pool (or template) MySQL container, inside the network namespace
+        of its own firewall (_start_database_firewall), as docker-compose.yml's
+        honeypot_database_1: attackers who get into a pool's WordPress own its
+        database too, and from there honeypot_network would lead everywhere
+        else -- the firewall lets connections in on 3306 and none out."""
+        fw = self._start_database_firewall(name, labels)
         return self.docker.containers.create(
             MYSQL_IMAGE, name=name, labels=labels, detach=True,
             command=["bash", "-c", f"rm -f /var/lib/mysql/placeholder; docker-entrypoint.sh mysqld {MYSQLD_ARGS}"],
@@ -798,7 +808,7 @@ class Manager:
                          "MYSQL_PASSWORD": password,
                          "MYSQL_ROOT_PASSWORD": env_required("MYSQL_ROOT_PASSWORD")},
             volumes={volume: {"bind": "/var/lib/mysql", "mode": "rw"}},
-            network=self._net("honeypot_network"),
+            network_mode=f"container:{fw.id}",
             security_opt=["no-new-privileges:true"], cap_drop=["ALL"],
             cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "SYS_NICE"],
             mem_limit="512m", nano_cpus=500_000_000, pids_limit=200,
@@ -969,6 +979,32 @@ class Manager:
         self._wait_healthy(wp, "WordPress")
         self.register_ready(n)
 
+    def _start_database_firewall(self, db_name, labels):
+        """<db_name>_net, as docker-compose.yml's honeypot_database_1_net: owns
+        the database's network namespace on honeypot_network, answers to its
+        DNS name and enforces the locked honeypot_database profile (MySQL in
+        from honeypot_network, no connection out) before MySQL starts in it.
+        Replaces a leftover of the same name (a template build cut short).
+        Not charged to the pool budget (pool_logic.pool_cost): ~10 MB, idle."""
+        name = f"{db_name}_net"
+        try:
+            self.docker.containers.get(name).remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        return self._start_firewall(name, db_name, labels, {
+            "FIREWALL_PROFILE": "honeypot_database",
+            "FIREWALL_LAYER": "db-proxy" if MODE == "database" else "default"})
+
+    def _remove_database(self, db) -> None:
+        """Remove a database container, then its firewall (MySQL lives in the
+        firewall's network namespace)."""
+        name = db.name
+        db.remove(force=True)
+        try:
+            self.docker.containers.get(f"{name}_net").remove(force=True)
+        except docker.errors.NotFound:
+            pass
+
     def _start_firewall_container(self, n, db_name, wp_name, labels):
         """honeypot_eshop_N_net, as docker-compose.yml's honeypot_eshop_1_net:
         owns the pool's network namespace on honeypot_network only (see
@@ -976,15 +1012,21 @@ class Manager:
         log into production_database) and answers to the pool's DNS name, with
         the honeypot firewall profile enforced before WordPress starts in it.
         Not charged to the pool budget (pool_logic.pool_cost): ~10 MB, idle."""
+        return self._start_firewall(f"{wp_name}_net", wp_name, labels, {
+            "FIREWALL_PROFILE": "honeypot", "FIREWALL_LAYER": "default",
+            "FIREWALL_DB_HOST": f"{db_name}:3306"})
+
+    def _start_firewall(self, name, alias, labels, environment):
+        """A container-firewall sidecar on honeypot_network only, answering to
+        `alias`, started and healthy (its ruleset enforced) on return."""
         net = self._net("honeypot_network")
         fw = self.docker.containers.create(
-            FIREWALL_IMAGE, name=f"{wp_name}_net", labels=labels, detach=True,
-            environment={"FIREWALL_PROFILE": "honeypot", "FIREWALL_LAYER": "default",
-                         "FIREWALL_DB_HOST": f"{db_name}:3306"},
+            FIREWALL_IMAGE, name=name, labels=labels, detach=True,
+            environment=environment,
             volumes={f"{PROJECT}_container_firewall_rules":
                      {"bind": "/var/lib/container-firewall", "mode": "rw"}},
             network=net,
-            networking_config={net: self.docker.api.create_endpoint_config(aliases=[wp_name])},
+            networking_config={net: self.docker.api.create_endpoint_config(aliases=[alias])},
             init=True, read_only=True, tmpfs={"/run": ""},
             security_opt=["no-new-privileges:true"], cap_drop=["ALL"], cap_add=["NET_ADMIN"],
             mem_limit="64m", nano_cpus=250_000_000, pids_limit=50,
@@ -1005,7 +1047,9 @@ class Manager:
         c = self.docker.containers.create(
             image, command=command, labels=labels, volumes=volumes, user=user,
             environment=environment, network=network, entrypoint=entrypoint,
-            cap_drop=["ALL"] if caps else None, cap_add=caps, log_config=LOG_CONFIG)
+            cap_drop=["ALL"] if caps else None, cap_add=caps, log_config=LOG_CONFIG,
+            # One on two networks never routes between them (as reverse_proxy).
+            sysctls={"net.ipv4.ip_forward": "0"} if extra_networks else None)
         try:
             for extra in extra_networks:
                 self.docker.networks.get(extra).connect(c)
@@ -1375,7 +1419,7 @@ wait_for() {
   done
 }
 wait_for "$PROD"; wait_for "$HP"
-HAS_SCHEMA=$(mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE' AND table_name='wp_options'" 2>/dev/null || echo 0)
+HAS_SCHEMA=$(mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE' AND table_name='wp_options'" 2>/dev/null || echo 0)
 # --default-character-set=binary on both ends of the pipe transfers stored
 # bytes verbatim. Without it the dump/restore round-trips through the client's
 # connection charset and re-encodes multibyte bytes in PHP-serialized postmeta
@@ -1384,16 +1428,16 @@ HAS_SCHEMA=$(mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT COU
 # "Add to cart" blocked. Mirrors replicate_content_to_honeypot.sh.
 if [ "$HAS_SCHEMA" = 0 ]; then
   mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --single-transaction --no-tablespaces --skip-add-locks "$MYSQL_DATABASE" \
-    | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE"
+    | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE"
 fi
 for m in $(ls /migrations/*.sql 2>/dev/null | sort); do
-  mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
+  mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --force "$MYSQL_DATABASE" < "$m" || echo "  (non-zero from $m, continuing)"
 done
 # Production's own site name (see honeypot_db_init): a renamed honeypot gave
 # itself away to every diverted user.
 mysqldump -h"$PROD" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary --no-create-info --replace --skip-add-locks \
   --no-tablespaces --skip-triggers --where="option_name='blogname'" "$MYSQL_DATABASE" wp_options \
-  | mysql -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE" || true
+  | mysql --local-infile=0 -h"$HP" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --default-character-set=binary "$MYSQL_DATABASE" || true
 """
 
 MIGRATE_SCRIPT = r"""
@@ -1405,16 +1449,16 @@ done
 # ALTER USER takes effect at once. No FLUSH PRIVILEGES: it needs the RELOAD
 # privilege, which the database's own user does not have, so it failed every
 # build after the password had already been changed.
-if ! mysql -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" -e 'SELECT 1' >/dev/null 2>&1; then
-  mysql -h"$DB_HOST" -u"$DB_USER" -p"$OLD_PASSWORD" \
+if ! mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" -e 'SELECT 1' >/dev/null 2>&1; then
+  mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$OLD_PASSWORD" \
     -e "ALTER USER '$DB_USER'@'%' IDENTIFIED BY '$NEW_PASSWORD';" || exit 1
 fi
 failed=0
 for f in $(ls /migrations/*.sql | sort); do
   if [ "$(basename "$f")" = 01_clean-honeypot-data.sql ]; then
-    mysql -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" 2>/dev/null
+    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" 2>/dev/null
   else
-    mysql -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" || failed=1
+    mysql --local-infile=0 -h"$DB_HOST" -u"$DB_USER" -p"$NEW_PASSWORD" "$DB_NAME" --force < "$f" || failed=1
   fi
 done
 exit $failed

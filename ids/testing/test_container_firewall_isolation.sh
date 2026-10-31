@@ -12,7 +12,8 @@
 #       pfw-hp-fw     the honeypot firewall, alias honeypot_eshop_1
 #       pfw-hp-wp     the REAL hardened WordPress image in pfw-hp-fw's
 #                     namespace (php -S stub server, no database settings)
-#       pfw-hp-db1    alias honeypot_database_1 (its own database)
+#       pfw-hpdb-fw   the honeypot_database firewall, alias honeypot_database_1
+#       pfw-hpdb-db   its database (a 3306 stand-in) in pfw-hpdb-fw's namespace
 #       pfw-hp-db2    alias honeypot_database_2 (another pool's database)
 #       pfw-hp-other  alias honeypot_eshop_2   (another pool)
 #     pfwtest_prod normal network (like production_network)
@@ -30,6 +31,10 @@
 #   and nothing else (no internet, DNS, edge, other pools, Docker host);
 #   other containers cannot connect in; WordPress cannot touch the firewall;
 #   a WordPress restart keeps the rules; a firewall restart fails closed.
+#   Honeypot database profile: the pool reaches it; from it nothing at all
+#   (edge, other pools, Docker host, internet); a firewall restart fails
+#   closed. Both honeypot profiles: locked (cannot be switched off or opened
+#   up), no forwarding, IPv6 enforced.
 #   Production profile: the edge gets in; the shop reaches its database
 #   and the internet on 443 only; backups unreachable; only the edge in.
 #
@@ -71,8 +76,8 @@ stub() {  # stub <name> <network> <alias> <port>
         "${STUB_IMAGE}" python -m http.server "$4" >/dev/null || die "start $1"
 }
 
-# A firewall sidecar + WordPress in its namespace.
-pair() {  # pair <prefix> <network> <alias> <profile> [extra env...]
+# A firewall sidecar, healthy (its ruleset enforced).
+firewall() {  # firewall <prefix> <network> <alias> <profile> [extra env...]
     _p=$1 _net=$2 _alias=$3 _profile=$4; shift 4
     docker run -d --name "${_p}-fw" --label "${LABEL}" --network "${_net}" --network-alias "${_alias}" \
         -e FIREWALL_PROFILE="${_profile}" -e FIREWALL_LAYER=default "$@" \
@@ -84,6 +89,12 @@ pair() {  # pair <prefix> <network> <alias> <profile> [extra env...]
         sleep 1
     done
     docker exec "${_p}-fw" container-firewall health >/dev/null 2>&1 || die "${_p}-fw never became healthy: $(docker logs --tail 5 "${_p}-fw" 2>&1)"
+}
+
+# A firewall sidecar + WordPress in its namespace.
+pair() {  # pair <prefix> <network> <alias> <profile> [extra env...]
+    firewall "$@"
+    _p=$1
     docker run -d --name "${_p}-wp" --label "${LABEL}" --network "container:${_p}-fw" \
         --security-opt no-new-privileges:true --cap-drop ALL ${WP_CAPS} --memory 256m --pids-limit 100 \
         --entrypoint php "${WP_IMAGE}" -S 0.0.0.0:80 -t /tmp >/dev/null || die "start ${_p}-wp"
@@ -112,11 +123,14 @@ docker volume create --label "${LABEL}" pfwtest_rules >/dev/null || die "create 
 docker run -d --name pfw-edge --label "${LABEL}" --network pfwtest_hp --network-alias reverse_proxy \
     "${STUB_IMAGE}" python -m http.server 80 >/dev/null || die "start pfw-edge"
 docker network connect --alias reverse_proxy pfwtest_prod pfw-edge || die "connect pfw-edge"
-stub pfw-hp-db1 pfwtest_hp honeypot_database_1 3306
 stub pfw-hp-db2 pfwtest_hp honeypot_database_2 3306
 stub pfw-hp-other pfwtest_hp honeypot_eshop_2 80
 stub pfw-pr-db pfwtest_prod production_database 3306
 stub pfw-pr-backup pfwtest_prod backup_service 22
+firewall pfw-hpdb pfwtest_hp honeypot_database_1 honeypot_database
+docker run -d --name pfw-hpdb-db --label "${LABEL}" --network container:pfw-hpdb-fw \
+    --security-opt no-new-privileges:true --cap-drop ALL \
+    "${STUB_IMAGE}" python -m http.server 3306 >/dev/null || die "start pfw-hpdb-db"
 pair pfw-hp pfwtest_hp honeypot_eshop_1 honeypot -e FIREWALL_DB_HOST=honeypot_database_1:3306
 pair pfw-pr pfwtest_prod production_eshop production
 sleep 2
@@ -146,13 +160,14 @@ check_blocked pfw-hp-wp "${HP_GW}" 22 "Docker host SSH on the gateway"
 banner "Honeypot profile – only the edge gets in"
 # ---------------------------------------------------------------------------
 check_stub_blocked pfw-hp-other honeypot_eshop_1 80
-check_stub_blocked pfw-hp-db1 honeypot_eshop_1 80
+check_stub_blocked pfw-hp-db2 honeypot_eshop_1 80
 
 # ---------------------------------------------------------------------------
 banner "Honeypot profile – WordPress cannot touch the firewall"
 # ---------------------------------------------------------------------------
 check_wordpress_contained pfw-hp-wp
 check_firewall_hardened pfw-hp-fw
+check_firewall_locked pfw-hp-fw
 check_in pfw-hp-wp "even root in WordPress cannot write the firewall's files (none visible)" \
     "! ls /var/lib/container-firewal[l] /usr/local/bin/container-firewal[l] 2>/dev/null | grep -q ."
 
@@ -166,6 +181,24 @@ check_blocked pfw-hp-wp honeypot_database_2 3306 "after a WordPress restart"
 docker restart -t 2 pfw-hp-fw >/dev/null
 sleep 3
 check_in pfw-hp-wp "after a firewall restart WordPress is cut off (fails closed, no interface but lo)" \
+    "! grep -qv '^ *lo:\\|^Inter\\|^ face' /proc/net/dev"
+
+# ---------------------------------------------------------------------------
+banner "Honeypot database profile – a dead end"
+# ---------------------------------------------------------------------------
+check_firewall_enforcing pfw-hpdb-fw honeypot_database
+check_firewall_hardened pfw-hpdb-fw
+check_firewall_locked pfw-hpdb-fw
+check_tcp_blocked pfw-hpdb-db reverse_proxy 80 "the edge"
+check_tcp_blocked pfw-hpdb-db honeypot_eshop_1 80 "its own pool's WordPress"
+check_tcp_blocked pfw-hpdb-db honeypot_eshop_2 80 "another pool"
+check_tcp_blocked pfw-hpdb-db honeypot_database_2 3306 "another pool's database"
+check_tcp_blocked pfw-hpdb-db "${HP_GW}" 2375 "Docker host API on the gateway"
+check_tcp_blocked pfw-hpdb-db "${HP_GW}" 22 "Docker host SSH on the gateway"
+check_tcp_blocked pfw-hpdb-db 1.1.1.1 443 "internet HTTPS"
+docker restart -t 2 pfw-hpdb-fw >/dev/null
+sleep 3
+check_in pfw-hpdb-db "after a firewall restart the database is cut off (fails closed, no interface but lo)" \
     "! grep -qv '^ *lo:\\|^Inter\\|^ face' /proc/net/dev"
 
 # ---------------------------------------------------------------------------

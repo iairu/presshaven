@@ -201,10 +201,10 @@ services:
       # Clone production -> honeypot ONLY if the honeypot has no WordPress
       # schema yet (fresh volume). This never clobbers a honeypot that already
       # holds its own user-diverged state on a warm restart.
-      HAS_SCHEMA=\$$(mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$$MYSQL_DATABASE' AND table_name='wp_options'\" 2>/dev/null || echo 0)
+      HAS_SCHEMA=\$$(mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$$MYSQL_DATABASE' AND table_name='wp_options'\" 2>/dev/null || echo 0)
       if [ \"\$$HAS_SCHEMA\" = '0' ]; then
         echo 'Cloning production database into the honeypot database...'
-        mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --single-transaction --no-tablespaces --skip-add-locks \"\$$MYSQL_DATABASE\" | mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\"
+        mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --single-transaction --no-tablespaces --skip-add-locks \"\$$MYSQL_DATABASE\" | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\"
         echo '  Clone complete.'
       else
         echo '  Honeypot database already has a WordPress schema -- skipping clone.'
@@ -216,7 +216,7 @@ services:
       if [ -d /migrations ]; then
         for m in \$$(ls /migrations/*.sql 2>/dev/null | sort); do
           echo \"  Applying \$$m ...\"
-          mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --force \"\$$MYSQL_DATABASE\" < \"\$$m\" || echo \"    (non-zero, continuing)\"
+          mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --force \"\$$MYSQL_DATABASE\" < \"\$$m\" || echo \"    (non-zero, continuing)\"
         done
       fi
 
@@ -226,13 +226,18 @@ services:
       # so a volume that still carries the old demo name is put right too;
       # honeypot_content_sync never touches wp_options.
       echo 'Copying the production site name into the honeypot database...'
-      mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --no-create-info --replace --skip-add-locks --no-tablespaces --skip-triggers --where=\"option_name='blogname'\" \"\$$MYSQL_DATABASE\" wp_options | mysql -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\" || echo '  (could not copy the site name, continuing)'
+      mysqldump -h\"\$$PROD\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" --no-create-info --replace --skip-add-locks --no-tablespaces --skip-triggers --where=\"option_name='blogname'\" \"\$$MYSQL_DATABASE\" wp_options | mysql --local-infile=0 -h\"\$$HP\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" \"\$$MYSQL_DATABASE\" || echo '  (could not copy the site name, continuing)'
 
       echo 'Honeypot database initialisation complete.'
       "
     networks:
       - honeypot_network
       - production_network
+    # On both networks: never a router between them. Its mysql clients of the
+    # honeypot database send no local files (--local-infile=0): attackers end
+    # up in that database, and this job holds production's password.
+    sysctls:
+      net.ipv4.ip_forward: 0
 
   # ---------------------------------------------------------------------------
   # Honeypot content replication (periodic production -> honeypot pool sync)
@@ -285,6 +290,10 @@ services:
       - production_network
       - honeypot_network
       - session_network
+    # On honeypot_network and the stack's other networks: never a router
+    # between them (Docker leaves ip_forward on in every container namespace).
+    sysctls:
+      net.ipv4.ip_forward: 0
 
   # Production WordPress database
   # ---------------------------------------------------------------------------
@@ -767,12 +776,26 @@ services:
     cpus: "1.0"
     pids_limit: 100
 
+  # The single honeypot database's firewall (x-container-firewall, profile
+  # honeypot_database): MySQL in from honeypot_network, nothing out.
+  honeypot_database_net:
+    <<: *container-firewall
+    environment:
+      - FIREWALL_PROFILE=honeypot_database
+      - FIREWALL_LAYER=db-proxy
+    networks:
+      honeypot_network:
+        aliases: [honeypot_database]
+
   # The single honeypot database (a scrubbed clone of production, see
   # honeypot_db_init). Own volume, not shared with the default layer's pools.
   honeypot_database:
     logging: *default-logging
     image: mysql:8.4.13
     depends_on:
+      honeypot_database_net:
+        condition: service_healthy
+        restart: true
       init_setup:
         condition: service_completed_successfully
     command: |
@@ -788,8 +811,10 @@ services:
     volumes:
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_proxy_data:/var/lib/mysql
-    networks:
-      - honeypot_network
+    # No networks of its own: it lives in honeypot_database_net's network
+    # namespace. Diverted sessions' SQL injections run here, so it must be a
+    # dead end: it cannot open a connection to the edge, Redis or production.
+    network_mode: service:honeypot_database_net
     # -------------------------------------------------------------------------
     # Container hardening – defence-in-depth so that a SQL injection or
     # database-level exploit cannot be used to pivot beyond this container.
@@ -1196,6 +1221,10 @@ services:
       - session_network
       - monitoring_network
       - ids_network
+    # On honeypot_network and the stack's other networks: never a router
+    # between them (Docker leaves ip_forward on in every container namespace).
+    sysctls:
+      net.ipv4.ip_forward: 0
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - ELK_ENABLED=${ELK_ENABLED:-false}

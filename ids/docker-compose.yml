@@ -338,11 +338,11 @@ services:
       set_pool_password() {
         HOST=\$$1
         NEW_PASS=\$$2
-        if mysql -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$NEW_PASS\" -e 'SELECT 1' >/dev/null 2>&1; then
+        if mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$NEW_PASS\" -e 'SELECT 1' >/dev/null 2>&1; then
           echo \"  \$$HOST already uses its pool-specific password\"
           return 0
         fi
-        if mysql -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -e \"ALTER USER '\$$MYSQL_USER'@'%' IDENTIFIED BY '\$$NEW_PASS';\" 2>/dev/null; then
+        if mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$MYSQL_PASSWORD\" -e \"ALTER USER '\$$MYSQL_USER'@'%' IDENTIFIED BY '\$$NEW_PASS';\" 2>/dev/null; then
           echo \"  Rotated \$$HOST to its pool-specific password\"
         else
           echo \"  WARNING: could not set pool-specific password for \$$HOST (neither old nor new password worked)\"
@@ -380,9 +380,9 @@ services:
             if [ -f \"\$$migration\" ]; then
               echo \"  Applying: \$$migration\"
               if [ \"\$$(basename \"\$$migration\")\" = '01_clean-honeypot-data.sql' ]; then
-                mysql -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$PASS\" \"\$$MYSQL_DATABASE\" --force < \"\$$migration\" 2>/dev/null
+                mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$PASS\" \"\$$MYSQL_DATABASE\" --force < \"\$$migration\" 2>/dev/null
                 echo \"  [OK] \$$migration applied to \$$HOST (best-effort -- table-not-found errors here are expected on a fresh pool, silenced)\"
-              elif mysql -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$PASS\" \"\$$MYSQL_DATABASE\" --force < \"\$$migration\"; then
+              elif mysql --local-infile=0 -h\"\$$HOST\" -u\"\$$MYSQL_USER\" -p\"\$$PASS\" \"\$$MYSQL_DATABASE\" --force < \"\$$migration\"; then
                 echo \"  [OK] \$$migration applied to \$$HOST\"
               else
                 echo \"  [FAILED] \$$migration failed on \$$HOST\"
@@ -485,6 +485,10 @@ services:
       - production_network
       - honeypot_network
       - session_network
+    # On honeypot_network and the stack's other networks: never a router
+    # between them (Docker leaves ip_forward on in every container namespace).
+    sysctls:
+      net.ipv4.ip_forward: 0
 
   # ---------------------------------------------------------------------------
   # Honeypot pool manager (one user per pool, spare pool always ready)
@@ -932,6 +936,8 @@ services:
     image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
+      honeypot_eshop_1_net:
+        condition: service_healthy
       honeypot_database_1:
         condition: service_healthy
       # honeypot_eshop_files needs init_setup's rsync to have actually put
@@ -979,8 +985,11 @@ services:
       # rsynced from production by init_setup; only this pool's DB schema is
       # migrated here).
       - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
-    networks:
-      - honeypot_network
+    # In honeypot_eshop_1_net's network namespace, under the pool's own
+    # firewall: wp-cli runs the pool's WordPress and plugin PHP, which an
+    # attacker may have rewritten in honeypot_eshop_files -- so this
+    # reaches exactly what honeypot_eshop_1 reaches (its own database), no more.
+    network_mode: service:honeypot_eshop_1_net
     command: ["sh", "/seed_wordpress_db.sh"]
     security_opt:
       - no-new-privileges:true
@@ -1001,6 +1010,8 @@ services:
     image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
+      honeypot_eshop_2_net:
+        condition: service_healthy
       honeypot_database_2:
         condition: service_healthy
       init_setup:
@@ -1045,8 +1056,11 @@ services:
       # rsynced from production by init_setup; only this pool's DB schema is
       # migrated here).
       - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
-    networks:
-      - honeypot_network
+    # In honeypot_eshop_2_net's network namespace, under the pool's own
+    # firewall: wp-cli runs the pool's WordPress and plugin PHP, which an
+    # attacker may have rewritten in honeypot_eshop_files_2 -- so this
+    # reaches exactly what honeypot_eshop_2 reaches (its own database), no more.
+    network_mode: service:honeypot_eshop_2_net
     command: ["sh", "/seed_wordpress_db.sh"]
     security_opt:
       - no-new-privileges:true
@@ -1067,6 +1081,8 @@ services:
     image: wordpress:cli-2.12.0-php8.4
     user: root
     depends_on:
+      honeypot_eshop_3_net:
+        condition: service_healthy
       honeypot_database_3:
         condition: service_healthy
       init_setup:
@@ -1102,8 +1118,11 @@ services:
       # rsynced from production by init_setup; only this pool's DB schema is
       # migrated here).
       - ./scripts/update_wordpress.sh:/update_wordpress.sh:ro
-    networks:
-      - honeypot_network
+    # In honeypot_eshop_3_net's network namespace, under the pool's own
+    # firewall: wp-cli runs the pool's WordPress and plugin PHP, which an
+    # attacker may have rewritten in honeypot_eshop_files_3 -- so this
+    # reaches exactly what honeypot_eshop_3 reaches (its own database), no more.
+    network_mode: service:honeypot_eshop_3_net
     command: ["sh", "/seed_wordpress_db.sh"]
     security_opt:
       - no-new-privileges:true
@@ -1134,13 +1153,30 @@ services:
   # without distinct credentials a compromised pool could authenticate
   # directly into another user's pool database. See
   # ids/testing/test_pool_isolation.sh.
+  #
+  # Each database lives in the network namespace of its own firewall,
+  # honeypot_database_N_net (x-container-firewall, profile honeypot_database):
+  # MySQL in from honeypot_network, nothing out. Since a pool's database is
+  # as attacker-reachable as its WordPress, it is as much a dead end.
   # ---------------------------------------------------------------------------
+
+  honeypot_database_1_net:
+    <<: *container-firewall
+    environment:
+      - FIREWALL_PROFILE=honeypot_database
+      - FIREWALL_LAYER=default
+    networks:
+      honeypot_network:
+        aliases: [honeypot_database_1]
 
   # Pool 1 – uses the original honeypot_database_data directory (backward compat)
   honeypot_database_1:
     logging: *default-logging
     image: mysql:8.4.13
     depends_on:
+      honeypot_database_1_net:
+        condition: service_healthy
+        restart: true
       init_setup:
         condition: service_completed_successfully
     command: |
@@ -1156,8 +1192,11 @@ services:
     volumes:
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data:/var/lib/mysql
-    networks:
-      - honeypot_network
+    # No networks of its own: it lives in honeypot_database_1_net's network namespace, whose
+    # firewall (honeypot_database profile) lets honeypot_network in on 3306
+    # and lets nothing out -- whoever owns this database through its pool
+    # cannot use it to reach the edge, Redis, production or another pool.
+    network_mode: service:honeypot_database_1_net
     # -------------------------------------------------------------------------
     # Container hardening – defence-in-depth so that a SQL injection or
     # database-level exploit cannot be used to pivot beyond this container.
@@ -1195,11 +1234,23 @@ services:
       start_period: 420s
       start_interval: 1s
 
+  honeypot_database_2_net:
+    <<: *container-firewall
+    environment:
+      - FIREWALL_PROFILE=honeypot_database
+      - FIREWALL_LAYER=default
+    networks:
+      honeypot_network:
+        aliases: [honeypot_database_2]
+
   # Pool 2 – independent database instance
   honeypot_database_2:
     logging: *default-logging
     image: mysql:8.4.13
     depends_on:
+      honeypot_database_2_net:
+        condition: service_healthy
+        restart: true
       init_setup:
         condition: service_completed_successfully
     command: |
@@ -1215,8 +1266,11 @@ services:
     volumes:
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data_2:/var/lib/mysql
-    networks:
-      - honeypot_network
+    # No networks of its own: it lives in honeypot_database_2_net's network namespace, whose
+    # firewall (honeypot_database profile) lets honeypot_network in on 3306
+    # and lets nothing out -- whoever owns this database through its pool
+    # cannot use it to reach the edge, Redis, production or another pool.
+    network_mode: service:honeypot_database_2_net
     # Hardening – same rationale as honeypot_database_1 above.
     security_opt:
       - no-new-privileges:true
@@ -1241,11 +1295,23 @@ services:
       start_period: 420s
       start_interval: 1s
 
+  honeypot_database_3_net:
+    <<: *container-firewall
+    environment:
+      - FIREWALL_PROFILE=honeypot_database
+      - FIREWALL_LAYER=default
+    networks:
+      honeypot_network:
+        aliases: [honeypot_database_3]
+
   # Pool 3 – independent database instance
   honeypot_database_3:
     logging: *default-logging
     image: mysql:8.4.13
     depends_on:
+      honeypot_database_3_net:
+        condition: service_healthy
+        restart: true
       init_setup:
         condition: service_completed_successfully
     command: |
@@ -1261,8 +1327,11 @@ services:
     volumes:
       # Named volume avoids vmhgfs chown restriction; populated by init_setup.
       - honeypot_database_data_3:/var/lib/mysql
-    networks:
-      - honeypot_network
+    # No networks of its own: it lives in honeypot_database_3_net's network namespace, whose
+    # firewall (honeypot_database profile) lets honeypot_network in on 3306
+    # and lets nothing out -- whoever owns this database through its pool
+    # cannot use it to reach the edge, Redis, production or another pool.
+    network_mode: service:honeypot_database_3_net
     # Hardening – same rationale as honeypot_database_1 above.
     security_opt:
       - no-new-privileges:true
@@ -2083,6 +2152,10 @@ services:
       - session_network
       - monitoring_network
       - ids_network
+    # On honeypot_network and the stack's other networks: never a router
+    # between them (Docker leaves ip_forward on in every container namespace).
+    sysctls:
+      net.ipv4.ip_forward: 0
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - ELK_ENABLED=${ELK_ENABLED:-false}

@@ -98,13 +98,14 @@ class LayerChecks:
         # Every network answers to the protected container's old DNS name.
         for net, opts in (fw.get("networks") or {}).items():
             self.assertIn(protected, (opts or {}).get("aliases") or [], f"{fw_name} on {net}")
-        # The WordPress container lives in the sidecar's namespace, nothing else.
+        # The protected container lives in the sidecar's namespace, nothing else.
         self.assertEqual(wp.get("network_mode"), f"service:{fw_name}")
         self.assertFalse(wp.get("networks"))
         dep = wp["depends_on"][fw_name]
         self.assertEqual(dep["condition"], "service_healthy")
-        self.assertTrue(dep.get("restart"), "WordPress must be recreated when its firewall restarts")
-        self.assertNotIn("/var/lib/container-firewall", mounts(wp), "rules must stay out of WordPress")
+        self.assertTrue(dep.get("restart"), f"{protected} must be recreated when its firewall restarts")
+        self.assertNotIn("/var/lib/container-firewall", mounts(wp), f"rules must stay out of {protected}")
+        self.assertEqual(networks(fw), {"honeypot_network"} if profile != "production" else networks(fw))
 
     # -- production ------------------------------------------------------------
     def test_production_eshop_is_hardened(self):
@@ -158,6 +159,43 @@ class LayerChecks:
         self.assertEqual([(r["peer"], r["ports"]) for r in doc["inbound"] if r["enabled"]],
                          [("reverse_proxy", "80")])
 
+    def test_database_firewall_defaults_open_nothing_out(self):
+        doc = json.loads((EDGE_DIR / "images/container_firewall/honeypot_database.json").read_text())
+        self.assertTrue(doc["enabled"])
+        self.assertEqual(doc["outbound"], [])
+        self.assertEqual([(r["peer"], r["proto"], r["ports"]) for r in doc["inbound"] if r["enabled"]],
+                         [("local-subnets", "tcp", "3306")])
+
+    def test_honeypot_profiles_are_locked_in_the_firewall_tool(self):
+        src = (EDGE_DIR / "images/container_firewall/container-firewall.php").read_text()
+        self.assertIn("const LOCKED_OUTBOUND = ['honeypot' => ['db-host'], 'honeypot_database' => []];", src)
+        self.assertIn("'FORWARD' => 'FW_FWD'", src)
+
+    def test_every_container_attackers_can_reach_sits_behind_a_honeypot_firewall(self):
+        # A pool's WordPress, its database (WordPress holds the DB password)
+        # and the seed jobs that run that WordPress's PHP via wp-cli.
+        for name, s in self.svc.items():
+            if re.fullmatch(r"honeypot_(eshop|database|db_seed)(_\d+)?", name):
+                owner = (s.get("network_mode") or "").removeprefix("service:")
+                self.assertTrue(owner.endswith("_net"), f"{name} has its own network namespace")
+                self.assertEqual(env(self.svc[owner])["FIREWALL_PROFILE"],
+                                 "honeypot_database" if "database" in name else "honeypot", name)
+
+    def test_containers_on_honeypot_network_and_another_never_forward(self):
+        for name, s in self.svc.items():
+            nets = networks(s)
+            if "honeypot_network" in nets and len(nets) > 1 and not name.endswith("_net"):
+                self.assertEqual(str((s.get("sysctls") or {}).get("net.ipv4.ip_forward")), "0", name)
+
+    def test_jobs_never_send_local_files_to_a_pool_database(self):
+        text = (EDGE_DIR / LAYERS[self.LAYER]).read_text()
+        for host in ("HP", "HOST"):
+            self.assertNotIn(f'mysql -h\\"\\$${host}\\"', text, host)
+        for script in ("scripts", "db_proxy/scripts"):
+            src = (EDGE_DIR / script / "replicate_content_to_honeypot.sh").read_text()
+            self.assertNotIn('mysql -h "$db_host"', src, script)
+            self.assertEqual(src.count('mysql --local-infile=0 -h "$db_host"'), 2, script)
+
     def test_production_firewall_defaults_do_not_open_honeypots_in_this_layer(self):
         doc = json.loads((EDGE_DIR / "images/container_firewall/production.json").read_text())
         for r in doc["outbound"]:
@@ -175,7 +213,8 @@ class DefaultLayer(LayerChecks, unittest.TestCase):
         pools = self.pools()
         self.assertGreaterEqual(len(pools), 1)
         for n in pools:
-            for name in (f"honeypot_eshop_{n}", f"honeypot_eshop_{n}_net", f"honeypot_database_{n}"):
+            for name in (f"honeypot_eshop_{n}", f"honeypot_eshop_{n}_net", f"honeypot_database_{n}",
+                         f"honeypot_database_{n}_net"):
                 self.assertIn(name, self.svc)
 
     def test_pool_eshops_are_hardened_and_behind_their_firewalls(self):
@@ -183,7 +222,6 @@ class DefaultLayer(LayerChecks, unittest.TestCase):
             self.assertEqual(self.svc[f"honeypot_eshop_{n}"]["image"], WORDPRESS_IMAGE)
             self.assertHardened(f"honeypot_eshop_{n}", WORDPRESS_CAPS, 1024)
             self.assertFirewallSidecar(f"honeypot_eshop_{n}_net", f"honeypot_eshop_{n}", "honeypot")
-            self.assertEqual(networks(self.svc[f"honeypot_eshop_{n}_net"]), {"honeypot_network"})
 
     def test_each_pool_is_wired_to_its_own_database(self):
         for n in self.pools():
@@ -191,10 +229,18 @@ class DefaultLayer(LayerChecks, unittest.TestCase):
             self.assertEqual(env(self.svc[f"honeypot_eshop_{n}"])["WORDPRESS_DB_HOST"].split(":")[0], db)
             self.assertEqual(env(self.svc[f"honeypot_eshop_{n}_net"])["FIREWALL_DB_HOST"].split(":")[0], db)
 
-    def test_pool_databases_are_hardened_and_on_honeypot_network_only(self):
+    def test_pool_databases_are_hardened_and_behind_their_firewalls(self):
         for n in self.pools():
             self.assertHardened(f"honeypot_database_{n}", MYSQL_CAPS, 1024)
-            self.assertEqual(networks(self.svc[f"honeypot_database_{n}"]), {"honeypot_network"})
+            self.assertFirewallSidecar(f"honeypot_database_{n}_net", f"honeypot_database_{n}",
+                                       "honeypot_database")
+
+    def test_seeds_run_wordpress_php_inside_the_pool_firewall(self):
+        for n in self.pools():
+            seed = self.svc[f"honeypot_db_seed_{n}"]
+            self.assertEqual(seed.get("network_mode"), f"service:honeypot_eshop_{n}_net")
+            self.assertFalse(seed.get("networks"))
+            self.assertEqual(seed["depends_on"][f"honeypot_eshop_{n}_net"]["condition"], "service_healthy")
 
     def test_pool_database_passwords_differ_from_each_other_and_production(self):
         # Compared, never printed.
@@ -227,9 +273,9 @@ class DbProxyLayer(LayerChecks, unittest.TestCase):
         self.assertEqual(networks(self.svc["production_eshop_net"]),
                          {"production_network", "honeypot_network", "monitoring_network"})
 
-    def test_honeypot_database_is_hardened_and_on_honeypot_network_only(self):
+    def test_honeypot_database_is_hardened_and_behind_its_firewall(self):
         self.assertHardened("honeypot_database", MYSQL_CAPS, 1024)
-        self.assertEqual(networks(self.svc["honeypot_database"]), {"honeypot_network"})
+        self.assertFirewallSidecar("honeypot_database_net", "honeypot_database", "honeypot_database")
 
 
 if __name__ == "__main__":

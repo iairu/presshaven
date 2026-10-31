@@ -301,6 +301,9 @@ build_sync_sql() {
     return 0
 }
 
+# Pool databases are where attackers end up: a client of one never sends
+# local files (--local-infile=0), so a rogue server there cannot read this
+# container's environment -- production's and Redis's passwords.
 replicate_to_pool() {
     local pool_num="$1" db_host db_pass
     db_host=$(pool_host "$pool_num")
@@ -309,7 +312,7 @@ replicate_to_pool() {
     log "pool $pool_num ($db_host): replication starting"
     redis_set_replicating "$pool_num"
 
-    if mysql -h "$db_host" -u"$MYSQL_USER" -p"$db_pass" --default-character-set=binary "$MYSQL_DATABASE" < "$WORKDIR/content_sync.sql"; then
+    if mysql --local-infile=0 -h "$db_host" -u"$MYSQL_USER" -p"$db_pass" --default-character-set=binary "$MYSQL_DATABASE" < "$WORKDIR/content_sync.sql"; then
         log "pool $pool_num ($db_host): replication complete"
     else
         log "pool $pool_num ($db_host): replication FAILED -- pool DB left as-is, will retry next cycle"
@@ -352,7 +355,7 @@ if [ "${1:-}" = "--once" ] && [ -n "${2:-}" ]; then
         exit 0      # production has no content yet: nothing to mirror
     fi
     db_host=$(pool_host "$2")
-    if mysql -h "$db_host" -u"$MYSQL_USER" -p"$(pool_password "$2")" --default-character-set=binary "$MYSQL_DATABASE" \
+    if mysql --local-infile=0 -h "$db_host" -u"$MYSQL_USER" -p"$(pool_password "$2")" --default-character-set=binary "$MYSQL_DATABASE" \
             < "$WORKDIR/content_sync.sql"; then
         log "pool $2 ($db_host): initial content replication complete"
         exit 0

@@ -197,6 +197,43 @@ check_inbound_dropped() {
     fi
 }
 
+# check_tcp_blocked <from> <host> <port> [what]: <from> cannot open <host>:<port>,
+# for containers without php (MySQL: bash; the test stand-ins: python). A
+# name that does not resolve counts as blocked only with bash.
+check_tcp_blocked() {
+    _desc="$1 cannot open $2:$3${4:+ ($4)}"
+    if run_in "$1" "command -v bash && command -v timeout"; then
+        check_in "$1" "${_desc}" "! timeout 4 bash -c '</dev/tcp/$2/$3' 2>/dev/null"
+    elif run_in "$1" "command -v python3"; then
+        check_in "$1" "${_desc}" "python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(4); sys.exit(1 if s.connect_ex((\"$2\", $3)) == 0 else 0)'"
+    else
+        skip "${_desc} -- no probe tool in $1"
+    fi
+}
+
+# check_firewall_locked <firewall>: a honeypot profile cannot be switched off
+# or opened up -- `container-firewall apply` refuses the default ruleset with
+# enabled=false, and with an extra outbound rule to the edge, for that reason
+# (the message is checked). Rejected before anything is enforced or saved, so
+# this changes nothing.
+check_firewall_locked() {
+    _mod='$d = json_decode(stream_get_contents(STDIN), true);'
+    # An image without the lock would ACCEPT these documents (switching a live
+    # pool's firewall off), so they are only tried on one that has it.
+    if ! run_in "$1" "grep -q LOCKED_OUTBOUND \$(command -v container-firewall)"; then
+        fail "$1 runs a firewall image with locked honeypot profiles (rebuild images/container_firewall)"
+        return 1
+    fi
+    check_in "$1" "$1 refuses to be switched off (locked profile)" \
+        "container-firewall apply --b64 \$(container-firewall default | php -r '${_mod} \$d[\"enabled\"] = false; echo base64_encode(json_encode(\$d));') 2>&1 | grep -q 'cannot be switched off'"
+    check_in "$1" "$1 refuses an outbound rule to the edge (locked profile)" \
+        "container-firewall apply --b64 \$(container-firewall default | php -r '${_mod} \$d[\"outbound\"][] = [\"id\" => \"escape\", \"enabled\" => true, \"peer\" => \"reverse_proxy\", \"proto\" => \"tcp\", \"ports\" => \"80\", \"label\" => \"x\"]; echo base64_encode(json_encode(\$d));') 2>&1 | grep -q 'outbound/escape: a honeyp'"
+    check_in "$1" "$1 drops every forwarded packet (FW_FWD hooked into FORWARD, v4 and v6)" \
+        "iptables -S FORWARD | grep -q -- '-j FW_FWD' && iptables -S FW_FWD | grep -q -- '-j DROP' && ip6tables -S FORWARD | grep -q -- '-j FW_FWD'"
+    check_in "$1" "$1 enforces IPv6 too" \
+        "container-firewall status | php -r '\$s = json_decode(stream_get_contents(STDIN), true); exit(\$s[\"ipv6\"] === true ? 0 : 1);'"
+}
+
 # Gateway (the Docker host's bridge address) of a project network.
 network_gateway() {
     docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' "${PROJECT}_$1" 2>/dev/null | awk '{print $1}'
