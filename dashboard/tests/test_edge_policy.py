@@ -83,6 +83,17 @@ class TargetTests(unittest.TestCase):
     def targets(self):
         return ep.honeypot_targets(load_catalog(self.registry))
 
+    def enable_all(self):
+        for t in self.targets():
+            self.registry.set_enabled(t.pattern_id, True, default=False)
+
+    def test_every_target_starts_disabled(self):
+        targets = self.targets()
+        self.assertTrue(targets)
+        self.assertFalse(any(t.enabled for t in targets))
+        payload = ep.build_payload(ep.EdgePolicySettings(path=Path(tempfile.mkdtemp()) / "p.json"), targets)
+        self.assertEqual(payload["targets"]["disabled_cves"], sorted(t.cve for t in targets))
+
     def test_every_cve_pattern_is_a_target(self):
         targets = self.targets()
         self.assertEqual(len(targets), load_catalog(self.registry).counts["cves"])
@@ -93,13 +104,15 @@ class TargetTests(unittest.TestCase):
         self.assertTrue(by_cve["CVE-2024-25600"].edge_enforced)
 
     def test_plugin_dir_disabled_only_when_all_its_cves_are(self):
-        self.registry.set_enabled("cve-2024-8425", False)
+        self.enable_all()
+        self.registry.set_enabled("cve-2024-8425", False, default=False)
         self.assertEqual(ep.disabled_plugin_dirs(self.targets()), [])
-        self.registry.set_enabled("cve-2025-47577", False)
+        self.registry.set_enabled("cve-2025-47577", False, default=False)
         self.assertEqual(ep.disabled_plugin_dirs(self.targets()), ["gift-voucher"])
 
     def test_payload(self):
-        self.registry.set_enabled("cve-2024-25600", False)
+        self.enable_all()
+        self.registry.set_enabled("cve-2024-25600", False, default=False)
         settings = ep.EdgePolicySettings(path=Path(tempfile.mkdtemp()) / "p.json")
         settings.set_whitelist_enabled("home", False)
         payload = ep.build_payload(settings, self.targets())

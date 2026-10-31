@@ -59,6 +59,7 @@ from core.patterns import (  # noqa: E402
     GDPR_RESTORE_CVE,
     GDPR_RESTORE_PRESET,
     PATTERN_PRESETS,
+    default_enabled,
 )
 
 # ---------------------------------------------------------------------------
@@ -1496,6 +1497,8 @@ class CatalogBuilder:
         self.finalise()
 
         patterns = list(self.patterns.values())
+        for p in patterns:
+            p["enabled"] = default_enabled(p["kind"])
         patterns.sort(key=lambda p: (
             SEVERITY_ORDER.get(p["severity"], 9),
             p["kind"],

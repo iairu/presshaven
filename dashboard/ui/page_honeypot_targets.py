@@ -5,7 +5,8 @@ patterns) with the vulnerable plugin directory the honeypots ship it in. The
 row checkbox is the registry's own enabled flag -- the same switch as on the
 Pattern Database page -- so a disabled target stops matching at the edge AND
 drops out of Attack Simulation / Segmentation Validation. A plugin directory
-stops being a target once every CVE it hosts is disabled.
+stops being a target once every CVE it hosts is disabled. Every target starts
+disabled (core.patterns.DEFAULT_DISABLED_KINDS): CVE targets are opt-in.
 
 The routing mode decides what a hit does:
   * auto-send -- divert to a honeypot at once, scoring bypassed;
@@ -42,6 +43,7 @@ class HoneypotTargetsPage(QWidget):
         super().__init__(parent)
         self.settings = edge_policy.EdgePolicySettings.load()
         self.registry = PatternRegistry.load()
+        self.catalog = None
 
         layout = QVBoxLayout(self)
         self.bar = EdgePolicyBar(state, current_document)
@@ -84,13 +86,17 @@ class HoneypotTargetsPage(QWidget):
 
         buttons = QHBoxLayout()
         self.enable_all_btn = QPushButton("Enable all")
+        self.reset_btn = QPushButton("Reset to defaults")
+        self.reset_btn.setToolTip("Every CVE target back to its default state (off until you enable it)")
         self.status = QLabel("")
         self.count_label = QLabel("")
         buttons.addWidget(self.enable_all_btn)
+        buttons.addWidget(self.reset_btn)
         buttons.addWidget(self.status, stretch=1)
         buttons.addWidget(self.count_label)
         layout.addLayout(buttons)
         layout.addWidget(muted_label(
+            "Targets start disabled; enable the CVEs you want caught. "
             "Enable/disable is shared with the Pattern Database page: a disabled target no longer "
             "matches at the edge and is skipped by Attack Simulation. A plugin directory stays a "
             "target while any of its CVEs is enabled."))
@@ -99,6 +105,7 @@ class HoneypotTargetsPage(QWidget):
         self.direct_radio.toggled.connect(self._on_mode_changed)
         self.score_spin.valueChanged.connect(self._on_score_changed)
         self.enable_all_btn.clicked.connect(self._enable_all)
+        self.reset_btn.clicked.connect(self._reset_defaults)
 
         self.reload()
 
@@ -125,9 +132,11 @@ class HoneypotTargetsPage(QWidget):
 
     def _fill(self) -> None:
         try:
-            targets = edge_policy.honeypot_targets(load_catalog(self.registry))
+            self.catalog = load_catalog(self.registry)
+            targets = edge_policy.honeypot_targets(self.catalog)
             self.bar.error_banner.set_error(None)
         except Exception as e:  # noqa: BLE001 -- a stale catalogue must not kill the page
+            self.catalog = None
             targets = []
             self.bar.error_banner.set_error(str(e), prefix="Cannot load pattern catalogue: ")
         muted = QColor(theme.scheme_colors()["fg_muted"])
@@ -203,10 +212,22 @@ class HoneypotTargetsPage(QWidget):
         if item.column() != 0:
             return
         enabled = item.checkState() == Qt.CheckState.Checked
-        self.registry.set_enabled(item.data(_ROLE_ID), enabled)
+        pattern_id = item.data(_ROLE_ID)
+        self.registry.set_enabled(pattern_id, enabled, self._default_enabled(pattern_id))
         self._save_registry(f"{item.text()} {'enabled' if enabled else 'disabled'}")
 
+    def _default_enabled(self, pattern_id: str) -> bool:
+        pattern = self.catalog.by_id.get(pattern_id, {}) if self.catalog else {}
+        return bool(pattern.get("default_enabled", True))
+
+    def _row_ids(self) -> list[str]:
+        return [self.table.item(row, 0).data(_ROLE_ID) for row in range(self.table.rowCount())]
+
     def _enable_all(self) -> None:
-        for row in range(self.table.rowCount()):
-            self.registry.set_enabled(self.table.item(row, 0).data(_ROLE_ID), True)
+        for pattern_id in self._row_ids():
+            self.registry.set_enabled(pattern_id, True, self._default_enabled(pattern_id))
         self._save_registry("all targets enabled")
+
+    def _reset_defaults(self) -> None:
+        self.registry.reset_enabled(self._row_ids())
+        self._save_registry("targets reset to their defaults")

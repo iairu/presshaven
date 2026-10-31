@@ -150,5 +150,7 @@ class PatternCatalog:
             "version": 1,
             "catalog_generated": self.generated,
             "count": len(patterns),
-            "patterns": patterns,
+            # default_enabled is the registry's merge bookkeeping, not pattern data.
+            "patterns": [{k: v for k, v in p.items() if k != "default_enabled"}
+                         for p in patterns],
         }

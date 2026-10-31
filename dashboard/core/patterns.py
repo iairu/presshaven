@@ -49,6 +49,18 @@ COMPONENTS = {"core": "WordPress core", "plugin": "Plugin / theme"}
 SURFACES = {"frontend": "Frontend", "backend": "Backend"}
 KINDS = {"cve": "CVE pattern", "generic": "Generic attack"}
 
+# Catalogue kinds that start disabled (patterns/patterns.json, Pattern Database,
+# Honeypot Targets): only generic attacks and the detection signals (scanner
+# tools, behaviour, session) are on out of the box; a CVE pattern -- and with
+# it its honeypot target and Attack Simulation preset -- is opt-in.
+DEFAULT_DISABLED_KINDS = frozenset({"cve"})
+
+
+def default_enabled(kind: str) -> bool:
+    """Whether a catalogue pattern of ``kind`` is enabled until the user
+    decides otherwise."""
+    return kind not in DEFAULT_DISABLED_KINDS
+
 
 @dataclass(frozen=True)
 class PatternPreset:

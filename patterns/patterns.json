@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-10-23",
+  "generated": "2026-10-31",
   "source_files": [
     "ids/reverse_proxy_enhanced/lua/pattern_rules.lua",
     "ids/reverse_proxy_enhanced/lua/init.lua",
@@ -233,7 +233,7 @@
         "defence": "Use prepared statements ($wpdb->prepare), validate the parameter's type (an ID should be an integer), and update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2022-0739",
         "WSTG-INPV-05"
@@ -317,7 +317,7 @@
         "defence": "Never eval() user input; require authentication and nonces; update Bricks (fixed in 1.9.6.1)."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-25600",
         "WSTG-INPV-11"
@@ -463,7 +463,7 @@
         "defence": "Check capabilities (current_user_can) and nonces on every state-changing action."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2025-2266",
         "WSTG-AUTHZ",
@@ -626,7 +626,7 @@
         "defence": "Allow-list extensions and MIME types, store uploads outside the web root, and never let the web server execute files in upload folders."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2025-4403",
         "WSTG-AUTHZ",
@@ -712,7 +712,7 @@
         "defence": "Require authentication, allow-list file types, disable PHP execution in uploads."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-8425",
         "WSTG-INPV-10",
@@ -861,7 +861,7 @@
         "defence": "Require authentication, allow-list file types, disable PHP execution in uploads."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2025-47577",
         "WSTG-AUTHZ",
@@ -949,7 +949,7 @@
         "defence": "Use prepared statements ($wpdb->prepare), validate the parameter's type (an ID should be an integer), and update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-2879",
         "WSTG-INPV-05"
@@ -1033,7 +1033,7 @@
         "defence": "Use prepared statements ($wpdb->prepare), validate the parameter's type (an ID should be an integer), and update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-1071",
         "WSTG-INPV-05"
@@ -1117,7 +1117,7 @@
         "defence": "Use prepared statements ($wpdb->prepare), validate the parameter's type (an ID should be an integer), and update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-27956",
         "WSTG-INPV-05"
@@ -1625,7 +1625,7 @@
         "defence": "Generate secrets per install, verify signatures server-side, update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2023-2986",
         "WSTG-ATHN",
@@ -1775,7 +1775,7 @@
         "defence": "Use prepared statements ($wpdb->prepare), validate the parameter's type (an ID should be an integer), and update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-2387",
         "WSTG-AUTHZ",
@@ -1911,7 +1911,7 @@
         "defence": "Resolve the real path and reject anything outside the allowed directory; never build file paths from raw user input."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2025-10142",
         "WSTG-AUTHZ",
@@ -1987,7 +1987,7 @@
         "defence": "Update WordPress (fixed in 4.7.2) and monitor for unexpected content changes."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2017-1001000",
         "WSTG-AUTHZ"
@@ -2121,7 +2121,7 @@
         "defence": "Never derive identity from a client-controlled header; update the plugin (fixed in 5.6.2)."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2023-28121",
         "WSTG-AUTHZ",
@@ -2257,7 +2257,7 @@
         "defence": "Canonicalise paths and compare against an allowed base directory; update the plugin."
       },
       "reportable": true,
-      "enabled": true,
+      "enabled": false,
       "tags": [
         "CVE-2024-50508",
         "WSTG-AUTHZ",

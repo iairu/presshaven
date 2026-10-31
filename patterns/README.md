@@ -67,8 +67,8 @@ in `patterns/registry.json`, owned by `dashboard/core/pattern_registry.py`:
 
 - **overrides** — per-id field changes on a generated pattern (`enabled`
   included), so disabling or editing a pattern never touches the generated
-  file. Enabling a pattern again prunes the override, so the file only records
-  real deviations.
+  file. Setting a pattern back to its default state prunes the override, so
+  the file only records real deviations.
 - **custom** — full records for patterns the user authored in the Pattern
   Database page (`kind`/`category`/`severity`/… filled out to the catalogue
   shape by `normalise_custom`).
@@ -84,8 +84,16 @@ and the Segmentation Validation preset list (`active_presets()` /
 runs. For the **CVE patterns** the same switch also reaches the live edge,
 through the edge policy below; the Suricata exporter does not read it yet.
 
-A missing or corrupt `registry.json` loads as an empty registry (every pattern
-enabled, nothing custom): deleting the file is a clean reset.
+**Defaults.** Only generic attacks and the detection signals (`generic`,
+`tool`, `behaviour`, `session`) start enabled. The 15 `cve` patterns start
+disabled, and so do their honeypot targets and Attack Simulation presets.
+The generator writes this into each pattern's `enabled` flag, following
+`DEFAULT_DISABLED_KINDS` in `dashboard/core/patterns.py`. An enable/disable
+saved in the registry always wins over the default, and **Reset to defaults**
+(on the Pattern Database and Honeypot Targets pages) drops it again.
+
+A missing or corrupt `registry.json` loads as an empty registry (catalogue
+defaults, nothing custom): deleting the file is a clean reset.
 
 ## Edge policy (URL whitelist + honeypot targets)
 
@@ -106,7 +114,8 @@ Their settings live in `patterns/edge_policy.json`, owned by
   vulnerable plugin directory it ships in. That directory comes from the
   comments on `vulnerability.plugins` in `init.lua`, because it can differ
   from the catalogue's plugin slug. The row checkbox is the registry's
-  `enabled` flag, the same switch as the Pattern Database page. A plugin
+  `enabled` flag, the same switch as the Pattern Database page, and every
+  target starts disabled. A plugin
   directory stops being a target once all of its CVEs are disabled. `mode`
   sets what a target hit does:
   - `direct` (auto-send) diverts to a honeypot at once, with scoring

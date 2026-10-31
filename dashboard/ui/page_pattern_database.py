@@ -210,10 +210,14 @@ class PatternDatabasePage(QWidget):
         self.bulk_enable_btn.setToolTip("Enable the selected patterns (or every filtered pattern)")
         self.bulk_disable_btn = QPushButton("Disable")
         self.bulk_disable_btn.setToolTip("Disable the selected patterns (or every filtered pattern)")
+        self.bulk_default_btn = QPushButton("Reset to defaults")
+        self.bulk_default_btn.setToolTip(
+            "Return the selected patterns (or every filtered pattern) to their default state: "
+            "generic attacks and detection signals on, CVE patterns off")
         self.bulk_export_btn = QPushButton("Export selected…")
         self.bulk_remove_btn = QPushButton("Remove…")
         self.bulk_remove_btn.setToolTip("Delete custom patterns / revert edited ones")
-        for btn in (self.bulk_enable_btn, self.bulk_disable_btn,
+        for btn in (self.bulk_enable_btn, self.bulk_disable_btn, self.bulk_default_btn,
                     self.bulk_export_btn, self.bulk_remove_btn):
             row4.addWidget(btn)
         filters_layout.addLayout(row4)
@@ -273,6 +277,7 @@ class PatternDatabasePage(QWidget):
         self.import_btn.clicked.connect(self._import_patterns)
         self.bulk_enable_btn.clicked.connect(lambda: self._bulk_set_enabled(True))
         self.bulk_disable_btn.clicked.connect(lambda: self._bulk_set_enabled(False))
+        self.bulk_default_btn.clicked.connect(self._bulk_reset_enabled)
         self.bulk_export_btn.clicked.connect(self._export_selected)
         self.bulk_remove_btn.clicked.connect(self._bulk_remove)
 
@@ -553,17 +558,27 @@ class PatternDatabasePage(QWidget):
         if not pattern_id:
             return
         enabled = item.checkState() == Qt.CheckState.Checked
-        if self.registry.is_enabled(pattern_id) == enabled:
+        if bool(self.catalog.by_id.get(pattern_id, {}).get("enabled", True)) == enabled:
             return
-        self.registry.set_enabled(pattern_id, enabled)
+        self.registry.set_enabled(pattern_id, enabled, self._default_enabled(pattern_id))
         self._commit("enabled" if enabled else "disabled", pattern_id)
+
+    def _default_enabled(self, pattern_id: str) -> bool:
+        return bool(self.catalog.by_id.get(pattern_id, {}).get("default_enabled", True))
 
     def _bulk_set_enabled(self, enabled: bool) -> None:
         ids = self._bulk_target_ids()
         if not ids:
             return
-        self.registry.set_many_enabled(ids, enabled)
+        self.registry.set_many_enabled(ids, enabled, {i: self._default_enabled(i) for i in ids})
         self._commit(f"{'enabled' if enabled else 'disabled'} {len(ids)} pattern(s)")
+
+    def _bulk_reset_enabled(self) -> None:
+        ids = self._bulk_target_ids()
+        if not ids:
+            return
+        self.registry.reset_enabled(ids)
+        self._commit(f"reset {len(ids)} pattern(s) to their default state")
 
     def _bulk_remove(self) -> None:
         ids = [i for i in self._bulk_target_ids()
@@ -694,7 +709,7 @@ class PatternDatabasePage(QWidget):
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _toggle_one(self, pattern_id: str, enabled: bool) -> None:
-        self.registry.set_enabled(pattern_id, enabled)
+        self.registry.set_enabled(pattern_id, enabled, self._default_enabled(pattern_id))
         self._commit("enabled" if enabled else "disabled", pattern_id)
 
     def _commit(self, what: str, keep_id: str = "") -> None:

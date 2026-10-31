@@ -5,7 +5,9 @@ rules and the Attack Simulation presets and must not be hand-edited (see
 ``patterns/README.md``).  The registry is the one *mutable* layer the
 dashboard owns on top of it:
 
-* which catalogue patterns are **enabled** (default: every pattern is on),
+* which catalogue patterns are **enabled** (default: the catalogue's own
+  ``enabled`` flag -- generic attacks and detection signals on, CVE patterns
+  off; see ``core.patterns.DEFAULT_DISABLED_KINDS``),
 * **field edits** the user has made to a generated pattern (name, severity,
   description, ...), kept as a small override rather than touching the
   generated file, and
@@ -26,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.pattern_catalog import PatternCatalog
+from core.patterns import default_enabled
 from core.paths import REPO_ROOT
 
 REGISTRY_PATH = REPO_ROOT / "patterns" / "registry.json"
@@ -63,7 +66,7 @@ class PatternRegistry:
     @classmethod
     def load(cls, path: Path | str = REGISTRY_PATH) -> "PatternRegistry":
         """Read the registry; a missing or unparseable file is an empty
-        registry (every pattern enabled, nothing custom), never an error --
+        registry (catalogue defaults, nothing custom), never an error --
         the dashboard must open even if someone deletes the file."""
         path = Path(path)
         if not path.exists():
@@ -113,26 +116,40 @@ class PatternRegistry:
         return bool(self.overrides.get(pattern_id, {}).get("enabled", default))
 
     # -- enable / disable --------------------------------------------------
-    def set_enabled(self, pattern_id: str, enabled: bool) -> None:
+    def set_enabled(self, pattern_id: str, enabled: bool, default: bool = True) -> None:
+        """``default`` is the pattern's catalogue state (``default_enabled``
+        of the merged record): the override only records a deviation from it."""
         idx = self._custom_index(pattern_id)
         if idx >= 0:
             self.custom[idx]["enabled"] = bool(enabled)
             return
-        if enabled:
-            # Enabled is the catalogue default: drop the key, and the whole
+        if bool(enabled) == bool(default):
+            # Back to the catalogue default: drop the key, and the whole
             # override entry when nothing else is left, so the file only ever
             # records real deviations.
-            entry = self.overrides.get(pattern_id)
-            if entry is not None:
-                entry.pop("enabled", None)
-                if not entry:
-                    self.overrides.pop(pattern_id, None)
+            self._drop_enabled(pattern_id)
         else:
-            self.overrides.setdefault(pattern_id, {})["enabled"] = False
+            self.overrides.setdefault(pattern_id, {})["enabled"] = bool(enabled)
 
-    def set_many_enabled(self, pattern_ids, enabled: bool) -> None:
+    def set_many_enabled(self, pattern_ids, enabled: bool,
+                         defaults: dict[str, bool] | None = None) -> None:
+        defaults = defaults or {}
         for pattern_id in pattern_ids:
-            self.set_enabled(pattern_id, enabled)
+            self.set_enabled(pattern_id, enabled, defaults.get(pattern_id, True))
+
+    def reset_enabled(self, pattern_ids=None) -> None:
+        """Return generated patterns (all, or ``pattern_ids``) to their
+        catalogue enabled state. Custom patterns have no default and keep
+        theirs."""
+        for pattern_id in list(self.overrides if pattern_ids is None else pattern_ids):
+            self._drop_enabled(pattern_id)
+
+    def _drop_enabled(self, pattern_id: str) -> None:
+        entry = self.overrides.get(pattern_id)
+        if entry is not None:
+            entry.pop("enabled", None)
+            if not entry:
+                self.overrides.pop(pattern_id, None)
 
     # -- edit --------------------------------------------------------------
     def override(self, pattern_id: str, fields: dict) -> None:
@@ -188,13 +205,14 @@ class PatternRegistry:
         out: list[dict] = []
         for pattern in base_patterns:
             merged = dict(pattern)
-            merged.setdefault("enabled", True)
+            merged.setdefault("enabled", default_enabled(pattern.get("kind", "")))
+            merged["default_enabled"] = merged["enabled"]
             override = self.overrides.get(pattern.get("id", ""))
             if override:
                 merged.update({k: v for k, v in override.items() if k in EDITABLE_FIELDS})
             out.append(merged)
         for record in self.custom:
-            out.append(dict(record))
+            out.append({**record, "default_enabled": bool(record.get("enabled", True))})
         return out
 
 

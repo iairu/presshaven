@@ -10,7 +10,7 @@ from core.pattern_registry import (  # noqa: E402
     PatternRegistry, active_presets, disabled_preset_cves, load_catalog,
     normalise_custom, slugify,
 )
-from core.patterns import PATTERN_PRESETS  # noqa: E402
+from core.patterns import PATTERN_PRESETS, default_enabled  # noqa: E402
 
 
 class RegistryPersistenceTests(unittest.TestCase):
@@ -84,13 +84,61 @@ class EffectiveCatalogTests(unittest.TestCase):
     def setUpClass(cls):
         cls.base = PatternCatalog.load()
 
+    def test_only_generic_and_detection_patterns_start_enabled(self):
+        cat = load_catalog(PatternRegistry(), base=self.base)
+        for p in cat.patterns:
+            self.assertEqual(p["enabled"], p["kind"] != "cve", p["id"])
+            self.assertEqual(p["default_enabled"], p["enabled"], p["id"])
+        self.assertEqual(cat.counts["disabled"], cat.counts["cves"])
+        self.assertTrue(cat.by_id["cmd-system"]["enabled"])
+        self.assertTrue(cat.by_id["tool-acunetix"]["enabled"])
+        self.assertFalse(cat.by_id["cve-2024-25600"]["enabled"])
+
+    def test_generated_catalogue_follows_the_default_rule(self):
+        # patterns.json is regenerated from default_enabled(); a stale file fails here.
+        for p in self.base.patterns:
+            self.assertEqual(p["enabled"], default_enabled(p["kind"]), p["id"])
+
     def test_disable_reflected_in_catalog_and_counts(self):
         reg = PatternRegistry()
-        reg.set_enabled("cve-2024-25600", False)
+        reg.set_enabled("cmd-system", False)
         cat = load_catalog(reg, base=self.base)
-        self.assertFalse(cat.by_id["cve-2024-25600"]["enabled"])
-        self.assertEqual(cat.counts["disabled"], 1)
+        self.assertFalse(cat.by_id["cmd-system"]["enabled"])
+        self.assertTrue(cat.by_id["cmd-system"]["default_enabled"])
+        self.assertEqual(cat.counts["disabled"], cat.counts["cves"] + 1)
         self.assertEqual(cat.counts["total"], len(self.base.patterns))
+
+    def test_enabling_a_cve_is_recorded_and_disabling_it_prunes(self):
+        reg = PatternRegistry()
+        reg.set_enabled("cve-2024-25600", True, default=False)
+        self.assertEqual(reg.overrides, {"cve-2024-25600": {"enabled": True}})
+        self.assertTrue(load_catalog(reg, base=self.base).by_id["cve-2024-25600"]["enabled"])
+        reg.set_enabled("cve-2024-25600", False, default=False)
+        self.assertEqual(reg.overrides, {})
+
+    def test_saved_choices_win_over_the_defaults(self):
+        reg = PatternRegistry(overrides={"cve-2024-25600": {"enabled": True},
+                                         "cmd-system": {"enabled": False}})
+        cat = load_catalog(reg, base=self.base)
+        self.assertTrue(cat.by_id["cve-2024-25600"]["enabled"])
+        self.assertFalse(cat.by_id["cmd-system"]["enabled"])
+
+    def test_reset_enabled_keeps_edits_and_custom_patterns(self):
+        reg = PatternRegistry(overrides={"cve-2024-25600": {"enabled": True, "name": "Renamed"},
+                                         "cve-2022-0739": {"enabled": True},
+                                         "cmd-system": {"enabled": False}})
+        custom = reg.add_custom({"name": "Mine", "enabled": False})
+        reg.reset_enabled(["cve-2022-0739"])
+        self.assertNotIn("cve-2022-0739", reg.overrides)
+        self.assertIn("cmd-system", reg.overrides)
+        reg.reset_enabled()
+        self.assertEqual(reg.overrides, {"cve-2024-25600": {"name": "Renamed"}})
+        self.assertFalse(reg.is_enabled(custom["id"]))
+
+    def test_export_leaves_out_merge_bookkeeping(self):
+        cat = load_catalog(PatternRegistry(), base=self.base)
+        payload = cat.export_payload(cat.patterns[:2])
+        self.assertFalse(any("default_enabled" in p for p in payload["patterns"]))
 
     def test_custom_pattern_appears_in_catalog(self):
         reg = PatternRegistry()
@@ -120,7 +168,10 @@ class PresetFilteringTests(unittest.TestCase):
 
     def test_disabling_a_cve_drops_its_preset(self):
         reg = PatternRegistry()
-        reg.set_enabled("cve-2024-25600", False)
+        for p in self.base.patterns:
+            if p["kind"] == "cve":
+                reg.set_enabled(p["id"], True, default=False)
+        reg.set_enabled("cve-2024-25600", False, default=False)
         cat = load_catalog(reg, base=self.base)
         disabled = disabled_preset_cves(catalog=cat)
         self.assertIn("CVE-2024-25600", disabled)
@@ -128,10 +179,13 @@ class PresetFilteringTests(unittest.TestCase):
         self.assertTrue(all(p.cve != "CVE-2024-25600" for p in kept))
         self.assertEqual(len(kept), len(PATTERN_PRESETS) - 1)
 
-    def test_nothing_disabled_keeps_every_preset(self):
+    def test_defaults_keep_generic_presets_and_drop_cve_ones(self):
         cat = load_catalog(PatternRegistry(), base=self.base)
-        self.assertEqual(len(active_presets(PATTERN_PRESETS, catalog=cat)),
-                         len(PATTERN_PRESETS))
+        catalogued = {p["cve"] for p in cat.patterns if p["kind"] == "cve"}
+        kept = active_presets(PATTERN_PRESETS, catalog=cat)
+        self.assertTrue(any(p.kind == "generic" for p in kept))
+        self.assertFalse(any(p.cve in catalogued for p in kept))
+        self.assertEqual(len(kept), sum(1 for p in PATTERN_PRESETS if p.cve not in catalogued))
 
 
 if __name__ == "__main__":
