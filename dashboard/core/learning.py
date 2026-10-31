@@ -471,6 +471,14 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Users are told apart by session, not by address: each frame has its own cookie "
         "and browser fingerprint, so each is diverted to a honeypot pool of its own.",
     ),
+    "breach_audit": PageGuide(
+        "Attacker's-eye hardening audit: assume a honeypot is already owned and try to break the containment, then export a PDF.",
+        "Leave all categories ticked, press Run breach validation, and read the table top-down -- failures first.",
+        "Diversion and isolation are only half the story: the other half is that a compromised honeypot "
+        "stays a dead end. These read-only probes try to pivot out of a honeypot to production, the other "
+        "pools, the Docker daemon and the internet, and to smuggle a honeypot target past the edge whitelist "
+        "onto production. Every blocked attempt is a PASS.",
+    ),
     "extras": PageGuide(
         "Report generation: implementation chapter, architecture overview and pattern / CVE matrix.",
         "Export the Pattern / CVE matrix as a study sheet.",

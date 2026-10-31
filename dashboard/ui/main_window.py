@@ -56,6 +56,7 @@ from ui.page_overview import OverviewPage
 from ui.page_pipeline import PipelinePage
 from ui.page_pool_scaling import PoolScalingPage
 from ui.page_pool_test import PoolTestPage
+from ui.page_breach_audit import BreachAuditPage
 from ui.page_redis import RedisPage
 from ui.page_resources import ResourcesPage
 from ui.page_services import ServicesPage
@@ -85,7 +86,7 @@ _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
     "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "whitelist", "honeypot_targets", "container_firewall", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
-    "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "wp_studio", "wp_update", "settings", "learn",
+    "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "breach_audit", "log_search", "extras", "wp_studio", "wp_update", "settings", "learn",
 ]
 PAGE_LABELS = {
     "overview": "Overview",
@@ -109,6 +110,7 @@ PAGE_LABELS = {
     "pattern_database": "Pattern Database",
     "signature_sim": "Signature Simulation",
     "pool_test": "Segmentation Validation",
+    "breach_audit": "Breach Validation",
     "log_search": "Forensics Analysis",
     "extras": "Reporting",
     "wp_studio": "WordPress Studio",
@@ -128,7 +130,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "kibana", "pipeline", "resources", "log_search"]),
-    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "honeypot_targets", "whitelist", "container_firewall", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "honeypot_targets", "whitelist", "container_firewall", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "breach_audit", "redis"]),
     ("Manage", ["services", "wp_studio", "wp_update", "settings", "certificates", "backups"]),
     ("Reporting", ["learn", "extras"]),
 ]
@@ -144,7 +146,7 @@ NAV_GROUPS = [
 # (Reporting) move into overflow.
 NAV_OVERFLOW = {
     "Monitor": ["pipeline", "resources", "log_search"],
-    "Threat Operations": ["pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"],
+    "Threat Operations": ["pattern_database", "signature_sim", "pool_scaling", "pool_test", "breach_audit", "redis"],
     "Manage": ["certificates", "backups"],
     "Reporting": ["extras"],
 }
@@ -342,6 +344,7 @@ class MainWindow(QMainWindow):
         self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
         self.signature_sim_page = SignatureSimPage(state)
         self.pool_test_page = PoolTestPage(state)
+        self.breach_audit_page = BreachAuditPage(state)
         self.log_search_page = LogSearchPage(state)
         self.extras_page = ExtrasPage(self._grab_health_screenshot)
         self.extras_page.open_page_requested.connect(self._open_page)
@@ -376,6 +379,7 @@ class MainWindow(QMainWindow):
             ("pattern_database", self.pattern_database_page),
             ("signature_sim", self.signature_sim_page),
             ("pool_test", self.pool_test_page),
+            ("breach_audit", self.breach_audit_page),
             ("log_search", self.log_search_page),
             ("extras", self.extras_page),
             ("wp_studio", self.wp_studio_page),
@@ -770,6 +774,7 @@ class MainWindow(QMainWindow):
         self.container_firewall_page.rebuild_targets()
         self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
+        self.breach_audit_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
@@ -1114,6 +1119,7 @@ class MainWindow(QMainWindow):
         self.container_firewall_page.rebuild_targets()
         self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
+        self.breach_audit_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
         self.log_search_page.rebuild_targets()
