@@ -377,14 +377,15 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Auto-send traps an attacker on first contact. Score-first trades that for fewer false diversions "
         "when a target URL is also reachable by legitimate traffic.",
     ),
-    "production_firewall": PageGuide(
-        "The firewall inside the production WordPress container: who may open a connection to it, and where "
-        "it may open connections itself.",
-        "Apply the defaults, Check, then load the shop once and watch the edge-http and database packet counters "
-        "rise while the default drop counter stays put.",
+    "container_firewall": PageGuide(
+        "The firewalls around the WordPress containers -- production and every honeypot pool: who may open a "
+        "connection to them, and where they may open connections themselves.",
+        "Apply the production defaults, Check, then load the shop once and watch the edge-http and database "
+        "packet counters rise. Switch to Honeypot pools: the only outbound rule is the pool's own database.",
         "Filtering only NEW connections keeps every reply flowing while a compromised plugin can no longer reach "
-        "anything the shop does not need -- not the honeypots, not the backups, not an attacker's server on "
-        "port 4444.",
+        "anything the shop does not need. An attacker who takes over a honeypot pool is meant to get in, but "
+        "not out: no internet, no edge, no production, no other pool. The rules sit in a sidecar container "
+        "whose network namespace WordPress joins, so even root inside WordPress cannot change them.",
     ),
     "pool_scaling": PageGuide(
         "Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.",

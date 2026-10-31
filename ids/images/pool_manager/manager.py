@@ -176,6 +176,10 @@ MYSQLD_ARGS = "--mysql-native-password=ON --authentication-policy=mysql_native_p
 # and PHP as the compose pools, with the PHP2Shell mitigations, so a runtime
 # pool is never softer than pools 1-3.
 WORDPRESS_IMAGE = os.environ.get("POOL_WORDPRESS_IMAGE", "presshaven/wordpress:7.1.3-php8.4-hardened")
+# Built by docker-compose.yml (images/container_firewall): every runtime pool's
+# WordPress lives in the network namespace of one of these, which holds the
+# honeypot firewall profile (see x-container-firewall in docker-compose.yml).
+FIREWALL_IMAGE = os.environ.get("POOL_FIREWALL_IMAGE", "presshaven/container-firewall:1")
 WPCLI_IMAGE = "wordpress:cli-2.12.0-php8.4"
 DB_NAME = "production_database"
 DB_USER = "production_user"
@@ -937,10 +941,12 @@ class Manager:
             extra_networks=[self._net("production_network")])
 
     def _start_wordpress_container(self, n, db_name, wp_name, files_vol, labels, password):
-        """The WordPress container itself. It generates wp-config from the per-pool
-        DB password it is handed (production_eshop_files/wp-config.php reads
-        WORDPRESS_DB_PASSWORD from the environment), so a template-cloned files
-        volume needs no editing."""
+        """The WordPress container itself, inside the network namespace of its
+        firewall (_start_firewall_container). It generates wp-config from the
+        per-pool DB password it is handed (production_eshop_files/wp-config.php
+        reads WORDPRESS_DB_PASSWORD from the environment), so a template-cloned
+        files volume needs no editing."""
+        fw = self._start_firewall_container(n, db_name, wp_name, labels)
         wp = self.docker.containers.create(
             WORDPRESS_IMAGE, name=wp_name, labels=labels, detach=True,
             command=["sh", "-c", WP_START_SCRIPT],
@@ -950,7 +956,7 @@ class Manager:
                 "WORDPRESS_DEBUG": "1", "WORDPRESS_DEBUG_LOG": "1",
                 "HONEYPOT_POOL_ID": str(n)},
             volumes={files_vol: {"bind": "/var/www/html", "mode": "rw"}},
-            network=self._net("honeypot_network"),
+            network_mode=f"container:{fw.id}",
             security_opt=["no-new-privileges:true"], cap_drop=["ALL"],
             cap_add=["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID",
                      "NET_BIND_SERVICE", "KILL"],
@@ -959,12 +965,36 @@ class Manager:
             healthcheck={"test": ["CMD", "curl", "-f", "http://localhost/"],
                          "interval": 30 * NS, "timeout": 10 * NS, "retries": 3,
                          "start_period": 60 * NS, "start_interval": 2 * NS})
-        # honeypot_network only (see honeypot_eshop_1 in docker-compose.yml):
-        # on production_network a compromised pool could log into
-        # production_database. The clone/sync helpers above keep that access.
         wp.start()
         self._wait_healthy(wp, "WordPress")
         self.register_ready(n)
+
+    def _start_firewall_container(self, n, db_name, wp_name, labels):
+        """honeypot_eshop_N_net, as docker-compose.yml's honeypot_eshop_1_net:
+        owns the pool's network namespace on honeypot_network only (see
+        honeypot_eshop_1 there: on production_network a compromised pool could
+        log into production_database) and answers to the pool's DNS name, with
+        the honeypot firewall profile enforced before WordPress starts in it.
+        Not charged to the pool budget (pool_logic.pool_cost): ~10 MB, idle."""
+        net = self._net("honeypot_network")
+        fw = self.docker.containers.create(
+            FIREWALL_IMAGE, name=f"{wp_name}_net", labels=labels, detach=True,
+            environment={"FIREWALL_PROFILE": "honeypot", "FIREWALL_LAYER": "default",
+                         "FIREWALL_DB_HOST": f"{db_name}:3306"},
+            volumes={f"{PROJECT}_container_firewall_rules":
+                     {"bind": "/var/lib/container-firewall", "mode": "rw"}},
+            network=net,
+            networking_config={net: self.docker.api.create_endpoint_config(aliases=[wp_name])},
+            init=True, read_only=True, tmpfs={"/run": ""},
+            security_opt=["no-new-privileges:true"], cap_drop=["ALL"], cap_add=["NET_ADMIN"],
+            mem_limit="64m", nano_cpus=250_000_000, pids_limit=50,
+            log_config=LOG_CONFIG, restart_policy={"Name": "unless-stopped"},
+            healthcheck={"test": ["CMD", "container-firewall", "health"],
+                         "interval": 30 * NS, "timeout": 5 * NS, "retries": 3,
+                         "start_period": 30 * NS, "start_interval": 1 * NS})
+        fw.start()
+        self._wait_healthy(fw, "firewall")
+        return fw
 
     def _run_helper(self, image, command, binds, labels, what, user=None,
                     environment=None, network=None, caps=None, entrypoint=None,
@@ -1011,7 +1041,9 @@ class Manager:
         self.redis.hdel(LAST_SEEN_KEY, str(n))
         self.redis.hdel(HEALTH_KEY, str(n))
         self.redis.srem(DIRTY_KEY, n)
-        for c in self.docker.containers.list(all=True, filters={"label": f"honeypot.pool={n}"}):
+        # The firewall last: WordPress lives in its network namespace.
+        for c in sorted(self.docker.containers.list(all=True, filters={"label": f"honeypot.pool={n}"}),
+                        key=lambda c: c.name.endswith("_net")):
             c.remove(force=True, v=True)
         for v in self.docker.volumes.list(filters={"label": f"honeypot.pool={n}"}):
             v.remove(force=True)

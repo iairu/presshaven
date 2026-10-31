@@ -26,6 +26,8 @@
 #  15. Backup files not publicly accessible
 #  16. Container capability audit (no-new-privileges, cap_drop ALL)
 #  17. Production database not reachable from outside the Docker network
+#  18. Container firewalls enforcing; WordPress cannot change them; a
+#      hijacked honeypot pool reaches only its own database
 #
 # USAGE:
 #   ./scenario_05_hardening_verification.sh [TARGET_HOST] [TARGET_PORT]
@@ -58,6 +60,9 @@ source "$(dirname "$0")/lib/scenario_common.sh"
 PROD_CONTAINER="honeypot-ids-system-v1-production_eshop-1"
 HP_CONTAINER="honeypot-ids-system-v1-honeypot_eshop_1-1"
 PROXY_CONTAINER="honeypot-ids-system-v1-reverse_proxy-1"
+PROD_FW_CONTAINER="honeypot-ids-system-v1-production_eshop_net-1"
+HP_FW_CONTAINER="honeypot-ids-system-v1-honeypot_eshop_1_net-1"
+HP_NETWORK="honeypot-ids-system-v1_honeypot_network"
 
 PASS=0
 FAIL=0
@@ -766,29 +771,78 @@ docker_check \
     "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
 
 # =============================================================================
-# CHECK GROUP 10 – Production Firewall
+# CHECK GROUP 10 – Container Firewalls
 # =============================================================================
-# production_eshop's own iptables ruleset (images/wordpress_hardened/
-# production-firewall.php, configured on the dashboard's Production Firewall
-# page): loaded and hooked, not changeable from Apache/PHP, and refusing new
-# outbound connections no rule lists.
+# The iptables rulesets around production_eshop and the honeypot pools
+# (images/container_firewall/, configured on the dashboard's Container
+# Firewall page): loaded and hooked, out of WordPress's reach, refusing new
+# outbound connections no rule lists -- a hijacked pool reaches its own
+# database and nothing else.
 # =============================================================================
-banner "Check Group 10 – Production Firewall"
+banner "Check Group 10 – Container Firewalls (production and honeypot pools)"
+
+# The rules live in a sidecar (<service>_net) that owns the network namespace
+# WordPress joins; WordPress itself has no NET_ADMIN and no iptables binary.
+FW_ENFORCING="container-firewall status | php -r '\$s = json_decode(stream_get_contents(STDIN), true); exit(\$s[\"hooked\"] && \$s[\"fingerprint\"] === \$s[\"enforced_fingerprint\"] && \$s[\"document\"][\"enabled\"] ? 0 : 1);'"
+# Probes use PHP (always in the WordPress image), and the "blocked" probes
+# exit 0 only when the connection fails -- so a broken probe (missing tool,
+# quoting) fails the check instead of passing it as "blocked".
+NO_NET_ADMIN="php -r 'preg_match(\"/CapBnd:\\s*(\\w+)/\", file_get_contents(\"/proc/1/status\"), \$m); exit(hexdec(\$m[1]) >> 12 & 1);' && ! command -v iptables"
+connects() { printf "php -r 'exit(@fsockopen(\"%s\", %s, \$e, \$m, 3) ? 0 : 1);'" "$1" "$2"; }
+blocked()  { printf "php -r 'exit(@fsockopen(\"%s\", %s, \$e, \$m, 3) ? 1 : 0);'" "$1" "$2"; }
 
 docker_check \
-    "Production firewall is loaded and enforcing the saved ruleset" \
-    "${PROD_CONTAINER}" 0 \
-    "production-firewall status | grep -q '\"hooked\":true' && production-firewall status | php -r '\$s = json_decode(stream_get_contents(STDIN), true); exit(\$s[\"fingerprint\"] === \$s[\"enforced_fingerprint\"] && \$s[\"document\"][\"enabled\"] ? 0 : 1);'"
+    "Production firewall (production_eshop_net) is loaded and enforcing" \
+    "${PROD_FW_CONTAINER}" 0 "${FW_ENFORCING}"
 
 docker_check \
-    "Apache (PID 1) cannot change the firewall (no NET_ADMIN in its bounding set)" \
-    "${PROD_CONTAINER}" 0 \
-    "v=\$(awk '/^CapBnd/ {print \$2}' /proc/1/status); [ \$(( 0x\$v >> 12 & 1 )) -eq 0 ]"
+    "Production eshop cannot change the firewall (no NET_ADMIN, no iptables)" \
+    "${PROD_CONTAINER}" 0 "${NO_NET_ADMIN}"
 
 docker_check \
     "Production eshop cannot open a connection to backup_service:22 (no rule)" \
-    "${PROD_CONTAINER}" 1 \
-    "timeout 3 bash -c '</dev/tcp/backup_service/22' 2>/dev/null"
+    "${PROD_CONTAINER}" 0 "$(blocked backup_service 22)"
+
+docker_check \
+    "Honeypot pool firewall (honeypot_eshop_1_net) is loaded and enforcing" \
+    "${HP_FW_CONTAINER}" 0 "${FW_ENFORCING}"
+
+docker_check \
+    "Honeypot eshop cannot change the firewall (no NET_ADMIN, no iptables)" \
+    "${HP_CONTAINER}" 0 "${NO_NET_ADMIN}"
+
+docker_check \
+    "Honeypot eshop still reaches its own database (honeypot_database_1:3306)" \
+    "${HP_CONTAINER}" 0 "$(connects honeypot_database_1 3306)"
+
+# A hijacked pool must not be a gateway: not to the internet, the edge (and
+# through it production), the other pools or their databases.
+for _target in 1.1.1.1/443 1.1.1.1/80 reverse_proxy/80 production_eshop/80 \
+               honeypot_eshop_2/80 honeypot_database_2/3306; do
+    docker_check \
+        "Honeypot eshop cannot open a connection to ${_target%/*}:${_target#*/}" \
+        "${HP_CONTAINER}" 0 "$(blocked "${_target%/*}" "${_target#*/}")"
+done
+
+docker_check \
+    "Honeypot eshop cannot resolve internet names (no external DNS)" \
+    "${HP_CONTAINER}" 0 \
+    "php -r 'exit(gethostbyname(\"example.com\") === \"example.com\" ? 0 : 1);'"
+
+TOTAL=$((TOTAL + 1))
+if ! command -v docker >/dev/null 2>&1; then
+    SKIP=$((SKIP + 1))
+    printf "  ${YELLOW}[SKIP]${NC} honeypot_network is internal – docker not found\n"
+elif [ "$(docker network inspect -f '{{.Internal}}' "${HP_NETWORK}" 2>/dev/null)" = "true" ]; then
+    PASS=$((PASS + 1))
+    printf "  ${GREEN}[PASS]${NC} honeypot_network is internal (no route out of the host)\n"
+elif ! docker network inspect "${HP_NETWORK}" >/dev/null 2>&1; then
+    SKIP=$((SKIP + 1))
+    printf "  ${YELLOW}[SKIP]${NC} honeypot_network is internal – network '%s' not found\n" "${HP_NETWORK}"
+else
+    FAIL=$((FAIL + 1))
+    printf "  ${RED}[FAIL]${NC} honeypot_network is NOT internal (recreate it: docker compose down && up -d)\n"
+fi
 
 # ---------------------------------------------------------------------------
 # Final report

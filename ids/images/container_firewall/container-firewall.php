@@ -1,55 +1,66 @@
 #!/usr/local/bin/php
 <?php
 /**
- * production-firewall: the iptables ruleset of production_eshop's own network
- * namespace. Only NEW connections are filtered -- loopback and ESTABLISHED /
- * RELATED traffic always passes -- so a connection is allowed when it opens
- * only if a rule names its peer and port: inbound, only the edge may open a
- * connection to Apache; outbound, PHP may reach only what the rules list (the
- * database, the public internet on 443, ...). Everything else is dropped
- * (inbound) or rejected (outbound: fails fast instead of hanging PHP).
+ * container-firewall: the iptables ruleset of one WordPress container's network
+ * namespace. It runs in its own small container that OWNS that namespace --
+ * the WordPress container joins it (compose: network_mode service:<this>), so
+ * the rules filter every packet WordPress sends or receives while nothing in
+ * the WordPress container can see or change them: it holds no NET_ADMIN, has
+ * no iptables binary, and cannot see this container's processes or files.
+ * (A firewall inside the WordPress container itself could not hold against
+ * root there: root could replace a binary the privileged watcher runs next.)
  *
- *   production-firewall boot           apply the saved ruleset (or the default)
- *   production-firewall apply --b64 X  validate, apply and save a ruleset
- *   production-firewall status         JSON: ruleset, resolved peers, counters
- *   production-firewall watch          re-resolve peers every 5 s, re-apply on
- *                                      change (the edge's IP changes whenever
- *                                      reverse_proxy is recreated)
- *   production-firewall default        print the image's default ruleset
+ * Only NEW connections are filtered -- loopback and ESTABLISHED / RELATED
+ * traffic always pass -- so a connection is allowed when it opens only if a
+ * rule names its peer and port. Everything else is dropped (inbound) or
+ * rejected (outbound: fails fast instead of hanging PHP).
  *
- * Needs CAP_NET_ADMIN (compose: cap_add NET_ADMIN). Started as root from the
- * production command, which then drops NET_ADMIN from Apache's bounding set,
- * so neither Apache nor PHP can change these rules. The dashboard's
- * Production Firewall page drives it through `docker compose exec`, which gets
- * the container's full capability set.
+ *   container-firewall run            the container's command: apply the
+ *                                     ruleset (retrying until it is), then
+ *                                     re-check every 5 s: re-resolve peers (the
+ *                                     edge's IP changes whenever it is
+ *                                     recreated), re-read the ruleset file (the
+ *                                     dashboard may have changed it), re-apply
+ *                                     on any change
+ *   container-firewall apply --b64 X  validate, apply and save a ruleset
+ *   container-firewall status         JSON: ruleset, resolved peers, counters
+ *   container-firewall health         exit 0 once the ruleset is enforced
+ *   container-firewall default        print the image's default ruleset
  *
- * Own chains only (PFW_IN, PFW_OUT, PFW_INET in the filter table), hooked
- * first into INPUT and OUTPUT, replaced atomically with iptables-restore
- * --noflush. The nat table is never touched: Docker's embedded DNS
- * (127.0.0.11) lives there, and reaches us over loopback.
+ * $FIREWALL_PROFILE picks the ruleset: "production" (production_eshop) or
+ * "honeypot" (every honeypot pool, compose and runtime). One file per profile
+ * in RULES_DIR (a volume every firewall container shares), so a change the
+ * dashboard applies through one honeypot pool's firewall reaches the others
+ * within WATCH_INTERVAL. No file = the image default for the profile.
+ *
+ * Own chains only (FW_IN, FW_OUT, FW_INET in the filter table), hooked first
+ * into INPUT and OUTPUT, replaced atomically with iptables-restore --noflush.
+ * The nat table is never touched: Docker's embedded DNS (127.0.0.11) lives
+ * there, and is reached over loopback.
  *
  * Ruleset document (version 1), validated identically by the dashboard
- * (dashboard/core/production_firewall.py):
+ * (dashboard/core/container_firewall.py):
  *   {version, enabled, inbound: [rule], outbound: [rule]}
  *   rule = {id, enabled, peer, proto, ports, label, layer?}
- *   peer  : a container / service name (resolved on every apply), an IPv4
+ *   peer  : a container / service name (resolved on every check), an IPv4
  *           address or CIDR, "any", "local-subnets" (every subnet this
- *           container is attached to) or, outbound only, "internet" (anything
- *           outside the private / reserved ranges)
+ *           container is attached to), "db-host" (this container's own
+ *           database, $FIREWALL_DB_HOST) or, outbound only, "internet"
+ *           (anything outside the private / reserved ranges)
  *   proto : tcp | udp | tcp/udp
  *   ports : "80", "465,587", "8000-8100" (at most 15 ports, a range counts 2)
  *   layer : "default" | "db-proxy" -- the rule applies only in that honeypot
- *           layer ($PRODUCTION_FIREWALL_LAYER); absent = every layer
+ *           layer ($FIREWALL_LAYER); absent = every layer
  */
 
-const STATE_DIR = '/var/lib/production-firewall';
-const STATE_FILE = STATE_DIR . '/ruleset.json';
-const RUNTIME_FILE = '/run/production-firewall.json';
-const DEFAULT_FILE = '/usr/local/share/production-firewall/default.json';
+const RULES_DIR = '/var/lib/container-firewall';
+const DEFAULTS_DIR = '/usr/local/share/container-firewall';
+const RUNTIME_FILE = '/run/container-firewall.json';
+const PROFILES = ['production', 'honeypot'];
 const WATCH_INTERVAL = 5;
 const MAX_RULES = 64;
 const MAX_PORTS = 15;
-const PEER_KEYWORDS = ['any', 'internet', 'local-subnets'];
+const PEER_KEYWORDS = ['any', 'internet', 'local-subnets', 'db-host'];
 const LAYERS = ['default', 'db-proxy'];
 // Not "internet": RFC 1918, loopback, link-local, CGNAT, "this network",
 // multicast and reserved.
@@ -57,13 +68,26 @@ const NON_INTERNET = ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
 	'172.16.0.0/12', '192.168.0.0/16', '224.0.0.0/4', '240.0.0.0/4'];
 
 function fail( string $msg, int $code = 1 ): void {
-	fwrite( STDERR, "production-firewall: $msg\n" );
+	fwrite( STDERR, "container-firewall: $msg\n" );
 	exit( $code );
 }
 
 function layer(): string {
-	$l = getenv( 'PRODUCTION_FIREWALL_LAYER' );
+	$l = getenv( 'FIREWALL_LAYER' );
 	return in_array( $l, LAYERS, true ) ? $l : 'default';
+}
+
+/** No fallback: the wrong profile would open production's egress on a honeypot. */
+function profile(): string {
+	$p = getenv( 'FIREWALL_PROFILE' );
+	if ( ! in_array( $p, PROFILES, true ) ) {
+		fail( 'FIREWALL_PROFILE must be one of ' . implode( ', ', PROFILES ), 2 );
+	}
+	return $p;
+}
+
+function rules_file(): string {
+	return RULES_DIR . '/' . profile() . '.json';
 }
 
 /** Runs argv (no shell); returns [exit code, stdout, stderr]. */
@@ -161,7 +185,7 @@ function validate( $doc ): array {
 			$peer = $r['peer'] ?? '';
 			if ( ! is_string( $peer ) || ! ( in_array( $peer, PEER_KEYWORDS, true ) || valid_cidr( $peer )
 					|| ( preg_match( '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/', $peer ) && ! preg_match( '#^[\d./]+$#', $peer ) ) ) ) {
-				$errors[] = "$where: peer must be a container name, an IPv4 address/CIDR, any, local-subnets or internet";
+				$errors[] = "$where: peer must be a container name, an IPv4 address/CIDR, any, local-subnets, db-host or internet";
 			} elseif ( $peer === 'internet' && $dir === 'inbound' ) {
 				$errors[] = "$where: internet is outbound only (inbound traffic always comes through the edge)";
 			}
@@ -186,36 +210,34 @@ function validate( $doc ): array {
 // -- ruleset --------------------------------------------------------------------
 
 function load_default(): array {
-	$doc = json_decode( (string) @file_get_contents( DEFAULT_FILE ), true );
+	$file = DEFAULTS_DIR . '/' . profile() . '.json';
+	$doc = json_decode( (string) @file_get_contents( $file ), true );
 	if ( validate( $doc ) ) {
-		fail( 'the image default ruleset ' . DEFAULT_FILE . ' is invalid' );
+		fail( "the image default ruleset $file is invalid" );
 	}
 	return $doc;
 }
 
 /** The saved ruleset, or the image default when there is none (or it is broken). */
 function load_saved( ?string &$source = null ): array {
-	$raw = @file_get_contents( STATE_FILE );
+	$raw = @file_get_contents( rules_file() );
 	if ( $raw !== false ) {
 		$doc = json_decode( $raw, true );
 		if ( ! validate( $doc ) ) {
 			$source = 'saved';
 			return $doc;
 		}
-		fwrite( STDERR, 'production-firewall: ' . STATE_FILE . " is invalid, using the default\n" );
+		fwrite( STDERR, 'container-firewall: ' . rules_file() . " is invalid, using the default\n" );
 	}
 	$source = 'default';
 	return load_default();
 }
 
 function save( array $doc ): void {
-	if ( ! is_dir( STATE_DIR ) && ! mkdir( STATE_DIR, 0700, true ) ) {
-		fail( 'cannot create ' . STATE_DIR );
-	}
-	$tmp = STATE_FILE . '.tmp';
+	$tmp = rules_file() . '.tmp';
 	if ( file_put_contents( $tmp, json_encode( $doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" ) === false
-			|| ! rename( $tmp, STATE_FILE ) ) {
-		fail( 'cannot write ' . STATE_FILE );
+			|| ! rename( $tmp, rules_file() ) ) {
+		fail( 'cannot write ' . rules_file() );
 	}
 }
 
@@ -243,10 +265,15 @@ function networks(): array {
 		return $nets;
 	}
 	$nets = [];
-	foreach ( preg_split( '/\s+/', trim( run( [ 'hostname', '-I' ] )[1] ) ) as $ip ) {
-		if ( ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
-			continue;
+	$ips = [];
+	foreach ( net_get_interfaces() ?: [] as $name => $if ) {
+		foreach ( $name === 'lo' ? [] : ( $if['unicast'] ?? [] ) as $u ) {
+			if ( filter_var( $u['address'] ?? '', FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
+				$ips[] = $u['address'];
+			}
 		}
+	}
+	foreach ( $ips as $ip ) {
 		$ptr = implode( '.', array_reverse( explode( '.', $ip ) ) ) . '.in-addr.arpa';
 		foreach ( @dns_get_record( $ptr, DNS_PTR ) ?: [] as $rec ) {
 			$dot = strpos( $rec['target'] ?? '', '.' );
@@ -287,6 +314,9 @@ function resolve( array $doc ): array {
 				$out[ $peer ] = [ '*' ];
 			} elseif ( $peer === 'local-subnets' ) {
 				$out[ $peer ] = local_subnets();
+			} elseif ( $peer === 'db-host' ) {
+				$host = preg_replace( '/:\d+$/', '', (string) getenv( 'FIREWALL_DB_HOST' ) );
+				$out[ $peer ] = $host === '' ? [] : ( valid_cidr( $host ) ? [ $host ] : resolve_name( $host ) );
 			} elseif ( valid_cidr( $peer ) ) {
 				$out[ $peer ] = [ $peer ];
 			} else {
@@ -304,19 +334,19 @@ function active( array $r ): bool {
 
 /** The iptables-restore input for the filter table. */
 function render( array $doc, array $resolved ): string {
-	$l = [ '*filter', ':PFW_IN - [0:0]', ':PFW_OUT - [0:0]', ':PFW_INET - [0:0]',
-		'-F PFW_IN', '-F PFW_OUT', '-F PFW_INET' ];
+	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', ':FW_INET - [0:0]',
+		'-F FW_IN', '-F FW_OUT', '-F FW_INET' ];
 	if ( ! $doc['enabled'] ) {
-		$l[] = '-A PFW_IN -m comment --comment pfw:disabled -j ACCEPT';
-		$l[] = '-A PFW_OUT -m comment --comment pfw:disabled -j ACCEPT';
+		$l[] = '-A FW_IN -m comment --comment fw:disabled -j ACCEPT';
+		$l[] = '-A FW_OUT -m comment --comment fw:disabled -j ACCEPT';
 		$l[] = 'COMMIT';
 		return implode( "\n", $l ) . "\n";
 	}
 	foreach ( NON_INTERNET as $net ) {
-		$l[] = "-A PFW_INET -d $net -j RETURN";
+		$l[] = "-A FW_INET -d $net -j RETURN";
 	}
-	$l[] = '-A PFW_INET -j ACCEPT';
-	foreach ( [ 'in' => 'PFW_IN', 'out' => 'PFW_OUT' ] as $dir => $chain ) {
+	$l[] = '-A FW_INET -j ACCEPT';
+	foreach ( [ 'in' => 'FW_IN', 'out' => 'FW_OUT' ] as $dir => $chain ) {
 		$l[] = "-A $chain " . ( $dir === 'in' ? '-i' : '-o' ) . ' lo -j ACCEPT';
 		$l[] = "-A $chain -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT";
 		$l[] = "-A $chain -m conntrack --ctstate INVALID -j DROP";
@@ -326,20 +356,20 @@ function render( array $doc, array $resolved ): string {
 			}
 			$ports = parse_ports( $r['ports'] );
 			$protos = $r['proto'] === 'tcp/udp' ? [ 'tcp', 'udp' ] : [ $r['proto'] ];
-			$target = $r['peer'] === 'internet' ? 'PFW_INET' : 'ACCEPT';
+			$target = $r['peer'] === 'internet' ? 'FW_INET' : 'ACCEPT';
 			foreach ( $resolved[ $r['peer'] ] ?? [] as $addr ) {
 				$match = $addr === '*' ? '' : ( $dir === 'in' ? " -s $addr" : " -d $addr" );
 				foreach ( $protos as $p ) {
 					$l[] = "-A $chain$match -p $p -m multiport --dports $ports -m conntrack --ctstate NEW"
-						. " -m comment --comment pfw:$dir:{$r['id']} -j $target";
+						. " -m comment --comment fw:$dir:{$r['id']} -j $target";
 				}
 			}
 		}
 		if ( $dir === 'in' ) {
-			$l[] = '-A PFW_IN -m comment --comment pfw:in:default -j DROP';
+			$l[] = '-A FW_IN -m comment --comment fw:in:default -j DROP';
 		} else {
-			$l[] = '-A PFW_OUT -p tcp -m comment --comment pfw:out:default -j REJECT --reject-with tcp-reset';
-			$l[] = '-A PFW_OUT -m comment --comment pfw:out:default -j REJECT --reject-with icmp-port-unreachable';
+			$l[] = '-A FW_OUT -p tcp -m comment --comment fw:out:default -j REJECT --reject-with tcp-reset';
+			$l[] = '-A FW_OUT -m comment --comment fw:out:default -j REJECT --reject-with icmp-port-unreachable';
 		}
 	}
 	$l[] = 'COMMIT';
@@ -349,24 +379,24 @@ function render( array $doc, array $resolved ): string {
 /** Same idea for IPv6, best effort: the stack networks are IPv4, so only
  * loopback and established traffic pass when the firewall is on. */
 function render6( bool $enabled ): string {
-	$l = [ '*filter', ':PFW_IN - [0:0]', ':PFW_OUT - [0:0]', '-F PFW_IN', '-F PFW_OUT' ];
+	$l = [ '*filter', ':FW_IN - [0:0]', ':FW_OUT - [0:0]', '-F FW_IN', '-F FW_OUT' ];
 	if ( $enabled ) {
-		$l[] = '-A PFW_IN -i lo -j ACCEPT';
-		$l[] = '-A PFW_IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT';
-		$l[] = '-A PFW_IN -j DROP';
-		$l[] = '-A PFW_OUT -o lo -j ACCEPT';
-		$l[] = '-A PFW_OUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT';
-		$l[] = '-A PFW_OUT -j REJECT';
+		$l[] = '-A FW_IN -i lo -j ACCEPT';
+		$l[] = '-A FW_IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT';
+		$l[] = '-A FW_IN -j DROP';
+		$l[] = '-A FW_OUT -o lo -j ACCEPT';
+		$l[] = '-A FW_OUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT';
+		$l[] = '-A FW_OUT -j REJECT';
 	} else {
-		$l[] = '-A PFW_IN -j ACCEPT';
-		$l[] = '-A PFW_OUT -j ACCEPT';
+		$l[] = '-A FW_IN -j ACCEPT';
+		$l[] = '-A FW_OUT -j ACCEPT';
 	}
 	$l[] = 'COMMIT';
 	return implode( "\n", $l ) . "\n";
 }
 
 function hook( string $bin ): bool {
-	foreach ( [ 'INPUT' => 'PFW_IN', 'OUTPUT' => 'PFW_OUT' ] as $builtin => $chain ) {
+	foreach ( [ 'INPUT' => 'FW_IN', 'OUTPUT' => 'FW_OUT' ] as $builtin => $chain ) {
 		if ( run( [ $bin, '-w', '5', '-C', $builtin, '-j', $chain ] )[0] !== 0
 				&& run( [ $bin, '-w', '5', '-I', $builtin, '1', '-j', $chain ] )[0] !== 0 ) {
 			return false;
@@ -384,11 +414,11 @@ function enforce( array $doc ): array {
 		throw new RuntimeException( 'iptables-restore failed: ' . trim( $err ) );
 	}
 	if ( ! hook( 'iptables' ) ) {
-		throw new RuntimeException( 'cannot hook PFW_IN / PFW_OUT into INPUT / OUTPUT' );
+		throw new RuntimeException( 'cannot hook FW_IN / FW_OUT into INPUT / OUTPUT' );
 	}
 	$v6 = run( [ 'ip6tables-restore', '-w', '5', '--noflush' ], render6( $doc['enabled'] ) )[0] === 0
 		&& hook( 'ip6tables' );
-	$runtime = [ 'applied_at' => gmdate( 'c' ), 'layer' => layer(), 'resolved' => $resolved,
+	$runtime = [ 'applied_at' => gmdate( 'c' ), 'profile' => profile(), 'layer' => layer(), 'resolved' => $resolved,
 		'fingerprint' => fingerprint( $doc ), 'ipv6' => $v6 ];
 	@file_put_contents( RUNTIME_FILE, json_encode( $runtime, JSON_UNESCAPED_SLASHES ) . "\n" );
 	return $runtime;
@@ -419,9 +449,9 @@ function counters(): array {
 		return [ null, $hits ];
 	}
 	foreach ( explode( "\n", $out ) as $line ) {
-		if ( preg_match( '/^\[\d+:\d+\] -A (INPUT|OUTPUT) -j PFW_(IN|OUT)$/', $line, $m ) ) {
+		if ( preg_match( '/^\[\d+:\d+\] -A (INPUT|OUTPUT) -j FW_(IN|OUT)$/', $line, $m ) ) {
 			$hooked[ strtolower( $m[2] ) ] = true;
-		} elseif ( preg_match( '/^\[(\d+):(\d+)\] -A PFW_(?:IN|OUT) .*--comment "?pfw:(in|out):([a-z0-9-]+)"?/', $line, $m ) ) {
+		} elseif ( preg_match( '/^\[(\d+):(\d+)\] -A FW_(?:IN|OUT) .*--comment "?fw:(in|out):([a-z0-9-]+)"?/', $line, $m ) ) {
 			$hits[ $m[3] ][ $m[4] ]['packets'] = ( $hits[ $m[3] ][ $m[4] ]['packets'] ?? 0 ) + (int) $m[1];
 			$hits[ $m[3] ][ $m[4] ]['bytes'] = ( $hits[ $m[3] ][ $m[4] ]['bytes'] ?? 0 ) + (int) $m[2];
 		}
@@ -431,20 +461,42 @@ function counters(): array {
 
 // -- commands -------------------------------------------------------------------
 
+/** Applies when the ruleset file, the resolved peers or the hooks differ from what is enforced; true if it applied. */
+function reconcile( bool $force = false ): bool {
+	$doc = load_saved( $source );
+	$rt = json_decode( (string) @file_get_contents( RUNTIME_FILE ), true ) ?: [];
+	if ( ! $force && fingerprint( $doc ) === ( $rt['fingerprint'] ?? null )
+			&& resolve( $doc ) == ( $rt['resolved'] ?? null ) && counters()[0] ) {
+		return false;
+	}
+	$rt = enforce( $doc );
+	$missing = array_keys( array_filter( $rt['resolved'], fn( $ips ) => ! $ips ) );
+	echo 'container-firewall: ' . profile() . " $source ruleset applied at {$rt['applied_at']} ("
+		. ( $doc['enabled'] ? 'enforcing' : 'disabled' ) . ')'
+		. ( $missing ? '; unresolved: ' . implode( ', ', $missing ) : '' ) . "\n";
+	return true;
+}
+
 $cmd = $argv[1] ?? '';
 try {
 switch ( $cmd ) {
-	case 'boot':
-		$doc = load_saved( $source );
-		$rt = enforce( $doc );
-		$missing = array_keys( array_filter( $rt['resolved'], fn( $ips ) => ! $ips ) );
-		echo "production-firewall: $source ruleset applied (" . ( $doc['enabled'] ? 'enforcing' : 'disabled' ) . ')'
-			. ( $missing ? '; unresolved: ' . implode( ', ', $missing ) : '' ) . "\n";
-		break;
+	case 'run':
+		profile();
+		@unlink( RUNTIME_FILE );
+		$force = true;
+		while ( true ) {
+			try {
+				reconcile( $force );
+				$force = false;
+			} catch ( RuntimeException $e ) {
+				fwrite( STDERR, 'container-firewall: apply failed, retrying: ' . $e->getMessage() . "\n" );
+			}
+			sleep( WATCH_INTERVAL );
+		}
 
 	case 'apply':
 		if ( ( $argv[2] ?? '' ) !== '--b64' || ! isset( $argv[3] ) ) {
-			fail( 'usage: production-firewall apply --b64 <base64 JSON>', 2 );
+			fail( 'usage: container-firewall apply --b64 <base64 JSON>', 2 );
 		}
 		$doc = json_decode( (string) base64_decode( $argv[3], true ), true );
 		$errors = validate( $doc );
@@ -462,6 +514,7 @@ switch ( $cmd ) {
 		$rt = json_decode( (string) @file_get_contents( RUNTIME_FILE ), true ) ?: [];
 		echo json_encode( [
 			'source' => $source,
+			'profile' => profile(),
 			'layer' => layer(),
 			'hooked' => $hooked,
 			'document' => $doc,
@@ -474,28 +527,16 @@ switch ( $cmd ) {
 		], JSON_UNESCAPED_SLASHES ) . "\n";
 		break;
 
-	case 'watch':
-		while ( true ) {
-			sleep( WATCH_INTERVAL );
-			$doc = load_saved();
-			$rt = json_decode( (string) @file_get_contents( RUNTIME_FILE ), true ) ?: [];
-			if ( resolve( $doc ) == ( $rt['resolved'] ?? null ) && counters()[0] ) {
-				continue;
-			}
-			try {
-				enforce( $doc );
-				echo 'production-firewall: peers changed or hook missing, ruleset re-applied at ' . gmdate( 'c' ) . "\n";
-			} catch ( RuntimeException $e ) {
-				fwrite( STDERR, 'production-firewall: re-apply failed: ' . $e->getMessage() . "\n" );
-			}
-		}
+	case 'health':
+		profile();
+		exit( is_file( RUNTIME_FILE ) && counters()[0] ? 0 : 1 );
 
 	case 'default':
 		echo json_encode( load_default(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
 		break;
 
 	default:
-		fail( 'usage: production-firewall boot|apply --b64 <doc>|status|watch|default', 2 );
+		fail( 'usage: container-firewall run|apply --b64 <doc>|status|health|default', 2 );
 }
 } catch ( RuntimeException $e ) {
 	fail( $e->getMessage() );

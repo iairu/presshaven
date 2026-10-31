@@ -1,5 +1,6 @@
-"""Production Firewall page: the iptables rules of production_eshop's own
-network namespace (core/production_firewall.py).
+"""Container Firewall page: the iptables rules around the WordPress containers
+(core/container_firewall.py), one ruleset per profile -- Production
+(production_eshop) and Honeypot pools (every pool, compose and runtime).
 
 Only connection OPENINGS are filtered -- replies and loopback always pass --
 so each row says who may open a connection: inbound, the edge to Apache;
@@ -7,11 +8,11 @@ outbound, PHP to the database, the internet on 443, a mail relay, ... Anything
 without a rule is dropped (inbound) or rejected (outbound). Built-in rules can
 be switched off, custom rules added and removed.
 
-Edits save to patterns/production_firewall.json at once; "Apply to
-production" sends the ruleset to the selected stack's production_eshop, which
-enforces it at once and keeps it across restarts. "Check" reads what the
-container enforces, with the address each peer resolved to and the packet
-count of every rule."""
+Edits save to patterns/container_firewall_<profile>.json at once; "Apply"
+sends the ruleset to the selected stack's firewall of that profile, which
+enforces it at once and keeps it across restarts (the other pools follow
+within 5 s). "Check" reads what the firewall enforces, with the address each
+peer resolved to and the packet count of every rule."""
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
@@ -21,7 +22,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from core import production_firewall as pfw
+from core import container_firewall as cfw
 from core.docker_ctl import targets_for
 from core.state import AppState
 from ui import theme
@@ -29,26 +30,50 @@ from ui.common import ErrorBanner, Job, TargetSelector, confirm, muted_label, se
 
 _ROLE_KEY = Qt.ItemDataRole.UserRole
 _COLUMNS = ["Rule", "Peer", "Protocol", "Ports", "Resolved to", "Packets", "Description"]
-_PEER_SUGGESTIONS = ["reverse_proxy", "production_database", "internet", "local-subnets", "any"]
+_PEER_SUGGESTIONS = {
+    "production": ["reverse_proxy", "production_database", "internet", "local-subnets", "any"],
+    "honeypot": ["db-host", "reverse_proxy", "local-subnets", "any"],
+}
+_EXPLANATION = {
+    "production": (
+        "Firewall around the production WordPress container. Only connection openings are filtered "
+        "(replies and loopback always pass): inbound, only the listed peers may connect to Apache; "
+        "outbound, PHP may open connections only to the listed peers. Everything else is dropped "
+        "inbound and refused outbound. It runs in production_eshop_net, whose network namespace "
+        "production_eshop joins: nothing inside WordPress -- not even root -- can change these rules."),
+    "honeypot": (
+        "Firewall around every honeypot pool (pools 1-3 and pool_manager's runtime pools). Attackers "
+        "may still break INTO a pool through the edge -- that is the point -- but a hijacked pool must "
+        "not become a gateway: by default it may open connections only to its own database (db-host), "
+        "not to the edge (and through it production), the other pools, the Docker host or the "
+        "internet. honeypot_network is also an internal network, so the internet stays unreachable "
+        "whatever these rules say. The rules live in honeypot_eshop_N_net, outside the pool's reach."),
+}
 
 
-class ProductionFirewallPage(QWidget):
+class ContainerFirewallPage(QWidget):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
-        self.settings = pfw.FirewallSettings.load()
-        self._status: pfw.FirewallStatus | None = None
+        self.profile = cfw.PRODUCTION
+        self.settings = cfw.FirewallSettings.for_profile(self.profile)
+        self._status: cfw.FirewallStatus | None = None
         self._jobs: set[Job] = set()
 
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
-        bar.addWidget(QLabel("Production:"))
+        self.profile_combo = QComboBox()
+        for profile in cfw.PROFILES.values():
+            self.profile_combo.addItem(profile.title, profile.name)
+        self.profile_combo.setToolTip("Which ruleset to edit: production_eshop's, or the one every honeypot "
+                                      "pool shares")
+        bar.addWidget(self.profile_combo)
+        bar.addWidget(QLabel("on"))
         self.target_combo = TargetSelector(lambda: targets_for("edge", state))
         bar.addWidget(self.target_combo)
         self.check_btn = QPushButton("Check")
-        self.check_btn.setToolTip("Read the ruleset production_eshop enforces, with resolved peers and counters")
+        self.check_btn.setToolTip("Read the ruleset the firewall enforces, with resolved peers and counters")
         bar.addWidget(self.check_btn)
-        self.apply_btn = QPushButton("Apply to production")
-        self.apply_btn.setToolTip("Send this ruleset to production_eshop: enforced at once, kept across restarts")
+        self.apply_btn = QPushButton("Apply")
         bar.addWidget(self.apply_btn)
         self.sync_label = QLabel("")
         bar.addWidget(self.sync_label, stretch=1)
@@ -56,11 +81,9 @@ class ProductionFirewallPage(QWidget):
         self.error_banner = ErrorBanner()
         layout.addWidget(self.error_banner)
 
-        layout.addWidget(muted_label(
-            "Firewall inside the production WordPress container. Only connection openings are filtered "
-            "(replies and loopback always pass): inbound, only the listed peers may connect to Apache; "
-            "outbound, PHP may open connections only to the listed peers. Everything else is dropped "
-            "inbound and refused outbound. Apache and PHP cannot change these rules themselves."))
+        self.explanation = muted_label("")
+        self.explanation.setWordWrap(True)
+        layout.addWidget(self.explanation)
 
         top = QHBoxLayout()
         self.enabled_check = QCheckBox("Firewall enabled")
@@ -76,9 +99,10 @@ class ProductionFirewallPage(QWidget):
         layout.addWidget(self.warning_label)
 
         self.tables: dict[str, QTableWidget] = {}
-        for direction, title in (("inbound", "Inbound — who may connect to production"),
-                                 ("outbound", "Outbound — where production may connect")):
-            layout.addWidget(QLabel(f"<b>{title}</b>"))
+        self.table_titles: dict[str, QLabel] = {}
+        for direction in cfw.DIRECTIONS:
+            self.table_titles[direction] = QLabel("")
+            layout.addWidget(self.table_titles[direction])
             table = QTableWidget(0, len(_COLUMNS))
             table.setHorizontalHeaderLabels(_COLUMNS)
             header = table.horizontalHeader()
@@ -102,16 +126,15 @@ class ProductionFirewallPage(QWidget):
         add_row.addWidget(self.direction_combo)
         self.peer_combo = QComboBox()
         self.peer_combo.setEditable(True)
-        self.peer_combo.addItems(_PEER_SUGGESTIONS)
-        self.peer_combo.setCurrentText("")
         self.peer_combo.lineEdit().setPlaceholderText("container, IPv4/CIDR, internet…")
         self.peer_combo.setToolTip(
-            "A container or service name (resolved on every apply, on every network production is on), "
+            "A container or service name (re-resolved every 5 s, on every network the container is on), "
             "an IPv4 address or CIDR, 'internet' (outbound: anything outside private ranges), "
-            "'local-subnets' (the stack networks production is on) or 'any'")
+            "'local-subnets' (the stack networks the container is on), 'db-host' (the container's own "
+            "database) or 'any'")
         add_row.addWidget(self.peer_combo, stretch=1)
         self.proto_combo = QComboBox()
-        self.proto_combo.addItems(pfw.PROTOS)
+        self.proto_combo.addItems(cfw.PROTOS)
         add_row.addWidget(self.proto_combo)
         self.ports_edit = QLineEdit()
         self.ports_edit.setPlaceholderText("443 or 465,587 or 8000-8100")
@@ -133,6 +156,7 @@ class ProductionFirewallPage(QWidget):
         buttons.addWidget(self.status, stretch=1)
         layout.addLayout(buttons)
 
+        self.profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         self.check_btn.clicked.connect(self.check)
         self.apply_btn.clicked.connect(self.apply)
         self.target_combo.currentIndexChanged.connect(self.check)
@@ -142,7 +166,7 @@ class ProductionFirewallPage(QWidget):
         self.remove_btn.clicked.connect(self._remove)
         self.reset_btn.clicked.connect(self._reset)
 
-        self.reload()
+        self._on_profile_changed(check=False)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -153,20 +177,45 @@ class ProductionFirewallPage(QWidget):
         self.target_combo.rebuild()
 
     # -- local state ---------------------------------------------------------
+    def _on_profile_changed(self, *_args, check: bool = True) -> None:
+        self.profile = cfw.PROFILES[self.profile_combo.currentData()]
+        name = self.profile.name
+        self._status = None
+        self.live_label.setText("")
+        set_status(self.sync_label, "")
+        self.error_banner.set_error(None)
+        self.explanation.setText(_EXPLANATION[name])
+        what = "production" if name == "production" else "a honeypot pool"
+        self.table_titles["inbound"].setText(f"<b>Inbound — who may connect to {what}</b>")
+        self.table_titles["outbound"].setText(f"<b>Outbound — where {what} may connect</b>")
+        self.apply_btn.setText(f"Apply to {self.profile.title.lower()}")
+        self.apply_btn.setToolTip(f"Send this ruleset to {self.profile.service} (protecting "
+                                  f"{self.profile.protects}): enforced at once, kept across restarts")
+        self.peer_combo.clear()
+        self.peer_combo.addItems(_PEER_SUGGESTIONS[name])
+        self.peer_combo.setCurrentText("")
+        self.reload()
+        if check:
+            self.check()
+
+    def _available(self) -> bool:
+        """The profile has containers in the dashboard's honeypot layer."""
+        return cfw.active_layer() in self.profile.layers
+
     def reload(self) -> None:
-        self.settings = pfw.FirewallSettings.load()
+        self.settings = cfw.FirewallSettings.for_profile(self.profile)
         self._fill()
 
     def _document(self) -> dict | None:
         try:
-            doc = pfw.build_document(self.settings)
-        except pfw.FirewallError as e:
+            doc = cfw.build_document(self.settings)
+        except cfw.FirewallError as e:
             self.error_banner.set_error(str(e))
             return None
         return doc
 
     def _layer(self) -> str:
-        return self._status.layer if self._status else pfw.active_layer()
+        return self._status.layer if self._status else cfw.active_layer()
 
     def _fill(self) -> None:
         self.enabled_check.blockSignals(True)
@@ -174,7 +223,7 @@ class ProductionFirewallPage(QWidget):
         self.enabled_check.blockSignals(False)
         try:
             rules = self.settings.rules()
-        except pfw.FirewallError as e:
+        except cfw.FirewallError as e:
             self.error_banner.set_error(str(e))
             rules = []
         colors = theme.scheme_colors()
@@ -207,7 +256,7 @@ class ProductionFirewallPage(QWidget):
         self._update_warnings()
         self._refresh_sync()
 
-    def _resolved_text(self, rule: pfw.FirewallRule, resolved: dict) -> str:
+    def _resolved_text(self, rule: cfw.FirewallRule, resolved: dict) -> str:
         if not self._status:
             return ""
         if rule.peer in ("any", "internet"):
@@ -218,7 +267,7 @@ class ProductionFirewallPage(QWidget):
 
     def _update_warnings(self) -> None:
         doc = self._document()
-        warnings = pfw.lockout_warnings(doc, self._layer()) if doc else []
+        warnings = cfw.lockout_warnings(doc, self._layer(), self.profile) if doc else []
         self.warning_label.setVisible(bool(warnings))
         self.warning_label.setText("\n".join(f"⚠ {w}" for w in warnings))
         self.warning_label.setStyleSheet(f"color: {theme.scheme_colors()['danger']};")
@@ -227,10 +276,10 @@ class ProductionFirewallPage(QWidget):
         try:
             self.settings.save()
         except OSError as e:
-            QMessageBox.critical(self, "Production firewall", f"Could not write {self.settings.path}:\n{e}")
+            QMessageBox.critical(self, "Container firewall", f"Could not write {self.settings.path}:\n{e}")
             return
         self._fill()
-        set_status(self.status, f"{what} (saved; apply to production to enforce)")
+        set_status(self.status, f"{what} (saved; apply to {self.profile.title.lower()} to enforce)")
 
     # -- edits ---------------------------------------------------------------
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
@@ -264,7 +313,7 @@ class ProductionFirewallPage(QWidget):
             record = self.settings.add_custom(
                 self.direction_combo.currentData(), self.peer_combo.currentText(),
                 self.proto_combo.currentText(), self.ports_edit.text(), self.label_edit.text())
-        except (ValueError, pfw.FirewallError) as e:
+        except (ValueError, cfw.FirewallError) as e:
             set_status(self.status, str(e), color=theme.scheme_colors()["danger"])
             return
         self.peer_combo.setCurrentText("")
@@ -280,7 +329,7 @@ class ProductionFirewallPage(QWidget):
         self._save(f"{key} removed")
 
     def _reset(self) -> None:
-        if not confirm(self, "Reset production firewall",
+        if not confirm(self, f"Reset {self.profile.title.lower()} firewall",
                        "Switch the firewall on and restore every built-in rule to its default? "
                        "Custom rules are kept."):
             return
@@ -299,14 +348,27 @@ class ProductionFirewallPage(QWidget):
         job.start()
 
     def check(self) -> None:
-        remote = self.target_combo.current_remote()
-        set_status(self.sync_label, "checking production…")
-        self._run(lambda: pfw.get_status(remote), self._on_status)
+        if not self._available():
+            self._status = None
+            self.error_banner.set_error(None)
+            set_status(self.sync_label, "the database proxy layer has no honeypot pool containers "
+                                        "(production_eshop serves the pool databases itself)")
+            self.apply_btn.setEnabled(False)
+            self._fill()
+            return
+        self.apply_btn.setEnabled(True)
+        remote, profile = self.target_combo.current_remote(), self.profile
+        set_status(self.sync_label, f"checking {profile.service}…")
+        self._run(lambda: cfw.get_status(remote, profile),
+                  lambda status, error: self._on_status(status, error, profile))
 
-    def _on_status(self, status, error: str) -> None:
+    def _on_status(self, status, error: str, profile=None) -> None:
+        if profile is not None and profile is not self.profile:
+            return  # answer for a profile no longer shown
         if error:
             self._status = None
-            self.error_banner.set_error(error, prefix="⚠ Could not read the production firewall: ")
+            self.error_banner.set_error(error, prefix=f"⚠ Could not read the {self.profile.title.lower()} "
+                                                      "firewall: ")
             set_status(self.sync_label, "")
             self.live_label.setText("")
             self._fill()
@@ -330,39 +392,44 @@ class ProductionFirewallPage(QWidget):
             live.append("IPv6 rules not loaded")
         self.live_label.setText(" · ".join(live))
         doc = self._document()
+        fw = self.profile.service
         if not s.hooked or s.enforced_fingerprint != s.fingerprint:
-            set_status(self.sync_label, "NOT enforced: the container's rules are not loaded (see its logs)",
+            set_status(self.sync_label, f"NOT enforced: {fw} has not loaded the saved rules (see its logs)",
                        color=colors["danger"])
-        elif doc is not None and pfw.fingerprint(doc) == s.fingerprint:
-            text = "production enforces this ruleset" if s.document["enabled"] else \
-                "production runs this ruleset (firewall off)"
+        elif doc is not None and cfw.fingerprint(doc) == s.fingerprint:
+            text = f"{fw} enforces this ruleset" if s.document["enabled"] else \
+                f"{fw} runs this ruleset (firewall off)"
             set_status(self.sync_label, text, color=colors["success" if s.document["enabled"] else "warning"])
         elif s.source == "default":
-            set_status(self.sync_label, "production runs the image default (nothing applied yet)",
+            set_status(self.sync_label, f"{fw} runs the image default (nothing applied yet)",
                        color=colors["warning"])
         else:
-            set_status(self.sync_label, "production differs from this ruleset (not applied yet)",
+            set_status(self.sync_label, f"{fw} differs from this ruleset (not applied yet)",
                        color=colors["warning"])
 
     def apply(self) -> None:
         doc = self._document()
         if doc is None:
             return
-        warnings = pfw.lockout_warnings(doc, self._layer())
-        if warnings and not confirm(self, "Apply production firewall",
+        profile = self.profile
+        warnings = cfw.lockout_warnings(doc, self._layer(), profile)
+        if warnings and not confirm(self, f"Apply {profile.title.lower()} firewall",
                                     "\n\n".join(warnings) + "\n\nApply anyway?"):
             return
         remote = self.target_combo.current_remote()
         set_status(self.sync_label, "applying…")
 
         def work():
-            pfw.apply_document(remote, doc)
-            return pfw.get_status(remote)
+            cfw.apply_document(remote, doc, profile)
+            return cfw.get_status(remote, profile)
 
         def done(status, error):
+            if profile is not self.profile:
+                return
             if error:
-                self.error_banner.set_error(error, prefix="⚠ Could not apply the production firewall: ")
+                self.error_banner.set_error(error, prefix=f"⚠ Could not apply the {profile.title.lower()} "
+                                                          "firewall: ")
                 set_status(self.sync_label, "")
                 return
-            self._on_status(status, "")
+            self._on_status(status, "", profile)
         self._run(work, done)

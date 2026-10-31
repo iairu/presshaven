@@ -1,21 +1,34 @@
-"""Production firewall: the iptables ruleset of production_eshop's own network
-namespace, edited by the Production Firewall page.
+"""Container firewall: the iptables rulesets of the WordPress containers'
+network namespaces, edited by the Container Firewall page.
 
-The container applies it itself (ids/images/wordpress_hardened/
-production-firewall.php, run at start, re-applied when a peer's IP changes).
+Each WordPress container lives in the network namespace of a small firewall
+container (production_eshop -> production_eshop_net, honeypot_eshop_N ->
+honeypot_eshop_N_net, runtime pools likewise) that holds the rules and applies
+them (ids/images/container_firewall/container-firewall.php, re-checked every
+5 s). WordPress itself has no NET_ADMIN and cannot see or change them, so even
+root inside a compromised container cannot open its own way out.
+
+Two profiles, one ruleset each:
+  production -- production_eshop: the edge in, the database and the public
+                internet on 443 out
+  honeypot   -- every honeypot pool: the edge in (the attacker's way in), the
+                pool's own database out, nothing else -- no internet, no
+                production, no host, no other pool (honeypot_network is also
+                an internal network: no route off the host at all)
+
 Only NEW connections are filtered -- loopback and established traffic always
-pass -- so each rule names who may OPEN a connection: inbound, the edge to
-Apache's port 80; outbound, PHP to the database, the internet on 443, ...
-Everything else is dropped (inbound) or rejected (outbound).
+pass -- so each rule names who may OPEN a connection. Everything else is
+dropped (inbound) or rejected (outbound).
 
-The built-in rules come from the image's default ruleset
-(production-firewall.default.json), so the dashboard and a container that was
-never configured agree on them. patterns/production_firewall.json keeps only
-the dashboard's deviations from those defaults (per-rule on/off and the master
-switch) plus custom rules. "Apply" sends the full document to the container
-with `docker compose exec production_eshop production-firewall apply`; the
-container validates it with the same rules as validate_rule() below, enforces
-it and saves it in its production_firewall_state volume."""
+The built-in rules come from the image's default ruleset per profile
+(images/container_firewall/<profile>.json), so the dashboard and a firewall
+that was never configured agree on them. patterns/container_firewall_<profile>
+.json keeps only the dashboard's deviations from those defaults (per-rule
+on/off and the master switch) plus custom rules. "Apply" sends the full
+document to one of the profile's firewalls with `docker compose exec <fw>
+container-firewall apply`; it validates it with the same rules as
+validate_rule() below, enforces it and saves it in the container_firewall_rules
+volume, where the profile's other firewalls (the other pools) pick it up."""
 from __future__ import annotations
 
 import base64
@@ -32,20 +45,44 @@ from core.paths import EDGE_DIR, REPO_ROOT
 from core.proc import run_checked
 from core.state import RemoteConfig
 
-SETTINGS_PATH = REPO_ROOT / "patterns" / "production_firewall.json"
-DEFAULT_RULESET_PATH = EDGE_DIR / "images" / "wordpress_hardened" / "production-firewall.default.json"
-SETTINGS_FORMAT = "production-firewall-settings"
+IMAGE_DIR = EDGE_DIR / "images" / "container_firewall"
+TOOL = "container-firewall"
+SETTINGS_FORMAT = "container-firewall-settings"
 SETTINGS_VERSION = 1
 DOCUMENT_VERSION = 1
-SERVICE = "production_eshop"
 
 DIRECTIONS = ("inbound", "outbound")
 PROTOS = ("tcp", "udp", "tcp/udp")
-PEER_KEYWORDS = ("any", "internet", "local-subnets")
+PEER_KEYWORDS = ("any", "internet", "local-subnets", "db-host")
 LAYERS = ("default", "db-proxy")
 MAX_RULES = 64
 MAX_PORTS = 15
 EDGE_PEER = "reverse_proxy"
+
+
+@dataclass(frozen=True)
+class Profile:
+    name: str
+    title: str
+    service: str        # the firewall the dashboard execs into
+    protects: str       # what it protects, for messages
+    layers: tuple[str, ...]  # honeypot layers in which its containers exist
+
+    @property
+    def settings_path(self) -> Path:
+        return REPO_ROOT / "patterns" / f"container_firewall_{self.name}.json"
+
+    @property
+    def defaults_path(self) -> Path:
+        return IMAGE_DIR / f"{self.name}.json"
+
+
+PRODUCTION = Profile("production", "Production", "production_eshop_net", "production_eshop", LAYERS)
+# Applied through pool 1's firewall; pools 2-3 and the runtime pools read the
+# same saved file within 5 s. The database proxy layer has no pool WordPress
+# containers (production_eshop serves the honeypot databases itself).
+HONEYPOT = Profile("honeypot", "Honeypot pools", "honeypot_eshop_1_net", "every honeypot pool", ("default",))
+PROFILES = {p.name: p for p in (PRODUCTION, HONEYPOT)}
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 _HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
@@ -62,7 +99,7 @@ def active_layer() -> str:
     return "db-proxy" if honeypot_layer.is_database() else "default"
 
 
-# -- validation (mirrors production-firewall.php validate()) -------------------
+# -- validation (mirrors container-firewall.php validate()) --------------------
 
 def is_cidr(text: str) -> bool:
     if not _CIDR_RE.match(text):
@@ -100,7 +137,7 @@ def validate_peer(peer, direction: str) -> None:
     # An address-shaped peer must be a valid address, never a "hostname".
     if not isinstance(peer, str) or not (peer in PEER_KEYWORDS or is_cidr(peer) or (
             _HOST_RE.match(peer) and not re.match(r"^[\d./]+$", peer))):
-        raise ValueError("peer must be a container name, an IPv4 address/CIDR, any, local-subnets or internet")
+        raise ValueError("peer must be a container name, an IPv4 address/CIDR, any, local-subnets, db-host or internet")
     if peer == "internet" and direction == "inbound":
         raise ValueError("internet is outbound only (inbound traffic always comes through the edge)")
 
@@ -181,7 +218,7 @@ class FirewallRule:
         return out
 
 
-def load_default_ruleset(path: Path | str = DEFAULT_RULESET_PATH) -> dict:
+def load_default_ruleset(path: Path | str = PRODUCTION.defaults_path) -> dict:
     """The image's default ruleset. Raises FirewallError when it is missing or
     invalid -- it ships with the repo, so that is a broken checkout."""
     try:
@@ -194,7 +231,7 @@ def load_default_ruleset(path: Path | str = DEFAULT_RULESET_PATH) -> dict:
     return doc
 
 
-def default_rules(path: Path | str = DEFAULT_RULESET_PATH) -> list[FirewallRule]:
+def default_rules(path: Path | str = PRODUCTION.defaults_path) -> list[FirewallRule]:
     doc = load_default_ruleset(path)
     return [FirewallRule(direction, r["id"], r["enabled"], r["peer"], r["proto"], r["ports"],
                          r.get("label", ""), r.get("layer"))
@@ -210,12 +247,16 @@ class FirewallSettings:
     enabled: bool = True
     overrides: dict[str, bool] = field(default_factory=dict)
     custom_rules: list[dict] = field(default_factory=list)
-    path: Path = SETTINGS_PATH
-    defaults_path: Path = DEFAULT_RULESET_PATH
+    path: Path = PRODUCTION.settings_path
+    defaults_path: Path = PRODUCTION.defaults_path
 
     @classmethod
-    def load(cls, path: Path | str = SETTINGS_PATH,
-             defaults_path: Path | str = DEFAULT_RULESET_PATH) -> "FirewallSettings":
+    def for_profile(cls, profile: Profile) -> "FirewallSettings":
+        return cls.load(profile.settings_path, profile.defaults_path)
+
+    @classmethod
+    def load(cls, path: Path | str = PRODUCTION.settings_path,
+             defaults_path: Path | str = PRODUCTION.defaults_path) -> "FirewallSettings":
         """A missing or unparseable file gives the defaults, never an error."""
         settings = cls(path=Path(path), defaults_path=Path(defaults_path))
         try:
@@ -312,7 +353,7 @@ class FirewallSettings:
 # -- document -------------------------------------------------------------------
 
 def build_document(settings: FirewallSettings) -> dict:
-    """The ruleset document production-firewall expects. Disabled rules are
+    """The ruleset document container-firewall expects. Disabled rules are
     included (they cost nothing and keep the page's rows stable)."""
     doc = {"version": DOCUMENT_VERSION, "enabled": settings.enabled, "inbound": [], "outbound": []}
     for r in settings.rules():
@@ -325,7 +366,7 @@ def encode_document(doc: dict) -> str:
 
 
 def fingerprint(doc: dict) -> str:
-    """sha256 of the canonical JSON; production-firewall.php fingerprint()
+    """sha256 of the canonical JSON; container-firewall.php fingerprint()
     computes the same, so a status can say whether this is what it enforces."""
     canonical = json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -343,9 +384,12 @@ def _reaches(rule: dict, peers: tuple[str, ...], port: int, layer: str) -> bool:
             and _covers(rule["ports"], port) and (rule["peer"] in peers or is_cidr(rule["peer"])))
 
 
-def lockout_warnings(doc: dict, layer: str) -> list[str]:
-    """What this ruleset would break, in plain words (empty = nothing obvious).
-    A CIDR peer counts as reaching (the dashboard cannot know the subnet)."""
+def lockout_warnings(doc: dict, layer: str, profile: Profile = PRODUCTION) -> list[str]:
+    """What this ruleset would break or open, in plain words (empty = nothing
+    obvious). A CIDR peer counts as reaching (the dashboard cannot know the
+    subnet)."""
+    if profile is HONEYPOT:
+        return _honeypot_warnings(doc, layer)
     if not doc["enabled"]:
         return ["The firewall is switched off: production accepts and opens connections to and from anything."]
     out = []
@@ -364,11 +408,45 @@ def lockout_warnings(doc: dict, layer: str) -> list[str]:
     return out
 
 
+# Outbound peers that would let a compromised pool reach past itself.
+_ESCAPE_PEERS = {
+    "any": "anything on its networks and beyond",
+    "internet": "the internet (blocked anyway while honeypot_network is internal)",
+    "local-subnets": "every container on honeypot_network: the edge (and through it production), "
+                     "the other pools and their databases",
+    EDGE_PEER: "the edge, and through it production",
+}
+
+
+def _honeypot_warnings(doc: dict, layer: str) -> list[str]:
+    if not doc["enabled"]:
+        return ["The firewall is switched off: a compromised honeypot pool can open connections to the edge "
+                "(and through it production), the other pools, the Docker host and anything else it can "
+                "route to."]
+    out = []
+    if not any(_reaches(r, (EDGE_PEER, "any", "local-subnets"), 80, layer) for r in doc["inbound"]):
+        out.append("No enabled inbound rule lets reverse_proxy open tcp/80: the edge cannot reach the pools, "
+                   "so diverted sessions get a 502 instead of the honeypot.")
+    if not any(_reaches(r, ("db-host", "any", "local-subnets"), 3306, layer)
+               or (r["enabled"] and r["peer"].startswith("honeypot_database"))
+               for r in doc["outbound"]):
+        out.append("No enabled outbound rule reaches db-host on tcp/3306: the pools lose their databases.")
+    for r in doc["outbound"]:
+        if not r["enabled"] or r.get("layer", layer) != layer:
+            continue
+        reach = _ESCAPE_PEERS.get(r["peer"])
+        if reach is None and r["peer"] != "db-host" and not r["peer"].startswith("honeypot_database"):
+            reach = r["peer"]  # an address or another container: past the pool's own database
+        if reach:
+            out.append(f"Outbound rule {r['id']} lets a compromised pool open connections to {reach}.")
+    return out
+
+
 # -- container ------------------------------------------------------------------
 
 @dataclass
 class FirewallStatus:
-    """What `production-firewall status` reported."""
+    """What `container-firewall status` reported."""
     source: str  # "saved" (applied from the dashboard) | "default" (never configured)
     layer: str
     hooked: bool | None  # None = could not read the live chains
@@ -379,6 +457,7 @@ class FirewallStatus:
     resolved: dict[str, list[str]]
     ipv6: bool | None
     counters: dict[str, dict[str, dict[str, int]]]
+    profile: str = "production"
 
     @property
     def enforced(self) -> bool:
@@ -398,30 +477,40 @@ class FirewallStatus:
                 fingerprint=raw["fingerprint"], enforced_fingerprint=raw.get("enforced_fingerprint"),
                 applied_at=raw.get("applied_at"), resolved=dict(raw.get("resolved") or {}),
                 ipv6=raw.get("ipv6"), counters={k: dict(v) for k, v in (raw.get("counters") or {}).items()},
+                profile=raw.get("profile", "production"),
             )
         except (ValueError, KeyError, TypeError, AttributeError) as e:
-            raise FirewallError(f"Unreadable status from production-firewall: {e}")
+            raise FirewallError(f"Unreadable status from {TOOL}: {e}")
 
 
-def _exec(remote: RemoteConfig | None, *args: str, timeout: float = 30.0) -> str:
-    argv, cwd = Target(project="edge", remote=remote).build("exec", "-T", SERVICE, "production-firewall", *args)
-    result = run_checked(argv, error=FirewallError, cwd=cwd, timeout=timeout, what="production-firewall")
+def _exec(remote: RemoteConfig | None, profile: Profile, *args: str, timeout: float = 30.0) -> str:
+    argv, cwd = Target(project="edge", remote=remote).build("exec", "-T", profile.service, TOOL, *args)
+    result = run_checked(argv, error=FirewallError, cwd=cwd, timeout=timeout, what=TOOL)
     return result.stdout
 
 
-def get_status(remote: RemoteConfig | None) -> FirewallStatus:
+def _explain(e: FirewallError, profile: Profile) -> FirewallError:
+    text = str(e)
+    if any(m in text for m in ("no such service", "is not running", "No such container")):
+        return FirewallError(
+            f"{profile.service} (the firewall of {profile.protects}) is not running. Deploy it: "
+            f"docker compose build {PRODUCTION.service} && docker compose up -d -- this recreates "
+            f"{profile.protects} inside it.")
+    return e
+
+
+def get_status(remote: RemoteConfig | None, profile: Profile = PRODUCTION) -> FirewallStatus:
     try:
-        return FirewallStatus.parse(_exec(remote, "status"))
+        return FirewallStatus.parse(_exec(remote, profile, "status"))
     except FirewallError as e:
-        if any(m in str(e) for m in ("executable file not found", "production-firewall: not found",
-                                      "exited with code 127")):
-            raise FirewallError("production_eshop runs an image without production-firewall: rebuild it "
-                                "(docker compose build production_eshop && docker compose up -d production_eshop).")
-        raise
+        raise _explain(e, profile) from None
 
 
-def apply_document(remote: RemoteConfig | None, doc: dict) -> None:
+def apply_document(remote: RemoteConfig | None, doc: dict, profile: Profile = PRODUCTION) -> None:
     errors = validate_document(doc)
     if errors:
         raise FirewallError("Invalid ruleset: " + "; ".join(errors))
-    _exec(remote, "apply", "--b64", encode_document(doc))
+    try:
+        _exec(remote, profile, "apply", "--b64", encode_document(doc))
+    except FirewallError as e:
+        raise _explain(e, profile) from None

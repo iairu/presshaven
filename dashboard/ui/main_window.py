@@ -45,7 +45,7 @@ from ui.page_signature_sim import SignatureSimPage
 from ui.page_detection import DetectionPage
 from ui.page_honeypot_targets import HoneypotTargetsPage
 from ui.page_whitelist import WhitelistPage
-from ui.page_production_firewall import ProductionFirewallPage
+from ui.page_container_firewall import ContainerFirewallPage
 from ui.page_extras import ExtrasPage
 from ui.page_health import HealthPage
 from ui.page_kibana import KibanaPage
@@ -84,7 +84,7 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "whitelist", "honeypot_targets", "production_firewall", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "whitelist", "honeypot_targets", "container_firewall", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "wp_studio", "wp_update", "settings", "learn",
 ]
 PAGE_LABELS = {
@@ -96,7 +96,7 @@ PAGE_LABELS = {
     "detection": "Detection Policy",
     "whitelist": "URL Whitelist",
     "honeypot_targets": "Honeypot Targets",
-    "production_firewall": "Production Firewall",
+    "container_firewall": "Container Firewall",
     "pool_scaling": "Pool Scaling",
     "services": "Workloads",
     "health": "Global Visualization",
@@ -128,7 +128,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "kibana", "pipeline", "resources", "log_search"]),
-    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "honeypot_targets", "whitelist", "production_firewall", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "honeypot_targets", "whitelist", "container_firewall", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "wp_studio", "wp_update", "settings", "certificates", "backups"]),
     ("Reporting", ["learn", "extras"]),
 ]
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
         self.suricata_page = SuricataPage(state)
         self.detection_page = DetectionPage(state)
         self.whitelist_page = WhitelistPage(state)
-        self.production_firewall_page = ProductionFirewallPage(state)
+        self.container_firewall_page = ContainerFirewallPage(state)
         self.honeypot_targets_page = HoneypotTargetsPage(state)
         self.pool_scaling_page = PoolScalingPage(state)
         self.services_page = ServicesPage(
@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
             ("suricata", self.suricata_page),
             ("detection", self.detection_page),
             ("whitelist", self.whitelist_page),
-            ("production_firewall", self.production_firewall_page),
+            ("container_firewall", self.container_firewall_page),
             ("honeypot_targets", self.honeypot_targets_page),
             ("pool_scaling", self.pool_scaling_page),
             ("services", self.services_page),
@@ -765,7 +765,7 @@ class MainWindow(QMainWindow):
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
         self.whitelist_page.rebuild_targets()
-        self.production_firewall_page.rebuild_targets()
+        self.container_firewall_page.rebuild_targets()
         self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()
@@ -1098,7 +1098,7 @@ class MainWindow(QMainWindow):
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
         self.whitelist_page.rebuild_targets()
-        self.production_firewall_page.rebuild_targets()
+        self.container_firewall_page.rebuild_targets()
         self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()

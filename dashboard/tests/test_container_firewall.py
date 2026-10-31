@@ -9,9 +9,9 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from core import production_firewall as pfw  # noqa: E402
+from core import container_firewall as pfw  # noqa: E402
 
-PHP_TOOL = pfw.DEFAULT_RULESET_PATH.parent / "production-firewall.php"
+PHP_TOOL = pfw.IMAGE_DIR / "container-firewall.php"
 
 
 class ValidationTests(unittest.TestCase):
@@ -38,6 +38,23 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(pfw.lockout_warnings(doc, "default"), [])
         self.assertEqual(pfw.lockout_warnings(doc, "db-proxy"), [])
 
+    def test_honeypot_default_only_reaches_own_database(self):
+        doc = pfw.load_default_ruleset(pfw.HONEYPOT.defaults_path)
+        self.assertEqual(pfw.validate_document(doc), [])
+        self.assertEqual(pfw.lockout_warnings(doc, "default", pfw.HONEYPOT), [])
+        self.assertEqual([(r["peer"], r["ports"]) for r in doc["outbound"] if r["enabled"]],
+                         [("db-host", "3306")])
+        self.assertEqual([(r["peer"], r["ports"]) for r in doc["inbound"] if r["enabled"]],
+                         [("reverse_proxy", "80")])
+
+    def test_profiles(self):
+        self.assertEqual(set(pfw.PROFILES), {"production", "honeypot"})
+        for profile in pfw.PROFILES.values():
+            self.assertTrue(profile.defaults_path.is_file(), profile.defaults_path)
+            self.assertTrue(profile.service.endswith("_net"))
+        self.assertNotEqual(pfw.PRODUCTION.settings_path, pfw.HONEYPOT.settings_path)
+        self.assertNotIn("db-proxy", pfw.HONEYPOT.layers)
+
     def test_php_tool_mirrors_limits(self):
         # The container validates the same document; keep the limits in step.
         php = PHP_TOOL.read_text(encoding="utf-8")
@@ -46,11 +63,13 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("'/^[a-z0-9][a-z0-9-]{0,47}$/'", php)
         self.assertEqual(re.search(r"const PEER_KEYWORDS = \[(.*?)\];", php).group(1),
                          ", ".join(f"'{k}'" for k in pfw.PEER_KEYWORDS))
+        self.assertEqual(re.search(r"const PROFILES = \[(.*?)\];", php).group(1),
+                         ", ".join(f"'{k}'" for k in pfw.PROFILES))
 
 
 class SettingsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp()) / "production_firewall.json"
+        self.tmp = Path(tempfile.mkdtemp()) / "container_firewall.json"
 
     def load(self):
         return pfw.FirewallSettings.load(self.tmp)
@@ -137,6 +156,27 @@ class DocumentTests(unittest.TestCase):
         s.enabled = False
         self.assertIn("switched off", pfw.lockout_warnings(pfw.build_document(s), "default")[0])
 
+    def test_honeypot_escape_warnings(self):
+        s = pfw.FirewallSettings.load(Path(tempfile.mkdtemp()) / "h.json", pfw.HONEYPOT.defaults_path)
+        warn = lambda: pfw.lockout_warnings(pfw.build_document(s), "default", pfw.HONEYPOT)  # noqa: E731
+        s.add_custom("outbound", "honeypot_database_2", "tcp", "3306")  # a pool database: no escape
+        self.assertEqual(warn(), [])
+        for peer, proto, ports, needle in (("internet", "tcp", "443", "internet"),
+                                           ("reverse_proxy", "tcp", "80", "production"),
+                                           ("local-subnets", "tcp", "22", "other pools"),
+                                           ("10.9.0.0/16", "udp", "53", "10.9.0.0/16")):
+            rec = s.add_custom("outbound", peer, proto, ports)
+            self.assertEqual(len(warn()), 1, peer)
+            self.assertIn(needle, warn()[0])
+            s.remove_custom(f"outbound/{rec['id']}")
+        s.set_enabled("outbound/database", False)
+        s.custom_rules.clear()
+        self.assertIn("db-host", warn()[0])
+        s.set_enabled("inbound/edge-http", False)
+        self.assertEqual(len(warn()), 2)
+        s.enabled = False
+        self.assertIn("switched off", warn()[0])
+
     def test_status_parse(self):
         doc = pfw.build_document(self.settings())
         fp = pfw.fingerprint(doc)
@@ -158,11 +198,26 @@ class DocumentTests(unittest.TestCase):
             pfw.apply_document(None, doc)
         argv = run.call_args.args[0]
         i = argv.index("exec")
-        self.assertEqual(argv[i:i + 6][:5], ["exec", "-T", "production_eshop", "production-firewall", "apply"])
+        self.assertEqual(argv[i:i + 5], ["exec", "-T", "production_eshop_net", "container-firewall", "apply"])
         self.assertEqual(json.loads(base64.b64decode(argv[-1])), doc)
         doc["inbound"][0]["ports"] = "0"
         with self.assertRaises(pfw.FirewallError):
             pfw.apply_document(None, doc)
+
+    def test_honeypot_apply_and_status_target_pool_firewall(self):
+        doc = pfw.load_default_ruleset(pfw.HONEYPOT.defaults_path)
+        with mock.patch.object(pfw, "run_checked") as run:
+            pfw.apply_document(None, doc, pfw.HONEYPOT)
+        argv = run.call_args.args[0]
+        i = argv.index("exec")
+        self.assertEqual(argv[i:i + 5], ["exec", "-T", "honeypot_eshop_1_net", "container-firewall", "apply"])
+
+    def test_missing_service_explained(self):
+        with mock.patch.object(pfw, "run_checked",
+                               side_effect=pfw.FirewallError("service \"honeypot_eshop_1_net\" is not running")):
+            with self.assertRaises(pfw.FirewallError) as cm:
+                pfw.get_status(None, pfw.HONEYPOT)
+        self.assertIn("honeypot_eshop_1_net", str(cm.exception))
 
 
 if __name__ == "__main__":
