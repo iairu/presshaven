@@ -617,17 +617,34 @@ services:
       - WORDPRESS_DB_NAME=production_database
       - WORDPRESS_DB_USER=production_user
       - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
-      # Enable WordPress debugging for SQL routing logs
-      - WORDPRESS_DEBUG=1
-      - WORDPRESS_DEBUG_LOG=1
+      # Cookie-signing keys/salts from .env. wp-config.php is in git, so it
+      # carries no defaults; unset, WordPress generates its own and stores
+      # them in wp_options (scrubbed from every honeypot clone).
+      - WORDPRESS_AUTH_KEY=${WORDPRESS_AUTH_KEY:-}
+      - WORDPRESS_SECURE_AUTH_KEY=${WORDPRESS_SECURE_AUTH_KEY:-}
+      - WORDPRESS_LOGGED_IN_KEY=${WORDPRESS_LOGGED_IN_KEY:-}
+      - WORDPRESS_NONCE_KEY=${WORDPRESS_NONCE_KEY:-}
+      - WORDPRESS_AUTH_SALT=${WORDPRESS_AUTH_SALT:-}
+      - WORDPRESS_SECURE_AUTH_SALT=${WORDPRESS_SECURE_AUTH_SALT:-}
+      - WORDPRESS_LOGGED_IN_SALT=${WORDPRESS_LOGGED_IN_SALT:-}
+      - WORDPRESS_NONCE_SALT=${WORDPRESS_NONCE_SALT:-}
+      # No WORDPRESS_DEBUG / WORDPRESS_DEBUG_LOG: debug.log lands in the
+      # webroot (wp-content/debug.log) and notices leak paths and plugin
+      # versions. db.php's routing does not log through WP_DEBUG. The honeypot
+      # pools keep debug on as bait.
     # ports:
     #   - "80:80" # temporary port for direct access
     volumes:
       - ./production_eshop_files:/var/www/html
+    # production_network ONLY. It used to join honeypot_network and
+    # monitoring_network too, which put production's PHP one hop from every
+    # honeypot container -- built to be compromised -- bypassing the edge.
+    # Nothing needs it: db.php's per-request routing is the db-proxy layer
+    # (docker-compose.db-proxy.yml), inert here; Suricata captures on the host
+    # and Vector reads container logs from the Docker socket. The edge reaches
+    # production over production_network.
     networks:
       - production_network
-      - honeypot_network  # Added: Allow access to honeypot database for SQL routing
-      - monitoring_network
     # -------------------------------------------------------------------------
     # Container hardening -- added this session. Every other service in this
     # compose file (honeypot_eshop_1/2/3, both database families,
@@ -701,6 +718,10 @@ services:
     # still does its normal wp-config/DB-wait/core-file setup as root)
     # with only the final CMD replaced, so all of this runs after that
     # setup and before apache starts serving requests.
+    #
+    # -D PRODUCTION_HARDENING switches on the production-only Apache rules
+    # (images/wordpress_hardened/zz-production-hardening.conf); the honeypot
+    # pools run the same image without it.
     command:
       - sh
       - -c
@@ -710,7 +731,7 @@ services:
         usermod -u "$$HOST_UID" www-data
         groupmod -g "$$HOST_GID" www-data
         chown -R www-data:www-data /var/www/html/wp-content
-        exec apache2-foreground
+        exec apache2-foreground -D PRODUCTION_HARDENING
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -1198,8 +1219,8 @@ services:
   # IMPORTANT: honeypot_db_migration must complete before any eshop starts so
   # that dummy data is in place and no real customer data is ever served.
   #
-  # Networks: each pool instance joins both honeypot_network (its own DB) and
-  # production_network (for the SQL proxy routing feature) and monitoring_network.
+  # Networks: each pool instance joins honeypot_network only (its own DB and
+  # the edge). Never production_network: see honeypot_eshop_1.
   # ---------------------------------------------------------------------------
 
   # Pool 1 – uses the original honeypot_eshop_files directory (backward compat)
@@ -1234,10 +1255,16 @@ services:
     #   - "8081:80" # temporary port for direct pool-1 access
     volumes:
       - honeypot_eshop_files:/var/www/html
+    # honeypot_network ONLY. A pool used to also join production_network
+    # ("for SQL routing") and monitoring_network -- an attacker with code
+    # execution here could then log into production_database as
+    # production_user (ALL PRIVILEGES) and reach production's PHP directly.
+    # The pool's own WordPress only talks to honeypot_database_N; the
+    # production->pool copies (honeypot_db_init, honeypot_content_sync,
+    # pool_manager's clone helpers) run in their own short-lived/sidecar
+    # containers, which keep production_network.
     networks:
       - honeypot_network
-      - production_network  # Allow access to production database for SQL routing
-      - monitoring_network
     # -------------------------------------------------------------------------
     # Container hardening for honeypot WordPress instances.
     #
@@ -1350,9 +1377,7 @@ services:
     volumes:
       - honeypot_eshop_files_2:/var/www/html
     networks:
-      - honeypot_network
-      - production_network
-      - monitoring_network
+      - honeypot_network  # only -- see honeypot_eshop_1
     # Hardening – same rationale as honeypot_eshop_1 above.
     security_opt:
       - no-new-privileges:true
@@ -1440,9 +1465,7 @@ services:
     volumes:
       - honeypot_eshop_files_3:/var/www/html
     networks:
-      - honeypot_network
-      - production_network
-      - monitoring_network
+      - honeypot_network  # only -- see honeypot_eshop_1
     # Hardening – same rationale as honeypot_eshop_1 above.
     security_opt:
       - no-new-privileges:true

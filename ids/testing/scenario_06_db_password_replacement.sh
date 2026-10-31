@@ -346,13 +346,13 @@ fi
 docker_check \
     "Honeypot container can reach honeypot_database:3306" \
     "${HP_ESHOP_CONTAINER}" 0 \
-    "nc -z -w 3 honeypot_database_1 3306 2>/dev/null || nc -z -w 3 honeypot_database 3306 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/honeypot_database_1/3306' 2>/dev/null || timeout 3 bash -c '</dev/tcp/honeypot_database/3306' 2>/dev/null"
 
 # 1d. Production database port is NOT reachable from the honeypot container.
 docker_check \
     "Honeypot container CANNOT reach production_database:3306" \
     "${HP_ESHOP_CONTAINER}" 1 \
-    "nc -z -w 3 production_database 3306 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
 
 # 1e. Direct MySQL query works from the honeypot DB container itself.
 mysql_check \
@@ -680,7 +680,7 @@ if command -v docker >/dev/null 2>&1 && \
    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${HP_ESHOP_CONTAINER}"; then
     _nc_exit=0
     docker exec "${HP_ESHOP_CONTAINER}" \
-        sh -c "nc -z -w 3 production_database 3306 2>/dev/null" \
+        sh -c "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null" \
         >/dev/null 2>&1 || _nc_exit=$?
     if [ "${_nc_exit}" -ne 0 ]; then
         printf "  ${GREEN}[PASS]${NC} Honeypot eshop container cannot reach production_database:3306\n"

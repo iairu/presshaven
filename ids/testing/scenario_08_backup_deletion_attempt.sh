@@ -412,20 +412,22 @@ docker_output_check \
 docker_must_fail \
     "Honeypot cannot reach backup_service container (network isolation)" \
     "${HP_ESHOP_CONTAINER}" \
-    "nc -z -w 3 backup_service 22 2>/dev/null || nc -z -w 3 172.20.0.0 22 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/backup_service/22' 2>/dev/null"
 
-# 3c. Honeypot cannot reach the production_network subnet (172.20.x.x).
+# 3c. Honeypot cannot reach production's web server directly (only via the
+#     edge). Not 172.20.0.1: that is the host's bridge address, where the
+#     edge's published port 80 legitimately answers from any container.
 docker_must_fail \
-    "Honeypot cannot reach production subnet 172.20.0.1" \
+    "Honeypot cannot reach production_eshop:80 directly" \
     "${HP_ESHOP_CONTAINER}" \
-    "nc -z -w 3 172.20.0.1 80 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/production_eshop/80' 2>/dev/null"
 
 # 3d. Honeypot can reach other honeypot containers (same network – expected).
 #     This confirms the honeypot network is still functional.
 docker_must_succeed \
     "Honeypot can reach its own database (honeypot_network works)" \
     "${HP_ESHOP_CONTAINER}" \
-    "nc -z -w 5 honeypot_database_1 3306 2>/dev/null || nc -z -w 5 honeypot_database 3306 2>/dev/null"
+    "timeout 5 bash -c '</dev/tcp/honeypot_database_1/3306' 2>/dev/null || timeout 5 bash -c '</dev/tcp/honeypot_database/3306' 2>/dev/null"
 
 # =============================================================================
 # PHASE 4 – Attempt to Destroy Production Database
@@ -439,7 +441,7 @@ banner "Phase 4 – Attempt to Destroy Production Database"
 docker_must_fail \
     "Honeypot cannot reach production_database:3306" \
     "${HP_ESHOP_CONTAINER}" \
-    "nc -z -w 3 production_database 3306 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
 
 # 4b. MySQL DROP DATABASE command against production_database must fail
 #     (because the hostname is not reachable from the honeypot container).

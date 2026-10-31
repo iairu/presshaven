@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 
 from core.env_file import EnvFile
 
-SECRET_HINTS = ("PASSWORD", "SECRET", "_KEY")
+SECRET_HINTS = ("PASSWORD", "SECRET", "_KEY", "_SALT")
 
 
 def looks_like_secret(key: str) -> bool:

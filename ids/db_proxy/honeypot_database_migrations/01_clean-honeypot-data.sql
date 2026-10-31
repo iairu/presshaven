@@ -75,6 +75,14 @@ DELETE FROM `wp_options` WHERE `option_name` LIKE '%password%';
 DELETE FROM `wp_options` WHERE `option_name` LIKE '%stripe%';
 DELETE FROM `wp_options` WHERE `option_name` LIKE '%paypal%';
 DELETE FROM `wp_options` WHERE `option_name` LIKE '%merchant%';
+-- WordPress auth keys/salts. wp_salt() stores generated ones here whenever
+-- wp-config's constants are empty (WORDPRESS_*_KEY/SALT not set in .env), so
+-- a clone of production would hand production's cookie-signing secrets to a
+-- container built to be compromised. The honeypot generates its own on the
+-- first request instead (production sessions stop working there, by design).
+DELETE FROM `wp_options` WHERE `option_name` IN
+  ('auth_key', 'auth_salt', 'secure_auth_key', 'secure_auth_salt',
+   'logged_in_key', 'logged_in_salt', 'nonce_key', 'nonce_salt', 'secret_key');
 
 -- ============================================
 -- Insert dummy data (ignore errors if tables don't exist yet)

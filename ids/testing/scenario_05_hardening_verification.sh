@@ -744,13 +744,26 @@ banner "Check Group 9 – Production Database Network Isolation"
 docker_check \
     "Honeypot container cannot reach production_database MySQL port" \
     "${HP_CONTAINER}" 1 \
-    "nc -z -w 3 production_database 3306 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
+
+docker_check \
+    "Honeypot container cannot reach production_eshop:80 directly (edge only)" \
+    "${HP_CONTAINER}" 1 \
+    "timeout 3 bash -c '</dev/tcp/production_eshop/80' 2>/dev/null"
+
+# The probe itself works: without this a probe that can never succeed (it
+# used to be nc, which the WordPress image does not ship) passes every
+# "cannot reach" check above with no isolation at all.
+docker_check \
+    "Honeypot container CAN reach its own database (probe sanity)" \
+    "${HP_CONTAINER}" 0 \
+    "timeout 3 bash -c '</dev/tcp/honeypot_database_1/3306' 2>/dev/null || timeout 3 bash -c '</dev/tcp/honeypot_database/3306' 2>/dev/null"
 
 # Production eshop CAN reach its own database.
 docker_check \
     "Production eshop can reach production_database MySQL port" \
     "${PROD_CONTAINER}" 0 \
-    "nc -z -w 3 production_database 3306 2>/dev/null"
+    "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
 
 # ---------------------------------------------------------------------------
 # Final report

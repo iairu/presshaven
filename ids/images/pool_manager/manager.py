@@ -959,8 +959,9 @@ class Manager:
             healthcheck={"test": ["CMD", "curl", "-f", "http://localhost/"],
                          "interval": 30 * NS, "timeout": 10 * NS, "retries": 3,
                          "start_period": 60 * NS, "start_interval": 2 * NS})
-        for extra in ("production_network", "monitoring_network"):
-            self.docker.networks.get(self._net(extra)).connect(wp)
+        # honeypot_network only (see honeypot_eshop_1 in docker-compose.yml):
+        # on production_network a compromised pool could log into
+        # production_database. The clone/sync helpers above keep that access.
         wp.start()
         self._wait_healthy(wp, "WordPress")
         self.register_ready(n)

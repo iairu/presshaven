@@ -426,9 +426,19 @@ services:
       # mu-plugin. Both are shared files that stay inert without this, so the
       # default layer (and its pool containers) never switch databases.
       - HONEYPOT_LAYER=database
-      # Enable WordPress debugging for SQL routing logs
-      - WORDPRESS_DEBUG=1
-      - WORDPRESS_DEBUG_LOG=1
+      # Cookie-signing keys/salts from .env (see docker-compose.yml
+      # production_eshop). One WordPress serves both databases here, so the
+      # honeypot side shares them -- but it never holds production users.
+      - WORDPRESS_AUTH_KEY=${WORDPRESS_AUTH_KEY:-}
+      - WORDPRESS_SECURE_AUTH_KEY=${WORDPRESS_SECURE_AUTH_KEY:-}
+      - WORDPRESS_LOGGED_IN_KEY=${WORDPRESS_LOGGED_IN_KEY:-}
+      - WORDPRESS_NONCE_KEY=${WORDPRESS_NONCE_KEY:-}
+      - WORDPRESS_AUTH_SALT=${WORDPRESS_AUTH_SALT:-}
+      - WORDPRESS_SECURE_AUTH_SALT=${WORDPRESS_SECURE_AUTH_SALT:-}
+      - WORDPRESS_LOGGED_IN_SALT=${WORDPRESS_LOGGED_IN_SALT:-}
+      - WORDPRESS_NONCE_SALT=${WORDPRESS_NONCE_SALT:-}
+      # No WORDPRESS_DEBUG: debug.log would land in the webroot. db.php does
+      # not log through WP_DEBUG.
     # ports:
     #   - "80:80" # temporary port for direct access
     volumes:
@@ -519,7 +529,7 @@ services:
         usermod -u "$$HOST_UID" www-data
         groupmod -g "$$HOST_GID" www-data
         chown -R www-data:www-data /var/www/html/wp-content
-        exec apache2-foreground
+        exec apache2-foreground -D PRODUCTION_HARDENING  # images/wordpress_hardened/zz-production-hardening.conf
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

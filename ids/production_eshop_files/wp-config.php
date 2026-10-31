@@ -74,15 +74,21 @@ define( 'DB_COLLATE', getenv_docker('WORDPRESS_DB_COLLATE', '') );
  * This will force all users to have to log in again.
  *
  * @since 2.6.0
+ *
+ * No fallback values: this file is in git, so any default here is public and
+ * lets anyone forge a valid login cookie. Production takes them from .env
+ * (WORDPRESS_*_KEY / WORDPRESS_*_SALT, passed by docker-compose). Left empty,
+ * WordPress generates random ones and keeps them in wp_options -- the
+ * honeypot clone scrubs those (honeypot_database_migrations/01_*.sql).
  */
-define( 'AUTH_KEY',         getenv_docker('WORDPRESS_AUTH_KEY',         '6962561e2ceff03329c7f4296254f0538e3348e2') );
-define( 'SECURE_AUTH_KEY',  getenv_docker('WORDPRESS_SECURE_AUTH_KEY',  '97454032da19bac60d7a0a0c7a552e0814c4010e') );
-define( 'LOGGED_IN_KEY',    getenv_docker('WORDPRESS_LOGGED_IN_KEY',    '269dc83d4ab74119e453adb0a4663cdf4cd60d09') );
-define( 'NONCE_KEY',        getenv_docker('WORDPRESS_NONCE_KEY',        'bf517191972833de294e262767ff68ea6eaf6095') );
-define( 'AUTH_SALT',        getenv_docker('WORDPRESS_AUTH_SALT',        'fafe3a3017020095dda03a35f6490dbf047ac7ba') );
-define( 'SECURE_AUTH_SALT', getenv_docker('WORDPRESS_SECURE_AUTH_SALT', 'a00e16b7f717468274ce8efec59e5b9e4379e1f5') );
-define( 'LOGGED_IN_SALT',   getenv_docker('WORDPRESS_LOGGED_IN_SALT',   '61f4a8f98002775c395127791b74efeb817aded2') );
-define( 'NONCE_SALT',       getenv_docker('WORDPRESS_NONCE_SALT',       '99922c8e7f9e7a2d2dd6e7790c379676baecb80e') );
+define( 'AUTH_KEY',         getenv_docker('WORDPRESS_AUTH_KEY',         '') );
+define( 'SECURE_AUTH_KEY',  getenv_docker('WORDPRESS_SECURE_AUTH_KEY',  '') );
+define( 'LOGGED_IN_KEY',    getenv_docker('WORDPRESS_LOGGED_IN_KEY',    '') );
+define( 'NONCE_KEY',        getenv_docker('WORDPRESS_NONCE_KEY',        '') );
+define( 'AUTH_SALT',        getenv_docker('WORDPRESS_AUTH_SALT',        '') );
+define( 'SECURE_AUTH_SALT', getenv_docker('WORDPRESS_SECURE_AUTH_SALT', '') );
+define( 'LOGGED_IN_SALT',   getenv_docker('WORDPRESS_LOGGED_IN_SALT',   '') );
+define( 'NONCE_SALT',       getenv_docker('WORDPRESS_NONCE_SALT',       '') );
 // (See also https://wordpress.stackexchange.com/a/152905/199287)
 
 /**#@-*/
