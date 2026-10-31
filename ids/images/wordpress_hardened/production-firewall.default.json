@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "enabled": true,
+  "inbound": [
+    {"id": "edge-http", "enabled": true, "peer": "reverse_proxy", "proto": "tcp", "ports": "80",
+     "label": "Edge (reverse_proxy) to Apache: all shop traffic and the edge's health probes"}
+  ],
+  "outbound": [
+    {"id": "database", "enabled": true, "peer": "production_database", "proto": "tcp", "ports": "3306",
+     "label": "Production database"},
+    {"id": "honeypot-databases", "enabled": true, "peer": "local-subnets", "proto": "tcp", "ports": "3306",
+     "layer": "db-proxy",
+     "label": "db-proxy layer only: db.php routes diverted sessions to the pool databases (honeypot_database_N)"},
+    {"id": "internet-https", "enabled": true, "peer": "internet", "proto": "tcp", "ports": "443",
+     "label": "Public internet HTTPS: WordPress.org updates, WooCommerce / Jetpack APIs, payment gateways"},
+    {"id": "internet-http", "enabled": false, "peer": "internet", "proto": "tcp", "ports": "80",
+     "label": "Public internet plain HTTP (a few plugin update servers still use it)"},
+    {"id": "smtp", "enabled": false, "peer": "internet", "proto": "tcp", "ports": "465,587",
+     "label": "Outgoing mail through an external SMTP relay (WP Mail SMTP and similar)"}
+  ]
+}

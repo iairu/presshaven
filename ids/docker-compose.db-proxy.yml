@@ -405,6 +405,9 @@ services:
       - WORDPRESS_DB_NAME=production_database
       - WORDPRESS_DB_USER=production_user
       - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+      # Which honeypot layer this is: production-firewall applies a rule with
+      # a "layer" only in its own layer.
+      - PRODUCTION_FIREWALL_LAYER=db-proxy
       # Honeypot database connection, consumed per-request by the db drop-in
       # wp-content/db.php: when the reverse proxy diverts a request (trusted
       # X-Honeypot-Backend: honeypot header), db.php connects $wpdb to THIS
@@ -443,6 +446,8 @@ services:
     #   - "80:80" # temporary port for direct access
     volumes:
       - ./production_eshop_files:/var/www/html
+      # Ruleset saved by the dashboard's Production Firewall page.
+      - production_firewall_state:/var/lib/production-firewall
     networks:
       - production_network
       - honeypot_network  # Added: Allow access to honeypot database for SQL routing
@@ -477,6 +482,13 @@ services:
       - SETUID
       - NET_BIND_SERVICE
       - KILL
+      # Production firewall (images/wordpress_hardened/production-firewall.php):
+      # NET_ADMIN loads the iptables ruleset of this container's own network
+      # namespace -- it cannot touch the host's or another container's.
+      # SETPCAP only lets the command below drop both again from Apache's
+      # bounding set; Apache, PHP and anything they spawn hold neither.
+      - NET_ADMIN
+      - SETPCAP
     mem_limit: 1024m
     cpus: "1.0"
     pids_limit: 300
@@ -529,7 +541,16 @@ services:
         usermod -u "$$HOST_UID" www-data
         groupmod -g "$$HOST_GID" www-data
         chown -R www-data:www-data /var/www/html/wp-content
-        exec apache2-foreground -D PRODUCTION_HARDENING  # images/wordpress_hardened/zz-production-hardening.conf
+        # Firewall first, before Apache serves anything; a failure is logged
+        # and the shop still starts (fail open -- the dashboard's Production
+        # Firewall page shows it unenforced). The watch loop re-resolves the
+        # rule peers (the edge's IP changes when reverse_proxy is recreated).
+        production-firewall boot || echo 'WARNING: production firewall NOT applied'
+        ( while true; do production-firewall watch; sleep 5; done ) &
+        # Two setpriv steps: dropping a capability from the bounding set needs
+        # SETPCAP, so NET_ADMIN goes first and SETPCAP itself second.
+        exec setpriv --bounding-set -net_admin -- setpriv --bounding-set -setpcap -- \
+          apache2-foreground -D PRODUCTION_HARDENING  # images/wordpress_hardened/zz-production-hardening.conf
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -1223,6 +1244,9 @@ networks:
         - subnet: 172.24.0.0/24
 
 volumes:
+  # production_eshop's firewall ruleset (images/wordpress_hardened/production-firewall.php).
+  production_firewall_state:
+    driver: local
   # production_mysql_data: named volume for the production MySQL instance.
   # Populated by init_setup from ./production_database_data (vmhgfs, read-only).
   # Using a named volume (not a bind mount) so that MySQL's chown on startup

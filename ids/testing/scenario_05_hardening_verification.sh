@@ -765,6 +765,31 @@ docker_check \
     "${PROD_CONTAINER}" 0 \
     "timeout 3 bash -c '</dev/tcp/production_database/3306' 2>/dev/null"
 
+# =============================================================================
+# CHECK GROUP 10 – Production Firewall
+# =============================================================================
+# production_eshop's own iptables ruleset (images/wordpress_hardened/
+# production-firewall.php, configured on the dashboard's Production Firewall
+# page): loaded and hooked, not changeable from Apache/PHP, and refusing new
+# outbound connections no rule lists.
+# =============================================================================
+banner "Check Group 10 – Production Firewall"
+
+docker_check \
+    "Production firewall is loaded and enforcing the saved ruleset" \
+    "${PROD_CONTAINER}" 0 \
+    "production-firewall status | grep -q '\"hooked\":true' && production-firewall status | php -r '\$s = json_decode(stream_get_contents(STDIN), true); exit(\$s[\"fingerprint\"] === \$s[\"enforced_fingerprint\"] && \$s[\"document\"][\"enabled\"] ? 0 : 1);'"
+
+docker_check \
+    "Apache (PID 1) cannot change the firewall (no NET_ADMIN in its bounding set)" \
+    "${PROD_CONTAINER}" 0 \
+    "v=\$(awk '/^CapBnd/ {print \$2}' /proc/1/status); [ \$(( 0x\$v >> 12 & 1 )) -eq 0 ]"
+
+docker_check \
+    "Production eshop cannot open a connection to backup_service:22 (no rule)" \
+    "${PROD_CONTAINER}" 1 \
+    "timeout 3 bash -c '</dev/tcp/backup_service/22' 2>/dev/null"
+
 # ---------------------------------------------------------------------------
 # Final report
 # ---------------------------------------------------------------------------

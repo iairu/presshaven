@@ -19,6 +19,10 @@
 #                                sensitive-file, uploads-PHP and directory
 #                                listing blocks; only active with
 #                                -D PRODUCTION_HARDENING (production_eshop)
+#   * production-firewall     -- iptables ruleset for production_eshop's own
+#                                network namespace (+ its default ruleset);
+#                                inert without CAP_NET_ADMIN, which only
+#                                production_eshop gets
 # The edge's body guard (reverse_proxy_enhanced/lua/body_guard_rules.lua)
 # strips the request bodies these exploits need before they reach Apache.
 FROM wordpress:7.1.3-php8.4-apache@sha256:edbfa4a140f7c5950435f5737538ad83d25af4661b74b990d7ec1eff3bec99a8
@@ -33,4 +37,11 @@ RUN a2enconf php-black-october mpm-black-october healthprobe-log zz-production-h
         /etc/apache2/sites-available/000-default.conf \
  && grep -q 'env=!healthprobe' /etc/apache2/sites-available/000-default.conf \
  && apache2ctl -t \
- && apache2ctl -t -D PRODUCTION_HARDENING
+ && apache2ctl -t -D PRODUCTION_HARDENING \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends iptables \
+ && rm -rf /var/lib/apt/lists/*
+COPY production-firewall.php /usr/local/bin/production-firewall
+COPY production-firewall.default.json /usr/local/share/production-firewall/default.json
+RUN chmod 0755 /usr/local/bin/production-firewall \
+ && production-firewall default > /dev/null
