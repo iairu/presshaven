@@ -1,16 +1,22 @@
-"""First-run setup wizard: creates and populates both projects' .env
-files, optionally configures remote SSH control, and optionally generates
-initial certificates. Re-runnable anytime from the menu; it loads existing
-.env values rather than blanking them, so re-running it to fix one field
-doesn't discard everything else.
+"""First-run setup wizard: everything a user needs to set the platform up,
+in order -- dependencies, remote SSH control, both projects' .env files
+(with weak-secret generation and backups for the ids one), the deployment
+choices (honeypot layer, what a honeypot-target hit does, host kernel
+settings), security alerts and certificates -- then a summary of anything
+still unfinished and an option to start the stacks. Re-runnable anytime
+from the menu; it loads existing values rather than blanking them. Every
+step after the .env pages is the same widget as its Settings tab
+(ui/setup_sections.py), so the two can't drift apart.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+from typing import Callable
+
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QVBoxLayout,
+    QCheckBox, QHBoxLayout, QLabel, QMessageBox, QScrollArea, QVBoxLayout,
     QWidget,
     QWizard, QWizardPage,
 )
@@ -24,13 +30,17 @@ from core.paths import (
 from core.state import AppState
 from ui.dependency_banner import DependencyBanner
 from ui.env_editor import EnvEditorWidget
-from ui.page_certs import CertWorker
 from ui.remote_config_widget import RemoteConfigWidget
+from ui.setup_sections import (
+    AlertsSection, CertsSection, DeploymentSection, HostChecksSection, SecretTools,
+    setup_summary,
+)
 
 # Page IDs, module-level (not SetupWizard class attributes) so both the
 # wizard itself and WizardTimeline's step list can reference them without
 # an import-order/forward-reference problem.
-PAGE_WELCOME, PAGE_REMOTE, PAGE_EDGE_ENV, PAGE_SIEM_ENV, PAGE_CERTS, PAGE_FINISH = range(6)
+(PAGE_WELCOME, PAGE_REMOTE, PAGE_EDGE_ENV, PAGE_SIEM_ENV, PAGE_DEPLOYMENT, PAGE_ALERTS,
+ PAGE_CERTS, PAGE_FINISH) = range(8)
 
 # Fixed step labels, in wizard order. Every run visits every page, in this
 # order -- a project marked remote no longer skips its .env page; that
@@ -42,10 +52,13 @@ _STEP_LABELS = {
     PAGE_REMOTE: "Remote/Local",
     PAGE_EDGE_ENV: "Edge .env",
     PAGE_SIEM_ENV: "SIEM .env",
+    PAGE_DEPLOYMENT: "Deployment",
+    PAGE_ALERTS: "Alerts",
     PAGE_CERTS: "Certificates",
     PAGE_FINISH: "Done",
 }
-_STEP_ORDER = (PAGE_WELCOME, PAGE_REMOTE, PAGE_EDGE_ENV, PAGE_SIEM_ENV, PAGE_CERTS, PAGE_FINISH)
+_STEP_ORDER = (PAGE_WELCOME, PAGE_REMOTE, PAGE_EDGE_ENV, PAGE_SIEM_ENV, PAGE_DEPLOYMENT,
+               PAGE_ALERTS, PAGE_CERTS, PAGE_FINISH)
 
 
 def visible_steps() -> list[tuple[int, str]]:
@@ -147,9 +160,13 @@ class WelcomePage(TimelineMixin, QWizardPage):
         layout.addWidget(self.dependency_banner)
 
         label = QLabel(
-            "This wizard creates/populates the .env files both compose "
-            "projects need (ids and siem), and "
-            "optionally sets up remote SSH control and initial certificates.\n\n"
+            "This wizard walks through everything the platform needs: remote "
+            "SSH control (optional), the .env files of both compose projects "
+            "(ids and siem) with strong generated secrets, the deployment "
+            "choices (honeypot layer, how honeypot-target traffic is handled, "
+            "host kernel settings), security alerts and certificates. The "
+            "last step lists anything still unfinished and can start the stacks.\n\n"
+            "Every step is also a tab under Settings.\n\n"
             "Re-running this wizard later loads your existing .env values "
             "instead of blanking them -- it's also reachable anytime from "
             "the menu."
@@ -244,6 +261,13 @@ class RemoteAwareEnvPage(TimelineMixin, QWizardPage):
         self.info.setWordWrap(True)
         layout.addWidget(self.info)
 
+        self.secret_tools = SecretTools(
+            project, local_path, local_example,
+            get_env_file=lambda: self.env_file,
+            apply_form=lambda: self.editor.apply_to_env_file(),
+            rebuild=self._show_editor, reload_local=self._load_source)
+        layout.addWidget(self.secret_tools)
+
         self._editor_slot = QVBoxLayout()
         layout.addLayout(self._editor_slot, stretch=1)
 
@@ -310,12 +334,21 @@ class RemoteAwareEnvPage(TimelineMixin, QWizardPage):
                 "the placeholder defaults."
             )
 
+        self._show_editor()
+
+    def _show_editor(self) -> None:
         # Show every key in the file (.env.example keys already merged in),
         # same as the Settings .env editor.
+        self._clear_editor()
         self.editor = EnvEditorWidget(self.env_file)
         self._editor_slot.addWidget(self.editor)
+        self.secret_tools.set_remote(self._source_is_remote)
+        self.secret_tools.update_warnings()
 
     def validatePage(self) -> bool:
+        # Weak secrets get one offer to be generated before they are written.
+        if not self.secret_tools.confirm_weak():
+            return False
         self.editor.apply_to_env_file()
         if self._source_is_remote:
             remote = self._remote_config()
@@ -332,7 +365,11 @@ class RemoteAwareEnvPage(TimelineMixin, QWizardPage):
                 )
                 return False
         else:
-            self.env_file.save()
+            note = self.secret_tools.save_local()
+            if note is None:
+                return False
+            if note:
+                QMessageBox.information(self, "Saved", f"Saved {self.local_path}" + note)
         return True
 
 
@@ -352,98 +389,125 @@ class SiemEnvPage(RemoteAwareEnvPage):
         )
 
 
-class CertsPage(TimelineMixin, QWizardPage):
-    def __init__(self, parent=None):
+class _SectionPage(TimelineMixin, QWizardPage):
+    """A wizard page around setup sections, scrolling when the window is short."""
+
+    def __init__(self, title: str, intro: str, parent=None):
         super().__init__(parent)
-        self.setTitle("Certificates (optional)")
-        layout = QVBoxLayout(self)
-        self._init_timeline(layout)
-        info = QLabel(
-            "Generate the SIEM CA + service certs, and the edge nginx "
-            "SSL cert, now. You can also do this later from the "
-            "PKI & Certificates page (which offers per-service regeneration "
-            "too)."
-        )
+        self.setTitle(title)
+        outer = QVBoxLayout(self)
+        self._init_timeline(outer)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        outer.addWidget(scroll, stretch=1)
+        body = QWidget()
+        scroll.setWidget(body)
+        self.body = QVBoxLayout(body)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        info = QLabel(intro)
         info.setWordWrap(True)
-        layout.addWidget(info)
+        self.body.addWidget(info)
 
-        self.status_label = QLabel("")
-        self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
-
-        self.generate_btn = QPushButton("Generate all certificates now")
-        self.generate_btn.clicked.connect(self._generate_all)
-        layout.addWidget(self.generate_btn)
-
-        # Run via CertWorker (a QThread -- see ui/page_certs.py, the
-        # standalone PKI & Certificates page's own "Regenerate ALL" button,
-        # which already did this correctly) rather than calling
-        # cert_ctl.regenerate() directly here on the UI thread. That was
-        # the actual bug behind "setup gets stuck after clicking Generate
-        # all certificates": regenerate()'s own docstring says as much
-        # ("callers should run this from a background thread") --
-        # rotating the SIEM CA + issuing 5 certs is several openssl
-        # `genpkey`/`req`/`x509` calls in a row, and RSA key generation
-        # can block for a real, noticeable amount of time waiting on
-        # system entropy, freezing the whole wizard window (no repaint,
-        # no input) for the duration -- indistinguishable from a genuine
-        # hang from the user's side, just not one that would ever return.
-        self._queue: list[str] = []
-        self._worker: CertWorker | None = None
-        self._lines: list[str] = []
-
-    def _generate_all(self) -> None:
-        self.generate_btn.setEnabled(False)
-        self._lines = []
-        self.status_label.setText("Generating…")
-        self._queue = ["siem-all", "edge-nginx"]
-        self._run_next_in_queue()
-
-    def _run_next_in_queue(self) -> None:
-        if not self._queue:
-            self.status_label.setText("\n".join(self._lines) + "\n\nDone.")
-            self.generate_btn.setEnabled(True)
-            return
-        group_id = self._queue.pop(0)
-        self._worker = CertWorker(group_id)
-        self._worker.line.connect(self._on_line)
-        self._worker.done.connect(self._on_step_done)
-        self._worker.start()
-
-    def _on_line(self, msg: str) -> None:
-        self._lines.append(msg.rstrip("\n"))
-        self.status_label.setText("\n".join(self._lines))
-
-    def _on_step_done(self, success: bool, message: str) -> None:
-        if not success:
-            self._lines.append(f"Failed: {message}")
-            self.status_label.setText("\n".join(self._lines))
-            self.generate_btn.setEnabled(True)
-            self._queue.clear()
-            QMessageBox.warning(self, "Certificate generation failed", message)
-            return
-        self._run_next_in_queue()
+    def finish_body(self) -> None:
+        self.body.addStretch(1)
 
 
-class FinishPage(TimelineMixin, QWizardPage):
+class DeploymentPage(_SectionPage):
+    def __init__(self, state: AppState, edge_running: Callable[[], bool] | None = None, parent=None):
+        super().__init__(
+            "Deployment",
+            "How suspicious traffic is handled. All of it can be changed later under "
+            "Settings → Deployment (the layer only while the ids stack is stopped).", parent)
+        self.deployment = DeploymentSection(state, edge_running)
+        self.body.addWidget(self.deployment)
+        self.body.addWidget(QLabel("<b>Host kernel settings</b>"))
+        self.host_checks = HostChecksSection(state)
+        self.body.addWidget(self.host_checks)
+        self.finish_body()
+        self._checked_once = False
+
+    def initializePage(self) -> None:
+        super().initializePage()
+        self.deployment.reload()
+        if not self._checked_once:   # remote hosts were just set on an earlier page
+            self._checked_once = True
+            self.host_checks.check()
+
+    def validatePage(self) -> bool:
+        try:
+            self.deployment.save()
+        except OSError as e:
+            QMessageBox.warning(self, "Save failed", f"Could not save the edge policy: {e}")
+            return False
+        return True
+
+
+class AlertsPage(_SectionPage):
+    def __init__(self, state: AppState, on_test_alert: Callable[[], None] | None = None, parent=None):
+        super().__init__(
+            "Security alerts",
+            "When to raise an alert for what the IDS sees, and where to send it. "
+            "Saved as you change it (also under Settings → Alerts).", parent)
+        self.alerts = AlertsSection(state, on_test_alert)
+        self.body.addWidget(self.alerts)
+        self.finish_body()
+
+
+class CertsPage(_SectionPage):
     def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setTitle("Done")
-        layout = QVBoxLayout(self)
-        self._init_timeline(layout)
-        layout.addWidget(QLabel(
-            "Setup complete. Use the Workloads page to start the stacks, "
-            "Health to watch container status, and Settings to change any "
-            "of this later."
-        ))
+        super().__init__(
+            "Certificates",
+            "The SIEM stack needs its CA and service certificates and the edge nginx "
+            "an SSL certificate before they start. Skip this if they already exist "
+            "(also under Settings → Certificates).", parent)
+        self.certs = CertsSection()
+        self.body.addWidget(self.certs)
+        self.finish_body()
+
+
+class FinishPage(_SectionPage):
+    def __init__(self, state: AppState, parent=None):
+        super().__init__("Done", "", parent)
+        self.state = state
+        self.summary = QLabel("")
+        self.summary.setWordWrap(True)
+        self.body.addWidget(self.summary)
+        self.body.addWidget(QLabel(
+            "The rest has safe defaults and its own page, to review when you like:\n"
+            "  •  Honeypot Targets / URL Whitelist -- which CVE targets and legitimate "
+            "URLs are on (generic exploits only by default)\n"
+            "  •  Container Firewall -- which sensitive endpoints only established "
+            "connections may reach\n"
+            "  •  Detection Policy -- scoring thresholds and decay\n\n"
+            "Health shows container status; Settings has every step of this wizard."))
+        self.start_check = QCheckBox("Start the stacks now (Workloads → Start all)")
+        self.start_check.setChecked(True)
+        self.body.addWidget(self.start_check)
+        self.finish_body()
+
+    def initializePage(self) -> None:
+        super().initializePage()
+        self.summary.setText("Checking what is still unfinished…")
+        self.repaint()
+        remaining = setup_summary(self.state)
+        if remaining:
+            self.summary.setStyleSheet("color: #e0a800;")
+            self.summary.setText("Still unfinished (go Back to fix, or later in Settings):\n"
+                                 + "\n".join(f"⚠ {r}" for r in remaining))
+        else:
+            self.summary.setStyleSheet("color: #5cb85c;")
+            self.summary.setText("✓ Setup complete -- no placeholder secrets or settings left.")
 
 
 class SetupWizard(QWizard):
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, state: AppState, parent=None,
+                 edge_running: Callable[[], bool] | None = None,
+                 on_test_alert: Callable[[], None] | None = None):
         super().__init__(parent)
         self.state = state
         self.setWindowTitle("PressHaven.io — Setup")
-        self.setMinimumSize(700, 620)
+        self.setMinimumSize(760, 660)
 
         # Remote/local choice comes first so the .env pages that follow
         # know whether to fetch from the remote host instead of a local file.
@@ -451,8 +515,15 @@ class SetupWizard(QWizard):
         self.setPage(PAGE_REMOTE, RemotePage(state))
         self.setPage(PAGE_EDGE_ENV, EdgeEnvPage(state))
         self.setPage(PAGE_SIEM_ENV, SiemEnvPage(state))
+        self.setPage(PAGE_DEPLOYMENT, DeploymentPage(state, edge_running))
+        self.setPage(PAGE_ALERTS, AlertsPage(state, on_test_alert))
         self.setPage(PAGE_CERTS, CertsPage())
-        self.setPage(PAGE_FINISH, FinishPage())
+        self.setPage(PAGE_FINISH, FinishPage(state))
+
+    @property
+    def start_stacks(self) -> bool:
+        """The Done page's "Start the stacks now", read after exec()."""
+        return self.page(PAGE_FINISH).start_check.isChecked()
 
     def accept(self) -> None:
         self.state.first_run_complete = True

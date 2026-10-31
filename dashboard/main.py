@@ -79,6 +79,7 @@ def main() -> int:
     state = AppState.load()
     theme.apply_theme(state.theme)
 
+    wizard = None
     if not state.first_run_complete:
         wizard = SetupWizard(state)
         result = wizard.exec()
@@ -91,6 +92,8 @@ def main() -> int:
 
     window = MainWindow(state)
     window.show()
+    if wizard is not None and wizard.start_stacks:
+        window.services_page.start_all()
     return app.exec()
 
 

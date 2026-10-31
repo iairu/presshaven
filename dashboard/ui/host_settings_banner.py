@@ -7,7 +7,7 @@ the commands that fix it.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QThread, QTimer
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from core import host_settings
@@ -49,7 +49,12 @@ class _CheckJob(QThread):
 
 
 class HostSettingsBanner(QWidget):
-    def __init__(self, state: AppState, parent=None):
+    # Number of hosts with a problem, after every check (0 = all fine).
+    checked = pyqtSignal(int)
+
+    def __init__(self, state: AppState, parent=None, auto: bool = True):
+        """auto=False: check only when refresh() is called (the Settings /
+        wizard copy; the main window's banner re-checks on its own)."""
         super().__init__(parent)
         self._state = state
         self._job: _CheckJob | None = None
@@ -65,8 +70,9 @@ class HostSettingsBanner(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(RECHECK_MS)
         self._timer.timeout.connect(self.refresh)
-        self._timer.start()
-        QTimer.singleShot(2000, self.refresh)   # after the window is up
+        if auto:
+            self._timer.start()
+            QTimer.singleShot(2000, self.refresh)   # after the window is up
 
     def _apply_style(self) -> None:
         if not self.isVisible():
@@ -100,6 +106,7 @@ class HostSettingsBanner(QWidget):
     def _show(self, result: list[tuple[Target, list[host_settings.Problem]]]) -> None:
         clear_layout(self._layout)
         self._details = self._details_btn = None
+        self.checked.emit(len(result))
         if not result:
             self.setVisible(False)
             self._apply_style()

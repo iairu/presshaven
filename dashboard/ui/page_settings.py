@@ -1,19 +1,18 @@
-"""Connectors & Config page: edit either project's real .env file, configure remote
-(SSH) control for either project, and export/import the whole
-configuration as one JSON bundle. This is the "adjust existing .env"
-surface -- the wizard covers first-run creation; this covers anytime
-changes."""
+"""Connectors & Config page: every first-run wizard step, reachable anytime
+-- either project's real .env file, remote (SSH) control, the deployment
+choices (honeypot layer, honeypot-target routing, Apply to edge), host
+kernel checks, security alerts, certificates -- plus export/import of the
+whole configuration as one JSON bundle. The wizard's later steps and these
+tabs are the same widgets (ui/setup_sections.py)."""
 from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QFormLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFileDialog, QFormLayout, QLabel, QMessageBox,
+    QPushButton, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
-
-from core import alert_policy
 
 from core.paths import (
     EDGE_ENV_EXAMPLE, EDGE_ENV_FILE, SIEM_ENV_EXAMPLE, SIEM_ENV_FILE,
@@ -21,24 +20,42 @@ from core.paths import (
 from core.settings_bundle import BundleError, apply_bundle, export_bundle, read_bundle, write_bundle
 from core.state import AppState
 from ui import theme
+from ui.common import set_status
+from ui.edge_policy_bar import EdgePolicyBar, current_document
 from ui.env_source_tab import EnvSourceTab
 from ui.remote_config_widget import RemoteConfigWidget
+from ui.setup_sections import (
+    AlertsSection, CertsSection, DeploymentSection, HostChecksSection,
+)
 
 
 class SettingsPage(QWidget):
     def __init__(self, state: AppState, on_state_changed, on_poll_interval_changed=None,
-                 on_test_alert=None, parent=None):
+                 on_test_alert=None, edge_running=None, on_layer_changed=None, parent=None):
         super().__init__(parent)
         self.state = state
         self._on_state_changed = on_state_changed
         self._on_poll_interval_changed = on_poll_interval_changed
         self._on_test_alert = on_test_alert
+        self._edge_running = edge_running          # callable -> bool (Workloads page)
+        self._on_layer_changed = on_layer_changed  # callable(layer_id)
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
         self._build_tabs()
+        self.tabs.currentChanged.connect(self._on_tab_shown)
+
+    def _on_tab_shown(self, index: int) -> None:
+        widget = self.tabs.widget(index)
+        if widget is self._deployment_tab:
+            # The layer lock follows the Workloads page; the routing values
+            # are also edited on the Honeypot Targets / URL Whitelist pages.
+            self.deployment.reload()
+        elif widget is self._host_checks_tab and not self._host_checked:
+            self._host_checked = True
+            self.host_checks.check()
 
     def _build_tabs(self) -> None:
         """(Re)builds every tab from scratch, reading .env files fresh
@@ -48,7 +65,10 @@ class SettingsPage(QWidget):
         self.tabs.clear()
 
         self.tabs.addTab(self._build_general_tab(), "General")
-        self.tabs.addTab(self._build_alerts_tab(), "Alerts")
+        self._deployment_tab = self._build_deployment_tab()
+        self.tabs.addTab(self._deployment_tab, "Deployment")
+        self.alerts_section = AlertsSection(self.state, self._on_test_alert)
+        self.tabs.addTab(self._scrolled(self.alerts_section), "Alerts")
 
         # Each .env tab has its own Local/Remote toggle (only enabled once
         # that project's remote connection is configured) -- get_remote_config
@@ -71,6 +91,13 @@ class SettingsPage(QWidget):
         self.siem_remote_widget = RemoteConfigWidget("siem", self.state.remote_siem)
         siem_remote_tab = self._wrap_with_save(self.siem_remote_widget, self._save_siem_remote)
         self.tabs.addTab(siem_remote_tab, "siem remote (SSH)")
+
+        self.host_checks = HostChecksSection(self.state)
+        self._host_checks_tab = self._scrolled(self.host_checks)
+        self._host_checked = False
+        self.tabs.addTab(self._host_checks_tab, "Host checks")
+        self.certs_section = CertsSection()
+        self.tabs.addTab(self._scrolled(self.certs_section), "Certificates")
 
         self.tabs.addTab(self._build_export_import_tab(), "Export / Import")
 
@@ -107,78 +134,47 @@ class SettingsPage(QWidget):
 
         return container
 
-    def _build_alerts_tab(self) -> QWidget:
-        policy = alert_policy.AlertPolicy.from_dict(self.state.alert_policy)
+    @staticmethod
+    def _scrolled(widget: QWidget) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        body = QWidget()
+        v = QVBoxLayout(body)
+        v.addWidget(widget)
+        v.addStretch(1)
+        scroll.setWidget(body)
+        return scroll
+
+    def _build_deployment_tab(self) -> QWidget:
         container = QWidget()
-        form = QFormLayout(container)
+        v = QVBoxLayout(container)
+        self.deployment = DeploymentSection(self.state, self._edge_running)
+        if self._on_layer_changed:
+            self.deployment.layer_changed.connect(self._on_layer_changed)
+        v.addWidget(self.deployment)
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self._save_deployment)
+        v.addWidget(save_btn)
+        self.deployment_status = QLabel("")
+        self.deployment_status.setWordWrap(True)
+        v.addWidget(self.deployment_status)
+        self.policy_bar = EdgePolicyBar(self.state, current_document)
+        v.addWidget(self.policy_bar)
+        v.addWidget(self.policy_bar.error_banner)
+        v.addStretch(1)
+        return self._scrolled(container)
 
-        self.alert_enabled = QCheckBox("Raise alerts for security events")
-        self.alert_enabled.setChecked(policy.enabled)
-        form.addRow("", self.alert_enabled)
-
-        self.alert_severity = QComboBox()
-        self.alert_severity.addItem("Medium and above", "medium")
-        self.alert_severity.addItem("High only", "high")
-        self.alert_severity.setCurrentIndex(alert_policy.MIN_SEVERITIES.index(policy.min_severity))
-        form.addRow("Minimum severity:", self.alert_severity)
-
-        self.alert_diversion = QCheckBox("Always alert when a session is diverted to the honeypot")
-        self.alert_diversion.setChecked(policy.on_diversion)
-        form.addRow("", self.alert_diversion)
-
-        self.alert_score = QSpinBox()
-        self.alert_score.setRange(0, 100)
-        self.alert_score.setSpecialValueText("off")
-        self.alert_score.setValue(policy.score_threshold)
-        form.addRow("Alert at risk score ≥:", self.alert_score)
-
-        self.alert_cooldown = QSpinBox()
-        self.alert_cooldown.setRange(0, 3600)
-        self.alert_cooldown.setSuffix(" s")
-        self.alert_cooldown.setValue(policy.cooldown_seconds)
-        form.addRow("Repeat suppression:", self.alert_cooldown)
-
-        self.alert_desktop = QCheckBox("Desktop notification (system tray)")
-        self.alert_desktop.setChecked(policy.desktop)
-        form.addRow("", self.alert_desktop)
-
-        self.alert_webhook = QLineEdit(policy.webhook_url)
-        self.alert_webhook.setPlaceholderText("https://hooks.slack.com/… or any endpoint accepting a JSON POST")
-        form.addRow("Webhook URL:", self.alert_webhook)
-
-        test_btn = QPushButton("Send test alert")
-        test_btn.clicked.connect(self._send_test_alert)
-        form.addRow("", test_btn)
-
-        note = QLabel("Container-health notifications are separate (General tab). Changes apply immediately.")
-        note.setWordWrap(True)
-        form.addRow(note)
-
-        for widget, signal in ((self.alert_enabled, "toggled"), (self.alert_severity, "currentIndexChanged"),
-                               (self.alert_diversion, "toggled"), (self.alert_score, "valueChanged"),
-                               (self.alert_cooldown, "valueChanged"), (self.alert_desktop, "toggled"),
-                               (self.alert_webhook, "editingFinished")):
-            getattr(widget, signal).connect(self._save_alert_policy)
-        return container
-
-    def _save_alert_policy(self, *_args) -> None:
-        self.state.alert_policy = alert_policy.AlertPolicy(
-            enabled=self.alert_enabled.isChecked(), min_severity=self.alert_severity.currentData(),
-            on_diversion=self.alert_diversion.isChecked(), score_threshold=self.alert_score.value(),
-            cooldown_seconds=self.alert_cooldown.value(), desktop=self.alert_desktop.isChecked(),
-            webhook_url=self.alert_webhook.text().strip()).to_dict()
-        self.state.save()
-
-    def _send_test_alert(self) -> None:
-        self._save_alert_policy()
-        if self._on_test_alert:
-            self._on_test_alert()
-        url = self.state.alert_policy.get("webhook_url", "")
-        if url:
-            error = alert_policy.send_webhook(
-                url, alert_policy.webhook_payload("Test alert", "from the dashboard", "high", None, 0))
-            QMessageBox.information(self, "Webhook test", "Webhook delivered." if not error
-                                    else f"Webhook failed: {error}")
+    def _save_deployment(self) -> None:
+        try:
+            summary = self.deployment.save()
+        except OSError as e:
+            QMessageBox.warning(self, "Save failed", f"Could not save the edge policy: {e}")
+            return
+        set_status(self.deployment_status,
+                   f"Saved ({summary}). Apply to edge to push the routing to a running edge; "
+                   "a freshly started edge without a policy gets it automatically.")
+        self.policy_bar.refresh_sync()
 
     def _on_poll_interval_spin_changed(self, seconds: int) -> None:
         interval_ms = seconds * 1000
@@ -228,8 +224,9 @@ class SettingsPage(QWidget):
         v = QVBoxLayout(container)
 
         info = QLabel(
-            "Back up or restore both projects' .env values and remote (SSH) "
-            "target settings as a single JSON file -- useful before a "
+            "Back up or restore both projects' .env values, remote (SSH) "
+            "target settings and the deployment choices (honeypot layer, alert "
+            "policy, honeypot-target routing and URL whitelist) as a single JSON file -- useful before a "
             "risky change, or to move this setup to a fresh checkout of "
             "the repo instead of re-typing everything by hand.\n\n"
             "⚠ The exported file contains real secrets in plaintext "
@@ -284,8 +281,8 @@ class SettingsPage(QWidget):
         reply = QMessageBox.warning(
             self, "Confirm import",
             "This will overwrite matching keys in both projects' real "
-            ".env files and replace both remote (SSH) settings entirely "
-            "with whatever is in this file.\n\nContinue?",
+            ".env files and replace both remote (SSH) settings, the honeypot "
+            "layer, alert policy and edge policy with whatever is in this file.\n\nContinue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )

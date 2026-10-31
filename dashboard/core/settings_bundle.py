@@ -1,5 +1,7 @@
 """Export/import bundle for the dashboard's own configuration -- both
-projects' real .env values, and remote (SSH) target settings. A single
+projects' real .env values, remote (SSH) target settings, and the
+deployment choices (honeypot layer, alert policy, edge policy: honeypot-
+target routing and URL whitelist). A single
 JSON file an operator can back up or move to a fresh checkout of this
 repo, instead of re-typing everything by hand.
 
@@ -13,11 +15,13 @@ committing it to version control.
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from core import edge_policy, honeypot_layer
 from core.env_file import EnvFile
 from core.projects import PROJECTS
 from core.state import AppState, RemoteConfig
@@ -41,6 +45,13 @@ def export_bundle(state: AppState) -> dict[str, Any]:
     for pid, spec in PROJECTS.items():
         bundle[f"{pid}_env"] = EnvFile.load(spec.env_file).as_dict()
         bundle[f"remote_{pid}"] = asdict(getattr(state, f"remote_{pid}"))
+    bundle["honeypot_layer"] = state.honeypot_layer
+    bundle["alert_policy"] = dict(state.alert_policy)
+    if edge_policy.POLICY_PATH.exists():
+        try:
+            bundle["edge_policy"] = json.loads(edge_policy.POLICY_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass   # unreadable: the dashboard runs on defaults, nothing to carry over
     return bundle
 
 
@@ -103,6 +114,27 @@ def apply_bundle(bundle: dict[str, Any], state: AppState) -> list[str]:
             notes.append(f"{label}: remote (SSH) settings replaced.")
         else:
             notes.append(f"{label}: no {bundle_key} data in bundle, left unchanged.")
+
+    # Optional sections (absent from bundles written before they existed).
+    if bundle.get("honeypot_layer") in honeypot_layer.LAYERS:
+        state.honeypot_layer = bundle["honeypot_layer"]
+        honeypot_layer.set_active(state.honeypot_layer)
+        notes.append(f"Honeypot layer: {honeypot_layer.layer(state.honeypot_layer).short_label}.")
+    if isinstance(bundle.get("alert_policy"), dict):
+        from core.alert_policy import AlertPolicy
+        state.alert_policy = AlertPolicy.from_dict(bundle["alert_policy"]).to_dict()
+        notes.append("Alert policy replaced.")
+    if isinstance(bundle.get("edge_policy"), dict):
+        # Parsed through EdgePolicySettings so out-of-range or unknown values
+        # are clamped/dropped exactly as on a normal load.
+        with tempfile.TemporaryDirectory(prefix="dashboard_bundle_") as tmp:
+            staged = Path(tmp) / "edge_policy.json"
+            staged.write_text(json.dumps(bundle["edge_policy"]), encoding="utf-8")
+            settings = edge_policy.EdgePolicySettings.load(staged)
+        settings.path = edge_policy.POLICY_PATH
+        settings.save()
+        notes.append("Edge policy (honeypot-target routing, URL whitelist) replaced -- "
+                     "Apply to edge to push it to a running edge.")
     state.save()
 
     return notes

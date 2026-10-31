@@ -182,24 +182,27 @@ class EnvTabTests(unittest.TestCase):
         ef.set("WP_ADMIN_EMAIL", "admin@example.com")
         ef.save()
         from core.state import RemoteConfig
-        from ui import env_source_tab
+        from ui import env_source_tab, setup_sections
         self.mod = env_source_tab
         self.box = mock.patch.object(env_source_tab, "QMessageBox")
         self.box.start()
+        self.box2 = mock.patch.object(setup_sections, "QMessageBox")
+        self.box2.start()
         self.tab = env_source_tab.EnvSourceTab("edge", self.env, EDGE_ENV_EXAMPLE, lambda: RemoteConfig())
 
     def tearDown(self):
         self.box.stop()
+        self.box2.stop()
         self.tab.deleteLater()
         for p in self.dir.iterdir():
             p.unlink()
         self.dir.rmdir()
 
     def test_warns_then_generates_saves_and_backs_up(self):
-        self.assertTrue(self.tab.warning_label.isVisibleTo(self.tab))
-        self.assertIn("WP_ADMIN_EMAIL", self.tab.warning_label.text())
+        self.assertTrue(self.tab.secret_tools.warning_label.isVisibleTo(self.tab))
+        self.assertIn("WP_ADMIN_EMAIL", self.tab.secret_tools.warning_label.text())
         before = EnvFile.load(self.env).get("REDIS_PASSWORD")
-        self.tab._generate_weak_secrets()
+        self.tab.secret_tools.generate()
         self.assertEqual(EnvFile.load(self.env).get("REDIS_PASSWORD"), before)  # not saved yet
         self.tab._save()
         after = EnvFile.load(self.env).get("REDIS_PASSWORD")
@@ -208,14 +211,14 @@ class EnvTabTests(unittest.TestCase):
         backups = env_secrets.list_backups(self.env)
         self.assertEqual(len(backups), 1)
         self.assertTrue(EnvFile.load(backups[0]).get("REDIS_PASSWORD") == before)
-        self.assertNotIn("Placeholder", self.tab.warning_label.text())
-        self.assertIn("WP_ADMIN_EMAIL", self.tab.warning_label.text())
+        self.assertNotIn("Placeholder", self.tab.secret_tools.warning_label.text())
+        self.assertIn("WP_ADMIN_EMAIL", self.tab.secret_tools.warning_label.text())
 
     def test_siem_tab_has_no_generator(self):
         from core.state import RemoteConfig
         tab = self.mod.EnvSourceTab("siem", self.env, EDGE_ENV_EXAMPLE, lambda: RemoteConfig())
-        self.assertFalse(tab.generate_btn.isVisibleTo(tab))
-        self.assertFalse(tab.warning_label.isVisibleTo(tab))
+        self.assertFalse(tab.secret_tools.generate_btn.isVisibleTo(tab))
+        self.assertFalse(tab.secret_tools.warning_label.isVisibleTo(tab))
         tab.deleteLater()
 
 

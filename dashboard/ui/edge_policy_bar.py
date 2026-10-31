@@ -10,6 +10,7 @@ here not applied yet)."""
 from __future__ import annotations
 
 import json
+import time
 from typing import Callable
 
 from PyQt6.QtCore import pyqtSignal
@@ -122,6 +123,28 @@ class EdgePolicyBar(QWidget):
             self.refresh_sync()
             self.applied.emit()
         self._run(work, done)
+
+
+def seed_if_missing(remote, build_document: Callable[[], str] | None = None,
+                    attempts: int = 10, delay: float = 3.0, sleep=time.sleep) -> bool:
+    """After an edge start: push the saved policy when the edge's Redis has
+    none yet (a fresh deploy or a purge), so it runs what the dashboard
+    shows instead of the Lua built-in defaults. A policy already there is
+    left alone -- it may have been applied on purpose. Retries while Redis
+    is still coming up. True when it applied one."""
+    build_document = build_document or current_document
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            if redis_inspect.get_edge_policy(remote) is not None:
+                return False
+            redis_inspect.set_edge_policy(remote, build_document())
+            return True
+        except redis_inspect.RedisInspectError as e:
+            last = e
+            if attempt < attempts - 1:
+                sleep(delay)
+    raise last
 
 
 def current_document() -> str:

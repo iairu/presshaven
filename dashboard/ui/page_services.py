@@ -19,7 +19,7 @@ from core.container_status import finished_ok, summarize
 from core import honeypot_layer
 from core.docker_ctl import Target
 from core import services_report
-from ui.common import confirm, danger_button, muted_label, set_status
+from ui.common import Job, confirm, danger_button, muted_label, set_status
 from ui.error_monitor import ErrorLogMonitor
 from ui.log_export import LogExporter
 from ui.process_runner import LogPanel
@@ -46,6 +46,7 @@ class TargetPanel(QGroupBox):
         # to know whether to auto-resume the tail once it finishes (see
         # _on_log_finished).
         self._mutating_action = False
+        self._seed_jobs: set = set()
         self._log_exporter = LogExporter(self)
 
         layout = QVBoxLayout(self)
@@ -173,6 +174,8 @@ class TargetPanel(QGroupBox):
                     self._remove_finished_containers()
                 else:
                     self._remove_finished_after_report = True
+                if self.target.project == "edge":
+                    self._seed_edge_policy()
             # If a "…with PDF graph export" is recording, let it know the
             # compose command has now exited (with this code) so a stop is
             # recorded right up to the down command finishing, not just until
@@ -180,6 +183,26 @@ class TargetPanel(QGroupBox):
             if self._svc_worker is not None:
                 self._svc_worker.notify_operation_finished(_exit_code)
             self._run("logs", "--tail=50", "-f", mutating=False)
+
+    def _seed_edge_policy(self) -> None:
+        """A freshly started edge with no policy in Redis gets the one saved
+        in the dashboard (URL Whitelist / Honeypot Targets / Settings →
+        Deployment), off the GUI thread."""
+        from ui.edge_policy_bar import seed_if_missing
+        remote = self.target.remote
+
+        def done(applied, error: str) -> None:
+            self._seed_jobs.discard(job)
+            if error:
+                self.log_panel.append(f"[edge policy not applied: {error} -- use Apply to edge "
+                                      "on the Honeypot Targets page]\n")
+            elif applied:
+                self.log_panel.append("[applied the saved edge policy (whitelist + honeypot "
+                                      "targets) to this fresh edge]\n")
+        job = Job(lambda: seed_if_missing(remote), self)
+        self._seed_jobs.add(job)
+        job.done.connect(done)
+        job.start()
 
     def _remove_finished_containers(self) -> None:
         """`up` leaves every one-shot service (init_setup, the db seed and

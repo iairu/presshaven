@@ -348,7 +348,9 @@ class MainWindow(QMainWindow):
         self.wp_studio_page = WpStudioPage(state)
         self.wp_update_page = WpUpdatePage(state)
         self.settings_page = SettingsPage(state, self._on_remote_settings_changed, self.set_poll_interval,
-                                      on_test_alert=self._test_alert)
+                                      on_test_alert=self._test_alert,
+                                      edge_running=self.services_page._edge_running,
+                                      on_layer_changed=self._on_layer_set_elsewhere)
         self.learn_page = LearnPage(state, PAGE_LABELS)
         self.learn_page.open_page_requested.connect(self._open_page)
 
@@ -774,6 +776,13 @@ class MainWindow(QMainWindow):
         self.resources_page.rebuild_targets()
         self.security_feed.start(self._edge_target())
 
+    def _on_layer_set_elsewhere(self, layer_id: str) -> None:
+        """Settings → Deployment or the wizard switched the honeypot layer
+        (only possible while the ids stack is stopped): show it on the
+        Workloads page too, then the same rebuild as a switch made there."""
+        self.services_page._select_layer(layer_id)
+        self._on_honeypot_layer_changed(layer_id)
+
     def _on_honeypot_layer_changed(self, _layer_id: str) -> None:
         """Workloads page switched the ids stack's honeypot layer: rebuild
         every page's targets (their compose file and labels changed), let the
@@ -1085,8 +1094,12 @@ class MainWindow(QMainWindow):
     # ---- menu ----
 
     def _rerun_wizard(self) -> None:
-        wizard = SetupWizard(self.state, self)
-        wizard.exec()
+        layer_before = honeypot_layer.active().id
+        wizard = SetupWizard(self.state, self, edge_running=self.services_page._edge_running,
+                             on_test_alert=self._test_alert)
+        accepted = wizard.exec() == SetupWizard.DialogCode.Accepted
+        if honeypot_layer.active().id != layer_before:
+            self._on_layer_set_elsewhere(honeypot_layer.active().id)
         # Connectors & Config page holds its own EnvFile/RemoteConfigWidget instances
         # loaded at construction time -- rebuild it so it reflects whatever
         # the wizard just wrote, instead of showing stale pre-wizard values.
@@ -1106,13 +1119,17 @@ class MainWindow(QMainWindow):
         self.log_search_page.rebuild_targets()
         self.resources_page.rebuild_targets()
         self.security_feed.start(self._edge_target())
+        if accepted and wizard.start_stacks:
+            self.services_page.start_all()
 
     def _reload_settings_page(self) -> None:
         area = self.stack.widget(PAGES.index("settings"))
         area.takeWidget()
         self.settings_page.deleteLater()
         self.settings_page = SettingsPage(self.state, self._on_remote_settings_changed, self.set_poll_interval,
-                                      on_test_alert=self._test_alert)
+                                      on_test_alert=self._test_alert,
+                                      edge_running=self.services_page._edge_running,
+                                      on_layer_changed=self._on_layer_set_elsewhere)
         area.setWidget(self.settings_page)
 
     # ---- responsive layout ----
