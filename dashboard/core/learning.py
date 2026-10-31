@@ -363,6 +363,20 @@ PAGE_GUIDES: dict[str, PageGuide] = {
         "Detection is configuration. The summary under the form turns the half-life into seconds so you can "
         "see how long an adversary stays flagged after they stop.",
     ),
+    "whitelist": PageGuide(
+        "The inventory of legitimate shop URLs. A path that is not on the enabled whitelist adds the "
+        "unlisted-path score to the request.",
+        "Apply the policy to the edge, then request /.env and /shop/ and compare their scores in Adversary Sessions.",
+        "An allow-list turns 'unknown' into evidence without trusting 'known': a payload on a whitelisted "
+        "path is still scored like any other request.",
+    ),
+    "honeypot_targets": PageGuide(
+        "The CVE trap URLs and vulnerable plugin paths that exist only on the honeypots, with what a hit does.",
+        "Switch to score-first mode, apply it, run a CVE preset on Attack Simulation and watch the score "
+        "rather than an instant diversion.",
+        "Auto-send traps an attacker on first contact. Score-first trades that for fewer false diversions "
+        "when a target URL is also reachable by legitimate traffic.",
+    ),
     "pool_scaling": PageGuide(
         "Standing view of the honeypot pools: count, resource budget, who is on which pool, and why scaling stops.",
         "Open it, then run Attack from all on Segmentation Validation and watch pools being built and handed over.",

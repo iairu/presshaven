@@ -501,6 +501,15 @@ local function init_worker()
                 end
             end
 
+            -- Mirror the dashboard's edge policy (legitimate URL whitelist +
+            -- honeypot target URLs, see edge_policy_rules.lua). A missing key
+            -- drops the shared-dict copy and every worker falls back to the
+            -- built-in defaults. (This layer's nginx.conf keeps its own
+            -- vulnerable-plugin location, which still diverts directly.)
+            if threat_intel_shared then
+                pcall(require("edge_policy").mirror, red, threat_intel_shared)
+            end
+
             _G.redis_pool.close_connection(red)
         end
 

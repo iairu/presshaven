@@ -43,6 +43,8 @@ from ui.page_wp_update import WpUpdatePage
 from ui.page_pattern_database import PatternDatabasePage
 from ui.page_signature_sim import SignatureSimPage
 from ui.page_detection import DetectionPage
+from ui.page_honeypot_targets import HoneypotTargetsPage
+from ui.page_whitelist import WhitelistPage
 from ui.page_extras import ExtrasPage
 from ui.page_health import HealthPage
 from ui.page_kibana import KibanaPage
@@ -81,7 +83,7 @@ _APP_ICON_PATH = DASHBOARD_DIR / "resources" / "app_icon.svg"
 _NOTIFY_ON_STATUSES = {"unhealthy", "exited_bad"}
 
 PAGES = [
-    "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
+    "overview", "live_events", "pipeline", "sessions", "suricata", "detection", "whitelist", "honeypot_targets", "pool_scaling", "services", "health", "resources", "certificates", "redis", "backups",
     "kibana", "patterns", "pattern_database", "signature_sim", "pool_test", "log_search", "extras", "wp_studio", "wp_update", "settings", "learn",
 ]
 PAGE_LABELS = {
@@ -91,6 +93,8 @@ PAGE_LABELS = {
     "sessions": "Adversary Sessions",
     "suricata": "Network IDS (Suricata)",
     "detection": "Detection Policy",
+    "whitelist": "URL Whitelist",
+    "honeypot_targets": "Honeypot Targets",
     "pool_scaling": "Pool Scaling",
     "services": "Workloads",
     "health": "Global Visualization",
@@ -122,7 +126,7 @@ PAGE_LABELS = {
 NAV_GROUPS = [
     ("Overview", ["overview"]),
     ("Monitor", ["live_events", "health", "kibana", "pipeline", "resources", "log_search"]),
-    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
+    ("Threat Operations", ["patterns", "sessions", "suricata", "detection", "honeypot_targets", "whitelist", "pattern_database", "signature_sim", "pool_scaling", "pool_test", "redis"]),
     ("Manage", ["services", "wp_studio", "wp_update", "settings", "certificates", "backups"]),
     ("Reporting", ["learn", "extras"]),
 ]
@@ -310,6 +314,8 @@ class MainWindow(QMainWindow):
         self.sessions_page = SessionsPage(state)
         self.suricata_page = SuricataPage(state)
         self.detection_page = DetectionPage(state)
+        self.whitelist_page = WhitelistPage(state)
+        self.honeypot_targets_page = HoneypotTargetsPage(state)
         self.pool_scaling_page = PoolScalingPage(state)
         self.services_page = ServicesPage(
             self._get_targets, self.error_monitor, self._grab_health_screenshot, state)
@@ -326,6 +332,8 @@ class MainWindow(QMainWindow):
         # a pattern-plugin change: the pages that run patterns re-read the
         # registry so a disabled pattern stops being simulated at once.
         self.pattern_database_page.registry_changed.connect(self._on_pattern_registry_changed)
+        # Honeypot Targets toggles the same registry flags.
+        self.honeypot_targets_page.registry_changed.connect(self._on_target_registry_changed)
         # Every pattern run drops a time-aligned marker onto the Resources
         # graphs so its resource impact is visible.
         self.patterns_page.pattern_ran.connect(self.resources_page.add_pattern_marker)
@@ -348,6 +356,8 @@ class MainWindow(QMainWindow):
             ("sessions", self.sessions_page),
             ("suricata", self.suricata_page),
             ("detection", self.detection_page),
+            ("whitelist", self.whitelist_page),
+            ("honeypot_targets", self.honeypot_targets_page),
             ("pool_scaling", self.pool_scaling_page),
             ("services", self.services_page),
             ("health", self.health_page),
@@ -750,6 +760,8 @@ class MainWindow(QMainWindow):
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
+        self.whitelist_page.rebuild_targets()
+        self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()
@@ -775,6 +787,14 @@ class MainWindow(QMainWindow):
         currently enabled."""
         self.patterns_page.reload_patterns()
         self.pool_test_page.reload_patterns()
+        self.honeypot_targets_page.reload()
+
+    def _on_target_registry_changed(self) -> None:
+        """Honeypot Targets enabled/disabled a CVE target: same registry, so
+        the simulation pages and the Pattern Database view re-read it."""
+        self.patterns_page.reload_patterns()
+        self.pool_test_page.reload_patterns()
+        self.pattern_database_page.reload()
 
     def set_poll_interval(self, interval_ms: int) -> None:
         self.state.poll_interval_ms = interval_ms
@@ -1072,6 +1092,8 @@ class MainWindow(QMainWindow):
         self.sessions_page.rebuild_targets()
         self.suricata_page.rebuild_targets()
         self.detection_page.rebuild_targets()
+        self.whitelist_page.rebuild_targets()
+        self.honeypot_targets_page.rebuild_targets()
         self.pool_scaling_page.rebuild_targets()
         self.backups_page.rebuild_targets()
         self.patterns_page.rebuild_targets()

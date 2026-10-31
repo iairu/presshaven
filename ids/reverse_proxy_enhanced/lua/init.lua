@@ -319,13 +319,17 @@ _G.config = {
     --   plugins      – List of plugin directory names (as they appear in the
     --                  URL path /wp-content/plugins/<name>/) that are
     --                  intentionally installed in the honeypot instances but
-    --                  absent from the production instance.  Any PHP file access
-    --                  inside one of these directories triggers Stage 5 honeypot
-    --                  routing in router.lua regardless of the risk score.
+    --                  absent from the production instance.  Any non-static file
+    --                  access inside one of these directories is a honeypot
+    --                  target (router.lua Stage 1c): diverted regardless of the
+    --                  risk score, or scored, per the dashboard edge policy
+    --                  (edge_policy.lua), which can also disable a plugin.
     --
     --   cve_patterns – Map of CVE ID → Lua string pattern.  pattern_analyzer.lua
     --                  checks these against the URI, query string, and request
-    --                  headers.  A single match scores +40 (Stage 3 routing).
+    --                  headers.  A match is a honeypot target (router.lua Stage
+    --                  1c): diverted directly or scored +target_score (default
+    --                  40), per the dashboard edge policy (edge_policy.lua).
     --                  Patterns use Lua magic-character escaping (%- for literal
     --                  hyphen, %[ %] for brackets, etc.).
     -- -----------------------------------------------------------------------

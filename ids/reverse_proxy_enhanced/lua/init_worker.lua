@@ -472,6 +472,14 @@ local function init_worker()
                 threat_intel_shared:set("maintenance", maint_flag)
             end
 
+            -- Mirror the dashboard's edge policy (legitimate URL whitelist +
+            -- honeypot target URLs, see edge_policy_rules.lua). A missing key
+            -- drops the shared-dict copy and every worker falls back to the
+            -- built-in defaults.
+            if threat_intel_shared then
+                pcall(require("edge_policy").mirror, red, threat_intel_shared)
+            end
+
             _G.redis_pool.close_connection(red)
         end
 

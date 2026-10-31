@@ -285,6 +285,28 @@ def maintenance_ttl(remote: RemoteConfig | None, timeout: float = 15.0) -> int:
         return -2
 
 
+# --- Edge URL policy (whitelist + honeypot targets) ------------------------
+# One JSON document (core/edge_policy.py build_payload), no TTL: the policy is
+# configuration, not threat state. init_worker.lua mirrors it into the
+# threat_intel shared dict every 5 s; a missing key means the edge's built-in
+# defaults (the pre-policy behaviour).
+EDGE_POLICY_KEY = "honeypot_edge_policy"
+
+
+def set_edge_policy(remote: RemoteConfig | None, document: str, timeout: float = 15.0) -> None:
+    _run_redis_cli(remote, "SET", EDGE_POLICY_KEY, document, timeout=timeout)
+
+
+def get_edge_policy(remote: RemoteConfig | None, timeout: float = 15.0) -> str | None:
+    """The document the edge is running with, or None when none was applied."""
+    out = _run_redis_cli(remote, "GET", EDGE_POLICY_KEY, timeout=timeout).strip()
+    return out or None
+
+
+def clear_edge_policy(remote: RemoteConfig | None, timeout: float = 15.0) -> None:
+    _run_redis_cli(remote, "DEL", EDGE_POLICY_KEY, timeout=timeout)
+
+
 def get_risk_scores(remote: RemoteConfig | None, timeout: float = 15.0) -> dict[str, int]:
     """{ip: raw_score} from the "threat_ips" key (see router.lua/
     init_worker.lua), for page_redis.py's bar chart. This is the raw,
@@ -351,13 +373,14 @@ def flush_all(remote: RemoteConfig | None, timeout: float = 15.0) -> None:
 
 
 # Deletes every key except the honeypot pool registry (honeypot_pool:ready /
-# :free / :owner:* / :pw:* ...), which pool_manager owns. "honeypot_pool_session:*"
+# :free / :owner:* / :pw:* ...), which pool_manager owns, and the edge URL
+# policy (configuration, see EDGE_POLICY_KEY). "honeypot_pool_session:*"
 # (a different prefix) IS deleted: that is the per-IP assignment, i.e. threat
 # state.
 _FLUSH_THREAT_SCRIPT = """
 local n = 0
 for _, k in ipairs(redis.call('KEYS', '*')) do
-  if string.sub(k, 1, 14) ~= 'honeypot_pool:' then
+  if string.sub(k, 1, 14) ~= 'honeypot_pool:' and k ~= 'honeypot_edge_policy' then
     redis.call('DEL', k)
     n = n + 1
   end

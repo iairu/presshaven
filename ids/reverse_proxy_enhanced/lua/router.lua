@@ -9,10 +9,14 @@
 --   1. Static asset  → always production (CSS/JS/images, no attack surface)
 --   1b. install.php on a not-yet-installed WordPress (and not already
 --       honeypot_bound) → always production (legitimate setup wizard)
+--   1c. Honeypot target URL hit (enabled CVE pattern or vulnerable plugin
+--       path) while the dashboard's target mode is "direct" → honeypot,
+--       scoring bypassed. In "score" mode a hit only adds target_score to
+--       the risk score (pattern_analyzer.lua) and Stage 3 decides. See
+--       edge_policy_rules.lua. (This replaces the old Stage 4 "CVE pattern
+--       matched" and Stage 5 "vulnerable plugin URI" checks.)
 --   2. Session already honeypot_bound → sticky honeypot (same pool via Redis)
 --   3. Risk score ≥ honeypot_threshold → honeypot (high risk, WSTG-INPV)
---   4. CVE pattern matched → honeypot (CVE pattern detected)
---   5. Vulnerable plugin URI → honeypot (direct plugin endpoint access)
 --   6. Bad IP reputation → honeypot (known flagged IP from threat_intel)
 --   7. Multiple admin-access attempts (≥3) → honeypot (WSTG-ATHN-04)
 --   8. Accumulated suspicious activities (≥5) → honeypot
@@ -321,6 +325,69 @@ function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
         pattern_result.score = math.floor(pattern_result.score + 0.5)
     end
 
+    -- Stage 1c: honeypot target URLs (dashboard "Honeypot Targets" page).
+    -- pattern_result.cve_matched only holds the CVE targets the dashboard
+    -- left enabled, and the plugin list is filtered the same way
+    -- (edge_policy.lua). In "direct" mode a hit diverts right here, whatever
+    -- the score; in "score" mode pattern_analyzer.lua already counted it and
+    -- the threshold (Stage 3) decides. A session that is already bound is
+    -- left to Stage 2, which keeps it on its pool for a direct hit even when
+    -- its score has decayed.
+    local uri = ngx.var.request_uri or ""
+    local target_hit = _M.honeypot_target_hit(pattern_result, uri)
+    local direct_target = target_hit ~= nil
+        and require("edge_policy").get().targets.mode == "direct"
+    if direct_target and not session_data.honeypot_bound then
+        if target_hit == "cve_pattern_match" then
+            assign_honeypot_pool(routing_decision, {
+                risk_score      = pattern_result.score,
+                honeypot_reason = "cve_pattern_match",
+                matched_cves    = pattern_result.cve_matched,
+            }, remote_ip, pool_owner)
+
+            ngx.log(ngx.WARN, "[ROUTING] 🎯 CVE PATTERN DETECTED -> HONEYPOT | CVEs: ",
+                    table.concat(pattern_result.cve_matched, ", "), " | Score: ", pattern_result.score,
+                    " | IP: ", remote_ip, " | URI: ", uri)
+
+            _G.utils.log_security_event("routing_to_honeypot", {
+                reason     = "cve_pattern_match",
+                cves       = pattern_result.cve_matched,
+                ip         = remote_ip,
+                pool       = routing_decision.session_data.honeypot_pool,
+                session_id = session_data.id
+            })
+        else
+            -- Direct access to a file inside a vulnerable plugin directory
+            -- (static assets excluded) is a strong signal before any payload.
+            -- This used to be a dedicated nginx location that hard-coded 8 of
+            -- the plugins; it now follows the dashboard's enabled list.
+            assign_honeypot_pool(routing_decision, {
+                risk_score          = math.max(pattern_result.score, 60),
+                honeypot_reason     = "vulnerable_plugin_access",
+                compromised         = true,
+                compromise_reason   = "vulnerable_plugin_access",
+                compromise_timestamp = ngx.time(),
+            }, remote_ip, pool_owner)
+
+            local ok, vuln_handler = pcall(require, "vulnerability_handler")
+            if ok then
+                pcall(vuln_handler.log_vulnerable_access, remote_ip, uri)
+            end
+
+            ngx.log(ngx.WARN, "[ROUTING] 🔌 VULNERABLE PLUGIN ACCESS -> HONEYPOT | Score: ",
+                    math.max(pattern_result.score, 60), " | IP: ", remote_ip, " | URI: ", uri)
+
+            _G.utils.log_security_event("routing_to_honeypot", {
+                reason     = "vulnerable_plugin_access",
+                uri        = uri,
+                ip         = remote_ip,
+                pool       = routing_decision.session_data.honeypot_pool,
+                session_id = session_data.id
+            })
+        end
+        return routing_decision
+    end
+
     -- Stage 2: Sticky honeypot routing.
     -- Once a session is marked honeypot_bound (by any routing stage on a prior
     -- request), all subsequent requests from the same session are locked to the
@@ -337,7 +404,7 @@ function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
         -- let a user freely alternate "run pattern" / "visit
         -- homepage" to re-run every pattern against production from a
         -- clean slate each time.
-        if pattern_result.score < 30 then
+        if pattern_result.score < 30 and not direct_target then
             routing_decision.target = "production"
             routing_decision.upstream = "production_backend"
             ngx.log(ngx.INFO, "[ROUTING] Session bound but accumulated/decayed score below threshold - "
@@ -431,61 +498,6 @@ function _M.decide_route(session_data, pattern_result, remote_ip, session_id)
         _G.utils.log_security_event("routing_to_honeypot", {
             reason    = "high_risk_score",
             score     = pattern_result.score,
-            ip        = remote_ip,
-            pool      = routing_decision.session_data.honeypot_pool,
-            session_id = session_data.id
-        })
-
-        return routing_decision
-    end
-    
-    -- Stage 4: CVE-specific patterns (immediate diversion).
-    -- CVE matches in pattern_analyzer.analyze_cve_patterns() score +40 each.
-    -- Even a single CVE match on a low-baseline request can cross the 80-point
-    -- threshold; this explicit stage ensures diversion even for requests where
-    -- the overall score is below threshold but a CVE was still matched.
-    -- Covered patterns are defined in _G.config.vulnerability.cve_patterns (init.lua).
-    if pattern_result.cve_matched and #pattern_result.cve_matched > 0 then
-        assign_honeypot_pool(routing_decision, {
-            risk_score    = pattern_result.score,
-            honeypot_reason = "cve_pattern_match",
-            matched_cves    = pattern_result.cve_matched,
-        }, remote_ip, pool_owner)
-
-        ngx.log(ngx.WARN, "[ROUTING] 🎯 CVE PATTERN DETECTED -> HONEYPOT | CVEs: ",
-                table.concat(pattern_result.cve_matched, ", "), " | Score: ", pattern_result.score,
-                " | IP: ", remote_ip, " | URI: ", ngx.var.request_uri)
-
-        _G.utils.log_security_event("routing_to_honeypot", {
-            reason    = "cve_pattern_match",
-            cves      = pattern_result.cve_matched,
-            ip        = remote_ip,
-            pool      = routing_decision.session_data.honeypot_pool,
-            session_id = session_data.id
-        })
-
-        return routing_decision
-    end
-    
-    -- Stage 5: Vulnerable plugin endpoint access.
-    -- Direct access to PHP files inside a known-vulnerable plugin directory
-    -- (e.g. /wp-content/plugins/woocommerce-payments/*.php) is a strong signal
-    -- even before any payload is sent.  Static assets (CSS/JS) inside these
-    -- directories are excluded by is_vulnerable_plugin_access() to avoid
-    -- false-positives on page loads that reference plugin stylesheets.
-    local uri = ngx.var.request_uri or ""
-    if _M.is_vulnerable_plugin_access(uri) then
-        assign_honeypot_pool(routing_decision, {
-            risk_score    = math.max(pattern_result.score, 60),
-            honeypot_reason = "vulnerable_plugin_access",
-        }, remote_ip, pool_owner)
-
-        ngx.log(ngx.WARN, "[ROUTING] 🔌 VULNERABLE PLUGIN ACCESS -> HONEYPOT | Score: ",
-                math.max(pattern_result.score, 60), " | IP: ", remote_ip, " | URI: ", uri)
-
-        _G.utils.log_security_event("routing_to_honeypot", {
-            reason    = "vulnerable_plugin_access",
-            uri       = uri,
             ip        = remote_ip,
             pool      = routing_decision.session_data.honeypot_pool,
             session_id = session_data.id
@@ -712,10 +724,23 @@ function _M.is_static_asset(uri)
     return is_static
 end
 
--- Check if the request is accessing vulnerable plugins
+-- Check if the request is accessing vulnerable plugins (only the plugin
+-- targets the dashboard left enabled, see edge_policy.lua)
 function _M.is_vulnerable_plugin_access(uri)
     return router_rules.is_vulnerable_plugin_access(
-        uri, _G.config.vulnerability.plugins, _G.config.threat.static_asset_patterns)
+        uri, require("edge_policy").plugins(), _G.config.threat.static_asset_patterns)
+end
+
+-- Which honeypot target this request hit: "cve_pattern_match",
+-- "vulnerable_plugin_access" or nil. A CVE match wins over the plugin path.
+function _M.honeypot_target_hit(pattern_result, uri)
+    if pattern_result.cve_matched and #pattern_result.cve_matched > 0 then
+        return "cve_pattern_match"
+    end
+    if _M.is_vulnerable_plugin_access(uri) then
+        return "vulnerable_plugin_access"
+    end
+    return nil
 end
 
 -- Check if the request is accessing admin areas

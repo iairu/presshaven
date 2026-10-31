@@ -47,6 +47,23 @@ This isn't an accident of two people building unrelated things — it's a delibe
 
 Every log event picked up by the edge shipper is tagged with `log_type` (`docker`, `nginx_access`, `nginx_error`, `nginx_security`, `suricata`, `suricata_fast`, `redis`) before it ever leaves the edge host; the aggregator's Elasticsearch sink uses that field to route each event into its own daily index (`honeypot-nginx_access-2026.08.05`, `honeypot-suricata-2026.08.05`, etc.) — fixed this session; it used to write everything into a single literal `hello-world-index` placeholder that was never replaced with real index logic.
 
+## Edge URL policy (whitelist + honeypot targets)
+
+The dashboard has two pages for the edge's URL policy: **URL Whitelist**
+and **Honeypot Targets**.
+
+- **URL Whitelist** lists the legitimate shop paths. A path that is not on
+  it adds an `unlisted_endpoint` score. It never subtracts.
+- **Honeypot Targets** lists the CVE patterns and vulnerable plugin paths,
+  each one enabled or disabled. A target hit either diverts at once with
+  scoring bypassed, or adds a score and lets the threshold decide.
+
+Both pages push one JSON document to the edge's Redis
+(`honeypot_edge_policy`). `init_worker.lua` mirrors it into a shared dict,
+and the router and pattern analyzer read it from there (`lua/edge_policy.lua`).
+If no document exists, the edge keeps its built-in behaviour. See
+`patterns/README.md`, "Edge policy".
+
 ## Honeypot pool assignment (WordPress proxy level)
 
 Each user IP gets a honeypot pool (`honeypot_eshop_N` + `honeypot_database_N`) to itself:

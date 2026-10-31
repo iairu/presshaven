@@ -30,7 +30,9 @@
 -- SCORING SUMMARY:
 --   Static asset requests          →   0 (always skipped)
 --   Matching a suspicious pattern  → +15 base, +5..+30 for specific checks
---   Matching a CVE pattern         → +40 per CVE matched
+--   Matching a CVE pattern         → +target_score per CVE matched (edge policy, default 40)
+--   Vulnerable plugin path         → +target_score, edge policy "score" mode only
+--   Path not on the URL whitelist  → +unlisted_score (edge policy, default 0)
 --   Flagged user-agent string    → +50
 --   Bad IP reputation              → +variable (from threat_intel dict)
 --   High per-IP request rate       → +20 (rate_limit shared dict, >10 req/s)
@@ -53,6 +55,9 @@ local pattern_rules = require "pattern_rules"
 local suricata_rules = require "suricata_rules"
 local wp_install_state = require "wp_install_state"
 local shared_ip_rules = require "shared_ip_rules"
+local router_rules = require "router_rules"
+local edge_policy = require "edge_policy"
+local edge_policy_rules = require "edge_policy_rules"
 
 local _M = {}
 
@@ -176,6 +181,37 @@ function _M.analyze_request(uri, headers, remote_ip)
             ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🎯 CVE PATTERNS DETECTED (+", cve_score.score, ") | CVEs: ",
                     table.concat(cve_score.cves, ", "))
         end
+    end
+
+    -- Stage 3b: honeypot target URLs and the legitimate URL whitelist
+    -- (dashboard-managed, see edge_policy_rules.lua).
+    --
+    -- In "score" mode a hit on an enabled vulnerable-plugin target is a
+    -- scored signal (target_score) instead of router.lua's immediate
+    -- diversion; CVE pattern hits are already scored above in both modes.
+    -- In "direct" mode router.lua diverts on the hit itself, so it adds
+    -- nothing here.
+    local policy = edge_policy.get()
+    if policy.targets.mode == "score"
+        and router_rules.is_vulnerable_plugin_access(
+            uri, edge_policy.plugins(), _G.config.threat.static_asset_patterns) then
+        pattern_result.score = pattern_result.score + policy.targets.target_score
+        table.insert(pattern_result.patterns_matched, "honeypot_target_plugin")
+        ngx.log(ngx.WARN, "[PATTERN ANALYZER] 🎯 Honeypot target plugin path (score mode, +",
+                policy.targets.target_score, ") | URI: ", uri)
+    end
+
+    -- A path that is not on the enabled whitelist is an unknown endpoint.
+    -- The whitelist never lowers a score: a whitelisted path only skips this
+    -- one signal, every other check above and below still applies.
+    local whitelist_id = edge_policy_rules.whitelist_match(
+        edge_policy_rules.request_path(uri), policy.whitelist.entries)
+    pattern_result.whitelist = whitelist_id or false
+    if not whitelist_id and policy.whitelist.unlisted_score > 0 then
+        pattern_result.score = pattern_result.score + policy.whitelist.unlisted_score
+        table.insert(pattern_result.patterns_matched, "unlisted_endpoint")
+        ngx.log(ngx.INFO, "[PATTERN ANALYZER] 🧭 Path not on the legitimate URL whitelist (+",
+                policy.whitelist.unlisted_score, ") | URI: ", uri)
     end
 
     -- Stage 4: IP reputation check, plus this session's own request rate.
@@ -321,10 +357,12 @@ function _M.analyze_headers(headers)
     return pattern_rules.analyze_headers(headers, ngx.var.request_method)
 end
 
+-- Only the CVE targets the dashboard left enabled (edge_policy.lua), each
+-- worth the policy's target_score (default 40).
 function _M.analyze_cve_patterns(uri, headers)
     return pattern_rules.analyze_cve_patterns(
-        uri, headers, ngx.var.args, _G.config.vulnerability.cve_patterns,
-        _G.config.threat.max_risk_score)
+        uri, headers, ngx.var.args, edge_policy.cve_patterns(),
+        _G.config.threat.max_risk_score, edge_policy.get().targets.target_score)
 end
 
 function _M.analyze_request_method()

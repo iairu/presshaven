@@ -81,6 +81,14 @@ package.loaded["abuseipdb_client"] = {
     report_ip_async = function(ip, reason) table.insert(abuse_reports, { ip = ip, reason = reason }) end,
 }
 
+-- The dashboard edge policy: tests flip `edge.mode` and `edge.plugins` to
+-- stand in for what the mirror timer would load from Redis.
+local edge = { mode = "direct", plugins = _G.config.vulnerability.plugins }
+package.loaded["edge_policy"] = {
+    get = function() return { targets = { mode = edge.mode, target_score = 40 } } end,
+    plugins = function() return edge.plugins end,
+}
+
 package.loaded["cjson"] = package.loaded["cjson"] or { encode = tostring, decode = function() return {} end }
 
 local router = require "router"
@@ -205,7 +213,7 @@ do
     check("stored score alone (no fresh signal) still diverts", d.target == "honeypot")
 end
 
-print("Stage 4: CVE match")
+print("Stage 1c: honeypot targets, direct mode")
 do
     local d = route({ uri = "/wp-json/wp/v2/users" }, { score = 20, cve_matched = { "CVE-2023-28121" } })
     check("CVE match below threshold -> honeypot", d.target == "honeypot" and reason(d) == "cve_pattern_match")
@@ -215,16 +223,41 @@ do
     end
     check("pool is assigned to the session, not the IP", by_session)
     check("matched CVEs are stored on the session", d.session_data.matched_cves[1] == "CVE-2023-28121")
-end
 
-print("Stage 5: vulnerable plugin path")
-do
-    local d = route({ uri = "/wp-content/plugins/woocommerce-payments/readme.txt" })
+    d = route({ uri = "/wp-content/plugins/woocommerce-payments/readme.txt" })
     check("hyphenated vulnerable plugin path -> honeypot",
           d.target == "honeypot" and reason(d) == "vulnerable_plugin_access")
     check("plugin access floors score at 60", d.session_data.risk_score == 60)
+    check("plugin access marks the session compromised", d.session_data.compromised == true)
     d = route({ uri = "/wp-content/plugins/woocommerce-payments/assets/app.js" })
     check("static asset inside a vulnerable plugin -> production", d.target == "production")
+
+    edge.plugins = { "abandoned-cart-lite" }
+    d = route({ uri = "/wp-content/plugins/woocommerce-payments/readme.txt" })
+    check("disabled plugin target -> production", d.target == "production")
+    edge.plugins = _G.config.vulnerability.plugins
+
+    d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
+              { score = 0 }, { id = "s1", honeypot_bound = true, honeypot_pool = 2, risk_score = 0 })
+    check("bound session with decayed score stays on the honeypot for a target hit",
+          d.target == "honeypot")
+    d = route({ uri = "/" }, { score = 0 }, { id = "s1", honeypot_bound = true, honeypot_pool = 2, risk_score = 0 })
+    check("bound session with decayed score is released on a clean request", d.target == "production")
+end
+
+print("Stage 1c: honeypot targets, score mode")
+do
+    edge.mode = "score"
+    local d = route({ uri = "/wp-json/wp/v2/users" }, { score = 40, cve_matched = { "CVE-2023-28121" } })
+    check("CVE hit under threshold -> production", d.target == "production")
+    d = route({ uri = "/wp-json/wp/v2/users" }, { score = 85, cve_matched = { "CVE-2023-28121" } })
+    check("CVE hit over threshold -> honeypot by score", d.target == "honeypot" and reason(d) == "high_risk_score")
+    d = route({ uri = "/wp-content/plugins/woocommerce-payments/readme.txt" }, { score = 40 })
+    check("plugin hit under threshold -> production", d.target == "production")
+    d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
+              { score = 0 }, { id = "s1", honeypot_bound = true, honeypot_pool = 2, risk_score = 0 })
+    check("bound session with decayed score is released even on a target hit", d.target == "production")
+    edge.mode = "direct"
 end
 
 print("Stage 6: IP reputation")
@@ -285,7 +318,7 @@ print("Stage ordering")
 do
     local d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
                     { score = 90, cve_matched = { "CVE-2023-28121" }, ip_reputation = 80 })
-    check("threshold beats CVE, plugin and reputation", reason(d) == "high_risk_score")
+    check("direct target beats threshold and reputation", reason(d) == "cve_pattern_match")
     d = route({ uri = "/wp-content/plugins/woocommerce-payments/x.php" },
               { score = 10, cve_matched = { "CVE-2023-28121" }, ip_reputation = 80 })
     check("CVE beats plugin path and reputation", reason(d) == "cve_pattern_match")

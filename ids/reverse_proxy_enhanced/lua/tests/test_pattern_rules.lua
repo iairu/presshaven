@@ -101,6 +101,10 @@ do
     check("header-based CVE match scores 40", match.score == 40)
     check("matched CVE listed", match.cves[1] == "CVE-2023-28121")
 
+    local custom = rules.analyze_cve_patterns("/wp-json/wc/v3/orders", { ["X-WCPAY-PLATFORM-CHECKOUT-USER"] = "1" },
+                                               nil, CVE_PATTERNS, 100, 25)
+    check("per-match score is configurable", custom.score == 25)
+
     local no_match = rules.analyze_cve_patterns("/shop/", {}, nil, CVE_PATTERNS)
     check("no CVE match scores zero", no_match.score == 0)
 

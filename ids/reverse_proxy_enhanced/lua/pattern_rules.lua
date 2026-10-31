@@ -404,7 +404,7 @@ function _M.analyze_headers(headers, request_method)
 end
 
 -- ---------------------------------------------------------------------------
--- analyze_cve_patterns(uri, headers, query_params, cve_patterns)
+-- analyze_cve_patterns(uri, headers, query_params, cve_patterns, max_score, per_match)
 --
 -- Checks the request URI, query string, and all headers against a CVE
 -- pattern dictionary. Pure: does NOT log -- the caller (pattern_analyzer.lua)
@@ -416,9 +416,12 @@ end
 -- @param query_params   string|nil   e.g. ngx.var.args
 -- @param cve_patterns   table        Map of CVE ID -> Lua pattern (from
 --                                    _G.config.vulnerability.cve_patterns).
+-- @param max_score      number|nil   Clamp for the returned score.
+-- @param per_match      number|nil   Points per matched CVE (default 40;
+--                                    the edge policy's targets.target_score).
 -- @return table  { score, cves[] }
 -- ---------------------------------------------------------------------------
-function _M.analyze_cve_patterns(uri, headers, query_params, cve_patterns, max_score)
+function _M.analyze_cve_patterns(uri, headers, query_params, cve_patterns, max_score, per_match)
     local result = {
         score = 0,
         cves = {}
@@ -454,7 +457,7 @@ function _M.analyze_cve_patterns(uri, headers, query_params, cve_patterns, max_s
         end
 
         if found then
-            result.score = result.score + 40
+            result.score = result.score + (per_match or 40)
             table.insert(result.cves, cve)
         end
     end
