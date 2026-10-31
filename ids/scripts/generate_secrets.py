@@ -11,6 +11,7 @@ GDPR RSA key. External credentials (AbuseIPDB, Elasticsearch) cannot be
 generated: a placeholder there is blanked, which disables that integration.
 Rotating them logs everyone out and needs a full `docker compose down && up`.
 """
+import base64
 import re
 import secrets
 import shutil
@@ -20,7 +21,6 @@ import time
 from pathlib import Path
 
 EDGE = Path(__file__).resolve().parent.parent
-ENV = Path(sys.argv[1]) if len(sys.argv) > 1 else EDGE / ".env"
 EXAMPLE = EDGE / ".env.example"
 
 HEX32 = [
@@ -45,14 +45,14 @@ def gdpr_key():
     der = subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt",
                           "rsa_keygen_bits:2048", "-outform", "DER"],
                          check=True, capture_output=True).stdout
-    import base64
     return base64.b64encode(der).decode()
 
 
-def main():
-    text = ENV.read_text()
-    cur, example = parse(text), parse(EXAMPLE.read_text())
-
+def plan(cur, example):
+    """{key: new value} for every secret in `cur` (a parsed .env) that is
+    missing, a placeholder, the .env.example value or too short. A blank
+    value means "clear this external credential". Shared with the dashboard
+    (Settings -> ids .env -> Generate weak secrets)."""
     def weak(k, min_len):
         v = cur.get(k, "")
         return (not v or len(v) < min_len or PLACEHOLDER.search(v)
@@ -78,25 +78,37 @@ def main():
         if v and v in seen:
             new[k] = merged[k] = secrets.token_hex(32)
         seen[merged.get(k)] = k
+    return new
+
+
+def backup(env):
+    """Copy `env` to .env.bak.<timestamp> (0600) and return the copy's path."""
+    path = env.with_name(f".env.bak.{time.strftime('%Y%m%d%H%M%S')}")
+    shutil.copy2(env, path)
+    path.chmod(0o600)
+    return path
+
+
+def main():
+    env = Path(sys.argv[1]) if len(sys.argv) > 1 else EDGE / ".env"
+    text = env.read_text()
+    new = plan(parse(text), parse(EXAMPLE.read_text()))
     if not new:
         print(".env: nothing to change")
         return
-    backup = ENV.with_name(f".env.bak.{time.strftime('%Y%m%d%H%M%S')}")
-    shutil.copy2(ENV, backup)
-    backup.chmod(0o600)
+    saved = backup(env)
     for k, v in new.items():
         if re.search(rf"^{k}=.*$", text, re.M):
             text = re.sub(rf"^{k}=.*$", lambda _m: f"{k}={v}", text, count=1, flags=re.M)
         else:
             text = text.rstrip("\n") + f"\n{k}={v}\n"
-    ENV.write_text(text)
-    ENV.chmod(0o600)
-    print(f"backup: {backup}")
+    env.write_text(text)
+    env.chmod(0o600)
+    print(f"backup: {saved}")
     print("generated:", ", ".join(k for k in new if new[k]))
     blanked = [k for k in new if not new[k]]
     if blanked:
         print("blanked (placeholder external credential, integration now disabled):", ", ".join(blanked))
-
 
 if __name__ == "__main__":
     main()

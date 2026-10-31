@@ -61,15 +61,23 @@ class TargetPanel(QGroupBox):
         self.start_btn = QPushButton("Start")
         self.restart_btn = QPushButton("Restart")
         self.stop_btn = QPushButton("Stop")
+        self.redeploy_btn = QPushButton("Redeploy")
+        self.redeploy_btn.setToolTip(
+            "Apply changed .env values and images: rebuild every image, then take the "
+            "stack down and up again (networks recreated, data volumes kept)"
+            + ("; the runtime honeypot pools are removed so pool_manager rebuilds them "
+               "with the current passwords." if target.project == "edge" else "."))
         self.purge_btn = danger_button("Purge (⚠ deletes volumes)")
         self.download_btn = QPushButton("Download logs…")
-        for b in (self.start_btn, self.restart_btn, self.stop_btn, self.purge_btn, self.download_btn):
+        for b in (self.start_btn, self.restart_btn, self.stop_btn, self.redeploy_btn,
+                  self.purge_btn, self.download_btn):
             button_row.addWidget(b)
         layout.addLayout(button_row)
 
         self.start_btn.clicked.connect(self._start)
         self.restart_btn.clicked.connect(self._restart)
         self.stop_btn.clicked.connect(self._stop)
+        self.redeploy_btn.clicked.connect(self._redeploy)
         self.purge_btn.clicked.connect(self._purge)
         self.download_btn.clicked.connect(self._download_logs)
 
@@ -92,7 +100,7 @@ class TargetPanel(QGroupBox):
         layout.addLayout(export_row)
 
         layout.addWidget(muted_label(
-            "Logs (auto-tailing -- Start/Restart/Stop/Purge takes over this "
+            "Logs (auto-tailing -- Start/Restart/Stop/Redeploy/Purge takes over this "
             "panel, then returns to auto-tailing once the command finishes):"
         ))
 
@@ -216,6 +224,26 @@ class TargetPanel(QGroupBox):
 
     def _stop(self) -> None:
         self._run("down")
+
+    def _redeploy(self) -> None:
+        edge = self.target.project == "edge"
+        if confirm(
+            self, "Confirm redeploy",
+            f"Rebuild every image of {self.target.label} and recreate all of its "
+            "containers and networks from the current .env and compose files. Data "
+            "volumes are kept"
+            + (" -- except the honeypot pools added at runtime, which pool_manager "
+               "rebuilds with the current design and passwords" if edge else "") + ".\n\n"
+            "The stack is down for the duration."
+            + ("\n\nIf secrets changed, every database switches to its new passwords "
+               "on this start, and everyone is logged out (WordPress salts and the "
+               "session signing key)." if edge else "") + "\n\nContinue?",
+        ):
+            self._mutating_action = True
+            # Ends in `up`, so the finished jobs get cleaned up as after Start.
+            self._last_mutating_args = ("up",)
+            argv, cwd = self.target.build_redeploy()
+            self.log_panel.run(argv, cwd)
 
     def _purge(self) -> None:
         if confirm(

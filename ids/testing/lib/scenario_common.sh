@@ -25,3 +25,15 @@ banner() {
     printf "${CYAN}  %s${NC}\n" "$1"
     printf "${CYAN}================================================================${NC}\n\n"
 }
+
+# INTERNAL_TEST_SECRET (gates the X-Route-Target / X-Risk-Score headers): an
+# exported value wins; otherwise it is read from ids/.env next to these
+# scripts, so a scenario needs no manual export -- from a shell or from the
+# dashboard's Attack Simulation page. Never printed.
+if [ -z "${INTERNAL_TEST_SECRET:-}" ]; then
+    _scenario_env="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.env"
+    if [ -r "${_scenario_env}" ]; then
+        INTERNAL_TEST_SECRET=$(grep -E '^INTERNAL_TEST_SECRET=' "${_scenario_env}" | head -1 | cut -d= -f2-)
+    fi
+    unset _scenario_env
+fi

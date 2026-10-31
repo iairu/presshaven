@@ -80,6 +80,7 @@ from ui.browser_widget import BrowserWidget
 from ui.kibana_timeline_capture import KibanaTimelineCapture
 from ui.page_learn import pattern_lesson_html
 from ui.process_runner import LogPanel
+from ui.scenario_runner import ScenarioScriptsTab
 
 _METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"]
 
@@ -644,6 +645,8 @@ class PatternsPage(QWidget):
         tabs.addTab(self.diagram, "Pattern analyzer")
         self.manual_tab = _ManualRequestTab(state)
         tabs.addTab(self.manual_tab, "Manual request (curl)")
+        self.scenario_tab = ScenarioScriptsTab(state)
+        tabs.addTab(self.scenario_tab, "Scenario scripts")
         self.tabs = tabs
         tabs.setCurrentWidget(self.diagram)  # GUI card view, not the raw log, is the default
         self.splitter.addWidget(tabs)

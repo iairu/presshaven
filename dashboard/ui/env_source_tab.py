@@ -5,21 +5,29 @@ writes back to whichever source is currently selected. Companion to the
 wizard's RemoteAwareEnvPage (same underlying core.env_upload functions),
 but reachable anytime afterward rather than only during first-run setup,
 and switchable back and forth without leaving the page.
+
+For the ids project it also covers secret hygiene (core/env_secrets.py):
+"Generate weak secrets" fills every placeholder/weak secret in the form,
+"Restore backup…" puts a .env.bak.* back, a local Save that changes a secret
+backs the file up first, and a warning line lists what is still a placeholder.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout,
-    QWidget,
+    QComboBox, QHBoxLayout, QInputDialog, QLabel, QMessageBox, QPushButton,
+    QVBoxLayout, QWidget,
 )
+
+from core import env_secrets
 
 from core.docker_ctl import Target
 from core.env_file import EnvFile, merge_example_keys, seed_from_example
 from core.env_upload import EnvUploadError, download_env_text, upload_env_text
 from core.state import RemoteConfig
-from ui.env_editor import EnvEditorWidget
+from ui.env_editor import EnvEditorWidget, looks_like_secret
 
 _SOURCE_LOCAL = "local"
 _SOURCE_REMOTE = "remote"
@@ -55,12 +63,36 @@ class EnvSourceTab(QWidget):
         self.refresh_btn.clicked.connect(self._reload_current_source)
         toggle_row.addWidget(self.refresh_btn)
         toggle_row.addStretch()
+
+        # The generation rules know the ids stack's secrets only.
+        self._secret_tools = project == "edge"
+        self.generate_btn = QPushButton("Generate weak secrets")
+        self.generate_btn.setToolTip(
+            "Fill every secret that is missing, a placeholder, the .env.example value "
+            "or too short with a strong random value (database passwords, Redis, salts, "
+            "signing keys, admin passwords, GDPR key). Values stay hidden; press Save to "
+            "write them, then Redeploy on the Workloads page.")
+        self.generate_btn.clicked.connect(self._generate_weak_secrets)
+        self.generate_btn.setVisible(self._secret_tools)
+        toggle_row.addWidget(self.generate_btn)
+        self.restore_btn = QPushButton("Restore backup…")
+        self.restore_btn.setToolTip(
+            "Put a .env.bak.* backup back as the local .env (the current file is "
+            "backed up first).")
+        self.restore_btn.clicked.connect(self._restore_backup)
+        toggle_row.addWidget(self.restore_btn)
         layout.addLayout(toggle_row)
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet("color: #888888;")
         layout.addWidget(self.status_label)
+
+        self.warning_label = QLabel("")
+        self.warning_label.setWordWrap(True)
+        self.warning_label.setStyleSheet("color: #e0a800;")
+        self.warning_label.setVisible(False)
+        layout.addWidget(self.warning_label)
 
         self._editor_slot = QVBoxLayout()
         layout.addLayout(self._editor_slot, stretch=1)
@@ -106,12 +138,24 @@ class EnvSourceTab(QWidget):
         else:
             self._load_local()
 
-    def _load_local(self) -> None:
+    def _show_editor(self) -> None:
         self._clear_editor()
-        self._source_is_remote = False
-        self.env_file = seed_from_example(self.local_path, self.local_example)
         self.editor = EnvEditorWidget(self.env_file)
         self._editor_slot.addWidget(self.editor)
+        self.restore_btn.setEnabled(not self._source_is_remote)
+        self._update_warnings()
+
+    def _update_warnings(self) -> None:
+        """Placeholder/weak settings in the file as loaded or last saved."""
+        warnings = (env_secrets.config_warnings(self.env_file, self.local_example)
+                    if self._secret_tools and self.env_file is not None else [])
+        self.warning_label.setText("\n".join(f"⚠ {w}" for w in warnings))
+        self.warning_label.setVisible(bool(warnings))
+
+    def _load_local(self) -> None:
+        self._source_is_remote = False
+        self.env_file = seed_from_example(self.local_path, self.local_example)
+        self._show_editor()
         self.status_label.setText(
             f"Editing local file: {self.local_path}" + self._added_keys_note()
         )
@@ -166,8 +210,7 @@ class EnvSourceTab(QWidget):
         # remote deployment of the same code needs too -- an empty remote
         # file becomes the full template, an old one gains new keys.
         self.env_file.added_keys = merge_example_keys(self.env_file, self.local_example)
-        self.editor = EnvEditorWidget(self.env_file)
-        self._editor_slot.addWidget(self.editor)
+        self._show_editor()
 
         if text:
             self.status_label.setText(
@@ -181,6 +224,70 @@ class EnvSourceTab(QWidget):
                 "template; Save will create it there."
             )
         self.status_label.setStyleSheet("color: #5cb85c;")
+
+    def _generate_weak_secrets(self) -> None:
+        """Replace every weak secret in the form (not on disk until Save).
+        Reports key names only; the values stay masked in their fields."""
+        self.editor.apply_to_env_file()
+        try:
+            plan = env_secrets.secret_plan(self.env_file, self.local_example)
+        except Exception as e:  # noqa: BLE001 -- e.g. openssl missing for the GDPR key
+            QMessageBox.warning(self, "Generate weak secrets", f"Could not generate secrets: {e}")
+            return
+        if not plan:
+            QMessageBox.information(self, "Generate weak secrets",
+                                    "Every secret is already strong -- nothing to change.")
+            return
+        for key, value in plan.items():
+            self.env_file.set(key, value)
+        self._show_editor()
+        generated = [k for k, v in plan.items() if v]
+        cleared = [k for k, v in plan.items() if not v]
+        text = ""
+        if generated:
+            text += "Generated: " + ", ".join(generated) + "\n\n"
+        if cleared:
+            text += ("Cleared (placeholder external credential, that integration is "
+                     "now off until you enter a real one): " + ", ".join(cleared) + "\n\n")
+        QMessageBox.information(
+            self, "Generate weak secrets",
+            text + "Not written yet: press Save (the current file is backed up first). "
+            "Then use Redeploy on the Workloads page so every container -- databases "
+            "included -- switches to the new values. Everyone gets logged out.")
+
+    def _restore_backup(self) -> None:
+        backups = env_secrets.list_backups(self.local_path)
+        if not backups:
+            QMessageBox.information(self, "Restore backup",
+                                    f"No .env.bak.* backups next to {self.local_path}.")
+            return
+        name, ok = QInputDialog.getItem(
+            self, "Restore backup",
+            f"Replace {self.local_path} with (newest first):",
+            [b.name for b in backups], 0, False)
+        if not ok:
+            return
+        chosen = self.local_path.parent / name
+        try:
+            previous = env_secrets.restore(self.local_path, chosen)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Restore backup", f"Restore failed: {e}")
+            return
+        self._load_local()
+        QMessageBox.information(
+            self, "Restore backup",
+            f"Restored {name}."
+            + (f" The file it replaced was saved as {previous.name}." if previous else "")
+            + "\n\nRunning containers still use whatever they were started with: "
+              "Redeploy on the Workloads page to apply it.")
+
+    def _changed_secrets_on_disk(self) -> list[str]:
+        """Secret keys whose value in the form differs from the local file."""
+        if not self.local_path.exists():
+            return []
+        disk = EnvFile.load(self.local_path)
+        return [k for k in self.env_file.keys()
+                if looks_like_secret(k) and k in disk.keys() and disk.get(k) != self.env_file.get(k)]
 
     def _save(self) -> None:
         self.editor.apply_to_env_file()
@@ -197,5 +304,24 @@ class EnvSourceTab(QWidget):
                 f"Saved to {remote.user}@{remote.host}:{remote_env_path}",
             )
         else:
+            changed = self._changed_secrets_on_disk()
+            note = ""
+            if changed:
+                try:
+                    note = f"\n\nPrevious file backed up as {env_secrets.backup(self.local_path).name}."
+                except OSError as e:
+                    if not confirm_unbacked(self, e):
+                        return
+                note += (f"\nChanged secrets: {', '.join(changed)}. Redeploy on the Workloads "
+                         "page to apply them (databases switch their passwords on that restart).")
             self.env_file.save()
-            QMessageBox.information(self, "Saved", f"Saved {self.local_path}")
+            os.chmod(self.local_path, 0o600)   # it holds every credential of the stack
+            QMessageBox.information(self, "Saved", f"Saved {self.local_path}" + note)
+        self._update_warnings()
+
+
+def confirm_unbacked(parent, error: Exception) -> bool:
+    return QMessageBox.question(
+        parent, "Backup failed",
+        f"Could not back up the current .env ({error}). Save anyway?",
+    ) == QMessageBox.StandardButton.Yes

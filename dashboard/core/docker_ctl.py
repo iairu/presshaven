@@ -277,6 +277,28 @@ class Target:
             f"v=$(docker volume ls -q --filter {label}); [ -z \"$v\" ] || docker volume rm -f $v; "
             f"{compose} down -v --remove-orphans; }}")
 
+    def build_redeploy(self) -> tuple[list[str], str | None]:
+        """Rebuild every image and replace every container, keeping the data
+        volumes: what applies changed .env values (new credentials included)
+        and changed images. `down` + `up --build` rather than `up
+        --force-recreate`, so networks are recreated too. For the edge stack
+        the runtime honeypot pools go first (their containers and volumes --
+        pools are disposable and pool_manager rebuilds them from the current
+        design and passwords), pool_manager stopped beforehand so it can't
+        rebuild one in between; plain `down` would leave them running with the
+        old configuration (see build_purge())."""
+        compose = "docker compose " + " ".join(shlex.quote(a) for a in self._global_flags(("up",)))
+        down = " ".join(shlex.quote(a) for a in self._augment_args(("down",)))
+        up = " ".join(shlex.quote(a) for a in self._augment_args(self._shipper_args(("up", "-d"))))
+        pools = ""
+        if self.project == "edge":
+            label = shlex.quote(f"label={RUNTIME_POOL_LABEL}")
+            pools = (f"{compose} stop pool_manager; "
+                     f"c=$(docker ps -aq --filter {label}); [ -z \"$c\" ] || docker rm -f -v $c; "
+                     f"v=$(docker volume ls -q --filter {label}); [ -z \"$v\" ] || docker volume rm -f $v; ")
+        # One brace group, so a failed `cd` (remote) skips all of it.
+        return self.build_shell(f"{{ {pools}{compose} {down} && {compose} {up}; }}")
+
     # ---- one-shot synchronous helpers (call from a background thread) ----
 
     def ps(self, timeout: float = 15.0) -> list[dict]:
